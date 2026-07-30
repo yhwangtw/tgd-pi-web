@@ -1,9 +1,7 @@
 # tGD Pi Web
 
 <p align="center">
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
-  <a href="LICENSE"><img alt="ライセンス" src="https://img.shields.io/github/license/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/commits/main"><img alt="最終コミット" src="https://img.shields.io/github/last-commit/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
+  <a href="https://github.com/yhwangtw/tgd-pi-web/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/yhwangtw/tgd-pi-web/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react">
 </p>
@@ -16,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/releases">リリース</a> ·
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/issues">バグを報告</a> ·
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/issues">機能を提案</a>
+  <a href="https://github.com/yhwangtw/tgd-pi-web/releases">リリース</a> ·
+  <a href="https://github.com/yhwangtw/tgd-pi-web/issues">バグを報告</a> ·
+  <a href="https://github.com/yhwangtw/tgd-pi-web/issues">機能を提案</a>
 </p>
 
 **Pi Coding Agent と tGD の全デリバリーフローをひとつにまとめるブラウザワークスペース。**
@@ -36,6 +34,7 @@ Pi のターミナル体験は高速で集中しやすいものです。本プ�
 - 会話の横でファイル、diff、ツール呼び出し、git 変更をレビュー。
 - 同じワークスペースで tGD artifacts と 7 つのデリバリーフェーズを追跡。
 - 検索、ブックマーク、ミニマップ、ブランチで長い会話を移動。
+- Safe Area 対応ナビゲーション、コンパクトなパイプライン、タッチしやすいメッセージ操作により、スマートフォンでもデスクトップでも快適に利用。
 - ローカルファースト。設定したモデルエンドポイント以外へ、アプリは実行時に外部リクエストを送りません。
 
 ## 対象ユーザー
@@ -56,13 +55,21 @@ Pi のターミナル体験は高速で集中しやすいものです。本プ�
 
 本プロジェクトは GitHub のソースコードから配布され、**npm には公開されません**。
 
+> [!IMPORTANT]
+> tGD Pi Web は、許可されたワークスペース内のファイル読み書き、git リポジトリの確認、shell コマンドの実行が可能です。デフォルトでは localhost のみで使用してください。リモート公開する場合は `PIWEB_ACCESS_PASSWORD` を設定し、認証付きのプライベートネットワークまたは Access proxy の背後に配置してください。詳細は[デプロイガイド](./deploy/README.md)を参照してください。
+
+サポート対象のワンステップインストールには、専用の checkout を使用します。
+
 ```bash
-git clone https://github.com/openclawyhwang-hub/tGD-pi-web.git
+git clone https://github.com/yhwangtw/tgd-pi-web.git
 cd tGD-pi-web
 bash setup.sh
 ```
 
-セットアップスクリプトは Node.js と npm を確認し、依存関係をインストールし、Pi agent ディレクトリを検証して production build を作成します。必要であれば production server も起動できます。このリポジトリ外のファイルは変更しません。
+セットアップスクリプトは、Git checkout ではまずローカルソースを `origin/main` で置き換え、その後 Node.js と npm の確認、依存関係のインストール、TypeScript 検証、production build を行い、必要に応じて production server を起動します。ソースアーカイブでは、既知の古いファイルを build 前に `~/.tgd-pi-web-backups/` へ移動します（`TGD_SETUP_BACKUP_DIR` で変更可能）。
+
+> [!WARNING]
+> エンドユーザー向け Git インストールでは `origin/main` が唯一の正です。`bash setup.sh` は `git reset --hard origin/main` と `git clean -fd` を実行し、ローカル commit、tracked 変更、ignore されていない untracked ファイルを破棄します。`.env`、`node_modules`、`.next` など ignore 済みの runtime state は保持されます。
 
 手動セットアップ：
 
@@ -77,11 +84,10 @@ npm start
 ### 既存 checkout の更新
 
 ```bash
-git pull
-npm install
-npm run build
-npm start
+bash setup.sh
 ```
+
+意図的にオフラインで使う Git checkout では、`TGD_SETUP_OFFLINE=1 bash setup.sh` を実行して remote 同期をスキップします。
 
 ## ブラウザ内の tGD ワークフロー
 
@@ -118,6 +124,12 @@ parent/
 artifacts が別の場所にある場合は `TGD_DIR` を設定してください。
 
 ## インターフェース
+
+<p align="center">
+  <img src="./docs/screenshots/11-mobile-chat.png" alt="レスポンシブなモバイル会話画面" width="390">
+</p>
+
+モバイルレイアウトでは、端末の Safe Area を尊重しながら、現在のフェーズ、会話、入力欄、モデル操作、主要ナビゲーションを親指の届く範囲に保ちます。
 
 | セッションとファイルのワークスペース | コマンドパレット |
 |---|---|
@@ -201,7 +213,7 @@ artifacts が別の場所にある場合は `TGD_DIR` を設定してくださ�
 
 | コマンド | 用途 |
 |---|---|
-| `bash setup.sh` | 環境を検証し、依存関係をインストールして production build を作成 |
+| `bash setup.sh` | ローカル source を `origin/main` で置き換え、検証、install、build を行い、必要に応じて production を起動 |
 | `npm run dev` | 必要に応じてポート `30141` で開発サーバーを起動 |
 | `node_modules/.bin/tsc --noEmit` | Typecheck |
 | `npx eslint .` | Lint |
@@ -231,6 +243,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 | 設定 | 動作 |
 |---|---|
 | `PI_CODING_AGENT_DIR` | デフォルトの `~/.pi/agent` ディレクトリを上書き |
+| `PIWEB_ACCESS_PASSWORD` | すべての route に組み込みの共有パスワードゲートを有効化 |
 | `TGD_DIR` | 隣接する `<project>-tGD/` artifact ディレクトリを上書き |
 | `models.json` | カスタム `baseUrl` を含むモデル／provider カタログ |
 | `auth.json` | Pi が管理する provider ごとの API credential |

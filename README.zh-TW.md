@@ -1,9 +1,7 @@
 # tGD Pi Web
 
 <p align="center">
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
-  <a href="LICENSE"><img alt="授權條款" src="https://img.shields.io/github/license/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/commits/main"><img alt="最近提交" src="https://img.shields.io/github/last-commit/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
+  <a href="https://github.com/yhwangtw/tgd-pi-web/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/yhwangtw/tgd-pi-web/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react">
 </p>
@@ -16,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/releases">版本發布</a> ·
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/issues">回報錯誤</a> ·
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/issues">建議功能</a>
+  <a href="https://github.com/yhwangtw/tgd-pi-web/releases">版本發布</a> ·
+  <a href="https://github.com/yhwangtw/tgd-pi-web/issues">回報錯誤</a> ·
+  <a href="https://github.com/yhwangtw/tgd-pi-web/issues">建議功能</a>
 </p>
 
 **為 Pi Coding Agent 與完整 tGD 交付流程打造的瀏覽器工作空間。**
@@ -36,6 +34,7 @@ Pi 的終端體驗快速而專注；這個專案補上長時間或多工作流�
 - 在對話旁檢查檔案、diff、tool call 與 git 變更。
 - 在同一工作空間追蹤 tGD artifacts 與七個交付階段。
 - 透過搜尋、書籤、minimap 與分支導覽長篇對話。
+- 在手機與桌機上使用 safe-area 導覽、精簡階段列及適合觸控的訊息操作。
 - 保持本機優先：除了你設定的模型端點，應用程式執行時不會發出外部請求。
 
 ## 適合誰？
@@ -56,8 +55,13 @@ Pi 的終端體驗快速而專注；這個專案補上長時間或多工作流�
 
 本專案只透過 GitHub 原始碼發布，**不發布至 npm**。
 
+> [!IMPORTANT]
+> tGD Pi Web 能在允許的工作區讀寫檔案、檢查 git repository，並執行 shell 指令。預設只在 localhost 使用；若要遠端存取，請設定 `PIWEB_ACCESS_PASSWORD`，並放在具身分驗證的私人網路或 Access proxy 後方。詳見[部署指南](./deploy/README.md)。
+
+正式支援的一步式安裝請使用獨立 checkout：
+
 ```bash
-git clone https://github.com/openclawyhwang-hub/tGD-pi-web.git
+git clone https://github.com/yhwangtw/tgd-pi-web.git
 cd tGD-pi-web
 bash setup.sh
 ```
@@ -130,6 +134,12 @@ parent/
 若 artifacts 位於其他位置，可設定 `TGD_DIR`。
 
 ## 介面導覽
+
+<p align="center">
+  <img src="./docs/screenshots/11-mobile-chat.png" alt="手機版響應式對話介面" width="390">
+</p>
+
+手機版會在 safe area 內保留目前階段、對話、輸入框、模型控制與主要導覽，常用操作維持在拇指可及範圍。
 
 | Session 與檔案工作區 | 指令面板 |
 |---|---|
@@ -243,6 +253,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 | 設定 | 行為 |
 |---|---|
 | `PI_CODING_AGENT_DIR` | 覆寫預設的 `~/.pi/agent` 目錄 |
+| `PIWEB_ACCESS_PASSWORD` | 啟用套用於所有 route 的內建共用密碼閘門 |
 | `TGD_DIR` | 覆寫相鄰的 `<project>-tGD/` artifact 目錄 |
 | `models.json` | 模型與 provider 清單，包含自訂 `baseUrl` |
 | `auth.json` | 由 Pi 管理的各 provider API credential |

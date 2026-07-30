@@ -1,9 +1,7 @@
 # tGD Pi Web
 
 <p align="center">
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
-  <a href="LICENSE"><img alt="Lizenz" src="https://img.shields.io/github/license/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/commits/main"><img alt="Letzter Commit" src="https://img.shields.io/github/last-commit/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
+  <a href="https://github.com/yhwangtw/tgd-pi-web/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/yhwangtw/tgd-pi-web/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react">
 </p>
@@ -16,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/releases">Releases</a> ·
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/issues">Fehler melden</a> ·
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/issues">Funktion vorschlagen</a>
+  <a href="https://github.com/yhwangtw/tgd-pi-web/releases">Releases</a> ·
+  <a href="https://github.com/yhwangtw/tgd-pi-web/issues">Fehler melden</a> ·
+  <a href="https://github.com/yhwangtw/tgd-pi-web/issues">Funktion vorschlagen</a>
 </p>
 
 **Ein Browser-Arbeitsbereich für den Pi Coding Agent und den vollständigen tGD-Auslieferungsprozess.**
@@ -36,6 +34,7 @@ Die Terminal-Oberfläche von Pi ist schnell und fokussiert. Dieses Projekt ergä
 - Dateien, Diffs, Tool-Aufrufe und Git-Änderungen direkt neben dem Gespräch prüfen.
 - tGD-Artefakte und alle sieben Auslieferungsphasen im selben Arbeitsbereich verfolgen.
 - Lange Gespräche mit Suche, Lesezeichen, Minimap und Branches navigieren.
+- Auf Smartphone und Desktop komfortabel arbeiten – mit Safe-Area-Navigation, kompakter Pipeline und touch-freundlichen Nachrichtenaktionen.
 - Local-first: Zur Laufzeit sendet die Anwendung keine externen Anfragen außer an den von dir konfigurierten Modell-Endpunkt.
 
 ## Für wen ist das gedacht?
@@ -56,13 +55,21 @@ Die Terminal-Oberfläche von Pi ist schnell und fokussiert. Dieses Projekt ergä
 
 Dieses Projekt wird als GitHub-Quellcode verteilt und **nicht auf npm veröffentlicht**.
 
+> [!IMPORTANT]
+> tGD Pi Web kann Dateien in erlaubten Workspaces lesen und bearbeiten, Git-Repositories prüfen und Shell-Befehle ausführen. Verwende es standardmäßig nur auf localhost. Für Remote-Zugriff müssen `PIWEB_ACCESS_PASSWORD` gesetzt und der Dienst hinter einem authentifizierten privaten Netzwerk oder Access Proxy betrieben werden. Weitere Informationen stehen im [Deployment-Leitfaden](./deploy/README.md).
+
+Verwende für die unterstützte Ein-Schritt-Installation einen eigenen Checkout:
+
 ```bash
-git clone https://github.com/openclawyhwang-hub/tGD-pi-web.git
+git clone https://github.com/yhwangtw/tgd-pi-web.git
 cd tGD-pi-web
 bash setup.sh
 ```
 
-Das Setup-Skript prüft Node.js und npm, installiert Abhängigkeiten, validiert das Pi-Agentenverzeichnis, erstellt einen Production-Build und kann den Production-Server starten. Es verändert keine Dateien außerhalb dieses Repositorys.
+In einem Git-Checkout ersetzt das Setup-Skript zuerst die lokale Quelle durch `origin/main`. Danach prüft es Node.js und npm, installiert Abhängigkeiten, führt die TypeScript-Validierung aus, erstellt den Production-Build und kann den Production-Server starten. Bei Quellarchiven werden bekannte veraltete Dateien vor dem Build nach `~/.tgd-pi-web-backups/` verschoben; der Pfad lässt sich mit `TGD_SETUP_BACKUP_DIR` ändern.
+
+> [!WARNING]
+> Für Git-Installationen von Endanwendern ist `origin/main` die einzige Quelle der Wahrheit. `bash setup.sh` führt `git reset --hard origin/main` und `git clean -fd` aus. Lokale Commits, getrackte Änderungen und nicht ignorierte untracked Dateien werden verworfen. Ignorierter Runtime-State wie `.env`, `node_modules` und `.next` bleibt erhalten.
 
 Manuelle Einrichtung:
 
@@ -77,11 +84,10 @@ npm start
 ### Vorhandenen Checkout aktualisieren
 
 ```bash
-git pull
-npm install
-npm run build
-npm start
+bash setup.sh
 ```
+
+Für einen bewusst offline verwendeten Git-Checkout überspringt `TGD_SETUP_OFFLINE=1 bash setup.sh` die Remote-Synchronisierung.
 
 ## tGD-Workflow im Browser
 
@@ -118,6 +124,12 @@ parent/
 Setze `TGD_DIR`, wenn das Artefaktverzeichnis an einem anderen Ort liegt.
 
 ## Oberfläche
+
+<p align="center">
+  <img src="./docs/screenshots/11-mobile-chat.png" alt="Responsive mobile Gesprächsansicht" width="390">
+</p>
+
+Das mobile Layout hält aktive Phase, Gespräch, Composer, Modellsteuerung und Hauptnavigation in Daumenreichweite und berücksichtigt die Safe Areas des Geräts.
 
 | Session- und Datei-Arbeitsbereich | Befehlspalette |
 |---|---|
@@ -201,7 +213,7 @@ Setze `TGD_DIR`, wenn das Artefaktverzeichnis an einem anderen Ort liegt.
 
 | Befehl | Zweck |
 |---|---|
-| `bash setup.sh` | Umgebung prüfen, Abhängigkeiten installieren und Production-Build erstellen |
+| `bash setup.sh` | Lokalen Quellstand durch `origin/main` ersetzen, prüfen, installieren, bauen und Production optional starten |
 | `npm run dev` | Optional den Entwicklungsserver auf Port `30141` starten |
 | `node_modules/.bin/tsc --noEmit` | Typecheck |
 | `npx eslint .` | Lint |
@@ -231,6 +243,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 | Einstellung | Verhalten |
 |---|---|
 | `PI_CODING_AGENT_DIR` | Überschreibt das Standardverzeichnis `~/.pi/agent` |
+| `PIWEB_ACCESS_PASSWORD` | Aktiviert das integrierte gemeinsame Passwort-Gate für alle Routes |
 | `TGD_DIR` | Überschreibt das benachbarte Artefaktverzeichnis `<project>-tGD/` |
 | `models.json` | Modell-/Provider-Katalog einschließlich benutzerdefinierter `baseUrl`-Werte |
 | `auth.json` | Von Pi verwaltete API-Zugangsdaten je Provider |

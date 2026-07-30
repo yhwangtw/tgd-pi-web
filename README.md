@@ -1,9 +1,7 @@
 # tGD Pi Web
 
 <p align="center">
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/openclawyhwang-hub/tGD-pi-web?style=flat-square"></a>
+  <a href="https://github.com/yhwangtw/tgd-pi-web/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/yhwangtw/tgd-pi-web/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react">
 </p>
@@ -16,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/releases">Releases</a> ·
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/issues">Report a bug</a> ·
-  <a href="https://github.com/openclawyhwang-hub/tGD-pi-web/issues">Request a feature</a>
+  <a href="https://github.com/yhwangtw/tgd-pi-web/releases">Releases</a> ·
+  <a href="https://github.com/yhwangtw/tgd-pi-web/issues">Report a bug</a> ·
+  <a href="https://github.com/yhwangtw/tgd-pi-web/issues">Request a feature</a>
 </p>
 
 **A browser workspace for Pi Coding Agent and the complete tGD delivery workflow.**
@@ -36,6 +34,7 @@ Pi's terminal experience is fast and focused. This project adds the visual conte
 - Review files, diffs, tool calls, and git changes beside the conversation.
 - Track tGD artifacts and the seven delivery phases in the same workspace.
 - Navigate long conversations with search, bookmarks, a minimap, and branches.
+- Work comfortably on phones and desktops with safe-area-aware navigation, a compact pipeline, and touch-friendly message actions.
 - Keep everything local: the app makes no external runtime requests beyond the model endpoint you configure.
 
 ## Who is this for?
@@ -56,8 +55,13 @@ Pi's terminal experience is fast and focused. This project adds the visual conte
 
 This project is distributed from GitHub source and is **not published to npm**.
 
+> [!IMPORTANT]
+> tGD Pi Web can read and edit files, inspect git repositories, and run shell commands in allowed workspaces. Keep it on localhost by default. For remote access, set `PIWEB_ACCESS_PASSWORD` and place the service behind an authenticated private network or access proxy. See the [deployment guide](./deploy/README.md).
+
+Use a dedicated checkout for the supported one-step installation:
+
 ```bash
-git clone https://github.com/openclawyhwang-hub/tGD-pi-web.git
+git clone https://github.com/yhwangtw/tgd-pi-web.git
 cd tGD-pi-web
 bash setup.sh
 ```
@@ -130,6 +134,12 @@ parent/
 Set `TGD_DIR` when your artifact directory lives elsewhere.
 
 ## Interface Tour
+
+<p align="center">
+  <img src="./docs/screenshots/11-mobile-chat.png" alt="Responsive mobile conversation view" width="390">
+</p>
+
+The mobile layout keeps the active phase, transcript, composer, model controls, and primary navigation within thumb reach while respecting device safe areas.
 
 | Session and file workspace | Command palette |
 |---|---|
@@ -243,6 +253,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 | Setting | Behavior |
 |---|---|
 | `PI_CODING_AGENT_DIR` | Overrides the default `~/.pi/agent` directory |
+| `PIWEB_ACCESS_PASSWORD` | Enables the built-in shared-password gate for every route |
 | `TGD_DIR` | Overrides the sibling `<project>-tGD/` artifact directory |
 | `models.json` | Model/provider catalog, including custom `baseUrl` values |
 | `auth.json` | Per-provider API credentials managed by Pi |
