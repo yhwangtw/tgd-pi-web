@@ -10,6 +10,7 @@ All notable changes to tGD-pi-web are documented here.
 - **Next.js request interception migrated from Middleware to Proxy.** The access gate now uses the Next.js 16 `proxy.ts` convention without the production-build deprecation warning.
 
 ### Added
+- **Conversation alignment is user-selectable.** Appearance settings now switch between the familiar assistant-left/user-right layout and an all-left transcript, with the choice persisted across sessions and reloads on desktop and mobile.
 - **OAuth flows have a tested browser bridge.** Browser login, device code, manual callback input, provider selection, cancellation, and prompt aborts share one typed token broker with regression tests.
 - **Remote-access protection is layered.** Access cookies are expiring HMAC tokens, an optional independent `PIWEB_SESSION_SECRET` separates cookie signing from the password, failed logins are throttled, and explicit cross-origin browser mutations are blocked.
 - **Dependency maintenance is automated and enforceable.** Dependabot groups the paired Pi packages and GitHub Actions updates; production audit now blocks every high/critical finding except the exact upstream Pi shrinkwrap advisory `GHSA-mh99-v99m-4gvg`, and fails once that exception becomes stale.

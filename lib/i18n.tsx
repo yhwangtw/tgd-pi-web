@@ -132,6 +132,9 @@ const MESSAGES = {
   "appearance.fontFamily.sans": { en: "Sans", zh: "無襯線" },
   "appearance.fontFamily.mono": { en: "Mono", zh: "等寬" },
   "appearance.fontFamily.system": { en: "System", zh: "系統" },
+  "appearance.messageLayout": { en: "Message layout", zh: "訊息排列" },
+  "appearance.messageLayout.split": { en: "Left & right", zh: "左右對話" },
+  "appearance.messageLayout.left": { en: "All left", zh: "全部靠左" },
   "appearance.logout": { en: "Log out", zh: "登出" },
 
   // ── Composer ──

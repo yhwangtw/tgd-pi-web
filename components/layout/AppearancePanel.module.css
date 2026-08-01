@@ -83,6 +83,13 @@
   margin-bottom: 10px;
 }
 
+.messageLayoutRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
 .fontFamilyRow [data-family="sans"] { font-family: var(--font-sans); }
 .fontFamilyRow [data-family="mono"] { font-family: var(--font-mono); }
 .fontFamilyRow [data-family="system"] { font-family: var(--font-system); }

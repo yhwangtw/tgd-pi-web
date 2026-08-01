@@ -6,6 +6,7 @@ import { useTheme, toggleOriginFromEvent } from "@/hooks/useTheme";
 import { useI18n } from "@/lib/i18n";
 import { FONT_SIZES, useFontSize } from "@/lib/font-size";
 import { FONT_FAMILIES, useFontFamily } from "@/lib/font-family";
+import { MESSAGE_LAYOUTS, useMessageLayout } from "@/lib/message-layout";
 import styles from "./AppearancePanel.module.css";
 
 interface Props {
@@ -22,6 +23,7 @@ export function AppearancePanel({ onClose }: Props) {
   const { isDark, toggleTheme } = useTheme();
   const { fontSize, setFontSize } = useFontSize();
   const { fontFamily, setFontFamily } = useFontFamily();
+  const { messageLayout, setMessageLayout } = useMessageLayout();
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -116,6 +118,21 @@ export function AppearancePanel({ onClose }: Props) {
             onClick={() => setFontFamily(family)}
           >
             {t(`appearance.fontFamily.${family}`)}
+          </button>
+        ))}
+      </div>
+
+      <div className={styles.sectionLabel}>{t("appearance.messageLayout")}</div>
+      <div className={styles.messageLayoutRow} role="group" aria-label={t("appearance.messageLayout")}>
+        {MESSAGE_LAYOUTS.map((layout) => (
+          <button
+            key={layout}
+            type="button"
+            className={`${styles.fontSizeBtn} ${layout === messageLayout ? styles.fontSizeBtnActive : ""}`}
+            aria-pressed={layout === messageLayout}
+            onClick={() => setMessageLayout(layout)}
+          >
+            {t(`appearance.messageLayout.${layout}`)}
           </button>
         ))}
       </div>

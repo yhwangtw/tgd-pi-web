@@ -146,9 +146,10 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
   return (
     <div
       ref={rootRef}
+      data-testid="user-message"
       className={`hover-group ${styles.root}`}
     >
-      <div className={styles.messageRow}>
+      <div data-testid="user-message-row" className={styles.messageRow}>
         {editing ? (
           <div className={styles.editBox}>
             <textarea
@@ -291,7 +292,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                   <circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" />
                 </svg>
               </summary>
-              <div className={styles.mobileActionPanel}>
+              <div data-testid="user-message-actions" className={styles.mobileActionPanel}>
                 <button
                   type="button"
                   onClick={() => { closeActions(); copyContent(); }}
