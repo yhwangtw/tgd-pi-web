@@ -81,12 +81,12 @@
   justify-content: center;
   gap: 8px;
   padding: 24px 18px;
-  color: var(--text-dim);
+  color: var(--text-muted);
   text-align: center;
   font-size: calc(11.5px * var(--font-scale));
 }
-.empty svg { opacity: 0.65; }
-.empty strong { color: var(--text-muted); font-size: calc(13px * var(--font-scale)); }
+.empty svg { color: var(--text-dim); opacity: 0.72; }
+.empty strong { color: var(--text); font-size: calc(13px * var(--font-scale)); }
 .empty span { line-height: 1.5; }
 .empty .primaryButton { margin-top: 6px; }
 
@@ -287,7 +287,8 @@
 .formActions { display: flex; justify-content: flex-end; gap: 7px; margin: 14px -12px -12px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--bg-panel); }
 .primaryButton,
 .secondaryButton { min-height: 31px; padding: 5px 10px; font-size: calc(10.5px * var(--font-scale)); }
-.primaryButton { background: var(--accent); border-color: var(--accent); color: var(--color-accent-contrast); }
+.primaryButton { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.primaryButton:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
 .secondaryButton { background: var(--bg-elev-1); color: var(--text-muted); }
 .formError,
 .listError { padding: 8px; border: 1px solid var(--color-error-border); border-radius: 7px; background: var(--color-error-bg); color: var(--color-error-text); font-size: calc(10px * var(--font-scale)); overflow-wrap: anywhere; }
