@@ -102,10 +102,10 @@
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
   height: 46px;
   padding: 0 8px 0 14px;
   background: var(--glass-bg);
+  box-shadow: 0 12px 28px -30px color-mix(in srgb, var(--text) 42%, transparent);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
   backdrop-filter: blur(14px) saturate(1.4);
 }
@@ -404,9 +404,9 @@
   height: 30px;
   margin-left: 2px;
   padding: 0 9px;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 7px;
-  background: var(--bg-elev-1);
+  background: transparent;
   font-size: calc(11px * var(--font-scale));
   color: var(--text-muted);
   white-space: nowrap;
@@ -415,7 +415,6 @@
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 .sessionStats:hover {
-  border-color: var(--color-accent-border);
   background: var(--bg-hover);
   color: var(--text);
 }
@@ -432,7 +431,6 @@
 }
 .contextStat + .costStat {
   padding-left: 8px;
-  border-left: 1px solid var(--border);
 }
 
 .contextStat {
@@ -984,9 +982,7 @@
   }
 
   .mobileMoreGroup + .mobileMoreGroup {
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid var(--border);
+    margin-top: 16px;
   }
 
   .mobileMoreGroupTitle {
@@ -1008,7 +1004,7 @@
     justify-content: center;
     gap: 6px;
     padding: 8px 4px;
-    border: 1px solid var(--border);
+    border: 1px solid transparent;
     border-radius: var(--radius-lg);
     background: var(--bg-elev-1);
     color: var(--text-muted);
@@ -1022,7 +1018,6 @@
   }
 
   .mobileMoreActionActive {
-    border-color: var(--color-accent-border);
     background: var(--color-accent-bg);
     color: var(--accent);
   }

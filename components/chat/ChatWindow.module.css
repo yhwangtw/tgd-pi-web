@@ -158,18 +158,7 @@
 }
 
 .turnStart {
-  margin-top: 8px;
-  padding-top: 12px;
-}
-
-.turnStart::before {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border) 14%, var(--border) 86%, transparent);
-  content: "";
+  margin-top: 22px;
 }
 
 .unreadDivider {
@@ -276,8 +265,7 @@
   }
 
   :global(html[data-density="compact"]) .turnStart {
-    margin-top: 4px;
-    padding-top: 8px;
+    margin-top: 14px;
   }
 
   :global(html[data-density="compact"]) .unreadDivider {
@@ -288,8 +276,7 @@
 
 @media (max-width: 700px) {
   :global(html[data-density="compact"]) .turnStart {
-    margin-top: 2px;
-    padding-top: 7px;
+    margin-top: 12px;
   }
 
   .emptyNew {
@@ -357,6 +344,7 @@
   .composerDock {
     z-index: 12;
     background: var(--bg);
+    box-shadow: 0 -14px 34px -30px color-mix(in srgb, var(--text) 38%, transparent);
   }
 
   .contextWarningWrap {
@@ -396,8 +384,7 @@
   }
 
   .turnStart {
-    margin-top: 4px;
-    padding-top: 10px;
+    margin-top: 18px;
   }
 
   .unreadDivider { margin: 8px 0 6px; gap: 7px; }

@@ -3,8 +3,7 @@
   align-items: center;
   gap: 10px;
   padding: 5px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-elev-1, var(--bg-panel));
+  background: color-mix(in srgb, var(--bg-elev-1, var(--bg-panel)) 72%, transparent);
   flex-shrink: 0;
   min-width: 0;
   overflow: hidden;

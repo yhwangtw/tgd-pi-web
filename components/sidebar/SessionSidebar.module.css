@@ -9,7 +9,6 @@
 /* ── Header ── */
 .header {
   padding: 12px 10px 10px;
-  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -37,7 +36,7 @@
   justify-content: center;
   gap: 5px;
   background: var(--bg-hover);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   height: 32px;
   padding-left: 10px;
   padding-right: 12px;
@@ -72,7 +71,7 @@
 }
 .refreshButtonDefault {
   background: var(--bg-hover);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   color: var(--text-muted);
 }
 .refreshButtonDone {
@@ -84,7 +83,6 @@
 /* ── Session-list toolbar ── */
 .sessionToolbar {
   padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -183,14 +181,12 @@
 
 /* ── Divider between sections ── */
 .groupHeaderDivider {
-  margin-top: 10px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
+  margin-top: 14px;
+  padding-top: 8px;
 }
 
 /* ── File explorer section ── */
 .explorerSection {
-  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -261,7 +257,6 @@
   padding: 7px 12px;
   margin-top: 6px;
   border: none;
-  border-top: 1px solid var(--border);
   background: none;
   color: var(--text-dim);
   font-size: calc(11px * var(--font-scale));
