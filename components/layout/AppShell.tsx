@@ -706,27 +706,31 @@ export function AppShell() {
           )}
           {/* Session stats — right-aligned in top bar */}
           {showChat && (state.sessionStats || state.contextUsage) && (() => {
-            const t = state.sessionStats?.tokens;
-            const c = state.sessionStats?.cost ?? 0;
+            const tokens = state.sessionStats?.tokens;
+            const cost = state.sessionStats?.cost ?? 0;
             const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
-            const costStr = c > 0 ? (c >= 0.01 ? `$${c.toFixed(2)}` : `<$0.01`) : null;
+            const costStr = cost > 0 ? (cost >= 0.01 ? `$${cost.toFixed(2)}` : `<$0.01`) : null;
 
             let ctxColor = "var(--text-muted)";
-            let ctxStr: string | null = null;
+            let ctxPercentStr: string | null = null;
+            let ctxWindowStr: string | null = null;
             if (state.contextUsage?.contextWindow) {
               const pct = state.contextUsage.percent;
               if (pct !== null && pct > 90) ctxColor = "var(--color-error)";
               else if (pct !== null && pct > 70) ctxColor = "var(--color-warning-text-strong)";
-              ctxStr = pct !== null ? `${pct.toFixed(0)}% / ${fmt(state.contextUsage.contextWindow)}` : `? / ${fmt(state.contextUsage.contextWindow)}`;
+              ctxPercentStr = pct !== null ? `${pct.toFixed(0)}%` : "?";
+              ctxWindowStr = `/ ${fmt(state.contextUsage.contextWindow)}`;
             }
 
+            const totalTokens = tokens ? tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite : 0;
+
             const tooltipParts: string[] = [];
-            if (t) {
-              tooltipParts.push(`in: ${t.input.toLocaleString()}`);
-              tooltipParts.push(`out: ${t.output.toLocaleString()}`);
-              tooltipParts.push(`cache read: ${t.cacheRead.toLocaleString()}`);
-              tooltipParts.push(`cache write: ${t.cacheWrite.toLocaleString()}`);
-              if (c > 0) tooltipParts.push(`cost: $${c.toFixed(4)}`);
+            if (tokens) {
+              tooltipParts.push(`in: ${tokens.input.toLocaleString()}`);
+              tooltipParts.push(`out: ${tokens.output.toLocaleString()}`);
+              tooltipParts.push(`cache read: ${tokens.cacheRead.toLocaleString()}`);
+              tooltipParts.push(`cache write: ${tokens.cacheWrite.toLocaleString()}`);
+              if (cost > 0) tooltipParts.push(`cost: $${cost.toFixed(4)}`);
             }
             if (state.contextUsage?.contextWindow) {
               const pct = state.contextUsage.percent;
@@ -735,42 +739,28 @@ export function AppShell() {
             const tooltip = tooltipParts.join("  |  ");
 
             return (
-              <div
+              <button
+                type="button"
+                onClick={() => setAnalyticsOpen(true)}
                 title={tooltip}
                 className={s.sessionStats}
+                aria-label={t("topbar.analyticsTitle")}
+                data-testid="session-usage-summary"
               >
-                {t && t.input > 0 && (
-                  <span className={s.tokenStat}>
-                    <span className={s.tokenStatLabel}>in</span>
-                    {fmt(t.input)}
-                  </span>
-                )}
-                {t && t.output > 0 && (
-                  <span className={s.tokenStat}>
-                    <span className={s.tokenStatLabel}>out</span>
-                    {fmt(t.output)}
-                  </span>
-                )}
-                {t && t.cacheRead > 0 && (
-                  <span className={s.tokenStat}>
-                    <span className={s.tokenStatLabel}>cache</span>
-                    {fmt(t.cacheRead)}
-                  </span>
-                )}
-                {costStr && (
-                  <span className={s.costStat}>
-                    {costStr}
-                  </span>
-                )}
-                {ctxStr && (
+                {ctxPercentStr && (
                   <span className={s.contextStat} style={{ color: ctxColor }}>
                     <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M1 9 L1 5 Q1 1 5 1 Q9 1 9 5 L9 9" /><line x1="1" y1="9" x2="9" y2="9" />
                     </svg>
-                    {ctxStr}
+                    <span>{ctxPercentStr}</span>
+                    <span className={s.contextWindow}>{ctxWindowStr}</span>
                   </span>
                 )}
-              </div>
+                {costStr && <span className={s.costStat}>{costStr}</span>}
+                {!ctxPercentStr && !costStr && totalTokens > 0 && (
+                  <span className={s.tokenTotal}>{fmt(totalTokens)} tokens</span>
+                )}
+              </button>
             );
           })()}
           <button

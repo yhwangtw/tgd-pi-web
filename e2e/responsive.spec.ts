@@ -229,4 +229,35 @@ test.describe("responsive shell", () => {
     expect(hideBox!.x + hideBox!.width).toBeLessThanOrEqual(panelBarBox!.x + panelBarBox!.width);
     await expectNoPageOverflow(page);
   });
+
+  test("AC-RWD-9: desktop session header keeps usage compact and actionable", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openSession(page);
+
+    const topBar = page.getByTestId("top-bar");
+    const title = topBar.locator("[class*='chatTitle']");
+    const sessionMenu = topBar.getByRole("button", { name: "Session actions" });
+    const usage = page.getByTestId("session-usage-summary");
+
+    await expect(usage).toBeVisible();
+    await expect(topBar.getByText("IN", { exact: true })).toHaveCount(0);
+    await expect(topBar.getByText("OUT", { exact: true })).toHaveCount(0);
+    await expect(topBar.getByText("CACHE", { exact: true })).toHaveCount(0);
+
+    const [titleBox, menuBox, usageBox] = await Promise.all([
+      title.boundingBox(),
+      sessionMenu.boundingBox(),
+      usage.boundingBox(),
+    ]);
+    expect(titleBox).not.toBeNull();
+    expect(menuBox).not.toBeNull();
+    expect(usageBox).not.toBeNull();
+    expect(menuBox!.x).toBeGreaterThanOrEqual(titleBox!.x + titleBox!.width);
+    expect(usageBox!.x).toBeGreaterThanOrEqual(menuBox!.x + menuBox!.width);
+    expect(usageBox!.width).toBeLessThanOrEqual(150);
+
+    await usage.click();
+    await expect(page.getByRole("heading", { name: "Session Analytics" })).toBeVisible();
+    await expectNoPageOverflow(page);
+  });
 });
