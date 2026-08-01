@@ -5,6 +5,7 @@ All notable changes to tGD-pi-web are documented here.
 ## [Unreleased]
 
 ### Changed
+- **Assistant message actions stay attached to message metadata.** The desktop quote, copy, and bookmark toolbar now opens beside Usage/time instead of floating at the far-right edge of the transcript; the compact mobile actions menu is unchanged.
 - **Pi runtime upgraded from 0.80.6 to 0.83.0.** Model discovery, API-key login, OAuth, logout, and active-session model selection now use Pi's canonical `ModelRuntime`; persisted credential changes restart idle sessions immediately and defer running sessions until the current run finishes.
 - **Setup makes the Web/CLI version boundary explicit.** It reports the pinned Web runtime and installed global `pi` versions; an interactive mismatch offers an opt-in global CLI synchronization, while unattended installs only print the command and never mutate the global CLI.
 - **Next.js request interception migrated from Middleware to Proxy.** The access gate now uses the Next.js 16 `proxy.ts` convention without the production-build deprecation warning.

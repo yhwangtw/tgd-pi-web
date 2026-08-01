@@ -139,6 +139,25 @@ test.describe("chat transcript", () => {
     await expect(page.getByText("services 層有沒有需要重構的地方").first()).toBeVisible();
   });
 
+  test("assistant message actions stay attached to their footer", async ({ page }) => {
+    await openMain(page);
+    const message = page.getByTestId("assistant-message").last();
+    await message.scrollIntoViewIfNeeded();
+    await message.hover({ position: { x: 8, y: 8 } });
+
+    const footer = message.getByTestId("assistant-message-footer");
+    const actions = message.getByTestId("assistant-message-actions");
+    await expect(actions).toBeVisible();
+    await page.waitForTimeout(200); // let the 120ms hover transition settle
+
+    const footerBox = await footer.boundingBox();
+    const actionsBox = await actions.boundingBox();
+    expect(footerBox).not.toBeNull();
+    expect(actionsBox).not.toBeNull();
+    expect(Math.abs(actionsBox!.x - (footerBox!.x + footerBox!.width + 6))).toBeLessThanOrEqual(2);
+    expect(actionsBox!.x + actionsBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  });
+
   test("always-follow toggle persists via the palette", async ({ page }) => {
     await openMain(page);
     for (const round of ["on", "off"] as const) {

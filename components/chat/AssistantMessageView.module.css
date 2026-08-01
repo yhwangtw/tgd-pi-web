@@ -157,6 +157,7 @@
 }
 
 .footer {
+  position: relative;
   display: flex;
   width: fit-content;
   max-width: 100%;
@@ -175,8 +176,8 @@
 
 .actionToolbar {
   position: absolute;
-  right: 0;
-  bottom: 0;
+  left: calc(100% + 6px);
+  bottom: 50%;
   z-index: 20;
   display: flex;
   align-items: center;
@@ -190,7 +191,7 @@
   box-shadow: var(--color-shadow-popup);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(3px);
+  transform: translate(3px, 50%);
   transition: opacity 0.12s ease, transform 0.12s ease;
 }
 .mobileActionMenu { display: none; }
@@ -198,7 +199,7 @@
 .messageContainer:focus-within .actionToolbar {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0);
+  transform: translate(0, 50%);
 }
 
 .actionToolbar .copyButton {

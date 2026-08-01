@@ -252,7 +252,7 @@ export function AssistantMessageView({
   }, [isStreaming]);
 
   return (
-    <div ref={rootRef} className={`hover-group ${styles.messageContainer}`}>
+    <div ref={rootRef} data-testid="assistant-message" className={`hover-group ${styles.messageContainer}`}>
       {/* Model label */}
       {showModelLabel && <div className={styles.modelLabel}>
         {message.provider && (
@@ -343,11 +343,11 @@ export function AssistantMessageView({
         <div className={styles.abortedNote}>{t("chat.stopped")}</div>
       )}
 
-      <div className={styles.footer}>
+      <div data-testid="assistant-message-footer" className={styles.footer}>
         {showUsage && (usageOverride ?? message.usage) && !isStreaming && (
           <UsageDetails usage={(usageOverride ?? message.usage)!} />
         )}
-        {textContent && !isStreaming && <div className={styles.actionToolbar}>
+        {textContent && !isStreaming && <div data-testid="assistant-message-actions" className={styles.actionToolbar}>
         {textContent && !isStreaming && onQuote && (
           <button type="button" onClick={quoteContent} title={t("chat.quote")} className={`${styles.copyButton} text-dim hover-accent`}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 21c3-6 7-9 14-9" /><path d="M13 7l5 5-5 5" /></svg>
