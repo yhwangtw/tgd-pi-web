@@ -46,6 +46,31 @@ describe("model catalog", () => {
     expect(createCwdSource).not.toHaveBeenCalled();
   });
 
+  it("waits for an active session source to refresh before returning it", async () => {
+    const sessionSource = {
+      registry: { getAvailable: () => [extensionModel] },
+      settings: { getDefaultProvider: () => "team-ai", getDefaultModel: () => "team-fast" },
+      diagnostics: [],
+    };
+    let resolveSource: ((source: typeof sessionSource) => void) | undefined;
+    const getSessionSource = vi.fn(() => new Promise<typeof sessionSource>((resolve) => {
+      resolveSource = resolve;
+    }));
+    const createCwdSource = vi.fn();
+
+    const pending = resolveModelCatalogSource({
+      sessionId: "session-1",
+      cwd: "/workspace",
+      getSessionSource,
+      createCwdSource,
+    });
+
+    expect(getSessionSource).toHaveBeenCalledWith("session-1");
+    expect(createCwdSource).not.toHaveBeenCalled();
+    resolveSource?.(sessionSource);
+    await expect(pending).resolves.toBe(sessionSource);
+  });
+
   it("loads cwd-bound services when there is no active session", async () => {
     const cwdSource = {
       registry: { getAvailable: () => [extensionModel] },

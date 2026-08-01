@@ -20,7 +20,15 @@ const LEGACY_FILES = [
   "components/sidebar/SearchResults.module.css",
 ] as const;
 
-function runSetupFixture(options: { gitCheckout?: boolean; legacyFiles?: boolean; offline?: boolean; tscExit?: number } = {}) {
+function runSetupFixture(
+  options: {
+    gitCheckout?: boolean;
+    legacyFiles?: boolean;
+    offline?: boolean;
+    piVersion?: string;
+    tscExit?: number;
+  } = {},
+) {
   const sandbox = mkdtempSync(join(tmpdir(), "tgd-pi-web-setup-"));
   tempDirs.push(sandbox);
 
@@ -35,8 +43,13 @@ function runSetupFixture(options: { gitCheckout?: boolean; legacyFiles?: boolean
   mkdirSync(project, { recursive: true });
   mkdirSync(fakeBin, { recursive: true });
   mkdirSync(join(project, "node_modules", ".bin"), { recursive: true });
+  mkdirSync(join(project, "node_modules", "@earendil-works", "pi-coding-agent"), { recursive: true });
   copyFileSync(resolve("setup.sh"), join(project, "setup.sh"));
   writeFileSync(join(project, "package-lock.json"), "{}\n");
+  writeFileSync(
+    join(project, "node_modules", "@earendil-works", "pi-coding-agent", "package.json"),
+    JSON.stringify({ version: "0.83.0" }),
+  );
   writeFileSync(ancestorLockfile, "{}\n");
   writeFileSync(gitLog, "");
   writeFileSync(npmLog, "");
@@ -62,6 +75,15 @@ fi
 exit 0
 `);
   chmodSync(fakeNpm, 0o755);
+
+  const fakePi = join(fakeBin, "pi");
+  writeFileSync(fakePi, `#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+  echo "${options.piVersion ?? "0.83.0"}"
+fi
+exit 0
+`);
+  chmodSync(fakePi, 0o755);
 
   const fakeGit = join(fakeBin, "git");
   writeFileSync(fakeGit, `#!/usr/bin/env bash
@@ -131,6 +153,23 @@ describe("workspace root setup", () => {
     expect(npmCalls).not.toContain("run dev");
     expect(result.stdout).toContain("Production build 完成");
     expect(result.stdout).not.toContain("啟動開發模式");
+  });
+
+  it("reports a matching global Pi CLI without reinstalling it", () => {
+    const { npmCalls, result } = runSetupFixture({ piVersion: "0.83.0" });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("全域 Pi CLI 版本一致: 0.83.0");
+    expect(npmCalls).not.toContain("install -g");
+  });
+
+  it("warns about a mismatched global Pi CLI without changing it non-interactively", () => {
+    const { npmCalls, result } = runSetupFixture({ piVersion: "0.79.3" });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("全域 Pi CLI 0.79.3 與 Web runtime 0.83.0 不一致");
+    expect(result.stdout).toContain("npm install -g @earendil-works/pi-coding-agent@0.83.0");
+    expect(npmCalls).not.toContain("install -g");
   });
 
   it("replaces a Git checkout with origin/main before setup continues", () => {

@@ -16,12 +16,22 @@ requires a login:
 # In the service environment (systemd: add an Environment= line; launchd: the
 # EnvironmentVariables dict; shell: export before `npm run start`):
 PIWEB_ACCESS_PASSWORD='pick-a-long-passphrase'
+PIWEB_SESSION_SECRET='paste-a-random-value-from-openssl-rand-hex-32'
 ```
 
-Unauthenticated page loads redirect to `/login`; API calls return 401. The
-cookie lasts 30 days; log out from the Appearance panel. **With the var unset
-the gate is off** (fine for localhost-only use). This is a front-door lock, not
-a substitute for the network isolation below — run both.
+Generate the session secret once with `openssl rand -hex 32`, store it beside
+the password in the service environment, and keep it stable across restarts.
+Changing it intentionally signs out every browser. If the secret is omitted,
+pi-web falls back to the password for compatibility, but an independent random
+secret is strongly recommended for remote access.
+
+Unauthenticated page loads redirect to `/login`; API calls return 401. Access
+cookies are HMAC-signed and last 30 days; five failed logins from one client
+trigger a 15-minute lockout. Browser mutations with an explicit cross-origin
+Origin are rejected even when the password gate is disabled. Log out from the
+Appearance panel. **With `PIWEB_ACCESS_PASSWORD` unset the gate is off** (fine
+for localhost-only use). This is a front-door lock, not a substitute for the
+network isolation below — run both.
 
 The port is `30141` (set by the `start` script: `next start -p 30141`). Next
 binds to `0.0.0.0` by default, so once it's running, any device on the **same

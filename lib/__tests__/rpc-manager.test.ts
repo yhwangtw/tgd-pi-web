@@ -91,12 +91,19 @@ describe("AgentSessionWrapper model catalog refresh", () => {
     const inner = {
       sessionId: "session-1",
       sessionFile: "/tmp/session-1.jsonl",
-      modelRegistry: { find },
       setModel,
       dispose: vi.fn(),
     } as unknown as AgentSessionLike;
-    const refreshModels = vi.fn(() => { refreshed = true; });
-    const wrapper = new AgentSessionWrapper(inner, "", undefined, [], refreshModels);
+    const refreshModels = vi.fn(async () => { refreshed = true; });
+    const wrapper = new AgentSessionWrapper(
+      inner,
+      "",
+      undefined,
+      [],
+      refreshModels,
+      undefined,
+      { find } as never,
+    );
 
     try {
       await expect(wrapper.send({
@@ -110,6 +117,64 @@ describe("AgentSessionWrapper model catalog refresh", () => {
     } finally {
       wrapper.destroy();
     }
+  });
+});
+
+describe("AgentSessionWrapper authentication refresh", () => {
+  it("restarts an idle session after notifying connected clients", () => {
+    const dispose = vi.fn();
+    const inner = {
+      sessionId: "session-idle",
+      sessionFile: "/tmp/session-idle.jsonl",
+      isStreaming: false,
+      isCompacting: false,
+      subscribe: vi.fn(() => vi.fn()),
+      dispose,
+    } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner);
+    const events: Array<{ type: string }> = [];
+    wrapper.start();
+    wrapper.onEvent((event) => events.push(event));
+
+    expect(wrapper.requestAuthRefresh()).toBe("restarted");
+    expect(events).toContainEqual({ type: "session_restart", reason: "auth" });
+    expect(wrapper.isAlive()).toBe(false);
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it("defers restart until a streaming run becomes idle", async () => {
+    let streaming = true;
+    let emit: ((event: { type: string }) => void) | undefined;
+    const dispose = vi.fn();
+    const inner = {
+      sessionId: "session-running",
+      sessionFile: "/tmp/session-running.jsonl",
+      get isStreaming() { return streaming; },
+      isCompacting: false,
+      subscribe: vi.fn((listener: (event: { type: string }) => void) => {
+        emit = listener;
+        return vi.fn();
+      }),
+      dispose,
+    } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner);
+    const events: Array<{ type: string }> = [];
+    wrapper.start();
+    wrapper.onEvent((event) => events.push(event));
+
+    expect(wrapper.requestAuthRefresh()).toBe("deferred");
+    expect(wrapper.requestAuthRefresh()).toBe("deferred");
+    expect(events).toContainEqual({ type: "session_restart_deferred", reason: "auth" });
+    expect(events.filter((event) => event.type === "session_restart_deferred")).toHaveLength(1);
+    expect(wrapper.isAlive()).toBe(true);
+
+    streaming = false;
+    emit?.({ type: "agent_end" });
+    await Promise.resolve();
+
+    expect(events).toContainEqual({ type: "session_restart", reason: "auth" });
+    expect(wrapper.isAlive()).toBe(false);
+    expect(dispose).toHaveBeenCalledOnce();
   });
 });
 

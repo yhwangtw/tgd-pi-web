@@ -224,6 +224,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return;
     }
     switch (event.type) {
+      case "session_restart_deferred":
+        showToast(translate("toast.authRefreshDeferred"), { type: "info", duration: 6000 });
+        break;
+      case "session_restart": {
+        eventSourceRef.current?.close();
+        eventSourceRef.current = null;
+        const sid = sessionIdRef.current;
+        if (!sid) break;
+        setTimeout(() => {
+          void connectEvents(sid).then(async (connected) => {
+            if (!connected) {
+              showToast(translate("toast.authReconnectFailed"), { type: "warning", duration: 8000 });
+              return;
+            }
+            await loadSession(sid, false, true);
+            showToast(translate("toast.authReconnected"), { type: "success", duration: 5000 });
+          });
+        }, 50);
+        break;
+      }
       case "agent_start":
         setAgentRunning(true);
         setAgentPhase({ kind: "waiting_model" });
@@ -397,7 +417,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         break;
     }
-  }, [loadSession, onAgentEnd, onSessionNamed, lastEventAtRef, setStalledSecs, opts.chatInputRef]);
+  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionNamed, lastEventAtRef, setStalledSecs, opts.chatInputRef]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleExtensionUIResponse = useCallback(async (response: WebExtensionUIResponse) => {

@@ -154,18 +154,53 @@ echo -e "  ${GREEN}✅ 依賴已與 package-lock.json 同步${NC}"
 # ── 檢查 Pi Agent ─────────────────────────────────────
 echo ""
 echo -e "${BOLD}🤖 檢查 Pi Agent...${NC}"
+PI_RUNTIME_VERSION="$(node -p "require('./node_modules/@earendil-works/pi-coding-agent/package.json').version")"
+echo -e "  ${GREEN}✅ Web 內建 Pi runtime: ${PI_RUNTIME_VERSION}${NC}"
+
+if command -v pi &>/dev/null; then
+  PI_CLI_VERSION="$(pi --version 2>/dev/null || true)"
+  PI_CLI_VERSION="${PI_CLI_VERSION%%$'\n'*}"
+
+  if [ -z "$PI_CLI_VERSION" ]; then
+    echo -e "  ${YELLOW}⚠️  找到全域 Pi CLI，但無法讀取版本${NC}"
+  elif [ "$PI_CLI_VERSION" = "$PI_RUNTIME_VERSION" ]; then
+    echo -e "  ${GREEN}✅ 全域 Pi CLI 版本一致: ${PI_CLI_VERSION}${NC}"
+  else
+    echo -e "  ${YELLOW}⚠️  全域 Pi CLI ${PI_CLI_VERSION} 與 Web runtime ${PI_RUNTIME_VERSION} 不一致${NC}"
+    echo "  僅使用 Web 不受影響；終端機的 pi 指令仍會使用 ${PI_CLI_VERSION}。"
+
+    if [ -t 0 ]; then
+      read -p "$(echo -e ${CYAN}是否將全域 Pi CLI 同步為 ${PI_RUNTIME_VERSION}？[y/N]${NC} )" sync_pi_cli
+      case "$sync_pi_cli" in
+        y|Y)
+          npm install -g "@earendil-works/pi-coding-agent@${PI_RUNTIME_VERSION}"
+          UPDATED_PI_CLI_VERSION="$(pi --version 2>/dev/null || true)"
+          UPDATED_PI_CLI_VERSION="${UPDATED_PI_CLI_VERSION%%$'\n'*}"
+          if [ "$UPDATED_PI_CLI_VERSION" = "$PI_RUNTIME_VERSION" ]; then
+            echo -e "  ${GREEN}✅ 全域 Pi CLI 已同步為 ${PI_RUNTIME_VERSION}${NC}"
+          else
+            echo -e "  ${YELLOW}⚠️  安裝完成，但 pi --version 回報 ${UPDATED_PI_CLI_VERSION:-未知版本}${NC}"
+          fi
+          ;;
+        *)
+          echo "  保留全域 Pi CLI ${PI_CLI_VERSION}。"
+          ;;
+      esac
+    else
+      echo "  如需同步：npm install -g @earendil-works/pi-coding-agent@${PI_RUNTIME_VERSION}"
+    fi
+  fi
+else
+  echo -e "  ${YELLOW}ℹ️  未安裝全域 Pi CLI（僅使用 Web 不需要安裝）${NC}"
+  echo "  如需在終端機使用 pi：npm install -g @earendil-works/pi-coding-agent@${PI_RUNTIME_VERSION}"
+fi
+
 PI_DIR="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
 if [ -d "$PI_DIR" ]; then
   echo -e "  ${GREEN}✅ Pi Agent 資料目錄: $PI_DIR${NC}"
 else
-  echo -e "  ${YELLOW}⚠️  Pi Agent 尚未安裝或未初始化${NC}"
-  echo -e "  ${YELLOW}   資料目錄 $PI_DIR 不存在${NC}"
-  echo ""
-  echo "  安裝 Pi Agent："
-  echo "    npm install -g @earendil-works/pi-coding-agent"
-  echo "    pi  # 首次運行會自動初始化"
-  echo ""
-  echo -e "  ${YELLOW}繼續啟動 Web 界面（瀏覽功能可用，對話需先裝 Pi Agent）${NC}"
+  echo -e "  ${YELLOW}ℹ️  Pi Agent 資料目錄尚未建立: $PI_DIR${NC}"
+  echo "  首次在 Web 或 CLI 完成設定與使用時會建立。"
 fi
 
 # ── 驗證 ──────────────────────────────────────────────

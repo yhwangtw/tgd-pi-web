@@ -11,11 +11,12 @@
 // behaves exactly as before (local-only use stays frictionless).
 //
 // Runs in BOTH the Node runtime (login route) and the Edge runtime
-// (middleware), so all crypto here uses Web Crypto (globalThis.crypto.subtle),
+// (Proxy), so all crypto here uses Web Crypto (globalThis.crypto.subtle),
 // which exists in both.
 // ============================================================================
 
 export const AUTH_COOKIE = "piweb_gate";
+export const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 // Paths reachable without auth when the gate is on: the login flow plus the
 // genuinely-static assets the browser fetches around login. Everything else —
@@ -49,17 +50,47 @@ function hex(buf: ArrayBuffer): string {
     .join("");
 }
 
-/**
- * The cookie value that proves the holder knew the password: a SHA-256 of the
- * password plus a fixed domain-separation label. Deterministic, so middleware
- * can recompute the expected value and compare without any shared session
- * store. Stealing the cookie is equivalent to knowing the password — which is
- * the same trust level as any long-lived session cookie, and acceptable here.
- */
-export async function deriveToken(password: string): Promise<string> {
+/** Deterministic password verifier used only during login comparison. */
+export async function derivePasswordVerifier(password: string): Promise<string> {
   const data = new TextEncoder().encode(`piweb-access-gate:v1:${password}`);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return hex(digest);
+}
+
+function base64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function sessionSecret(): string | null {
+  return process.env.PIWEB_SESSION_SECRET || process.env.PIWEB_ACCESS_PASSWORD || null;
+}
+
+async function signTokenPayload(payload: string): Promise<string | null> {
+  const secret = sessionSecret();
+  if (!secret) return null;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+  return base64Url(new Uint8Array(signature));
+}
+
+/** Issue an expiring, signed session token. The password hash is never stored in the cookie. */
+export async function issueAccessToken(
+  nowMs = Date.now(),
+  nonce = base64Url(crypto.getRandomValues(new Uint8Array(18))),
+): Promise<string> {
+  const expires = Math.floor(nowMs / 1000) + AUTH_COOKIE_MAX_AGE_SECONDS;
+  const payload = `v2.${expires}.${nonce}`;
+  const signature = await signTokenPayload(payload);
+  if (!signature) throw new Error("Access gate session secret is unavailable");
+  return `${payload}.${signature}`;
 }
 
 /** Constant-time string compare (avoids leaking length/prefix via timing). */
@@ -70,16 +101,37 @@ export function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** The token expected for the currently-configured password (null if off). */
-export async function expectedToken(): Promise<string | null> {
-  const pw = process.env.PIWEB_ACCESS_PASSWORD;
-  return pw ? deriveToken(pw) : null;
-}
-
 /** Does this cookie value grant access under the current password? */
-export async function cookieAuthorizes(cookieValue: string | undefined): Promise<boolean> {
+export async function cookieAuthorizes(cookieValue: string | undefined, nowMs = Date.now()): Promise<boolean> {
   if (!gateEnabled()) return true; // gate off → everything is allowed
   if (!cookieValue) return false;
-  const expected = await expectedToken();
-  return expected !== null && timingSafeEqual(cookieValue, expected);
+  const parts = cookieValue.split(".");
+  if (parts.length !== 4 || parts[0] !== "v2") return false;
+  const expires = Number(parts[1]);
+  if (!Number.isSafeInteger(expires) || expires <= Math.floor(nowMs / 1000)) return false;
+  const payload = parts.slice(0, 3).join(".");
+  const expected = await signTokenPayload(payload);
+  return expected !== null && timingSafeEqual(parts[3], expected);
+}
+
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/** Block explicit browser cross-origin mutations while allowing CLI clients with no Origin header. */
+export function requestIsSameOrigin(request: Pick<Request, "headers" | "method" | "url">): boolean {
+  if (SAFE_METHODS.has(request.method.toUpperCase())) return true;
+  if (request.headers.get("sec-fetch-site")?.toLowerCase() === "cross-site") return false;
+
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+  try {
+    const originUrl = new URL(origin);
+    const requestUrl = new URL(request.url);
+    const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+    const host = forwardedHost || request.headers.get("host") || requestUrl.host;
+    const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+    const protocol = forwardedProto ? `${forwardedProto}:` : requestUrl.protocol;
+    return originUrl.host === host && originUrl.protocol === protocol;
+  } catch {
+    return false;
+  }
 }

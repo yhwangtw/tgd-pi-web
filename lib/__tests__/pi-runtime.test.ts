@@ -8,21 +8,20 @@ import {
 } from "../pi-runtime";
 
 describe("Pi Web runtime integration", () => {
-  it("reloads auth on every read and refreshes models only after models.json changes", () => {
+  it("refreshes the model runtime only after models.json changes", async () => {
     const calls: string[] = [];
     let modelsVersion = "v1";
     const services = {
       agentDir: "/agent",
-      authStorage: { reload: vi.fn(() => calls.push("auth")) },
-      modelRegistry: { refresh: vi.fn(() => calls.push("models")) },
+      modelRuntime: { refresh: vi.fn(async () => { calls.push("models"); }) },
     };
     const refresh = createAgentModelCatalogRefresher(services, () => modelsVersion);
 
-    refresh();
+    await refresh();
     modelsVersion = "v2";
-    refresh();
+    await refresh();
 
-    expect(calls).toEqual(["auth", "auth", "models"]);
+    expect(calls).toEqual(["models"]);
   });
 
   it("initializes Pi's extension theme from the session settings without a watcher", () => {
@@ -35,7 +34,7 @@ describe("Pi Web runtime integration", () => {
 
   it("tracks successful and failed extension provider registrations", () => {
     const models: Array<{ id: string; name: string; provider: string }> = [];
-    const registry = {
+    const runtime = {
       registerProvider(name: string, config: { models?: Array<{ id: string; name: string }> }) {
         if (name === "broken") throw new Error("invalid provider");
         for (const model of config.models ?? []) models.push({ ...model, provider: name });
@@ -43,19 +42,19 @@ describe("Pi Web runtime integration", () => {
       unregisterProvider(name: string) {
         for (let i = models.length - 1; i >= 0; i--) if (models[i].provider === name) models.splice(i, 1);
       },
-      getAll: () => models,
-      getAvailable: () => models.filter((m) => m.id !== "team-large"),
-      getProviderDisplayName: (name: string) => name === "team-ai" ? "Team AI" : name,
+      getModels: () => models,
+      getAvailableSnapshot: () => models.filter((m) => m.id !== "team-large"),
+      getProvider: (name: string) => ({ name: name === "team-ai" ? "Team AI" : name }),
     };
-    const tracker = trackExtensionProviders(registry);
+    const tracker = trackExtensionProviders(runtime);
     tracker.discover("team-ai", "/ext/provider.ts");
     tracker.discover("broken", "/ext/broken.ts");
 
-    registry.registerProvider("team-ai", { models: [
+    runtime.registerProvider("team-ai", { models: [
       { id: "team-fast", name: "Team Fast" },
       { id: "team-large", name: "Team Large" },
     ] });
-    expect(() => registry.registerProvider("broken", { models: [] })).toThrow("invalid provider");
+    expect(() => runtime.registerProvider("broken", { models: [] })).toThrow("invalid provider");
 
     expect(tracker.snapshot()).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -71,7 +70,7 @@ describe("Pi Web runtime integration", () => {
 
     tracker.beginReload();
     tracker.discover("next-ai", "/ext/next-provider.ts");
-    registry.registerProvider("next-ai", { models: [{ id: "next-fast", name: "Next Fast" }] });
+    runtime.registerProvider("next-ai", { models: [{ id: "next-fast", name: "Next Fast" }] });
     tracker.finishReload();
 
     expect(tracker.snapshot().map((provider) => provider.name)).toEqual(["next-ai"]);

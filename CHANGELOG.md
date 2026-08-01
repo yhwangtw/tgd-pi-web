@@ -4,6 +4,16 @@ All notable changes to tGD-pi-web are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **Pi runtime upgraded from 0.80.6 to 0.83.0.** Model discovery, API-key login, OAuth, logout, and active-session model selection now use Pi's canonical `ModelRuntime`; persisted credential changes restart idle sessions immediately and defer running sessions until the current run finishes.
+- **Setup makes the Web/CLI version boundary explicit.** It reports the pinned Web runtime and installed global `pi` versions; an interactive mismatch offers an opt-in global CLI synchronization, while unattended installs only print the command and never mutate the global CLI.
+- **Next.js request interception migrated from Middleware to Proxy.** The access gate now uses the Next.js 16 `proxy.ts` convention without the production-build deprecation warning.
+
+### Added
+- **OAuth flows have a tested browser bridge.** Browser login, device code, manual callback input, provider selection, cancellation, and prompt aborts share one typed token broker with regression tests.
+- **Remote-access protection is layered.** Access cookies are expiring HMAC tokens, an optional independent `PIWEB_SESSION_SECRET` separates cookie signing from the password, failed logins are throttled, and explicit cross-origin browser mutations are blocked.
+- **Dependency maintenance is automated and enforceable.** Dependabot groups the paired Pi packages and GitHub Actions updates; production audit now blocks every high/critical finding except the exact upstream Pi shrinkwrap advisory `GHSA-mh99-v99m-4gvg`, and fails once that exception becomes stale.
+
 ## [2026.07.11-4] (PR #51)
 
 ### Added

@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import { statSync } from "node:fs";
 import {
-  AuthStorage,
   ModelRegistry,
   createAgentSessionServices,
   getAgentDir,
@@ -14,6 +13,7 @@ import {
   type ProviderConfig,
 } from "@earendil-works/pi-coding-agent";
 import type { ExtensionProviderInfo } from "./extensions-info";
+import { createPiModelRuntime } from "./pi-model-runtime";
 
 interface ProviderModelLike {
   id: string;
@@ -21,12 +21,12 @@ interface ProviderModelLike {
   provider: string;
 }
 
-export interface TrackableModelRegistry {
+export interface TrackableModelRuntime {
   registerProvider(name: string, config: ProviderConfig): void;
   unregisterProvider(name: string): void;
-  getAll(): ProviderModelLike[];
-  getAvailable(): ProviderModelLike[];
-  getProviderDisplayName(name: string): string;
+  getModels(): readonly ProviderModelLike[];
+  getAvailableSnapshot(): readonly ProviderModelLike[];
+  getProvider(name: string): { name: string } | undefined;
 }
 
 interface TrackedProvider {
@@ -40,7 +40,7 @@ export class ExtensionProviderTracker {
   private reloadSeen: Set<string> | null = null;
   private reloadSources: Map<string, Set<string>> | null = null;
 
-  constructor(private readonly registry: TrackableModelRegistry) {}
+  constructor(private readonly runtime: TrackableModelRuntime) {}
 
   discover(name: string, source: string): void {
     if (this.reloadSeen) {
@@ -101,7 +101,7 @@ export class ExtensionProviderTracker {
         if (currentSources?.size) tracked.sources = currentSources;
         if (tracked.status !== "error") continue;
       }
-      this.registry.unregisterProvider(name);
+      this.runtime.unregisterProvider(name);
       if (seen.has(name) && tracked.status === "error") {
         this.providers.set(name, tracked);
       }
@@ -114,14 +114,14 @@ export class ExtensionProviderTracker {
   }
 
   snapshot(): ExtensionProviderInfo[] {
-    const all = this.registry.getAll();
-    const available = new Set(this.registry.getAvailable().map((model) => `${model.provider}:${model.id}`));
+    const all = [...this.runtime.getModels()];
+    const available = new Set(this.runtime.getAvailableSnapshot().map((model) => `${model.provider}:${model.id}`));
     return [...this.providers.entries()]
       .map(([name, tracked]) => {
         const models = all.filter((model) => model.provider === name);
         return {
           name,
-          displayName: this.registry.getProviderDisplayName(name),
+          displayName: this.runtime.getProvider(name)?.name ?? name,
           status: tracked.status,
           modelCount: models.length,
           availableModelCount: models.filter((model) => available.has(`${name}:${model.id}`)).length,
@@ -134,12 +134,12 @@ export class ExtensionProviderTracker {
   }
 }
 
-export function trackExtensionProviders<T extends TrackableModelRegistry>(registry: T): ExtensionProviderTracker {
-  const tracker = new ExtensionProviderTracker(registry);
-  const registerProvider = registry.registerProvider.bind(registry);
-  const unregisterProvider = registry.unregisterProvider.bind(registry);
+export function trackExtensionProviders<T extends TrackableModelRuntime>(runtime: T): ExtensionProviderTracker {
+  const tracker = new ExtensionProviderTracker(runtime);
+  const registerProvider = runtime.registerProvider.bind(runtime);
+  const unregisterProvider = runtime.unregisterProvider.bind(runtime);
 
-  registry.registerProvider = (name, config) => {
+  runtime.registerProvider = (name, config) => {
     try {
       registerProvider(name, config);
       tracker.registered(name);
@@ -148,7 +148,7 @@ export function trackExtensionProviders<T extends TrackableModelRegistry>(regist
       throw error;
     }
   };
-  registry.unregisterProvider = (name) => {
+  runtime.unregisterProvider = (name) => {
     unregisterProvider(name);
     tracker.unregistered(name);
   };
@@ -168,8 +168,9 @@ export function initializeWebTheme(
 
 interface ModelCatalogRefreshServices {
   agentDir: string;
-  authStorage: { reload(): void };
-  modelRegistry: { refresh(): void };
+  modelRuntime: {
+    refresh(options?: { allowNetwork?: boolean }): Promise<unknown>;
+  };
 }
 
 function modelsConfigVersion(agentDir: string): string | null {
@@ -184,29 +185,25 @@ function modelsConfigVersion(agentDir: string): string | null {
 export function createAgentModelCatalogRefresher(
   services: ModelCatalogRefreshServices,
   readModelsVersion: () => string | null = () => modelsConfigVersion(services.agentDir),
-): () => void {
+): () => Promise<void> {
   let lastModelsVersion = readModelsVersion();
-  return () => {
-    // Auth routes persist through separate AuthStorage instances, so credentials
-    // must always be reloaded. Avoid resetting Pi's process-wide dynamic provider
-    // registrations unless models.json actually changed.
-    services.authStorage.reload();
+  return async () => {
     const nextModelsVersion = readModelsVersion();
     if (nextModelsVersion === lastModelsVersion) return;
-    services.modelRegistry.refresh();
+    await services.modelRuntime.refresh({ allowNetwork: false });
     lastModelsVersion = nextModelsVersion;
   };
 }
 
 export async function createTrackedAgentServices(cwd: string): Promise<{
   services: AgentSessionServices;
+  modelRegistry: ModelRegistry;
   providerTracker: ExtensionProviderTracker;
-  refreshModelCatalog: () => void;
+  refreshModelCatalog: () => Promise<void>;
 }> {
   const agentDir = getAgentDir();
-  const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
-  const modelRegistry = ModelRegistry.create(authStorage, join(agentDir, "models.json"));
-  const providerTracker = trackExtensionProviders(modelRegistry);
+  const modelRuntime = await createPiModelRuntime({ agentDir });
+  const providerTracker = trackExtensionProviders(modelRuntime);
 
   // Pi explicitly supports loading async provider factories without starting a
   // session (the same path used by `pi --list-models`). Keep model discovery on
@@ -215,8 +212,7 @@ export async function createTrackedAgentServices(cwd: string): Promise<{
   const services = await createAgentSessionServices({
     cwd,
     agentDir,
-    authStorage,
-    modelRegistry,
+    modelRuntime,
     resourceLoaderOptions: {
       extensionsOverride(base: LoadExtensionsResult) {
         for (const registration of base.runtime.pendingProviderRegistrations) {
@@ -230,6 +226,7 @@ export async function createTrackedAgentServices(cwd: string): Promise<{
 
   return {
     services,
+    modelRegistry: new ModelRegistry(modelRuntime),
     providerTracker,
     refreshModelCatalog: createAgentModelCatalogRefresher(services),
   };

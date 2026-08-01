@@ -28,7 +28,9 @@ export async function GET(
 
   const stream = new ReadableStream({
     start(controller) {
+      let closed = false;
       const encode = (data: unknown) => {
+        if (closed) return;
         const text = `data: ${JSON.stringify(data)}\n\n`;
         controller.enqueue(new TextEncoder().encode(text));
       };
@@ -36,8 +38,10 @@ export async function GET(
       // Send initial connected event
       encode({ type: "connected", sessionId: id });
 
+      let cleanup = () => {};
       const unsubscribe = session.onEvent((event) => {
         encode(event);
+        if (event.type === "session_restart") queueMicrotask(cleanup);
       });
 
       // Heartbeat every 30s to prevent server/proxy timeout (Next.js default ~120-150s)
@@ -50,14 +54,16 @@ export async function GET(
       }, 30_000);
 
       // Cleanup when client disconnects
-      const cleanup = () => {
+      cleanup = () => {
+        if (closed) return;
+        closed = true;
         clearInterval(heartbeat);
         unsubscribe();
-        controller.close();
+        try { controller.close(); } catch { /* already closed */ }
       };
 
       // Detect client disconnect via abort signal
-      req.signal?.addEventListener("abort", cleanup);
+      req.signal?.addEventListener("abort", cleanup, { once: true });
     },
   });
 

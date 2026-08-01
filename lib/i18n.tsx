@@ -516,6 +516,9 @@ const MESSAGES = {
   "toast.forkFailed": { en: "Fork failed", zh: "分叉失敗" },
   "toast.steerFailed": { en: "Steer failed", zh: "插話失敗" },
   "toast.followUpFailed": { en: "Follow-up failed", zh: "追問失敗" },
+  "toast.authRefreshDeferred": { en: "Authentication updated. This session will reconnect after the current run.", zh: "認證已更新，這次執行完成後會重新連線" },
+  "toast.authReconnected": { en: "Authentication updated and the agent reconnected", zh: "認證已更新，Agent 已重新連線" },
+  "toast.authReconnectFailed": { en: "Authentication updated, but the agent could not reconnect", zh: "認證已更新，但 Agent 重新連線失敗" },
 
   // ── Welcome / placeholders ──
   "welcome.selectSession": { en: "Select a session", zh: "選擇一個 session" },

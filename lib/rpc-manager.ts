@@ -1,4 +1,4 @@
-import { createAgentSessionFromServices, SessionManager, type ExtensionError } from "@earendil-works/pi-coding-agent";
+import { createAgentSessionFromServices, SessionManager, type ExtensionError, type ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath } from "./session-reader";
 import { createSnapshot } from "./git-snapshot";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
@@ -36,6 +36,8 @@ export class AgentSessionWrapper {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private onDestroyCallback: (() => void) | null = null;
   private _alive = true;
+  private authRefreshPending = false;
+  private bashRunning = false;
   private readonly extensionDiagnostics: ExtensionDiagnosticInfo[];
 
   constructor(
@@ -43,8 +45,9 @@ export class AgentSessionWrapper {
     public readonly cwd: string = "",
     private readonly providerTracker?: ExtensionProviderTracker,
     initialDiagnostics: Array<{ type: string; message: string }> = [],
-    private readonly refreshModelCatalog?: () => void,
+    private readonly refreshModelCatalog?: () => Promise<void>,
     private readonly webExtensionUI?: WebExtensionUIBridge,
+    public readonly modelRegistry?: ModelRegistry,
   ) {
     this.extensionDiagnostics = initialDiagnostics.map((diagnostic) => ({
       type: diagnostic.type === "info" || diagnostic.type === "warning" ? diagnostic.type : "error",
@@ -75,6 +78,7 @@ export class AgentSessionWrapper {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
       this.resetIdleTimer();
       this.emitEvent(event);
+      if (this.authRefreshPending) queueMicrotask(() => this.restartForAuthIfIdle());
     });
     this.resetIdleTimer();
   }
@@ -117,8 +121,27 @@ export class AgentSessionWrapper {
     return this.providerTracker?.snapshot() ?? [];
   }
 
-  refreshModels(): void {
-    this.refreshModelCatalog?.();
+  async refreshModels(): Promise<void> {
+    await this.refreshModelCatalog?.();
+  }
+
+  private restartForAuthIfIdle(): boolean {
+    if (!this._alive || !this.authRefreshPending) return false;
+    if (this.inner.isStreaming || this.inner.isCompacting || this.bashRunning) return false;
+    this.authRefreshPending = false;
+    this.emitEvent({ type: "session_restart", reason: "auth" });
+    this.destroy();
+    return true;
+  }
+
+  requestAuthRefresh(): "restarted" | "deferred" {
+    const alreadyPending = this.authRefreshPending;
+    this.authRefreshPending = true;
+    if (this.restartForAuthIfIdle()) return "restarted";
+    if (!alreadyPending) {
+      this.emitEvent({ type: "session_restart_deferred", reason: "auth" });
+    }
+    return "deferred";
   }
 
   async send(command: Record<string, unknown>): Promise<unknown> {
@@ -170,8 +193,9 @@ export class AgentSessionWrapper {
 
       case "set_model": {
         const { provider, modelId } = command as { provider: string; modelId: string };
-        this.refreshModels();
-        const registry = this.inner.modelRegistry;
+        await this.refreshModels();
+        const registry = this.modelRegistry;
+        if (!registry) throw new Error("Model registry is unavailable");
         const model = registry.find(provider, modelId);
         if (!model) throw new Error(`Model not found: ${provider}/${modelId}`);
         await this.inner.setModel(model);
@@ -282,6 +306,7 @@ export class AgentSessionWrapper {
         const bashCommand = command.command as string;
         const excludeFromContext = Boolean(command.excludeFromContext);
         const emit = (event: AgentEvent) => this.emitEvent(event);
+        this.bashRunning = true;
         emit({ type: "bash_start", command: bashCommand });
         try {
           const result = await this.inner.executeBash(
@@ -297,6 +322,9 @@ export class AgentSessionWrapper {
         } catch (e) {
           emit({ type: "bash_end", errorMessage: String(e) });
           throw e;
+        } finally {
+          this.bashRunning = false;
+          this.restartForAuthIfIdle();
         }
       }
 
@@ -398,6 +426,21 @@ export function getRpcSession(sessionId: string): AgentSessionWrapper | undefine
 }
 
 /**
+ * Credential mutations are persisted through a short-lived ModelRuntime.
+ * Existing sessions intentionally restart so their private runtime reloads the
+ * new credential snapshot instead of continuing with stale auth state.
+ */
+export function invalidateRpcSessionsForAuthChange(): { restarted: number; deferred: number } {
+  let restarted = 0;
+  let deferred = 0;
+  for (const session of [...getRegistry().values()]) {
+    if (session.requestAuthRefresh() === "restarted") restarted++;
+    else deferred++;
+  }
+  return { restarted, deferred };
+}
+
+/**
  * Get or create an AgentSession for the given session.
  * For new sessions (sessionFile === ""), pi generates its own id.
  * Pass toolNames to pre-configure active tools (empty array = all tools disabled).
@@ -433,7 +476,7 @@ export async function startRpcSession(
     }
 
     const webExtensionUI = new WebExtensionUIBridge({ acceptDialogs: false });
-    const { services, providerTracker, refreshModelCatalog } = await createTrackedAgentServices(cwd);
+    const { services, modelRegistry, providerTracker, refreshModelCatalog } = await createTrackedAgentServices(cwd);
     const { session: inner } = await createAgentSessionFromServices({
       services,
       sessionManager,
@@ -466,6 +509,7 @@ export async function startRpcSession(
       services.diagnostics,
       refreshModelCatalog,
       webExtensionUI,
+      modelRegistry,
     );
     wrapper.start();
     try {

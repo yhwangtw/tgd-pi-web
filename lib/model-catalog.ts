@@ -72,11 +72,11 @@ export function buildModelCatalog(
 export async function resolveModelCatalogSource(options: {
   sessionId: string | null;
   cwd: string | null;
-  getSessionSource: (sessionId: string) => ModelCatalogSource | null;
+  getSessionSource: (sessionId: string) => ModelCatalogSource | null | Promise<ModelCatalogSource | null>;
   createCwdSource: (cwd: string) => Promise<ModelCatalogSource>;
 }): Promise<ModelCatalogSource> {
   if (options.sessionId) {
-    const active = options.getSessionSource(options.sessionId);
+    const active = await options.getSessionSource(options.sessionId);
     if (active) return active;
   }
   if (!options.cwd) throw new Error("cwd is required when no active session exists");

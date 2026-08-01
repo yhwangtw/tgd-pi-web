@@ -25,6 +25,10 @@
         <key>PORT</key><string>30141</string>
         <key>HOSTNAME</key><string>0.0.0.0</string>
         <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <!-- For remote access, uncomment both and replace the values. Generate
+             PIWEB_SESSION_SECRET once with: openssl rand -hex 32 -->
+        <!-- <key>PIWEB_ACCESS_PASSWORD</key><string>change-me-to-a-long-passphrase</string> -->
+        <!-- <key>PIWEB_SESSION_SECRET</key><string>change-me-to-a-random-64-character-value</string> -->
     </dict>
 
     <key>RunAtLoad</key><true/>

@@ -11,21 +11,21 @@ import {
 
 export const dynamic = "force-dynamic";
 
-function activeSessionSource(sessionId: string): ModelCatalogSource | null {
+async function activeSessionSource(sessionId: string): Promise<ModelCatalogSource | null> {
   const session = getRpcSession(sessionId);
-  if (!session?.isAlive()) return null;
-  session.refreshModels();
+  if (!session?.isAlive() || !session.modelRegistry) return null;
+  await session.refreshModels();
   return {
-    registry: session.inner.modelRegistry,
+    registry: session.modelRegistry,
     settings: session.inner.settingsManager,
     diagnostics: session.getExtensionDiagnostics(),
   };
 }
 
 async function cwdSource(cwd: string): Promise<ModelCatalogSource> {
-  const { services } = await createTrackedAgentServices(cwd);
+  const { services, modelRegistry } = await createTrackedAgentServices(cwd);
   return {
-    registry: services.modelRegistry,
+    registry: modelRegistry,
     settings: services.settingsManager,
     diagnostics: services.diagnostics,
   };

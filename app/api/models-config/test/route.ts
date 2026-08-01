@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { completeSimple, type AssistantMessage } from "@earendil-works/pi-ai/compat";
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { createPiModelRegistry } from "@/lib/pi-model-runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       },
     }, null, 2), "utf8");
 
-    const registry = ModelRegistry.create(AuthStorage.create(), modelsPath);
+    const { registry } = await createPiModelRegistry({ modelsPath });
     const loadError = registry.getError();
     if (loadError) return NextResponse.json({ ok: false, error: loadError });
 

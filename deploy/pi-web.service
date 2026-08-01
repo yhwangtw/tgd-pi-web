@@ -27,6 +27,8 @@ Environment=HOSTNAME=0.0.0.0
 # STRONGLY recommended when reachable beyond localhost: require a login
 # (see deploy/README.md §0). Uncomment and set a long passphrase.
 # Environment=PIWEB_ACCESS_PASSWORD=change-me-to-a-long-passphrase
+# Generate this once with `openssl rand -hex 32`; keep it stable across restarts.
+# Environment=PIWEB_SESSION_SECRET=change-me-to-a-random-64-character-value
 
 # Keep it up
 Restart=on-failure

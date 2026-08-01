@@ -4,7 +4,6 @@ import type {
   ExtensionError,
   ExtensionRunner,
   ExtensionUIContext,
-  ModelRegistry,
   ResourceLoader,
   SessionManager,
   SettingsManager,
@@ -40,7 +39,6 @@ export interface AgentSessionLike {
   readonly autoCompactionEnabled: boolean;
   readonly autoRetryEnabled: boolean;
   readonly model: ModelLike | undefined;
-  readonly modelRegistry: ModelRegistry;
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
   readonly agent: { state?: { systemPrompt?: string; thinkingLevel?: string } };

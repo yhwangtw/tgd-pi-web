@@ -1,10 +1,10 @@
-import { AuthStorage } from "@earendil-works/pi-coding-agent";
+import { createPiModelRuntime } from "@/lib/pi-model-runtime";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const authStorage = AuthStorage.create();
-  const providers = authStorage.getOAuthProviders();
+  const runtime = await createPiModelRuntime();
+  const providers = runtime.getProviders().filter((provider) => provider.auth.oauth);
 
   const EXCLUDED = new Set(["anthropic"]);
   const DISPLAY_NAMES: Record<string, string> = {
@@ -16,11 +16,11 @@ export async function GET() {
     providers
       .filter((p) => !EXCLUDED.has(p.id))
       .map(async (p) => {
-        const loggedIn = authStorage.has(p.id);
+        const loggedIn = runtime.getProviderAuthStatus(p.id).configured;
         return {
           id: p.id,
           name: DISPLAY_NAMES[p.id] ?? p.name,
-          usesCallbackServer: p.usesCallbackServer ?? false,
+          usesCallbackServer: false,
           loggedIn,
         };
       })

@@ -40,7 +40,7 @@ export async function POST(
     }
 
     // Get the full Model<Api> object from model registry (has api, baseUrl, etc.)
-    const fullModel = inner.modelRegistry.find(modelLike.provider, modelLike.id);
+    const fullModel = session.modelRegistry?.find(modelLike.provider, modelLike.id);
     if (!fullModel) {
       return NextResponse.json({ error: "Model not found in registry" }, { status: 400 });
     }

@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AUTH_COOKIE, gateEnabled, deriveToken, timingSafeEqual } from "@/lib/access-gate";
+import {
+  AUTH_COOKIE,
+  AUTH_COOKIE_MAX_AGE_SECONDS,
+  derivePasswordVerifier,
+  gateEnabled,
+  issueAccessToken,
+  timingSafeEqual,
+} from "@/lib/access-gate";
+import {
+  checkLoginRateLimit,
+  clearLoginFailures,
+  loginClientKey,
+  recordLoginFailure,
+} from "@/lib/login-rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +29,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, gate: "disabled" });
   }
 
+  const clientKey = loginClientKey(req.headers);
+  const limit = checkLoginRateLimit(clientKey);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many login attempts. Try again later." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    );
+  }
+
   let password = "";
   try {
     ({ password = "" } = (await req.json()) as { password?: string });
@@ -23,19 +45,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
 
-  const submitted = await deriveToken(password);
-  const expected = await deriveToken(process.env.PIWEB_ACCESS_PASSWORD as string);
+  const submitted = await derivePasswordVerifier(password);
+  const expected = await derivePasswordVerifier(process.env.PIWEB_ACCESS_PASSWORD as string);
   if (!timingSafeEqual(submitted, expected)) {
-    return NextResponse.json({ error: "Incorrect password" }, { status: 401 });
+    const failure = recordLoginFailure(clientKey);
+    return NextResponse.json(
+      { error: failure.allowed ? "Incorrect password" : "Too many login attempts. Try again later." },
+      {
+        status: failure.allowed ? 401 : 429,
+        headers: failure.allowed ? undefined : { "Retry-After": String(failure.retryAfterSeconds) },
+      },
+    );
   }
 
+  clearLoginFailures(clientKey);
+
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(AUTH_COOKIE, expected, {
+  res.cookies.set(AUTH_COOKIE, await issueAccessToken(), {
     httpOnly: true,
     sameSite: "lax",
-    secure: req.nextUrl.protocol === "https:",
+    secure: req.nextUrl.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: AUTH_COOKIE_MAX_AGE_SECONDS,
   });
   return res;
 }
