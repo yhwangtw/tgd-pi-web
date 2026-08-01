@@ -526,13 +526,15 @@
 }
 
 .keyboardHint {
-  flex: 1 1 auto;
-  min-width: 80px;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  padding-left: 12px;
   overflow: hidden;
   color: var(--text-dim);
   font-size: calc(10px * var(--font-scale));
   line-height: 1.3;
-  text-align: center;
+  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -742,6 +744,12 @@
   opacity: 0.55;
 }
 
+@media (max-width: 900px) {
+  .keyboardHint {
+    display: none;
+  }
+}
+
 @media (pointer: coarse) {
   .bottomBar {
     overflow-x: auto;
@@ -882,10 +890,6 @@
   }
 
   .bottomBarRight {
-    display: none;
-  }
-
-  .keyboardHint {
     display: none;
   }
 
