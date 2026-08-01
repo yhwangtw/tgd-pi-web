@@ -1,60 +1,18 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { isPatchedBraceExpansion, resolvePiBraceExpansion } from "./patch-pi-brace-expansion.mjs";
 
-const ALLOWED_ADVISORY = "https://github.com/advisories/GHSA-mh99-v99m-4gvg";
-const ALLOWED_PACKAGE = "brace-expansion";
-const ALLOWED_VERSION = "5.0.7";
-const ALLOWED_NODE = "node_modules/@earendil-works/pi-coding-agent/node_modules/brace-expansion";
-const INSTALLED_PACKAGE_JSON = `${ALLOWED_NODE}/package.json`;
 const BLOCKING_SEVERITIES = new Set(["high", "critical"]);
 
-function installedAllowlistedVersion() {
-  try {
-    return JSON.parse(readFileSync(INSTALLED_PACKAGE_JSON, "utf8")).version;
-  } catch {
-    return null;
-  }
-}
-
-function advisoryAllowed(vulnerability, advisory, installedVersion) {
-  return installedVersion === ALLOWED_VERSION
-    && vulnerability.name === ALLOWED_PACKAGE
-    && advisory.url === ALLOWED_ADVISORY
-    && BLOCKING_SEVERITIES.has(advisory.severity)
-    && Array.isArray(vulnerability.nodes)
-    && vulnerability.nodes.length > 0
-    && vulnerability.nodes.every((node) => node === ALLOWED_NODE);
-}
-
-function vulnerabilityAllowed(name, vulnerabilities, installedVersion, visiting = new Set()) {
-  if (visiting.has(name)) return false;
-  const vulnerability = vulnerabilities[name];
-  if (!vulnerability) return false;
-  const nextVisiting = new Set(visiting).add(name);
-  const blockingVia = (vulnerability.via ?? []).filter((via) => (
-    typeof via === "string" || BLOCKING_SEVERITIES.has(via.severity)
-  ));
-  if (blockingVia.length === 0) return false;
-  return blockingVia.every((via) => (
-    typeof via === "string"
-      ? vulnerabilityAllowed(via, vulnerabilities, installedVersion, nextVisiting)
-      : advisoryAllowed(vulnerability, via, installedVersion)
-  ));
-}
-
-export function evaluateAudit(report, installedVersion) {
+export function evaluateAudit(report) {
   const vulnerabilities = report?.vulnerabilities ?? {};
-  const ignored = [];
   const blocking = [];
   for (const [name, vulnerability] of Object.entries(vulnerabilities)) {
-    if (!BLOCKING_SEVERITIES.has(vulnerability.severity)) continue;
-    if (vulnerabilityAllowed(name, vulnerabilities, installedVersion)) ignored.push(name);
-    else blocking.push(name);
+    if (BLOCKING_SEVERITIES.has(vulnerability.severity)) blocking.push(name);
   }
-  return { ignored, blocking };
+  return { blocking };
 }
 
 function describeVulnerability(name, vulnerability) {
@@ -65,10 +23,16 @@ function describeVulnerability(name, vulnerability) {
 }
 
 function main() {
-  const installedVersion = installedAllowlistedVersion();
-  if (installedVersion !== ALLOWED_VERSION) {
+  let effectiveBraceExpansion;
+  try {
+    effectiveBraceExpansion = resolvePiBraceExpansion();
+  } catch (error) {
+    console.error(`Could not resolve Pi's brace-expansion dependency: ${error.message}`);
+    process.exit(1);
+  }
+  if (!isPatchedBraceExpansion(effectiveBraceExpansion.version)) {
     console.error(
-      `Security allowlist is stale: expected ${ALLOWED_PACKAGE}@${ALLOWED_VERSION} at ${ALLOWED_NODE}, found ${installedVersion ?? "nothing"}. Remove or update the exception.`,
+      `Pi resolves vulnerable brace-expansion@${effectiveBraceExpansion.version} from ${effectiveBraceExpansion.packageDir}.`,
     );
     process.exit(1);
   }
@@ -96,7 +60,7 @@ function main() {
     process.exit(1);
   }
 
-  const result = evaluateAudit(report, installedVersion);
+  const result = evaluateAudit(report);
   if (result.blocking.length > 0) {
     console.error("Blocking production vulnerabilities:");
     for (const name of result.blocking) {
@@ -105,11 +69,7 @@ function main() {
     process.exit(1);
   }
 
-  if (result.ignored.length > 0) {
-    console.warn(
-      `Temporarily allowing ${ALLOWED_ADVISORY} from official Pi shrinkwrap (${result.ignored.join(", ")}). All other high/critical findings remain blocking.`,
-    );
-  }
+  console.log(`Pi resolves patched brace-expansion@${effectiveBraceExpansion.version}.`);
   console.log("Production dependency audit passed policy.");
 }
 

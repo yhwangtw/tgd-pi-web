@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { evaluateAudit } from "../audit-production.mjs";
+import { isPatchedBraceExpansion } from "../patch-pi-brace-expansion.mjs";
 
-const allowedAdvisory = {
+const advisory = {
   source: 123,
   name: "brace-expansion",
   dependency: "brace-expansion",
@@ -18,7 +19,7 @@ function report(extra = {}) {
       "brace-expansion": {
         name: "brace-expansion",
         severity: "high",
-        via: [allowedAdvisory],
+        via: [advisory],
         nodes: ["node_modules/@earendil-works/pi-coding-agent/node_modules/brace-expansion"],
       },
       ...extra,
@@ -27,12 +28,17 @@ function report(extra = {}) {
 }
 
 describe("production audit policy", () => {
-  it("allows only the exact upstream Pi advisory and installed version", () => {
-    expect(evaluateAudit(report(), "5.0.7")).toEqual({ ignored: ["brace-expansion"], blocking: [] });
-    expect(evaluateAudit(report(), "5.0.8").blocking).toEqual(["brace-expansion"]);
+  it("recognizes the patched brace-expansion boundary", () => {
+    expect(isPatchedBraceExpansion("5.0.7")).toBe(false);
+    expect(isPatchedBraceExpansion("5.0.8")).toBe(true);
+    expect(isPatchedBraceExpansion("5.0.9")).toBe(true);
   });
 
-  it("allows a transitive parent only when every blocking cause is allowlisted", () => {
+  it("blocks the former Pi brace-expansion exception", () => {
+    expect(evaluateAudit(report())).toEqual({ blocking: ["brace-expansion"] });
+  });
+
+  it("blocks high-severity transitive parents", () => {
     const input = report({
       minimatch: {
         name: "minimatch",
@@ -41,13 +47,10 @@ describe("production audit policy", () => {
         nodes: ["node_modules/@earendil-works/pi-coding-agent/node_modules/minimatch"],
       },
     });
-    expect(evaluateAudit(input, "5.0.7")).toEqual({
-      ignored: ["brace-expansion", "minimatch"],
-      blocking: [],
-    });
+    expect(evaluateAudit(input)).toEqual({ blocking: ["brace-expansion", "minimatch"] });
   });
 
-  it("blocks any unrelated or changed advisory", () => {
+  it("blocks unrelated critical advisories too", () => {
     const input = report({
       next: {
         name: "next",
@@ -56,9 +59,6 @@ describe("production audit policy", () => {
         nodes: ["node_modules/next"],
       },
     });
-    expect(evaluateAudit(input, "5.0.7")).toEqual({
-      ignored: ["brace-expansion"],
-      blocking: ["next"],
-    });
+    expect(evaluateAudit(input)).toEqual({ blocking: ["brace-expansion", "next"] });
   });
 });
