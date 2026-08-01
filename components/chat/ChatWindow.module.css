@@ -270,7 +270,28 @@
   min-width: 0;
 }
 
+@media (min-width: 701px) {
+  :global(html[data-density="compact"]) .transcriptScroll {
+    padding-top: 8px;
+  }
+
+  :global(html[data-density="compact"]) .turnStart {
+    margin-top: 4px;
+    padding-top: 8px;
+  }
+
+  :global(html[data-density="compact"]) .unreadDivider {
+    margin-top: 10px;
+    margin-bottom: 6px;
+  }
+}
+
 @media (max-width: 700px) {
+  :global(html[data-density="compact"]) .turnStart {
+    margin-top: 2px;
+    padding-top: 7px;
+  }
+
   .emptyNew {
     justify-content: flex-start;
     padding: 24px 10px 12px;

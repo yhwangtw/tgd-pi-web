@@ -6,6 +6,12 @@
   align-items: flex-end;
 }
 
+@media (min-width: 701px) {
+  :global(html[data-density="compact"]) .root { margin-bottom: 6px; }
+  :global(html[data-density="compact"]) .bubble { padding: 6px 10px; }
+  :global(html[data-density="compact"]) .bottomRow { margin-top: 1px; }
+}
+
 /* Message row */
 .messageRow {
   display: flex;
@@ -223,6 +229,8 @@
 }
 
 @media (max-width: 700px) {
+  :global(html[data-density="compact"]) .root { margin-bottom: 5px; }
+
   .root {
     margin-bottom: 8px;
   }

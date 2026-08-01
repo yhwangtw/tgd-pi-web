@@ -25,16 +25,17 @@ export function isProviderAuthError(errorMessage?: string): boolean {
   return !!errorMessage && /(?:no api key|unauthori[sz]ed|authentication|credential|sign[ -]?in|log[ -]?in|openai-codex)/i.test(errorMessage);
 }
 
-function formatTime(ts?: number): string | null {
+function formatTime(ts?: number, locale: "en" | "zh" = "en"): string | null {
   if (!ts) return null;
   const d = new Date(ts);
   const now = new Date();
   const isToday = d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const language = locale === "zh" ? "zh-TW" : "en";
+  const time = d.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" });
   if (isToday) return time;
-  const date = d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+  const date = d.toLocaleDateString(language, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
   return `${date} ${time}`;
 }
 
@@ -96,8 +97,8 @@ export function AssistantMessageView({
   isBookmarked?: boolean;
   onToggleBookmark?: (entryId: string) => void;
 }) {
-  const { t } = useI18n();
-  const time = showTimestamp ? formatTime(message.timestamp) : null;
+  const { locale, t } = useI18n();
+  const time = showTimestamp ? formatTime(message.timestamp, locale) : null;
   const blocks = useMemo(() => message.content ?? [], [message.content]);
   const [copied, setCopied] = useState(false);
   const streamStartRef = useRef<number | null>(null);
@@ -718,8 +719,8 @@ function PairedResult({ text, isEmpty, isError }: {
 }
 
 function UsageDetails({ usage }: { usage: NonNullable<AssistantMessage["usage"]> }) {
-  const { t } = useI18n();
-  const details = formatUsage(usage);
+  const { locale, t } = useI18n();
+  const details = formatUsage(usage, locale);
   return (
     <details className={styles.usageDetails}>
       <summary title={details}>
@@ -757,11 +758,12 @@ function formatUsage(usage: {
   cacheRead: number;
   cacheWrite: number;
   cost: { total: number };
-}): string {
+}, locale: "en" | "zh"): string {
   const parts = [];
-  if (usage.input) parts.push(`${usage.input.toLocaleString()} in`);
-  if (usage.output) parts.push(`${usage.output.toLocaleString()} out`);
-  if (usage.cacheRead) parts.push(`${usage.cacheRead.toLocaleString()} cache`);
+  const language = locale === "zh" ? "zh-TW" : "en";
+  if (usage.input) parts.push(`${usage.input.toLocaleString(language)} ${locale === "zh" ? "輸入" : "in"}`);
+  if (usage.output) parts.push(`${usage.output.toLocaleString(language)} ${locale === "zh" ? "輸出" : "out"}`);
+  if (usage.cacheRead) parts.push(`${usage.cacheRead.toLocaleString(language)} ${locale === "zh" ? "快取" : "cache"}`);
   if (usage.cost?.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
   return parts.join(" · ");
 }

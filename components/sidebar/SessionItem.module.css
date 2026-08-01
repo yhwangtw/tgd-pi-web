@@ -11,6 +11,15 @@
   outline: none;
 }
 
+@media (min-width: 701px) {
+  :global(html[data-density="compact"]) .item {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  :global(html[data-density="compact"]) .grid { row-gap: 1px; }
+}
+
 /* Keyboard-focused row (roving focus from the list's arrow-key nav) */
 .item:focus-visible {
   box-shadow: inset 0 0 0 1.5px var(--color-accent-border-focus-strong);

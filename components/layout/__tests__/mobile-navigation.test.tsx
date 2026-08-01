@@ -54,11 +54,17 @@ describe("MobileNavigation", () => {
     await act(async () => button("Files").click());
     expect(handlers.onSelectView).toHaveBeenCalledWith("files");
 
-    await act(async () => button("More").click());
-    expect(container!.querySelector('[aria-label="More tools"]')).not.toBeNull();
+    const chat = button("Chat");
+    const more = button("More");
+    await act(async () => more.click());
+    expect(container!.querySelector('section[aria-label="More"]')).not.toBeNull();
+    expect(chat.getAttribute("aria-current")).toBeNull();
+    expect(more.getAttribute("aria-current")).toBe("page");
+    expect(container!.textContent).toContain("Work");
+    expect(container!.textContent).toContain("Settings");
 
     await act(async () => button("Agents").click());
     expect(handlers.onSelectView).toHaveBeenCalledWith("agents");
-    expect(container!.querySelector('[aria-label="More tools"]')).toBeNull();
+    expect(container!.querySelector('section[aria-label="More"]')).toBeNull();
   });
 });

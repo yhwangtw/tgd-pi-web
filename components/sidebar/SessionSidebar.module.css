@@ -13,6 +13,11 @@
   flex-shrink: 0;
 }
 
+@media (min-width: 701px) {
+  :global(html[data-density="compact"]) .header { padding-top: 8px; padding-bottom: 7px; }
+  :global(html[data-density="compact"]) .sessionToolbar { padding-top: 3px; padding-bottom: 3px; }
+}
+
 .headerRow {
   display: flex;
   align-items: center;

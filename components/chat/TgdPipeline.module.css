@@ -168,6 +168,12 @@
   background: var(--bg-hover);
 }
 
+@media (min-width: 701px) {
+  :global(html[data-density="compact"]) .bar { padding-top: 2px; padding-bottom: 2px; }
+  :global(html[data-density="compact"]) .mobileSummary { height: 26px; }
+  :global(html[data-density="compact"]) .hide { width: 26px; height: 26px; }
+}
+
 /* Narrow screens: tighten spacing and drop the "tGD" wordmark so more of the
    scrollable phase track is visible. The track keeps its overflow-x scroll. */
 @media (max-width: 640px) {

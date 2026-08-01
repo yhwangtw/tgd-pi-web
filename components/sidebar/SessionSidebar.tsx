@@ -323,7 +323,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       <div
         ref={listRef}
         role="listbox"
-        aria-label="Sessions"
+        aria-label={t("sidebar.sessions")}
         tabIndex={0}
         onKeyDown={handleListKeyDown}
         className={styles.sessionList}
@@ -333,7 +333,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         {selectedCwd && !loading && !error && (
           <div className={styles.projectScopeLabel}>
             <span className={styles.projectScopeName}>{selectedCwd.split(/[\\/]/).filter(Boolean).pop()}</span>
-            <span> · {filteredSessions.length} session{filteredSessions.length === 1 ? "" : "s"}</span>
+            <span> · {filteredSessions.length} {t("sidebar.sessionsFound")}</span>
           </div>
         )}
         {loading && (
@@ -348,7 +348,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         )}
         {!loading && !error && filteredSessions.length === 0 && (
           <div className={styles.emptyMessage}>
-            No sessions found
+            {t("sidebar.noSessions")}
           </div>
         )}
         {pinnedNodes.length > 0 && (
@@ -358,7 +358,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--text-dim)" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                 </svg>
-                Pinned
+                {t("sidebar.pinned")}
               </span>
             </div>
             {pinnedNodes.map((node) => (

@@ -248,9 +248,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   // ── tGD pipeline: detect which phases have run in this session ──
   const [pipelineHidden, setPipelineHidden] = useState(false);
+  const [idlePipelineExpanded, setIdlePipelineExpanded] = useState(false);
   useEffect(() => { setPipelineHidden(localStorage.getItem("pi-tgd-pipeline-hidden") === "1"); }, []);
-  const hidePipeline = useCallback(() => { setPipelineHidden(true); localStorage.setItem("pi-tgd-pipeline-hidden", "1"); }, []);
-  const showPipeline = useCallback(() => { setPipelineHidden(false); localStorage.removeItem("pi-tgd-pipeline-hidden"); }, []);
+  const hidePipeline = useCallback(() => { setPipelineHidden(true); setIdlePipelineExpanded(false); localStorage.setItem("pi-tgd-pipeline-hidden", "1"); }, []);
+  const showPipeline = useCallback(() => { setPipelineHidden(false); setIdlePipelineExpanded(true); localStorage.removeItem("pi-tgd-pipeline-hidden"); }, []);
 
   const tgdPhases = useMemo(
     () => PHASE_ACTIONS.map((p) => ({ cmd: p.cmd, label: t(p.labelKey), desc: t(p.descKey), icon: p.icon })),
@@ -342,6 +343,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     }
     return false;
   }, [agentRunning, messages]);
+  const pipelineRelevant = activeTgdRun
+    || tgdState.invoked.size > 0
+    || diskDone.size > 0
+    || currentFeature !== null;
 
   const { soundEnabled, onSoundToggle, playDoneSound } = useAudio();
   const playDoneSoundRef = useRef(playDoneSound);
@@ -851,6 +856,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       quote={messageQuote}
       onClearQuote={() => setMessageQuoteState(null)}
       onOpenQuote={openQuotedMessage}
+      wide={wideChat}
     />
   );
 
@@ -930,7 +936,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
       {isEmptyNew ? (
         <div className={`${styles.emptyNew} flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8`}>
-          <div className={`${styles.emptyNewInner} w-full ${wideChat ? "max-w-[1180px]" : "max-w-[820px]"}`}>
+          <div className={`${styles.emptyNewInner} w-full ${wideChat ? "max-w-[1080px]" : "max-w-[900px]"}`}>
             <div
               className={styles.welcomeHeader}
             >
@@ -970,9 +976,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       ) : (
       <>
       <style>{`::highlight(conversation-find) { background: var(--color-warning-bg-strong); color: var(--text); text-decoration: underline var(--color-warning-border); text-decoration-thickness: 1px; }`}</style>
-      {pipelineHidden ? (
+      {pipelineHidden || (!pipelineRelevant && !idlePipelineExpanded) ? (
         <button onClick={showPipeline} className={styles.pipelineShow} title={t("chat.showPipeline")}>
-          tGD ▸
+          tGD · {t("chat.workflow")} ▸
         </button>
       ) : (
         <TgdPipeline phases={tgdPhases} statusOf={phaseStatusOf} onRun={runPhase} onHide={hidePipeline} feature={currentFeature?.name ?? null} active={activeTgdRun} />
@@ -1053,7 +1059,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </button>
         )}
         <div ref={scrollContainerRef} className={`${styles.transcriptScroll} flex-1 overflow-y-auto pt-4 [scrollbar-width:none]`}>
-          <div className={`${styles.transcript} mx-auto px-4 ${wideChat ? "max-w-[1180px]" : "max-w-[820px]"}`}>
+          <div className={`${styles.transcript} mx-auto px-4 ${wideChat ? "max-w-[1080px]" : "max-w-[900px]"}`}>
 
             {(() => {
               let lastUserIdx = -1;
@@ -1273,7 +1279,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
              reserves the minimap rail) so the banner's box aligns exactly
              with the composer below instead of sticking out to the right. */
           <div className={`${styles.contextWarningWrap} pb-1 pl-4 pr-[52px]`}>
-          <div className={`mx-auto flex items-center gap-2 ${wideChat ? "max-w-[1180px]" : "max-w-[820px]"}`}>
+          <div className={`mx-auto flex items-center gap-2 ${wideChat ? "max-w-[1080px]" : "max-w-[900px]"}`}>
             <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-3 py-1.5 text-[12px] text-[var(--color-warning-text)]">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
               {/* min-w-0 flex-1: a flex child's min-width:auto refuses to shrink,

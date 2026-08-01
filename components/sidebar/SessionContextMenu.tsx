@@ -151,7 +151,7 @@ export function SessionContextMenu({
     <div
       ref={menuRef}
       role="menu"
-      aria-label="Session actions"
+      aria-label={t("mobile.sessionActions")}
       className={styles.menu}
       style={{ left: clampedPos.left, top: clampedPos.top }}
       onContextMenu={(e) => e.preventDefault()}
@@ -160,27 +160,27 @@ export function SessionContextMenu({
         <svg width="13" height="13" viewBox="0 0 24 24" fill={isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.menuIcon}>
           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
         </svg>
-        <span>{isPinned ? "Unpin session" : "Pin session"}</span>
+        <span>{isPinned ? t("session.unpin") : t("session.pin")}</span>
       </button>
       <button
         role="menuitem"
         onClick={handleParallel}
         disabled={isParallelOpen}
         className={`${styles.menuItem} ${isParallelOpen ? styles.menuItemDisabled : ""}`}
-        title={isParallelOpen ? "Already open in parallel view" : "Open in parallel view"}
+        title={isParallelOpen ? t("session.alreadyParallel") : t("session.openParallel")}
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.menuIcon}>
           <rect x="3" y="3" width="18" height="18" rx="2" />
           <line x1="12" y1="3" x2="12" y2="21" />
         </svg>
-        <span>Open in parallel</span>
+        <span>{t("session.openParallel")}</span>
       </button>
       <div className={styles.separator} />
       <button role="menuitem" onClick={handleRename} className={styles.menuItem}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.menuIcon}>
           <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
         </svg>
-        <span>Rename</span>
+        <span>{t("session.rename")}</span>
       </button>
       {addingTag ? (
         <form onSubmit={handleSubmitTag} className={styles.tagForm} role="menuitem">
@@ -199,7 +199,7 @@ export function SessionContextMenu({
                 setTagDraft("");
               }
             }}
-            placeholder={existingTags.length > 0 ? "new tag…" : "add tag…"}
+            placeholder={existingTags.length > 0 ? t("session.newTag") : t("session.addTag")}
             className={styles.tagInput}
             maxLength={32}
           />
@@ -214,12 +214,12 @@ export function SessionContextMenu({
             <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
             <line x1="7" y1="7" x2="7.01" y2="7" />
           </svg>
-          <span>Add tag</span>
+          <span>{t("session.addTag")}</span>
         </button>
       )}
       {/* Current tags — click × to remove (the menu stays open for multi-remove) */}
       {onRemoveTag && existingTags.length > 0 && (
-        <div className={styles.tagList} role="menuitem" aria-label="Current tags">
+        <div className={styles.tagList} role="menuitem" aria-label={t("session.currentTags")}>
           {existingTags.map((tag) => {
             const ts = getTagStyle(tag, theme);
             return (
@@ -232,8 +232,8 @@ export function SessionContextMenu({
                 <button
                   onClick={() => onRemoveTag(tag)}
                   className={styles.tagListRemove}
-                  title={`Remove #${tag}`}
-                  aria-label={`Remove #${tag}`}
+                  title={`${t("session.removeTag")} #${tag}`}
+                  aria-label={`${t("session.removeTag")} #${tag}`}
                 >×</button>
               </span>
             );
@@ -258,7 +258,7 @@ export function SessionContextMenu({
           <path d="M10 11v6M14 11v6" />
           <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
         </svg>
-        <span>Delete</span>
+        <span>{t("session.delete")}</span>
       </button>
     </div>
   );

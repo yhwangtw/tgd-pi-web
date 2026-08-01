@@ -5,11 +5,11 @@
 
 .inner {
   width: 100%;
-  max-width: 820px;
+  max-width: 900px;
   margin: 0 auto;
 }
 
-.innerWide { max-width: 1180px; }
+.innerWide { max-width: 1080px; }
 
 .card {
   display: flex;

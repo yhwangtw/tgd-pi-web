@@ -64,6 +64,8 @@ interface Props {
   quote?: MessageQuote | null;
   onClearQuote?: () => void;
   onOpenQuote?: (entryId: string) => void;
+  /** Keep the composer aligned with the selected transcript reading width. */
+  wide?: boolean;
 }
 
 /**
@@ -112,6 +114,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   quote,
   onClearQuote,
   onOpenQuote,
+  wide = false,
 }: Props, ref) {
   const { t } = useI18n();
   const { prompts } = usePrompts();
@@ -732,7 +735,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }}
       />
       <div
-        className={expanded ? `${styles.innerWrapper} ${styles.innerWrapperExpanded}` : styles.innerWrapper}
+        className={expanded
+          ? `${styles.innerWrapper} ${styles.innerWrapperExpanded}`
+          : `${styles.innerWrapper} ${wide ? styles.innerWrapperWide : ""}`}
         data-testid="composer-toolbar"
       >
         {expanded && (

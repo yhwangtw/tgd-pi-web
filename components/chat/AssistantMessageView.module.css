@@ -6,6 +6,13 @@
   margin-bottom: 12px;
 }
 
+@media (min-width: 701px) {
+  :global(html[data-density="compact"]) .messageContainer { margin-bottom: 6px; }
+  :global(html[data-density="compact"]) .blocksContainer { gap: 5px; }
+  :global(html[data-density="compact"]) .modelLabel { margin-bottom: 2px; }
+  :global(html[data-density="compact"]) .footer { margin-top: 2px; }
+}
+
 /* Model label */
 .modelLabel {
   font-size: calc(11px * var(--font-scale));
@@ -516,6 +523,9 @@
 .focusDiff { min-width: 0; min-height: 100%; padding: 12px; }
 
 @media (max-width: 700px) {
+  :global(html[data-density="compact"]) .messageContainer { margin-bottom: 5px; }
+  :global(html[data-density="compact"]) .blocksContainer { gap: 5px; }
+
   .errorBody {
     align-items: flex-start;
     flex-direction: column;

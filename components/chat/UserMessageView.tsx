@@ -12,16 +12,17 @@ import { ImageLightbox } from "./ImageLightbox";
 import { useI18n } from "@/lib/i18n";
 import { MessageBookmarkAction, MessageBookmarkIndicator } from "./MessageBookmarkAction";
 
-function formatTime(ts?: number): string | null {
+function formatTime(ts?: number, locale: "en" | "zh" = "en"): string | null {
   if (!ts) return null;
   const d = new Date(ts);
   const now = new Date();
   const isToday = d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const language = locale === "zh" ? "zh-TW" : "en";
+  const time = d.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" });
   if (isToday) return time;
-  const date = d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+  const date = d.toLocaleDateString(language, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
   return `${date} ${time}`;
 }
 
@@ -59,7 +60,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
   isBookmarked?: boolean;
   onToggleBookmark?: (entryId: string) => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [copied, setCopied] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -100,7 +101,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
       ? []
       : message.content.filter((b): b is ImageContent => b.type === "image");
 
-  const time = formatTime(message.timestamp);
+  const time = formatTime(message.timestamp, locale);
   const canFork = !!entryId && !!onFork;
   const canEdit = !!prevAssistantEntryId && !!onEditRerun;
   const canBookmark = !!entryId && !!onToggleBookmark;

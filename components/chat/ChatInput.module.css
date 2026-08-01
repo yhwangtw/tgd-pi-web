@@ -14,10 +14,21 @@
   background: var(--bg);
 }
 
+@media (min-width: 701px) {
+  :global(html[data-density="compact"]) .container { padding-bottom: 4px; }
+  :global(html[data-density="compact"]) .inputWrapper { padding-top: 6px; padding-bottom: 6px; }
+  :global(html[data-density="compact"]) .textarea { min-height: 30px; padding-top: 3px; padding-bottom: 3px; }
+  :global(html[data-density="compact"]) .bottomBar { margin-top: 1px; }
+}
+
 /* Max-width wrapper */
 .innerWrapper {
-  max-width: 820px;
+  max-width: 900px;
   margin: 0 auto;
+}
+
+.innerWrapperWide {
+  max-width: 1080px;
 }
 
 .innerWrapperExpanded {

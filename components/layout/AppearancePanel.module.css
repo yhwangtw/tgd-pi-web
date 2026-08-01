@@ -3,8 +3,10 @@
   left: 52px;
   bottom: 12px;
   z-index: 950;
-  width: 236px;
+  width: 268px;
+  max-height: calc(100dvh - 24px);
   padding: 12px;
+  overflow-y: auto;
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   box-shadow: var(--color-shadow-modal);
@@ -16,14 +18,47 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.title {
+.panelHeader {
+  display: flex;
+  min-height: 34px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 10px;
-  font-size: calc(11px * var(--font-scale));
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-dim);
 }
+
+.panelHeader > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.panelHeader strong {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.panelHeader span {
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+}
+
+.closeButton {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.closeButton:hover { background: var(--bg-hover); color: var(--text); }
 
 .themeRow {
   display: flex;
@@ -195,20 +230,52 @@
   border-color: var(--color-error);
 }
 
+.resetRow {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
+
+.resetRow:hover { border-color: var(--border); background: var(--bg-hover); color: var(--text); }
+
 @media (max-width: 700px) {
   .panel {
     left: calc(var(--safe-area-left) + 8px);
     right: calc(var(--safe-area-right) + 8px);
     bottom: calc(var(--safe-area-bottom) + 72px);
     width: auto;
-    max-height: min(70dvh, 560px);
-    padding: 14px;
-    overflow-y: auto;
+    max-height: min(76dvh, 640px);
+    padding: 12px 14px 14px;
+    overscroll-behavior: contain;
   }
+
+  .panelHeader {
+    position: sticky;
+    top: -12px;
+    z-index: 2;
+    margin: -2px -4px 10px;
+    padding: 8px 4px 6px;
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+  }
+
+  .closeButton { width: 44px; height: 44px; }
 
   .themeBtn,
   .fontSizeBtn,
   .skinRow,
+  .resetRow,
   .logoutRow {
     min-height: 44px;
   }

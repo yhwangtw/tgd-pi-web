@@ -77,6 +77,29 @@ test.describe("appearance", () => {
       .toBe(false);
   });
 
+  test("interface density applies immediately and survives reload", async ({ page }) => {
+    await openMain(page);
+    await page.getByRole("button", { name: "Appearance" }).click();
+    const dialog = page.getByRole("dialog", { name: "Appearance" });
+    await dialog.getByRole("button", { name: "Compact", exact: true }).click();
+
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.getAttribute("data-density")))
+      .toBe("compact");
+
+    await page.reload();
+    await expect(page.getByText("專案架構分析").first()).toBeVisible({ timeout: 20_000 });
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.getAttribute("data-density")))
+      .toBe("compact");
+
+    await page.getByRole("button", { name: "Appearance" }).click();
+    await page.getByRole("dialog", { name: "Appearance" }).getByRole("button", { name: "Comfortable", exact: true }).click();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.hasAttribute("data-density")))
+      .toBe(false);
+  });
+
   test("all-left layout remains aligned and usable on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openMain(page);
