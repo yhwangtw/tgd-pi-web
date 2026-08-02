@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
 import styles from "./TurnActivityGroup.module.css";
 
@@ -15,14 +15,56 @@ interface Props {
 
 export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed, children }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const rootRef = useRef<HTMLElement | null>(null);
+  const pendingScrollRef = useRef<{
+    container: HTMLElement;
+    scrollTop: number;
+    overflowAnchor: string;
+  } | null>(null);
   const { t } = useI18n();
 
+  const toggleExpanded = () => {
+    const container = rootRef.current?.closest<HTMLElement>("[data-transcript-scroll]");
+    if (container) {
+      pendingScrollRef.current = {
+        container,
+        scrollTop: container.scrollTop,
+        overflowAnchor: container.style.overflowAnchor,
+      };
+      // Browser scroll anchoring otherwise follows content below a long work
+      // log and moves the clicked summary as the disclosure opens.
+      container.style.overflowAnchor = "none";
+    }
+    setExpanded((value) => !value);
+  };
+
+  useLayoutEffect(() => {
+    const pending = pendingScrollRef.current;
+    if (!pending) return;
+    pending.container.scrollTop = pending.scrollTop;
+    const restore = () => {
+      // Re-apply after layout/scroll anchoring has settled but before paint.
+      // This also covers large disclosures whose content-visibility state
+      // changes in the same render.
+      pending.container.scrollTop = pending.scrollTop;
+      pending.container.style.overflowAnchor = pending.overflowAnchor;
+      pendingScrollRef.current = null;
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(restore);
+    else restore();
+  }, [expanded]);
+
   return (
-    <section className={`${styles.root} ${failed ? styles.rootError : ""}`} aria-label={t("chat.workLog")}>
+    <section
+      ref={rootRef}
+      className={`${styles.root} ${failed ? styles.rootError : ""}`}
+      aria-label={t("chat.workLog")}
+      data-work-log-expanded={expanded ? "true" : "false"}
+    >
       <button
         type="button"
         className={styles.summary}
-        onClick={() => setExpanded((value) => !value)}
+        onClick={toggleExpanded}
         aria-expanded={expanded}
       >
         <span className={styles.stateIcon} aria-hidden>

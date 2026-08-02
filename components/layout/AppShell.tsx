@@ -17,7 +17,7 @@ import { IconRail, type PanelView } from "./IconRail";
 import { MobileNavigation } from "./MobileNavigation";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { TabBar } from "./TabBar";
-import { BranchNavigator } from "../chat/BranchNavigator";
+import { BranchNavigator, hasSessionBranches } from "../chat/BranchNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppShellState } from "@/hooks/useAppShellState";
 import { useFileTabs } from "@/hooks/useFileTabs";
@@ -34,6 +34,8 @@ import { useTabTitle } from "@/lib/attention";
 import { setSkin } from "@/lib/skin";
 import { resolveAppShellCenterView } from "./app-shell-view";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { resolveWorkspaceIdentity, type WorkspaceIdentity } from "@/lib/workspace-identity";
+import type { Worktree } from "@/lib/worktrees";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ChatInputHandle } from "../chat/ChatInput";
 import { getSessionDisplayTitle } from "../sidebar/session-utils";
@@ -95,6 +97,35 @@ export function AppShell() {
       return !v;
     });
   }, []);
+
+  const workspaceCwd = state.selectedSession?.cwd ?? state.newSessionCwd ?? state.activeCwd;
+  const [workspaceIdentity, setWorkspaceIdentity] = useState<WorkspaceIdentity | null>(null);
+  const fallbackWorkspaceIdentity = workspaceCwd
+    ? resolveWorkspaceIdentity(workspaceCwd, [])
+    : null;
+  const visibleWorkspaceIdentity = workspaceIdentity?.sourceCwd === workspaceCwd
+    ? workspaceIdentity
+    : fallbackWorkspaceIdentity;
+
+  useEffect(() => {
+    if (!workspaceCwd) {
+      setWorkspaceIdentity(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    fetch(`/api/worktrees?cwd=${encodeURIComponent(workspaceCwd)}`, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { worktrees?: Worktree[] } | null) => {
+        if (!controller.signal.aborted) {
+          setWorkspaceIdentity(resolveWorkspaceIdentity(workspaceCwd, data?.worktrees ?? []));
+        }
+      })
+      .catch(() => {
+        // The cwd label remains useful outside git or during a transient fetch failure.
+      });
+    return () => controller.abort();
+  }, [workspaceCwd]);
 
   const { rightWidth, draggingRight, startRightResize, resetRightWidth } = useRightPanelWidth();
   const chatInputRef = useRef<ChatInputHandle | null>(null);
@@ -490,6 +521,21 @@ export function AppShell() {
   );
 
   const tabTitle = useTabTitle();
+  const sessionHasBranches = hasSessionBranches(state.branchTree);
+  const systemPanelStyle = state.topPanelPos && typeof window !== "undefined"
+    ? (() => {
+        const margin = 8;
+        const width = Math.min(760, state.topPanelPos.width - margin * 2);
+        return {
+          top: state.topPanelPos.top + 6,
+          left: Math.max(
+            margin,
+            state.topPanelPos.left + state.topPanelPos.width - width - margin,
+          ),
+          width,
+        };
+      })()
+    : null;
 
   return (
     <>
@@ -552,12 +598,34 @@ export function AppShell() {
               <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
             </svg>
           </button>
-          <div className={s.chatTitle} title={state.selectedSession ? getSessionDisplayTitle(state.selectedSession, 240) : undefined}>
-            {state.selectedSession
-              ? getSessionDisplayTitle(state.selectedSession)
-              : effectiveNewSessionCwd
-                ? t("sidebar.new").toLowerCase() + " · " + (effectiveNewSessionCwd.split("/").pop() ?? "")
-                : "π"}
+          <div className={s.sessionIdentity} data-testid="session-identity">
+            {visibleWorkspaceIdentity && (
+              <div
+                className={s.workspaceIdentity}
+                aria-label={`${t("topbar.repository")}: ${visibleWorkspaceIdentity.repository}${visibleWorkspaceIdentity.branch ? `, ${t("topbar.branch")}: ${visibleWorkspaceIdentity.branch}` : ""}`}
+                title={visibleWorkspaceIdentity.root}
+              >
+                <span className={s.workspaceRepository} data-testid="workspace-repository">
+                  {visibleWorkspaceIdentity.repository}
+                </span>
+                <span
+                  className={`${s.workspaceBranch} ${visibleWorkspaceIdentity.isGit ? "" : s.workspaceBranchNeutral}`}
+                  data-testid="workspace-branch"
+                >
+                  {visibleWorkspaceIdentity.detached && visibleWorkspaceIdentity.branch
+                    ? `${t("topbar.detached")} · ${visibleWorkspaceIdentity.branch}`
+                    : visibleWorkspaceIdentity.branch
+                    ?? (workspaceIdentity?.sourceCwd === workspaceCwd ? t("topbar.notGitRepository") : "…")}
+                </span>
+              </div>
+            )}
+            <div className={s.chatTitle} title={state.selectedSession ? getSessionDisplayTitle(state.selectedSession, 240) : undefined}>
+              {state.selectedSession
+                ? getSessionDisplayTitle(state.selectedSession)
+                : effectiveNewSessionCwd
+                  ? t("sidebar.new").toLowerCase()
+                  : "π"}
+            </div>
           </div>
           {showChat && (
             <button
@@ -594,18 +662,27 @@ export function AppShell() {
                   <button type="button" className={s.sessionMenuItem} role="menuitem" onClick={() => { setAnalyticsOpen(true); setSessionMenuOpen(false); }}>
                     <span>{t("topbar.analytics")}</span><small>{t("topbar.analyticsTitle")}</small>
                   </button>
-                  <button type="button" className={s.sessionMenuItem} role="menuitem" onClick={() => { actions.toggleTopPanel("branches"); setSessionMenuOpen(false); }}>
-                    <span>{t("topbar.branches")}</span><small>{state.branchTree.length > 0 ? t("topbar.sessionMenuBranchesHint") : t("topbar.sessionMenuNoBranches")}</small>
+                  <button
+                    type="button"
+                    className={s.sessionMenuItem}
+                    role="menuitem"
+                    disabled={!sessionHasBranches}
+                    onClick={() => {
+                      if (sessionHasBranches) actions.toggleTopPanel("branches");
+                      setSessionMenuOpen(false);
+                    }}
+                  >
+                    <span>{t("topbar.branches")}</span><small>{sessionHasBranches ? t("topbar.sessionMenuBranchesHint") : t("topbar.sessionMenuNoBranches")}</small>
                   </button>
                   <button type="button" className={s.sessionMenuItem} role="menuitem" onClick={() => { actions.toggleTopPanel("system"); setSessionMenuOpen(false); }}>
                     <span>{t("topbar.system")}</span><small>{state.systemPrompt ? t("topbar.sessionMenuSystemLoaded") : t("topbar.sessionMenuSystemPending")}</small>
                   </button>
                   <div className={s.sessionMenuDivider} />
                   <button type="button" className={s.sessionMenuItem} role="menuitem" disabled={!state.selectedSession} onClick={() => { handleExportSession(); setSessionMenuOpen(false); }}>
-                    <span>HTML</span><small>{t("topbar.exportHtmlHint")}</small>
+                    <span>{t("topbar.exportHtmlLabel")}</span><small>{t("topbar.exportHtmlHint")}</small>
                   </button>
                   <button type="button" className={s.sessionMenuItem} role="menuitem" disabled={!state.selectedSession} onClick={() => { handleExportMarkdown(); setSessionMenuOpen(false); }}>
-                    <span>Markdown</span><small>{t("topbar.exportMdHint")}</small>
+                    <span>{t("topbar.exportMdLabel")}</span><small>{t("topbar.exportMdHint")}</small>
                   </button>
                 </div>,
                 document.body,
@@ -651,7 +728,7 @@ export function AppShell() {
                       className={s.exportMenuItem}
                       role="menuitem"
                     >
-                      <strong>HTML</strong>
+                      <strong>{t("topbar.exportHtmlLabel")}</strong>
                       <span className={s.exportMenuHint}>{t("topbar.exportHtmlHint")}</span>
                     </button>
                     <button
@@ -659,7 +736,7 @@ export function AppShell() {
                       className={s.exportMenuItem}
                       role="menuitem"
                     >
-                      <strong>Markdown</strong>
+                      <strong>{t("topbar.exportMdLabel")}</strong>
                       <span className={s.exportMenuHint}>{t("topbar.exportMdHint")}</span>
                     </button>
                   </div>,
@@ -775,37 +852,52 @@ export function AppShell() {
               <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
             </svg>
           </button>
-          {/* Top panel dropdown — shared, only one active at a time */}
-          {state.activeTopPanel && state.topPanelPos && (
-            <div
-              className={s.topPanelDropdown}
-              style={{
-                top: state.topPanelPos.top,
-                left: state.topPanelPos.left,
-                width: state.topPanelPos.width,
-              }}
-            >
-              {state.activeTopPanel === "system" && (
-                <div className={s.systemPanel}>
-                  {state.systemPrompt ? (
-                    <div className={s.systemPromptContent}>
-                      {state.systemPrompt}
-                    </div>
-                  ) : state.systemPrompt === "" ? (
-                    <div className={s.systemPromptPlaceholder}>
-                      {t("system.empty")}
-                    </div>
-                  ) : (
-                    <div className={s.systemPromptPlaceholder}>
-                      {t("system.notLoaded")}
-                    </div>
-                  )}
+        </div>
+
+        {/* Portalled to body because the top bar's backdrop-filter creates a
+            stacking context that would otherwise let chat messages paint over
+            this fixed panel. */}
+        {state.activeTopPanel === "system" && systemPanelStyle && typeof document !== "undefined" && createPortal(
+          <section
+            className={s.topPanelDropdown}
+            style={systemPanelStyle}
+            role="dialog"
+            aria-label={t("topbar.system")}
+            data-testid="system-prompt-panel"
+          >
+            <div className={s.systemPanel}>
+              <header className={s.systemPanelHeader}>
+                <strong>{t("topbar.system")}</strong>
+                <button
+                  type="button"
+                  className={s.systemPanelClose}
+                  onClick={() => actions.toggleTopPanel("system")}
+                  aria-label={t("common.close")}
+                  title={t("common.close")}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </header>
+              {state.systemPrompt ? (
+                <div className={s.systemPromptContent}>
+                  {state.systemPrompt}
+                </div>
+              ) : state.systemPrompt === "" ? (
+                <div className={s.systemPromptPlaceholder}>
+                  {t("system.empty")}
+                </div>
+              ) : (
+                <div className={s.systemPromptPlaceholder}>
+                  {t("system.notLoaded")}
                 </div>
               )}
             </div>
-          )}
-
-        </div>
+          </section>,
+          document.body,
+        )}
 
         {/* Chat content */}
         <div className={s.chatContent}>

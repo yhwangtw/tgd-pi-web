@@ -99,7 +99,7 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
 
   return (
     <section
-      className={styles.card}
+      className={`${styles.card} ${styles.questionCard}`}
       role="dialog"
       aria-labelledby={`extension-question-${request.id}`}
       onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); void cancel(); } }}
@@ -146,10 +146,7 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
           />
         )}
         {error && <p className={styles.error} role="alert">{error}</p>}
-        <div className={styles.actions}>
-          <button type="button" className={styles.secondaryButton} disabled={submitting} onClick={() => void cancel()}>
-            {t("extensionUI.cancel")}
-          </button>
+        <div className={`${styles.actions} ${styles.questionActions}`}>
           <button type="submit" className={styles.primaryButton} disabled={!canSubmit || submitting}>
             {submitting ? t("extensionUI.sending") : t("extensionUI.submit")}
           </button>
@@ -168,9 +165,12 @@ function CardHeader({ id, title, pendingCount, onCancel }: {
   const { t } = useI18n();
   return (
     <div className={styles.cardHeader}>
-      <div>
+      <div className={styles.cardHeading}>
+        <span className={styles.waitingMark} aria-hidden />
+        <div>
         <div className={styles.eyebrow}>{t("extensionUI.waiting")}</div>
         <h2 id={`extension-question-${id}`} className={styles.cardTitle}>{title}</h2>
+        </div>
       </div>
       <div className={styles.headerActions}>
         {pendingCount > 1 && <span className={styles.pendingCount}>+{pendingCount - 1}</span>}

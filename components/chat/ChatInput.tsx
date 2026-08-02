@@ -1010,36 +1010,46 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             id="composer-secondary-tools"
             className={`${styles.bottomBarRight} ${mobileToolsOpen ? styles.bottomBarRightMobileOpen : ""} ${isStreaming ? styles.bottomBarRightStreaming : ""}`}
           >
-            <button
-              type="button"
-              onClick={toggleExpanded}
-              className={styles.expandButton}
-              aria-expanded={expanded}
-              aria-label={expanded ? t("input.collapseComposer") : t("input.expandComposer")}
-              title={expanded ? t("input.collapseComposer") : t("input.expandComposer")}
-            >
-              {expanded ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M8 3v5H3M16 21v-5h5M3 8l5-5M21 16l-5 5" />
-                </svg>
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M8 3H3v5M16 21h5v-5M3 8l5-5M21 16l-5 5" />
-                </svg>
-              )}
-            </button>
-            <ThinkingSelector
-              thinkingLevel={thinkingLevel}
-              thinkingLevelMap={thinkingLevelMap}
-              availableThinkingLevels={availableThinkingLevels}
-              isStreaming={isStreaming}
-              onThinkingLevelChange={onThinkingLevelChange}
-            />
-            <ToolPresetSelector
-              toolPreset={toolPreset}
-              isStreaming={isStreaming}
-              onToolPresetChange={onToolPresetChange}
-            />
+            <div className={styles.mobileLabeledControl}>
+              <span className={styles.mobileControlLabel}>{t("input.composerSize")}</span>
+              <button
+                type="button"
+                onClick={toggleExpanded}
+                className={styles.expandButton}
+                aria-expanded={expanded}
+                aria-label={expanded ? t("input.collapseComposer") : t("input.expandComposer")}
+                title={expanded ? t("input.collapseComposer") : t("input.expandComposer")}
+              >
+                {expanded ? (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M8 3v5H3M16 21v-5h5M3 8l5-5M21 16l-5 5" />
+                  </svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M8 3H3v5M16 21h5v-5M3 8l5-5M21 16l-5 5" />
+                  </svg>
+                )}
+                <span className={styles.mobileControlValue}>{t(expanded ? "input.collapseComposerShort" : "input.expandComposerShort")}</span>
+              </button>
+            </div>
+            <div className={styles.mobileLabeledControl}>
+              <span className={styles.mobileControlLabel}>{t("input.reasoning")}</span>
+              <ThinkingSelector
+                thinkingLevel={thinkingLevel}
+                thinkingLevelMap={thinkingLevelMap}
+                availableThinkingLevels={availableThinkingLevels}
+                isStreaming={isStreaming}
+                onThinkingLevelChange={onThinkingLevelChange}
+              />
+            </div>
+            <div className={styles.mobileLabeledControl}>
+              <span className={styles.mobileControlLabel}>{t("input.tools")}</span>
+              <ToolPresetSelector
+                toolPreset={toolPreset}
+                isStreaming={isStreaming}
+                onToolPresetChange={onToolPresetChange}
+              />
+            </div>
 
             {!isStreaming && onCompact && (
               <div className={styles.compactControls}>
@@ -1054,7 +1064,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     className={autoCompactionEnabled ? styles.autoCompactButtonOn : styles.autoCompactButtonOff}
                   >
                     <span className={styles.autoCompactDot} aria-hidden />
-                    {t("chat.autoCompactShort")}
+                    {t("chat.autoCompact")}
                   </button>
                 )}
                 <div className={styles.compactWrapper}>
@@ -1096,37 +1106,41 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             )}
 
             {onSoundToggle !== undefined && (
-              <button
-                type="button"
-                onClick={onSoundToggle}
-                aria-label={soundEnabled ? t("input.soundOnTitle") : t("input.soundOffTitle")}
-                title={soundEnabled ? t("input.soundOnTitle") : t("input.soundOffTitle")}
-                className={soundEnabled ? styles.soundButtonEnabled : styles.soundButtonDisabled}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                  e.currentTarget.style.opacity = "1";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "none";
-                  e.currentTarget.style.color = soundEnabled ? "var(--text-muted)" : "var(--text-dim)";
-                  e.currentTarget.style.opacity = soundEnabled ? "1" : "0.55";
-                }}
-              >
-                {soundEnabled ? (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                  </svg>
-                ) : (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                    <line x1="23" y1="9" x2="17" y2="15" />
-                    <line x1="17" y1="9" x2="23" y2="15" />
-                  </svg>
-                )}
-              </button>
+              <div className={`${styles.mobileLabeledControl} ${styles.mobileSoundControl}`}>
+                <span className={styles.mobileControlLabel}>{t("input.sound")}</span>
+                <button
+                  type="button"
+                  onClick={onSoundToggle}
+                  aria-label={soundEnabled ? t("input.soundOnTitle") : t("input.soundOffTitle")}
+                  title={soundEnabled ? t("input.soundOnTitle") : t("input.soundOffTitle")}
+                  className={soundEnabled ? styles.soundButtonEnabled : styles.soundButtonDisabled}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--bg-hover)";
+                    e.currentTarget.style.color = "var(--text)";
+                    e.currentTarget.style.opacity = "1";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "none";
+                    e.currentTarget.style.color = soundEnabled ? "var(--text-muted)" : "var(--text-dim)";
+                    e.currentTarget.style.opacity = soundEnabled ? "1" : "0.55";
+                  }}
+                >
+                  {soundEnabled ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    </svg>
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <line x1="23" y1="9" x2="17" y2="15" />
+                      <line x1="17" y1="9" x2="23" y2="15" />
+                    </svg>
+                  )}
+                  <span className={styles.mobileControlValue}>{t(soundEnabled ? "chat.on" : "chat.off")}</span>
+                </button>
+              </div>
             )}
           </div>
 

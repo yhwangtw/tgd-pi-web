@@ -5,7 +5,9 @@
   background: var(--bg-elev-1);
 }
 
-.rootError { border-color: var(--color-error-border); }
+.rootError {
+  box-shadow: inset 2px 0 var(--color-error);
+}
 
 .summary {
   display: flex;
@@ -22,6 +24,10 @@
 }
 
 .summary:hover { background: var(--bg-hover); color: var(--text); }
+
+.summary:focus-visible {
+  outline-offset: -2px;
+}
 
 .stateIcon {
   display: inline-flex;

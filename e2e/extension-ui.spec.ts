@@ -16,7 +16,7 @@ test.describe("extension interactive UI", () => {
 
     await expect(page.getByRole("heading", { name: "Choose a release target" })).toBeVisible();
     await expect(page.getByText("Waiting for decisions")).toBeVisible();
-    await page.getByRole("option", { name: "Production" }).click();
+    await page.getByRole("button", { name: "Production", exact: true }).click();
     await page.getByRole("button", { name: "Continue", exact: true }).click();
 
     await expect(page.getByRole("heading", { name: "Confirm release" })).toBeVisible();

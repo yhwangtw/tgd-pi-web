@@ -5,6 +5,21 @@ import { getAlwaysFollow } from "@/lib/prefs";
 import { AT_BOTTOM, loadScrollPosition, saveScrollPosition } from "@/lib/scroll-memory";
 
 /**
+ * Minimum bottom filler needed to keep the current viewport offset valid when
+ * the full-height run spacer is retired. Without it, the browser clamps
+ * scrollTop to the new maximum and visually yanks an anchored reader down.
+ */
+export function preservedRunSpacerHeight(
+  scrollTop: number,
+  clientHeight: number,
+  scrollHeight: number,
+  currentSpacerHeight: number,
+): number {
+  const contentHeight = Math.max(0, scrollHeight - currentSpacerHeight);
+  return Math.max(0, Math.ceil(scrollTop + clientHeight - contentHeight));
+}
+
+/**
  * Transcript scroll management: owns the anchor refs and decides when the
  * view follows new content — initial jump to bottom, scroll-sent-message-
  * to-top, and conditional follow at end of a run.
@@ -23,7 +38,7 @@ export function useTranscriptScroll(
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
   }, []);
 
   const scrollUserMsgToTop = useCallback(() => {
@@ -31,7 +46,10 @@ export function useTranscriptScroll(
     const el = lastUserMsgRef.current;
     if (!container || !el) return;
     const elAbsTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-    container.scrollTo({ top: elAbsTop - 16, behavior: "smooth" });
+    // This must be immediate. A short response can finish before a smooth
+    // animation reaches the anchor; the end-of-run spacer calculation would
+    // then preserve the old near-bottom position instead of the sent message.
+    container.scrollTo({ top: elAbsTop - 16, behavior: "auto" });
   }, []);
 
   useEffect(() => {
@@ -62,14 +80,14 @@ export function useTranscriptScroll(
         } else {
           scrollToBottom("instant");
         }
-      } else if (!agentRunningRef.current) {
-        // Only follow to the bottom if the reader is already near it —
-        // yanking someone who scrolled up (or is reading the answer from the
-        // top anchor) loses their place. Distance is measured fresh here:
-        // the run spacer has already unmounted by the time this effect runs.
-        const el = scrollContainerRef.current;
-        const dist = el ? el.scrollHeight - el.scrollTop - el.clientHeight : 0;
-        if (dist < 200 || getAlwaysFollow()) scrollToBottom("smooth");
+      } else if (!agentRunningRef.current && getAlwaysFollow()) {
+        // Do not infer follow intent from distance after a run. The temporary
+        // run spacer has already unmounted by this point, so the browser may
+        // clamp scrollTop to the new maximum and make `dist` look like zero
+        // even when the reader was anchored at the sent message. Streaming
+        // follow already keeps an engaged reader at the tail; only the
+        // explicit always-follow preference should move an idle reader here.
+        scrollToBottom("smooth");
       }
     }
   }, [messagesLength, agentRunning, agentRunningRef, scrollToBottom, scrollUserMsgToTop, memoryKey]);

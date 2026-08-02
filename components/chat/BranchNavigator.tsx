@@ -71,11 +71,12 @@ function getLabel(entry: SessionEntry): string {
   return entry.type;
 }
 
-// Does the tree have any branching at all?
-function hasBranch(nodes: SessionTreeNode[]): boolean {
+// Does the tree have any branching at all? A populated tree can still be a
+// purely linear history, which should not expose a dead "Branches" action.
+export function hasSessionBranches(nodes: SessionTreeNode[]): boolean {
   for (const node of nodes) {
     if (node.children.length > 1) return true;
-    if (hasBranch(node.children)) return true;
+    if (hasSessionBranches(node.children)) return true;
   }
   return false;
 }
@@ -208,7 +209,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
 
   const noBranchReason = !hasSession
     ? "No active session"
-    : !hasBranch(tree)
+    : !hasSessionBranches(tree)
       ? "This session has no branches"
       : null;
 
@@ -232,6 +233,12 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
     </svg>
   );
 
+
+  // AppShell controls this dropdown from its own session menu. When that
+  // trigger is hidden and the dropdown is closed, avoid leaving an empty flex
+  // item behind — on mobile it otherwise consumes a grid cell and wraps the
+  // visible actions onto a second row.
+  if (inline && hideTrigger && (!open || !hasContent)) return null;
 
   if (inline) {
     return (

@@ -110,17 +110,65 @@
   backdrop-filter: blur(14px) saturate(1.4);
 }
 
-/* Session title — the top bar is session-scoped now */
-.chatTitle {
+/* Repository context stays visible with the session title so a coding chat
+   never loses the workspace it can edit. */
+.sessionIdentity {
   flex: 1 1 auto;
   min-width: 0;
-  padding-right: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 12px 0 2px;
+}
+
+.workspaceIdentity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: calc(10.5px * var(--font-scale));
+  font-weight: 600;
+  line-height: 1;
+}
+
+.workspaceRepository {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.workspaceBranch {
+  max-width: 46%;
+  flex: 0 1 auto;
+  padding: 2px 5px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-bg);
+  color: var(--accent);
+  font-size: calc(9.5px * var(--font-scale));
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceBranchNeutral {
+  background: var(--bg-elev-1);
+  color: var(--text-dim);
+}
+
+.chatTitle {
+  min-width: 0;
+  overflow: hidden;
   color: var(--text);
   font-size: calc(12.5px * var(--font-scale));
   font-weight: 500;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topBarButton {
@@ -264,12 +312,13 @@
 }
 .sessionMenuItem:hover { background: var(--bg-hover); }
 .sessionMenuItem:disabled { color: var(--text-dim); cursor: not-allowed; }
+.sessionMenuItem:disabled:hover { background: transparent; }
 .sessionMenuItem span { font-size: calc(12px * var(--font-scale)); font-weight: 600; }
 .sessionMenuItem small { color: var(--text-dim); font-size: calc(10.5px * var(--font-scale)); font-weight: 400; }
 .sessionMenuDivider { height: 1px; margin: 3px 5px; background: var(--border); }
 
-/* Narrow screens: reclaim top-bar space so the action buttons fit without
-   clipping — drop the session title and the (secondary) live stats. */
+/* Narrow desktop layouts can drop the secondary session name, while the
+   repository context remains visible. The phone rule below restores both. */
 @media (max-width: 640px) {
   .chatTitle { display: none; }
 }
@@ -459,18 +508,55 @@
 /* ── Top panel dropdown ── */
 .topPanelDropdown {
   position: fixed;
-  z-index: 500;
+  z-index: 620;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elev-1);
+  box-shadow: var(--color-shadow-popup);
 }
 
 .systemPanel {
-  background: var(--bg-panel);
-  border-bottom: 1px solid var(--border);
+  min-width: 0;
+  background: var(--bg-elev-1);
+}
+
+.systemPanelHeader {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.systemPanelClose {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.systemPanelClose:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .systemPromptContent {
-  max-height: min(600px, 75vh);
+  max-height: min(520px, calc(100dvh - 120px));
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 14px 16px 18px;
   color: var(--text-muted);
   font-size: calc(12px * var(--font-scale));
   line-height: 1.6;
@@ -771,11 +857,27 @@
 
   .chatTitle {
     display: block;
-    flex: 1 1 auto;
     max-width: none;
-    font-size: var(--text-sm);
+    font-size: calc(11.5px * var(--font-scale));
     color: var(--text);
-    text-align: center;
+    text-align: left;
+  }
+
+  .sessionIdentity {
+    flex: 1 1 auto;
+    align-items: flex-start;
+    gap: 3px;
+    padding: 0 2px;
+  }
+
+  .workspaceIdentity {
+    width: 100%;
+    font-size: calc(11px * var(--font-scale));
+  }
+
+  .workspaceBranch {
+    max-width: 50%;
+    font-size: calc(9.5px * var(--font-scale));
   }
 
   .sessionStats {
@@ -790,27 +892,27 @@
 
   .chatActionsMobileOpen {
     position: fixed;
-    top: calc(var(--safe-area-top) + 60px);
-    left: calc(var(--safe-area-left) + 8px);
+    top: calc(var(--safe-area-top) + 56px);
+    left: auto;
     right: calc(var(--safe-area-right) + 8px);
     z-index: 382;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: stretch;
-    gap: 4px;
+    display: grid;
+    width: min(320px, calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 16px));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: center;
+    gap: 6px;
     height: auto;
-    padding: 8px;
+    padding: 6px;
     overflow: visible;
     border: 1px solid var(--glass-border);
-    border-radius: var(--radius-lg);
+    border-radius: 12px;
     background: var(--glass-bg);
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
     backdrop-filter: blur(18px) saturate(1.4);
-    box-shadow: var(--color-shadow-modal);
+    box-shadow: var(--color-shadow-popup);
   }
 
   .chatActionsMobileOpen > * {
-    flex: 1 1 calc(50% - 4px);
     min-width: 0;
     height: 44px;
   }
@@ -820,6 +922,8 @@
     width: 100%;
     min-height: 44px;
     justify-content: center;
+    gap: 4px;
+    padding: 0 6px;
   }
 
   .mobileActionsBackdrop {
@@ -828,19 +932,23 @@
     inset: 0;
     z-index: 381;
     border: 0;
-    background: var(--color-overlay);
+    background: transparent;
   }
 
   .topPanelDropdown {
     top: calc(var(--safe-area-top) + 60px) !important;
     left: calc(var(--safe-area-left) + 8px) !important;
     width: calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 16px) !important;
-    z-index: 390;
+    z-index: 620;
   }
 
-  .systemPanel,
+  .systemPanelClose {
+    width: 44px;
+    height: 44px;
+  }
+
   .systemPromptContent {
-    border-radius: var(--radius-lg);
+    max-height: calc(100dvh - var(--safe-area-top) - var(--mobile-nav-height) - 132px);
   }
 
   .parallelContainer {

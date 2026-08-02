@@ -11,30 +11,58 @@ interface ChoiceListProps {
   selected?: string;
   firstRef?: RefObject<HTMLButtonElement | null>;
   onSelect: (value: string) => void;
+  allowOther?: boolean;
+  otherLabel?: string;
+  otherSelected?: boolean;
+  onSelectOther?: () => void;
 }
 
-export function QuestionChoiceList({ questionId, options, selected, firstRef, onSelect }: ChoiceListProps) {
+export function QuestionChoiceList({
+  questionId,
+  options,
+  selected,
+  firstRef,
+  onSelect,
+  allowOther = false,
+  otherLabel,
+  otherSelected = false,
+  onSelectOther,
+}: ChoiceListProps) {
   return (
-    <div className={styles.choices} role="listbox">
+    <div className={styles.choices}>
       {options.map((option, index) => (
         <button
           key={option.label}
           ref={index === 0 ? firstRef : undefined}
           type="button"
-          role="option"
-          aria-selected={selected === option.label}
+          aria-pressed={selected === option.label}
           data-question-id={questionId}
           data-value={option.label}
           className={`${styles.choice} ${selected === option.label ? styles.choiceSelected : ""}`}
           onClick={() => onSelect(option.label)}
         >
-          <span className={styles.choiceMark} aria-hidden>{selected === option.label ? "●" : "○"}</span>
+          <span className={styles.choiceMark} aria-hidden />
           <span className={styles.choiceCopy}>
             <span className={styles.choiceLabel}>{option.label}</span>
             {option.description && <span className={styles.choiceDescription}>{option.description}</span>}
           </span>
         </button>
       ))}
+      {allowOther && (
+        <button
+          type="button"
+          aria-pressed={otherSelected}
+          data-question-id={questionId}
+          data-value="__other__"
+          className={`${styles.choice} ${otherSelected ? styles.choiceSelected : ""}`}
+          onClick={onSelectOther}
+        >
+          <span className={styles.choiceMark} aria-hidden />
+          <span className={styles.choiceCopy}>
+            <span className={styles.choiceLabel}>{otherLabel}</span>
+          </span>
+        </button>
+      )}
     </div>
   );
 }
@@ -61,24 +89,18 @@ export function AskUserFields({ request, answers, setAnswers, customAnswers, set
           options={question.options}
           selected={customAnswers.has(question.id) ? undefined : answers[question.id]}
           firstRef={index === 0 ? firstControlRef : undefined}
+          allowOther={question.allowOther}
+          otherLabel={t("extensionUI.other")}
+          otherSelected={customAnswers.has(question.id)}
           onSelect={(value) => {
             setCustomAnswers((current) => { const next = new Set(current); next.delete(question.id); return next; });
             setAnswers((current) => ({ ...current, [question.id]: value }));
           }}
-        />
-      )}
-      {question.allowOther && question.options.length > 0 && (
-        <button
-          type="button"
-          className={`${styles.choice} ${customAnswers.has(question.id) ? styles.choiceSelected : ""}`}
-          onClick={() => {
+          onSelectOther={() => {
             setCustomAnswers((current) => new Set(current).add(question.id));
             setAnswers((current) => ({ ...current, [question.id]: "" }));
           }}
-        >
-          <span className={styles.choiceMark} aria-hidden>{customAnswers.has(question.id) ? "●" : "○"}</span>
-          <span className={styles.choiceLabel}>{t("extensionUI.other")}</span>
-        </button>
+        />
       )}
       {question.allowOther && (question.options.length === 0 || customAnswers.has(question.id)) && (
         <input

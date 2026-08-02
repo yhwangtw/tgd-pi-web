@@ -216,10 +216,14 @@ empty/corrupted files as a side effect. Cache lives on `globalThis`
   running for on-time execution. It is intentionally not an OS daemon.
 
 ### Scroll contract (ChatWindow + useAgentSession)
-- On send: user message anchors to the viewport top; a viewport-height spacer
-  below lets the answer stream in without jumps.
-- End of run: only auto-scroll to bottom when the reader is within 200px of
-  it (measured fresh — the spacer has already unmounted). Never yank.
+- On send: user message anchors to the viewport top immediately (never smooth;
+  fast replies can otherwise finish before the anchor animation); a
+  viewport-height spacer below lets the answer stream in without jumps.
+- End of run: never infer follow intent from the post-layout distance. Removing
+  the viewport spacer can clamp `scrollTop` to the new maximum and make an
+  anchored reader look like they were at the tail. Shrink the spacer to the
+  minimum filler needed to preserve the viewport; engaged streaming follow is
+  already pinned, and only explicit always-follow may move an idle reader.
 - Streaming follow: engaged only by user scrolls into the bottom zone (or the
   jump button) — content growth never changes engagement. Instant scrolls,
   not smooth (smooth queues jitter at token rate).

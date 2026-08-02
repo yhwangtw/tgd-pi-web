@@ -123,5 +123,8 @@ describe("composer controls", () => {
     await act(async () => trigger.click());
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(panel.className).toContain("bottomBarRightMobileOpen");
+    expect(panel.textContent).toContain("Composer");
+    expect(panel.textContent).toContain("Reasoning");
+    expect(panel.textContent).toContain("Tools");
   });
 });

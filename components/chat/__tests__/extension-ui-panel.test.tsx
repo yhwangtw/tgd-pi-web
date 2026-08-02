@@ -105,6 +105,44 @@ describe("ExtensionUIPanel", () => {
     });
   });
 
+  it("keeps the custom answer inside the option grid and submits it", async () => {
+    const state: ExtensionUIState = {
+      dialogs: [{
+        type: "extension_ui_request",
+        id: "ask-other",
+        method: "ask_user",
+        questions: [{
+          id: "path",
+          header: "Path",
+          question: "Which path should be used?",
+          options: [{ label: "Default", description: "Use the suggested path" }],
+          allowOther: true,
+        }],
+      }],
+      statuses: {},
+      widgets: {},
+    };
+    const { onRespond } = await render(state);
+
+    const other = container!.querySelector<HTMLButtonElement>('[data-value="__other__"]')!;
+    expect(other.parentElement?.querySelector('[data-value="Default"]')).not.toBeNull();
+    await act(async () => other.click());
+
+    const path = container!.querySelector<HTMLInputElement>('input[data-question-id="path"]')!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(path, "/tmp/project-tGD");
+      path.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => container!.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+
+    expect(onRespond).toHaveBeenCalledWith({
+      type: "extension_ui_response",
+      id: "ask-other",
+      answers: { path: "/tmp/project-tGD" },
+    });
+  });
+
   it("hides the ambient Telegram connected status below the conversation", async () => {
     const state: ExtensionUIState = {
       dialogs: [],

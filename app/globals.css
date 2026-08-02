@@ -1032,6 +1032,17 @@ span.linenumber {
   content-visibility: visible;
 }
 
+/* Long work logs must keep their real height while open. If content-visibility
+   substitutes the 120px intrinsic estimate as the message crosses the
+   viewport edge, the transcript scrollbar appears to jump backwards. */
+.msg-item:has([data-work-log-expanded="true"]) {
+  content-visibility: visible;
+}
+
+[data-transcript-scroll]:has([data-work-log-expanded="true"]) {
+  overflow-anchor: none;
+}
+
 /* ═══ Interactive hover utility classes ═══ */
 .hover-bg:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--bg-hover);

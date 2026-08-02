@@ -12,8 +12,7 @@
 }
 
 .groupError {
-  border-color: var(--color-error-border);
-  background: var(--color-error-bg);
+  box-shadow: inset 2px 0 var(--color-error);
 }
 
 .summary {

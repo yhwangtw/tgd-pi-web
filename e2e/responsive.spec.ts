@@ -260,4 +260,87 @@ test.describe("responsive shell", () => {
     await expect(page.getByRole("heading", { name: "Session Analytics" })).toBeVisible();
     await expectNoPageOverflow(page);
   });
+
+  test("AC-RWD-9b: session overlays stay above the transcript and hide dead branch actions", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openSession(page);
+
+    await page.getByRole("button", { name: "Session actions" }).click();
+    const branches = page.getByRole("menuitem", { name: /Branches/ });
+    await expect(branches).toBeDisabled();
+    await expect(branches).toContainText("No alternate turns");
+    await expect(page.getByRole("menuitem", { name: /HTML/ })).toContainText("Downloads .html · keeps the full layout");
+    await expect(page.getByRole("menuitem", { name: /Markdown/ })).toContainText("Downloads .md · easy to edit or paste");
+
+    await page.getByRole("menuitem", { name: /System/ }).click();
+    const panel = page.getByTestId("system-prompt-panel");
+    await expect(panel).toBeVisible();
+    expect(await panel.evaluate((element) => element.parentElement === document.body)).toBe(true);
+
+    const box = await panel.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeLessThanOrEqual(760);
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(1440);
+    await expectNoPageOverflow(page);
+  });
+
+  test("AC-RWD-10: mobile header shows repository and branch at first glance", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await openSession(page);
+
+    const identity = page.getByTestId("session-identity");
+    await expect(identity.getByTestId("workspace-repository")).toHaveText("demo-project");
+    await expect(identity.getByTestId("workspace-branch")).not.toHaveText("");
+    await expect(identity).toContainText("專案架構分析");
+    await expectNoPageOverflow(page);
+  });
+
+  test("AC-RWD-11: mobile session actions stay in one compact row", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await openSession(page);
+
+    await page.getByRole("button", { name: "Session actions", exact: true }).click();
+    const panel = page.locator("[class*='chatActionsMobileOpen']");
+    const exportAction = panel.getByRole("button", { name: "Choose export format" });
+    const analyticsAction = panel.getByRole("button", { name: "Token usage and cost report" });
+    const systemAction = panel.getByRole("button", { name: "System", exact: true });
+    await expect(panel).toBeVisible();
+
+    const [panelBox, exportBox, analyticsBox, systemBox] = await Promise.all([
+      panel.boundingBox(),
+      exportAction.boundingBox(),
+      analyticsAction.boundingBox(),
+      systemAction.boundingBox(),
+    ]);
+    expect(panelBox).not.toBeNull();
+    expect(exportBox).not.toBeNull();
+    expect(analyticsBox).not.toBeNull();
+    expect(systemBox).not.toBeNull();
+    expect(panelBox!.width).toBeLessThanOrEqual(320);
+    expect(panelBox!.height).toBeLessThanOrEqual(64);
+    expect(Math.abs(exportBox!.y - analyticsBox!.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(analyticsBox!.y - systemBox!.y)).toBeLessThanOrEqual(1);
+    await expectNoPageOverflow(page);
+  });
+
+  test("AC-RWD-12: mobile composer settings use a compact labeled grid", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await openSession(page);
+
+    await page.getByRole("button", { name: "More composer controls" }).click();
+    const panel = page.locator("#composer-secondary-tools");
+    await expect(panel).toBeVisible();
+    await expect(panel.getByText("Composer", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Reasoning", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Tools", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Sound", { exact: true })).toBeVisible();
+
+    const panelBox = await panel.boundingBox();
+    expect(panelBox).not.toBeNull();
+    expect(panelBox!.width).toBeLessThanOrEqual(320);
+    expect(panelBox!.x).toBeGreaterThanOrEqual(0);
+    expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(320);
+    await expectNoPageOverflow(page);
+  });
 });

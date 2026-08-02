@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AgentMessage, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle, type MessageQuote } from "./ChatInput";
@@ -13,6 +13,7 @@ import { CompactionSummary, getCompactionSummary } from "./CompactionSummary";
 import { pickTurnTarget } from "./turn-nav";
 import { getAlwaysFollow } from "@/lib/prefs";
 import { useAgentSession, type AgentPhase } from "@/hooks/useAgentSession";
+import { preservedRunSpacerHeight } from "@/hooks/use-transcript-scroll";
 import { getRunError } from "@/hooks/use-agent-session-types";
 import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
@@ -459,8 +460,21 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   const lastReadStorageKey = session?.id ? `pi-last-read:${session.id}` : null;
   const [unreadMessageIndex, setUnreadMessageIndex] = useState<number | null>(null);
+  const unreadSessionRef = useRef<{ sessionId: string; initialized: boolean } | null>(null);
   useEffect(() => {
-    if (!lastReadStorageKey || conversationLayout.displayIndices.length === 0) {
+    const sessionId = session?.id;
+    if (!sessionId || !lastReadStorageKey) {
+      unreadSessionRef.current = null;
+      setUnreadMessageIndex(null);
+      return;
+    }
+    if (unreadSessionRef.current?.sessionId !== sessionId) {
+      unreadSessionRef.current = { sessionId, initialized: false };
+      setUnreadMessageIndex(null);
+    }
+    if (loading || unreadSessionRef.current.initialized) return;
+    unreadSessionRef.current.initialized = true;
+    if (conversationLayout.displayIndices.length === 0) {
       setUnreadMessageIndex(null);
       return;
     }
@@ -470,37 +484,55 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     if (lastReadIndex < 0) { setUnreadMessageIndex(null); return; }
     const next = conversationLayout.displayIndices.find((index) => index > lastReadIndex && !!entryIds[index]);
     setUnreadMessageIndex(next ?? null);
-  }, [conversationLayout.displayIndices, entryIds, lastReadStorageKey]);
+  }, [conversationLayout.displayIndices, entryIds, lastReadStorageKey, loading, session?.id]);
+
+  // Keep the read tracker live without recreating its scroll listener for
+  // every streamed/persisted message. Recreating it used to run cleanup-save
+  // just before the assistant entry appeared, then recompute the unread marker
+  // between the user's prompt and the reply in the same active visit.
+  const visibleMessageIndicesRef = useRef(conversationLayout.displayIndices);
+  const readEntryIdsRef = useRef(entryIds);
+  visibleMessageIndicesRef.current = conversationLayout.displayIndices;
+  readEntryIdsRef.current = entryIds;
+
+  const saveLastRead = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !lastReadStorageKey) return;
+    const bottom = container.getBoundingClientRect().bottom;
+    let lastVisibleId: string | undefined;
+    visibleMessageIndicesRef.current.forEach((messageIndex, visibleIndex) => {
+      const element = messageRefs.current[visibleIndex];
+      const entryId = readEntryIdsRef.current[messageIndex];
+      if (element && element.getBoundingClientRect().top < bottom - 12 && entryId) {
+        lastVisibleId = entryId;
+      }
+    });
+    if (lastVisibleId) localStorage.setItem(lastReadStorageKey, lastVisibleId);
+  }, [lastReadStorageKey, messageRefs, scrollContainerRef]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || !lastReadStorageKey) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const save = () => {
-      const bottom = container.getBoundingClientRect().bottom;
-      let lastVisibleId: string | undefined;
-      conversationLayout.displayIndices.forEach((messageIndex, visibleIndex) => {
-        const element = messageRefs.current[visibleIndex];
-        if (element && element.getBoundingClientRect().top < bottom - 12 && entryIds[messageIndex]) {
-          lastVisibleId = entryIds[messageIndex];
-        }
-      });
-      if (lastVisibleId) localStorage.setItem(lastReadStorageKey, lastVisibleId);
-    };
     const onScroll = () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(save, 500);
+      timer = setTimeout(saveLastRead, 500);
     };
-    const onPageHide = () => save();
+    const onPageHide = () => saveLastRead();
     container.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("pagehide", onPageHide);
     return () => {
       if (timer) clearTimeout(timer);
-      save();
+      saveLastRead();
       container.removeEventListener("scroll", onScroll);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, [conversationLayout.displayIndices, entryIds, lastReadStorageKey, messageRefs, scrollContainerRef]);
+  }, [lastReadStorageKey, saveLastRead, scrollContainerRef]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(saveLastRead);
+    return () => cancelAnimationFrame(frame);
+  }, [conversationLayout.displayIndices, entryIds, saveLastRead]);
 
   // ── Long-message collapse ────────────────────────────────────────────────
   // Historical messages taller than a threshold clamp to a preview; the
@@ -543,15 +575,35 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     chatInputRef?.current?.insertIfEmpty(content);
   }, [chatInputRef]);
 
-  // Spacer below the last message while the agent runs, so the newest user
-  // message can be scrolled to the top. Measured in an effect — reading
-  // clientHeight during render forces synchronous layout.
+  // Spacer below the last message lets the newest user message stay anchored
+  // at the top while the answer streams. On completion it shrinks to the
+  // minimum filler needed to preserve that reading position; removing it in
+  // the same render would make the browser clamp scrollTop to the new bottom.
   const [spacerHeight, setSpacerHeight] = useState<number | null>(null);
-  useEffect(() => {
-    if (agentRunning && scrollContainerRef.current) {
-      setSpacerHeight(scrollContainerRef.current.clientHeight);
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    if (agentRunning) {
+      const next = container.clientHeight;
+      setSpacerHeight((current) => current === next ? current : next);
+      return;
     }
-  }, [agentRunning, scrollContainerRef]);
+    if (spacerHeight === null) return;
+    if (getAlwaysFollow()) {
+      setSpacerHeight(null);
+      return;
+    }
+    const next = preservedRunSpacerHeight(
+      container.scrollTop,
+      container.clientHeight,
+      container.scrollHeight,
+      spacerHeight,
+    );
+    setSpacerHeight((current) => {
+      if (next <= 1) return null;
+      return current === next ? current : next;
+    });
+  }, [agentRunning, scrollContainerRef, spacerHeight]);
 
   // ── Scroll-to-bottom affordance + streaming follow mode ─────────────────
   // followStreamRef: whether the reader is "at the tail" and wants the view
@@ -620,9 +672,16 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const jumpToBottom = useCallback(() => {
     // block:"end" — with the run spacer mounted below the marker, the default
     // block:"start" could scroll the content clean out of the viewport.
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (agentRunning) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    } else {
+      setSpacerHeight(null);
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      });
+    }
     followStreamRef.current = true;
-  }, [messagesEndRef]);
+  }, [agentRunning, messagesEndRef]);
 
   // Streaming follow: while engaged, keep the tail pinned to the viewport
   // bottom as tokens arrive. Instant (not smooth) — smooth animations queue
@@ -1058,7 +1117,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             )}
           </button>
         )}
-        <div ref={scrollContainerRef} className={`${styles.transcriptScroll} flex-1 overflow-y-auto pt-4 [scrollbar-width:none]`}>
+        <div ref={scrollContainerRef} data-transcript-scroll className={`${styles.transcriptScroll} flex-1 overflow-y-auto pt-4 [scrollbar-width:none]`}>
           <div className={`${styles.transcript} mx-auto px-4 ${wideChat ? "max-w-[1080px]" : "max-w-[900px]"}`}>
 
             {(() => {
@@ -1258,7 +1317,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 the spacer's blank space instead of on the streaming text. */}
             <div ref={messagesEndRef} />
 
-            {agentRunning && (
+            {spacerHeight !== null && (
               <div style={{ height: spacerHeight ?? "80vh" }} />
             )}
           </div>
@@ -1317,7 +1376,15 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           onRespond={handleExtensionUIResponse}
           wide={wideChat}
         />
-        {chatInputElement}
+        {/* Keep the composer mounted while a blocking decision is visible.
+            Extensions can issue the one-shot setEditorText event before the
+            dialog-close event reaches React; unmounting here loses that draft. */}
+        <div
+          className={styles.composerMount}
+          hidden={extensionUIState.dialogs.length > 0}
+        >
+          {chatInputElement}
+        </div>
         <ExtensionWidgets state={extensionUIState} placement="belowEditor" wide={wideChat} />
       </div>
       </>

@@ -244,6 +244,16 @@
   width: 100%;
 }
 
+/* A blocking extension dialog hides the normal composer without unmounting
+   it, so one-shot setEditorText events can still update its retained draft. */
+.composerMount {
+  display: contents;
+}
+
+.composerMount[hidden] {
+  display: none;
+}
+
 .findScope {
   max-width: 92px;
   min-height: 28px;
