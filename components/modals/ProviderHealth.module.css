@@ -49,5 +49,8 @@
 
 @media (pointer: coarse) {
   .filter,
-  .filterActive { min-height: var(--control-touch); }
+  .filterActive {
+    min-width: var(--control-touch);
+    min-height: var(--control-touch);
+  }
 }
