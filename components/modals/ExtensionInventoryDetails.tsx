@@ -52,12 +52,11 @@ export function ExtensionInventoryDetails({ report }: { report: ExtensionsReport
         <p className={styles.supportNote}>{t("extensions.interactiveUiNote")}</p>
       </div>
 
-      <div className={styles.section}>
+      {report.providers.length > 0 && <div className={styles.section}>
         <div className={styles.sectionHeading}>
           <span className={styles.sectionTitle}>{t("extensions.providers")} ({report.providers.length})</span>
           <SupportBadge value={report.compatibility.providers} />
         </div>
-        {report.providers.length === 0 && <div className={styles.sectionEmpty}>{t("extensions.none")}</div>}
         {report.providers.map((provider) => (
           <div key={provider.name} className={styles.row}>
             <span className={styles.rowName}>{provider.displayName}</span>
@@ -72,14 +71,13 @@ export function ExtensionInventoryDetails({ report }: { report: ExtensionsReport
             )}
           </div>
         ))}
-      </div>
+      </div>}
 
-      <div className={styles.section}>
+      {report.shortcuts.length > 0 && <div className={styles.section}>
         <div className={styles.sectionHeading}>
           <span className={styles.sectionTitle}>{t("extensions.shortcuts")} ({report.shortcuts.length})</span>
           <SupportBadge value={displayExtensionSupport(report.compatibility.shortcuts, report.shortcuts.length)} />
         </div>
-        {report.shortcuts.length === 0 && <div className={styles.sectionEmpty}>{t("extensions.none")}</div>}
         {report.shortcuts.map((shortcut, index) => (
           <div key={`${shortcut.shortcut}:${shortcut.source ?? index}`} className={styles.row}>
             <span className={styles.rowName}>{shortcut.shortcut}</span>
@@ -87,14 +85,13 @@ export function ExtensionInventoryDetails({ report }: { report: ExtensionsReport
             {shortcut.source && <span className={styles.rowSource} title={shortcut.source}>{tail(shortcut.source)}</span>}
           </div>
         ))}
-      </div>
+      </div>}
 
-      <div className={styles.section}>
+      {report.events.length > 0 && <div className={styles.section}>
         <div className={styles.sectionHeading}>
           <span className={styles.sectionTitle}>{t("extensions.events")} ({report.events.length})</span>
           <SupportBadge value={report.compatibility.events} />
         </div>
-        {report.events.length === 0 && <div className={styles.sectionEmpty}>{t("extensions.none")}</div>}
         {report.events.map((event, index) => (
           <div key={`${event.name}:${event.source}:${index}`} className={styles.row}>
             <span className={styles.rowName}>{event.name}</span>
@@ -102,14 +99,13 @@ export function ExtensionInventoryDetails({ report }: { report: ExtensionsReport
             <span className={styles.rowSource} title={event.source}>{tail(event.source)}</span>
           </div>
         ))}
-      </div>
+      </div>}
 
-      <div className={styles.section}>
+      {report.renderers.length > 0 && <div className={styles.section}>
         <div className={styles.sectionHeading}>
           <span className={styles.sectionTitle}>{t("extensions.renderers")} ({report.renderers.length})</span>
           <SupportBadge value={displayExtensionSupport(report.compatibility.renderers, report.renderers.length)} />
         </div>
-        {report.renderers.length === 0 && <div className={styles.sectionEmpty}>{t("extensions.none")}</div>}
         {report.renderers.map((renderer, index) => (
           <div key={`${renderer.type}:${renderer.customType}:${index}`} className={styles.row}>
             <span className={styles.rowName}>{renderer.customType}</span>
@@ -117,14 +113,13 @@ export function ExtensionInventoryDetails({ report }: { report: ExtensionsReport
             <span className={styles.rowSource} title={renderer.source}>{tail(renderer.source)}</span>
           </div>
         ))}
-      </div>
+      </div>}
 
-      <div className={styles.section}>
+      {report.resources.length > 0 && <div className={styles.section}>
         <div className={styles.sectionHeading}>
           <span className={styles.sectionTitle}>{t("extensions.resources")} ({report.resources.length})</span>
           <SupportBadge value={report.compatibility.resources} />
         </div>
-        {report.resources.length === 0 && <div className={styles.sectionEmpty}>{t("extensions.none")}</div>}
         {report.resources.map((resource, index) => (
           <div key={`${resource.type}:${resource.path ?? resource.name}:${index}`} className={styles.row}>
             <span className={styles.rowName}>{resource.name}</span>
@@ -132,7 +127,7 @@ export function ExtensionInventoryDetails({ report }: { report: ExtensionsReport
             <span className={styles.rowSource} title={resource.path ?? resource.source}>{tail(resource.path ?? resource.source)}</span>
           </div>
         ))}
-      </div>
+      </div>}
     </>
   );
 }

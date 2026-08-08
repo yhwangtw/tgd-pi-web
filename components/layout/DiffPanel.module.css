@@ -18,7 +18,7 @@
 .badge {
   flex-shrink: 0;
   padding: 0 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: var(--color-accent-bg);
   color: var(--accent);
   font-size: var(--text-xs);
@@ -43,7 +43,7 @@
   padding: 3px;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   color: var(--text-dim);
   cursor: pointer;
 }
@@ -71,5 +71,14 @@
   border-bottom-color: var(--trae-hairline);
   background: var(--trae-surface);
 }
-:global(html[data-ui-style="trae"]) .badge { border-radius: 999px; background: var(--trae-control); }
-:global(html[data-ui-style="trae"]) .close { width: 30px; height: 30px; border-radius: 9px; }
+:global(html[data-ui-style="trae"]) .badge { border-radius: var(--radius-pill); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .close { width: 30px; height: 30px; border-radius: var(--radius-control); }
+
+@media (max-width: 700px), (pointer: coarse) {
+  .close,
+  :global(html[data-ui-style="trae"]) .close {
+    width: var(--control-touch);
+    height: var(--control-touch);
+    justify-content: center;
+  }
+}

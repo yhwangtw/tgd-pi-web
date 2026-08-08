@@ -811,8 +811,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       el.animate(
         [
-          { boxShadow: "0 0 0 3px var(--color-accent-border)", borderRadius: "var(--radius-lg)" },
-          { boxShadow: "0 0 0 3px transparent", borderRadius: "var(--radius-lg)" },
+          { boxShadow: "0 0 0 3px var(--color-accent-border)", borderRadius: "var(--radius-card)" },
+          { boxShadow: "0 0 0 3px transparent", borderRadius: "var(--radius-card)" },
         ],
         { duration: reduceMotion ? 1 : 700, easing: "ease-out" },
       );
@@ -1108,7 +1108,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           <button
             onClick={jumpToBottom}
             aria-label={t("chat.jumpBottom")}
-            className={`glass absolute bottom-4 left-1/2 z-10 flex h-8 -translate-x-1/2 items-center justify-center rounded-full border text-[var(--text-muted)] shadow-[var(--color-shadow-dropdown)] transition hover:text-[var(--text)] ${agentRunning && newLines > 0 ? "gap-1 px-3" : "w-8"} ${agentRunning ? "!border-[var(--color-accent-border)] text-[var(--accent)]" : ""}`}
+            className={`${styles.jumpButton} glass absolute bottom-4 left-1/2 z-10 flex h-8 -translate-x-1/2 items-center justify-center rounded-full border text-[var(--text-muted)] shadow-[var(--color-shadow-dropdown)] transition hover:text-[var(--text)] ${agentRunning && newLines > 0 ? "gap-1 px-3" : "w-8"} ${agentRunning ? "!border-[var(--color-accent-border)] text-[var(--accent)]" : ""}`}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg>
             {agentRunning && newLines > 0 && (
@@ -1292,7 +1292,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             )}
 
             {agentRunning && !streamState.streamingMessage && (
-              <div className={`flex items-center gap-2 py-2 text-[13px] ${stalledSecs > 0 ? "text-[var(--color-warning-text-strong)]" : "text-text-muted"}`}>
+              <div className={`${styles.runStatus} flex items-center gap-2 py-2 text-[13px] ${stalledSecs > 0 ? "text-[var(--color-warning-text-strong)]" : "text-text-muted"}`}>
                 {stalledSecs > 0 ? (
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />

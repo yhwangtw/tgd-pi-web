@@ -33,7 +33,7 @@
   border: none;
   cursor: pointer;
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   font-size: var(--text-xs);
   font-family: inherit;
 }
@@ -131,7 +131,7 @@
 .phaseChip {
   font-size: var(--text-2xs);
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid transparent;
   font-weight: var(--weight-medium);
 }
@@ -185,29 +185,29 @@
   margin: 8px 8px 2px;
   padding: 7px 10px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--trae-surface);
 }
 :global(html[data-ui-style="trae"]) .viewToggle {
   flex: 0 0 auto;
   padding: 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--trae-control);
 }
 :global(html[data-ui-style="trae"]) .viewTab,
-:global(html[data-ui-style="trae"]) .viewTabActive { min-height: 28px; padding: 0 10px; border-radius: 999px; }
+:global(html[data-ui-style="trae"]) .viewTabActive { min-height: 28px; padding: 0 10px; border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .viewTabActive { background: var(--trae-surface-solid); box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 9%, transparent); }
 :global(html[data-ui-style="trae"]) .body { padding: 8px 6px 14px; }
 :global(html[data-ui-style="trae"]) .feature {
   margin: 4px 4px 8px;
   padding: 10px 0;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--trae-surface-solid);
   box-shadow: var(--trae-card-shadow);
 }
 :global(html[data-ui-style="trae"]) .fileRow,
-:global(html[data-ui-style="trae"]) .dirRow { min-height: 34px; border-radius: 9px; }
+:global(html[data-ui-style="trae"]) .dirRow { min-height: 34px; border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .noFeatures { border: 0; }
 
 @media (pointer: coarse) {

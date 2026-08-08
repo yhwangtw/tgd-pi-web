@@ -1,7 +1,7 @@
 .container {
   margin: 10px 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: var(--tool-bg);
   overflow: hidden;
 }
@@ -46,7 +46,7 @@
   padding: 1px 8px;
   background: none;
   border: 1px solid var(--color-error-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   color: var(--color-error);
   font-size: var(--text-xs);
   cursor: pointer;
@@ -59,7 +59,7 @@
 .badge {
   flex-shrink: 0;
   padding: 1px 7px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   font-size: var(--text-xs);
   line-height: var(--leading-relaxed);
 }
@@ -95,8 +95,8 @@
   word-break: break-word;
 }
 
-:global(html[data-ui-style="trae"]) .container { border-color: transparent; border-radius: 14px; background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .container { border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .header { min-height: 40px; padding: 7px 12px; border-bottom-color: var(--trae-hairline); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .badge,
-:global(html[data-ui-style="trae"]) .abortButton { border-radius: 999px; }
+:global(html[data-ui-style="trae"]) .abortButton { border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .output { max-height: 360px; padding: 12px 14px; }

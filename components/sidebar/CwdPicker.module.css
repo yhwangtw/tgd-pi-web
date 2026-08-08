@@ -9,7 +9,7 @@
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   padding: 7px 10px;
   cursor: pointer;
   font-size: var(--text-md);
@@ -82,7 +82,7 @@
 :global(html[data-ui-style="trae"]) .trigger,
 :global(html[data-ui-style="trae"]) .triggerEmpty {
   border-color: transparent;
-  border-radius: 11px;
+  border-radius: var(--radius-card);
   background: var(--trae-control);
 }
 :global(html[data-ui-style="trae"]) .trigger:hover,

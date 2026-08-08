@@ -39,7 +39,7 @@
   height: 36px;
   padding: 0 30px 0 32px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   outline: none;
   background: var(--bg);
   color: var(--text);
@@ -82,7 +82,7 @@
   min-height: 28px;
   padding: 0 4px;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: none;
   color: var(--text-dim);
   font-size: var(--text-xs);
@@ -124,7 +124,7 @@
   height: 24px;
   padding: 0 5px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: var(--bg);
   color: var(--text-dim);
   font-size: var(--text-xs);
@@ -254,7 +254,7 @@
 }
 
 .mark {
-  border-radius: 2px;
+  border-radius: var(--radius-indicator);
   background: color-mix(in srgb, var(--accent) 28%, transparent);
   color: var(--text);
 }
@@ -279,17 +279,17 @@
   margin: 8px 8px 0;
   padding: 10px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-panel);
   background: var(--trae-surface);
 }
 :global(html[data-ui-style="trae"]) .title { margin-bottom: 10px; letter-spacing: var(--tracking-normal); text-transform: none; }
 :global(html[data-ui-style="trae"]) .input {
   height: 40px;
   border-color: transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-control-prominent);
   background: var(--trae-control);
 }
-:global(html[data-ui-style="trae"]) .scope { min-height: 32px; padding: 0 9px; border-radius: 999px; }
+:global(html[data-ui-style="trae"]) .scope { min-height: 32px; padding: 0 9px; border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .scopeActive { border-color: transparent; background: var(--bg-selected); }
 :global(html[data-ui-style="trae"]) .status { padding: 10px 14px 6px; }
 :global(html[data-ui-style="trae"]) .group { border: 0; padding: 0 6px 8px; }
@@ -299,7 +299,7 @@
   letter-spacing: var(--tracking-normal);
   text-transform: none;
 }
-:global(html[data-ui-style="trae"]) .result { min-height: 46px; border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .result { min-height: 46px; border-radius: var(--radius-card); }
 :global(html[data-ui-style="trae"]) .result:focus-visible { box-shadow: 0 0 0 2px var(--color-accent-border-focus); }
 
 @media (pointer: coarse) {

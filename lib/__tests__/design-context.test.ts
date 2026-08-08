@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDesignContext } from "../design-context";
+import { formatDesignContext, parseDesignContext } from "../design-context";
 
 describe("formatDesignContext", () => {
   it("keeps the selected geometry, styles, and markup in a compact prompt block", () => {
@@ -22,5 +22,26 @@ describe("formatDesignContext", () => {
     expect(output).toContain("disabled: false");
     expect(output).toContain("<button class=\"send\">Send</button>");
     expect(output).toContain("Preserve the app's existing design tokens");
+  });
+
+  it("extracts a compact transcript summary without discarding the raw prompt", () => {
+    const output = formatDesignContext({
+      selector: ".composer > button",
+      tagName: "BUTTON",
+      text: "Send",
+      html: '<button class="send">Send</button>',
+      rect: { x: 12, y: 9, width: 91, height: 33 },
+      viewport: { width: 390, height: 844 },
+      styles: { display: "flex" },
+    });
+
+    expect(parseDesignContext(output)).toEqual({
+      element: "button",
+      selector: ".composer > button",
+      viewport: { width: 390, height: 844 },
+      visibleText: "Send",
+      raw: output,
+    });
+    expect(parseDesignContext("ordinary user message")).toBeNull();
   });
 });

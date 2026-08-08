@@ -12,6 +12,7 @@ import { ImageLightbox } from "./ImageLightbox";
 import { useI18n } from "@/lib/i18n";
 import { MessageBookmarkAction, MessageBookmarkIndicator } from "./MessageBookmarkAction";
 import { useMobileActionPlacement } from "@/hooks/use-mobile-action-placement";
+import { parseDesignContext } from "@/lib/design-context";
 
 function formatTime(ts?: number, locale: "en" | "zh" = "en"): string | null {
   if (!ts) return null;
@@ -79,6 +80,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(content);
+  const designContext = parseDesignContext(content);
   const editRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (!editing) return;
@@ -184,7 +186,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
           </div>
         ) : (
         <div
-          className={styles.bubble}
+          className={`${styles.bubble} ${designContext ? styles.designContextBubble : ""}`}
         >
           {imageBlocks.length > 0 && (
             <div className={content ? styles.imageGrid : styles.imageGridNoMargin}>
@@ -213,7 +215,39 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
               })}
             </div>
           )}
-          {content && <MarkdownBody className="markdown-user-message">{content}</MarkdownBody>}
+          {content && (designContext ? (
+            <details className={styles.designContextCard}>
+              <summary>
+                <span className={styles.designContextHeading}>
+                  <strong>{t("chat.designReference")}</strong>
+                  <span>{designContext.element}</span>
+                </span>
+                {designContext.viewport && (
+                  <span className={styles.designContextViewport}>
+                    {designContext.viewport.width}×{designContext.viewport.height}
+                  </span>
+                )}
+                <span className={styles.designContextDisclosure}>{t("chat.designReferenceDetails")}</span>
+              </summary>
+              <div className={styles.designContextBody}>
+                {designContext.visibleText && (
+                  <div className={styles.designContextField}>
+                    <span>{t("chat.designTarget")}</span>
+                    <strong>{designContext.visibleText}</strong>
+                  </div>
+                )}
+                {designContext.selector && (
+                  <div className={styles.designContextField}>
+                    <span>{t("chat.designSelector")}</span>
+                    <code>{designContext.selector}</code>
+                  </div>
+                )}
+                <pre className={styles.designContextRaw}>{designContext.raw}</pre>
+              </div>
+            </details>
+          ) : (
+            <MarkdownBody className="markdown-user-message">{content}</MarkdownBody>
+          ))}
           {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
         </div>
         )}

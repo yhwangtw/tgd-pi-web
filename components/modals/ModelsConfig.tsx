@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { ModelEntry, ProviderEntry, ModelsJson, ModelTestState, Selection, OAuthProvider, ApiKeyProvider } from "./models-config-types";
 import { API_OPTIONS } from "./models-config-types";
 import { Field, TextInput, SecretTextInput, NumInput, Select, Check, SectionTitle } from "./models-config-forms";
@@ -8,6 +8,8 @@ import { ProviderIcon } from "./ProviderIcon";
 import { OAuthDetail } from "./OAuthDetail";
 import { ApiKeyDetail } from "./ApiKeyDetail";
 import { AddProviderPicker } from "./AddProviderPicker";
+import { ProviderHealth } from "./ProviderHealth";
+import { useI18n } from "@/lib/i18n";
 import styles from "./ModelsConfig.module.css";
 
 // ── Provider detail ───────────────────────────────────────────────────────────
@@ -366,15 +368,17 @@ function ModelDetail({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ModelsConfig({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const [selection, setSelection] = useState<Selection | null>({ type: "health" });
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const savedConfigRef = useRef(JSON.stringify({ providers: {} }));
 
   // Esc closes the modal — consistent with AnalyticsModal and the palette.
   useEffect(() => {
@@ -405,8 +409,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       .then((d: ModelsJson) => {
         const normalized = d.providers ? d : { ...d, providers: {} };
         setConfig(normalized);
-        const keys = Object.keys(normalized.providers ?? {});
-        if (keys.length > 0) setSelection({ type: "provider", name: keys[0] });
+        savedConfigRef.current = JSON.stringify(normalized);
+        setSelection({ type: "health" });
       })
       .catch(() => setConfig({ providers: {} }))
       .finally(() => setLoading(false));
@@ -499,7 +503,11 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       });
       const d = await res.json() as { success?: boolean; error?: string };
       if (!res.ok || d.error) setSaveError(d.error ?? `HTTP ${res.status}`);
-      else { setSavedOk(true); setTimeout(() => setSavedOk(false), 2000); }
+      else {
+        savedConfigRef.current = JSON.stringify(config);
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 2000);
+      }
     } catch (e) {
       setSaveError(String(e));
     } finally {
@@ -508,12 +516,14 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   }, [config]);
 
   const providers = Object.entries(config.providers ?? {});
+  const hasUnsavedChanges = JSON.stringify(config) !== savedConfigRef.current;
   const activeOAuth = oauthProviders.filter((p) => p.loggedIn);
   const activeApiKey = apiKeyProviders.filter((p) => p.configured);
 
   // Resolve current detail
   const detailContent = (() => {
     if (!selection) return null;
+    if (selection.type === "health") return <ProviderHealth />;
     if (selection.type === "oauth") {
       const p = oauthProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
@@ -580,6 +590,16 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           {/* Left: tree */}
           <div className={styles.sidebar} data-testid="models-config-nav">
             <div className={styles.sidebarScroll}>
+              <button
+                type="button"
+                onClick={() => setSelection({ type: "health" })}
+                className={`${styles.healthRow} ${selection?.type === "health" ? styles.treeItemSelected : "hover-bg"}`}
+                data-testid="provider-health-nav"
+              >
+                <span className={styles.healthIcon} aria-hidden>✓</span>
+                <span className={styles.treeItemText}>{t("providerHealth.title")}</span>
+              </button>
+              <div className={styles.divider} />
               {/* Active OAuth subscriptions */}
               {activeOAuth.map((p) => {
                 const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
@@ -685,7 +705,12 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           <div className={styles.rightPanel} data-testid="models-config-detail">
             {loading ? null : detailContent ?? (
               <div className={styles.emptyState}>
-                Select a provider or model
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <rect x="4" y="4" width="16" height="16" rx="3" /><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3" />
+                </svg>
+                <strong>No model selected</strong>
+                <span>Select a provider from the left, or connect a new one.</span>
+                <button type="button" onClick={() => setPickerOpen(true)}>Add provider</button>
               </div>
             )}
           </div>
@@ -697,7 +722,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} className={styles.cancelButton}>
             Cancel
           </button>
-          <button onClick={handleSave} disabled={saving || savedOk}
+          <button onClick={handleSave} disabled={saving || savedOk || !hasUnsavedChanges}
             className={`${styles.saveButton} ${savedOk ? styles.saveButtonSaved : saving ? styles.saveButtonSaving : styles.saveButtonReady}`}>
             {savedOk && (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"

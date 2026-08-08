@@ -42,7 +42,7 @@
 .watchDot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   display: inline-block;
 }
 
@@ -88,7 +88,7 @@
 .zoomReset {
   background: none;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   color: var(--text-muted);
   font-size: var(--text-xs);
   padding: 1px 7px;
@@ -99,5 +99,5 @@
 :global(html[data-ui-style="trae"]) .root { background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .toolbar { min-height: 44px; padding: 7px 12px; border-bottom-color: var(--trae-hairline); background: var(--trae-surface); }
 :global(html[data-ui-style="trae"]) .imageContainer { background-color: var(--trae-control); }
-:global(html[data-ui-style="trae"]) .image { border-radius: 12px; box-shadow: var(--trae-hover-shadow); }
-:global(html[data-ui-style="trae"]) .zoomReset { min-height: 28px; border-color: transparent; border-radius: 9px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .image { border-radius: var(--radius-media); box-shadow: var(--trae-hover-shadow); }
+:global(html[data-ui-style="trae"]) .zoomReset { min-height: 28px; border-color: transparent; border-radius: var(--radius-control-prominent); background: var(--trae-control); }

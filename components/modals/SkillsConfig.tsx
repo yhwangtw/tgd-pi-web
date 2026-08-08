@@ -21,6 +21,7 @@ export function SkillsConfig({
   const [toggling, setToggling] = useState<Set<string>>(new Set());
   const [saveError, setSaveError] = useState<string | null>(null);
   const [addMode, setAddMode] = useState(false);
+  const [query, setQuery] = useState("");
 
   // Esc closes the modal — consistent with AnalyticsModal and the palette.
   useEffect(() => {
@@ -90,6 +91,10 @@ export function SkillsConfig({
   }, []);
 
   const selectedSkill = skills.find((s) => s.filePath === selected) ?? null;
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleSkills = normalizedQuery
+    ? skills.filter((skill) => `${skill.name} ${skill.description ?? ""} ${skill.filePath}`.toLowerCase().includes(normalizedQuery))
+    : skills;
 
   return (
     <div
@@ -128,6 +133,13 @@ export function SkillsConfig({
         <div className={styles.body}>
           {/* Left: skill list */}
           <div className={styles.sidebar} data-testid="skills-config-nav">
+            <label className={styles.searchBox}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+              </svg>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter skills…" aria-label="Filter skills" />
+              {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear skill filter">×</button>}
+            </label>
             <div className={styles.sidebarScroll}>
               {loading ? (
                 <div className={styles.loadingText}>
@@ -141,11 +153,15 @@ export function SkillsConfig({
                 <div className={styles.emptyText}>
                   No skills found
                 </div>
+              ) : visibleSkills.length === 0 ? (
+                <div className={styles.emptyText}>
+                  No matching skills
+                </div>
               ) : (
                 (() => {
                   const groups: { label: string; skills: typeof skills }[] = [];
                   for (const grpLabel of ["project", "global", "path"]) {
-                    const grpSkills = skills.filter(
+                    const grpSkills = visibleSkills.filter(
                       (s) => sourceLabel(s) === grpLabel,
                     );
                     if (grpSkills.length > 0)

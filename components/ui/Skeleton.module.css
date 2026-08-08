@@ -8,7 +8,7 @@
 .line {
   display: block;
   height: 12px;
-  border-radius: 4px;
+  border-radius: var(--radius-control-compact);
   background: var(--bg-hover);
 }
 
@@ -32,14 +32,14 @@
 
 .sessionItemTitle {
   height: 10px !important;
-  border-radius: 4px;
+  border-radius: var(--radius-control-compact);
   /* override the default .skeleton-line 12px height in globals.css */
 }
 
 .sessionItemMeta {
   height: 8px !important;
-  border-radius: 3px;
+  border-radius: var(--radius-control-compact);
   /* override the default .skeleton-line 12px height in globals.css */
 }
 
-:global(html[data-ui-style="trae"]) .line { border-radius: 999px; background: linear-gradient(90deg, var(--trae-control), var(--bg-selected), var(--trae-control)); background-size: 200% 100%; }
+:global(html[data-ui-style="trae"]) .line { border-radius: var(--radius-pill); background: linear-gradient(90deg, var(--trae-control), var(--bg-selected), var(--trae-control)); background-size: 200% 100%; }

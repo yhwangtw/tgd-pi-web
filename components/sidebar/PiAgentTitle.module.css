@@ -13,7 +13,7 @@
   width: 30px;
   height: 30px;
   flex-shrink: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-control-prominent);
   background: linear-gradient(135deg, var(--accent), var(--accent-hover));
   color: var(--bg);
   font-family: var(--font-mono);
@@ -52,6 +52,6 @@
   white-space: nowrap;
 }
 
-:global(html[data-ui-style="trae"]) .badge { border-radius: 10px; color: var(--accent-fg); box-shadow: 0 5px 16px var(--color-accent-glow); }
+:global(html[data-ui-style="trae"]) .badge { border-radius: var(--radius-card); color: var(--accent-fg); box-shadow: 0 5px 16px var(--color-accent-glow); }
 :global(html[data-ui-style="trae"]) .name { font-weight: var(--weight-semibold); }
 :global(html[data-ui-style="trae"]) .tagline { letter-spacing: var(--tracking-wide); text-transform: none; }

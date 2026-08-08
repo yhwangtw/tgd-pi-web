@@ -40,7 +40,7 @@
   height: 32px;
   padding-left: 10px;
   padding-right: 12px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   letter-spacing: var(--tracking-tight);
@@ -64,7 +64,7 @@
   cursor: pointer;
   width: 32px;
   height: 32px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   padding: 0;
   flex-shrink: 0;
   transition: background 0.3s, color 0.3s, border-color 0.3s;
@@ -110,7 +110,7 @@
   height: var(--control-sm);
   background: none;
   border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   color: var(--text-dim);
   cursor: pointer;
   padding: 0;
@@ -231,7 +231,7 @@
   margin-right: 6px;
   border: none;
   cursor: pointer;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   flex-shrink: 0;
   transition: color 0.3s, background 0.3s;
 }
@@ -316,7 +316,7 @@
 :global(html[data-ui-style="trae"]) .newSessionButton,
 :global(html[data-ui-style="trae"]) .refreshButton {
   border: 0;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   background: var(--bg-elev-1);
   box-shadow: var(--color-shadow-card);
 }

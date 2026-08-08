@@ -87,13 +87,14 @@ type MathPlugins = {
 /**
  * Heuristic: does this markdown contain LaTeX math?
  * - Block: $$...$$ on its own line
- * - Inline: $...$ (avoid matching $$ as the delimiter; require non-space inside)
+ * Inline single-dollar math is intentionally disabled. In a coding UI,
+ * shell variables such as `$TGD_DIR` are far more common than inline LaTeX
+ * and must remain literal text. Display math continues to use `$$...$$`.
  * If no math is present, we skip the (large) remark-math + rehype-katex bundle entirely.
  */
 function containsMath(markdown: string): boolean {
   if (/^\s{0,3}\$\$.*\$\$\s*$/m.test(markdown)) return true;
   if (/\$\$[\s\S]+?\$\$/.test(markdown)) return true;
-  if(/(^|[^\\$])\$[^$\n]+\$/.test(markdown)) return true;
   return false;
 }
 
@@ -145,7 +146,7 @@ export function MarkdownBody({ children, className, isStreaming, allowSafeHtml =
   }, [needsMath]);
 
   const remarkPlugins: PluggableList = useMemo(
-    () => (mathPlugins ? [remarkGfm, mathPlugins.remarkMath] : [remarkGfm]),
+    () => (mathPlugins ? [remarkGfm, [mathPlugins.remarkMath, { singleDollarTextMath: false }]] : [remarkGfm]),
     [mathPlugins],
   );
   const rehypePlugins: PluggableList = useMemo(

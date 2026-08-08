@@ -1,7 +1,7 @@
 .inlineCode {
   background: var(--bg-selected);
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-inline);
   font-family: var(--font-mono);
   font-size: 0.9em;
 }
@@ -24,7 +24,7 @@
   max-width: 100%;
   margin-top: 4px;
   margin-bottom: 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   overflow: hidden;
   border: 1px solid var(--border);
 }
@@ -67,7 +67,7 @@
   height: 28px;
   place-items: center;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
@@ -82,7 +82,7 @@
   gap: 5px;
   padding: 0 6px 0 9px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
   color: var(--text-muted);
   font-size: var(--text-xs);
@@ -121,7 +121,7 @@
   border: 1px solid var(--border);
   cursor: pointer;
   font-size: var(--text-xs);
-  border-radius: 4px;
+  border-radius: var(--radius-control-compact);
   padding: 1px 6px;
   background: none;
   color: var(--text-muted);
@@ -162,7 +162,7 @@
   .lineJump input { width: 42px; }
   .focusCodeLine { grid-template-columns: 48px minmax(0, 1fr); }
   .blockContainer {
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
   }
 
   .blockHeader {
@@ -187,12 +187,12 @@
   }
 }
 
-:global(html[data-ui-style="trae"]) .blockContainer { border-color: transparent; border-radius: 14px; background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .blockContainer { border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .blockHeader { min-height: 38px; border-bottom-color: var(--trae-hairline); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .copyBtn,
 :global(html[data-ui-style="trae"]) .focusBtn,
-:global(html[data-ui-style="trae"]) .previewBtn { min-height: 28px; border-radius: 9px; }
-:global(html[data-ui-style="trae"]) .inlineCode { border-radius: 6px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .previewBtn { min-height: 28px; border-radius: var(--radius-control); }
+:global(html[data-ui-style="trae"]) .inlineCode { border-radius: var(--radius-inline); background: var(--trae-control); }
 
 @media (pointer: coarse) {
   .copyBtn,

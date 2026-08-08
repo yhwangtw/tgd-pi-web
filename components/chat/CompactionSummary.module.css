@@ -1,7 +1,7 @@
 .card {
   max-width: 760px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-card);
   background: var(--bg-elev-1);
   color: var(--text-muted);
 }
@@ -42,6 +42,6 @@
   .header { min-height: 44px; }
 }
 
-:global(html[data-ui-style="trae"]) .card { border-color: transparent; border-radius: 14px; background: var(--trae-surface); box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .card { border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .header { padding: 8px 11px; }
 :global(html[data-ui-style="trae"]) .body { border-top-color: var(--trae-hairline); }

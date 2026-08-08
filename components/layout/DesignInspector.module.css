@@ -10,7 +10,7 @@
 .highlight {
   position: fixed;
   border: 2px solid var(--accent);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--accent) 36%, transparent);
   transition: left .08s ease, top .08s ease, width .08s ease, height .08s ease;
 }
@@ -27,7 +27,7 @@
   padding: 6px 8px 6px 10px;
   transform: translateX(-50%);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   background: var(--glass-bg);
   box-shadow: var(--color-shadow-popup);
   -webkit-backdrop-filter: blur(16px) saturate(1.35);
@@ -38,13 +38,13 @@
 
 .toolbar strong { font-weight: var(--weight-semibold); }
 .hint { color: var(--text-muted); }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--color-accent-bg); }
+.dot { width: 7px; height: 7px; border-radius: var(--radius-circle); background: var(--accent); box-shadow: 0 0 0 3px var(--color-accent-bg); }
 .toolbar button {
   min-width: 28px;
   height: 24px;
   padding: 0 6px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: var(--bg-elev-1);
   color: var(--text-muted);
   cursor: pointer;
@@ -56,7 +56,7 @@
   max-width: min(520px, calc(100vw - 16px));
   pointer-events: none;
   padding: 3px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: var(--accent);
   color: var(--accent-fg);
   font-family: var(--font-mono);
@@ -68,6 +68,16 @@
 }
 
 @media (max-width: 700px) {
-  .toolbar { top: calc(var(--safe-area-top) + 6px); max-width: calc(100vw - 16px); }
+  .toolbar {
+    top: calc(var(--safe-area-top) + 6px);
+    min-height: 56px;
+    max-width: calc(100vw - 16px);
+    padding: 6px 8px 6px 12px;
+  }
   .hint { display: none; }
+  .toolbar button {
+    min-width: var(--control-touch);
+    height: var(--control-touch);
+    border-radius: var(--radius-control);
+  }
 }

@@ -22,7 +22,7 @@
   padding: 3px 11px;
   font-size: var(--text-sm);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--text-muted);
   background: var(--bg-panel);
   cursor: pointer;
@@ -34,7 +34,7 @@
   background: var(--bg-hover);
 }
 
-:global(html[data-ui-style="trae"]) .toggleBtn { min-height: var(--control-lg); border-color: transparent; border-radius: var(--radius-full); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .toggleBtn { min-height: var(--control-lg); border-color: transparent; border-radius: var(--radius-pill); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .fade { background: linear-gradient(transparent, var(--trae-canvas)); }
 
 @media (pointer: coarse) {

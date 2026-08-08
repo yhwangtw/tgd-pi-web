@@ -2,7 +2,7 @@
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
 }
 
@@ -95,7 +95,7 @@
   .children { gap: 5px; padding: 5px; }
 }
 
-:global(html[data-ui-style="trae"]) .group { border-color: transparent; border-radius: 13px; background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .group { border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .groupRunning { border-color: var(--color-accent-border-focus); background: var(--color-accent-bg-subtle); }
 :global(html[data-ui-style="trae"]) .groupError { box-shadow: inset 3px 0 var(--color-error), var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .summary { min-height: 40px; padding: 7px 11px; }

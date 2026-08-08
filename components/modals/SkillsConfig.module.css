@@ -18,7 +18,7 @@
   min-width: 0;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-dialog);
   display: flex;
   flex-direction: column;
   box-shadow: var(--color-shadow-modal);
@@ -83,6 +83,24 @@
   background: var(--bg-panel);
 }
 
+.searchBox {
+  display: flex;
+  min-height: var(--control-lg);
+  align-items: center;
+  gap: 7px;
+  margin: 10px 8px 2px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-elev-1);
+  color: var(--text-dim);
+}
+
+.searchBox:focus-within { border-color: var(--color-accent-border-focus); color: var(--text-muted); }
+.searchBox input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: var(--text-sm); }
+.searchBox button { display: grid; width: var(--control-sm); height: var(--control-sm); place-items: center; border: 0; border-radius: var(--radius-control-compact); color: var(--text-dim); cursor: pointer; }
+.searchBox button:hover { background: var(--bg-hover); color: var(--text); }
+
 .sidebarScroll {
   flex: 1;
   overflow-y: auto;
@@ -125,7 +143,7 @@
   align-items: center;
   gap: 7px;
   padding: 8px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   cursor: pointer;
   background: none;
 }
@@ -138,7 +156,7 @@
   flex-shrink: 0;
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--accent);
   box-shadow: 0 0 4px var(--accent);
   transition: background 0.15s, box-shadow 0.15s;
@@ -179,7 +197,7 @@
   align-items: center;
   gap: 6px;
   padding: 7px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   cursor: pointer;
   background: none;
   color: var(--text-dim);
@@ -228,6 +246,15 @@
     padding: 10px 12px;
   }
 
+  .closeButton {
+    display: grid;
+    width: var(--control-touch);
+    height: var(--control-touch);
+    padding: 0;
+    place-items: center;
+    border-radius: var(--radius-control);
+  }
+
   .cwdCode {
     min-width: 0;
   }
@@ -244,6 +271,8 @@
     border-bottom: 1px solid var(--border);
   }
 
+  .searchBox { min-height: var(--control-touch); }
+
   .rightPanel {
     width: 100%;
     padding: 14px;
@@ -252,15 +281,15 @@
 }
 
 :global(html[data-ui-style="trae"]) .overlay { background: var(--trae-overlay); backdrop-filter: blur(8px); }
-:global(html[data-ui-style="trae"]) .modal { border-color: var(--trae-hairline); border-radius: 20px; background: var(--trae-canvas); }
+:global(html[data-ui-style="trae"]) .modal { border-color: var(--trae-hairline); border-radius: var(--radius-dialog); background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .header { border-color: transparent; background: var(--trae-surface); }
 :global(html[data-ui-style="trae"]) .header { min-height: 58px; padding: 12px 20px; }
 :global(html[data-ui-style="trae"]) .sidebar { width: 230px; border-right-color: var(--trae-hairline); background: transparent; }
 :global(html[data-ui-style="trae"]) .sidebarScroll { padding: 10px 8px; }
 :global(html[data-ui-style="trae"]) .groupLabel { padding: 7px 9px 4px; letter-spacing: var(--tracking-label); text-transform: none; }
-:global(html[data-ui-style="trae"]) .skillItem { min-height: 40px; border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .skillItem { min-height: 40px; border-radius: var(--radius-row); }
 :global(html[data-ui-style="trae"]) .addButtonWrapper { border-color: var(--trae-hairline); }
-:global(html[data-ui-style="trae"]) .addSkillButton { min-height: 38px; border-radius: 10px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .addSkillButton { min-height: 38px; border-radius: var(--radius-control); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .rightPanel { padding: 24px; }
 
 @media (max-width: 600px) {
@@ -274,4 +303,19 @@
     background: var(--trae-surface);
   }
   :global(html[data-ui-style="trae"]) .rightPanel { padding: 18px 14px 28px; }
+}
+
+@media (pointer: coarse) {
+  .closeButton,
+  .searchBox button,
+  .skillItem,
+  .addSkillButton {
+    min-width: var(--control-touch);
+    min-height: var(--control-touch);
+  }
+
+  .skillItem,
+  .addSkillButton {
+    width: 100%;
+  }
 }

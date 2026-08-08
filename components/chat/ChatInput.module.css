@@ -73,7 +73,7 @@
   height: 32px;
   flex: 0 0 auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
   color: var(--text-muted);
   cursor: pointer;
@@ -90,7 +90,7 @@
   padding: 5px 10px;
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning-border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   font-size: var(--text-sm);
   color: var(--color-warning-text);
   display: flex;
@@ -115,7 +115,7 @@
   overflow: hidden;
   border: 1px solid var(--color-accent-border-subtle);
   border-left: 3px solid var(--accent);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-row);
   background: var(--color-accent-bg-subtle);
 }
 
@@ -184,7 +184,7 @@
   min-width: 0;
   max-width: min(320px, 60vw);
   border: 1px solid var(--color-accent-border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--color-accent-bg-subtle);
   color: var(--text-muted);
   overflow: hidden;
@@ -244,7 +244,7 @@
   width: 56px;
   height: 56px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--border);
   display: block;
 }
@@ -255,7 +255,7 @@
   right: -4px;
   width: 16px;
   height: 16px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--bg-panel);
   border: 1px solid var(--border);
   display: flex;
@@ -273,7 +273,7 @@
   align-items: center;
   position: relative;
   background: var(--bg-elev-1);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-composer);
   padding: 10px 10px 10px 14px;
   box-shadow: var(--color-shadow-input);
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
@@ -350,7 +350,7 @@
   gap: 5px;
   padding: 7px 12px;
   border: 1px solid var(--color-warning-border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-tight);
@@ -378,7 +378,7 @@
   gap: 5px;
   padding: 7px 12px;
   border: 1px solid var(--color-accent-border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-tight);
@@ -408,7 +408,7 @@
   gap: 6px;
   padding: 7px 14px;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-tight);
@@ -458,14 +458,14 @@
   margin-left: 4px;
   padding: 2px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
 }
 
 .sendModeButton {
   height: 26px;
   padding: 0 8px;
-  border-radius: calc(var(--radius-md) - 2px);
+  border-radius: var(--radius-control-compact);
   color: var(--text-dim);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
@@ -516,7 +516,7 @@
   gap: 4px;
   padding: 8px;
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control-prominent);
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
   backdrop-filter: blur(18px) saturate(1.4);
@@ -555,7 +555,7 @@
   flex: 0 0 32px;
   place-items: center;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -569,7 +569,7 @@
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   cursor: pointer;
 }
@@ -590,7 +590,7 @@
   padding: 0;
   background: none;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   transition: background 0.12s, color 0.12s;
 }
 
@@ -624,7 +624,7 @@
   height: 32px;
   padding: 0 8px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   font-size: var(--text-xs);
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
@@ -651,7 +651,7 @@
 .autoCompactDot {
   width: 5px;
   height: 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: currentColor;
 }
 
@@ -663,7 +663,7 @@
   color: var(--color-error-text);
   font-size: var(--text-xs);
   padding: 4px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-menu);
   white-space: nowrap;
   pointer-events: none;
   box-shadow: var(--color-shadow-dropdown);
@@ -678,7 +678,7 @@
   padding: 8px 12px;
   height: 32px;
   border: none;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   font-size: var(--text-sm);
   transition: background 0.12s, color 0.12s;
 }
@@ -716,7 +716,7 @@
   height: 32px;
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-border);
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   color: var(--color-error);
   cursor: pointer;
   font-size: var(--text-sm);
@@ -736,7 +736,7 @@
   padding: 0;
   background: none;
   border: none;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   cursor: pointer;
   transition: background 0.12s, color 0.12s, opacity 0.12s;
 }
@@ -760,15 +760,6 @@
 }
 
 @media (pointer: coarse) {
-  .bottomBar {
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .bottomBar::-webkit-scrollbar {
-    display: none;
-  }
-
   .attachButton,
   .soundButton,
   .expandButton {
@@ -816,7 +807,7 @@
   .inputWrapper {
     gap: 6px;
     padding: 4px 5px 4px 10px;
-    border-radius: 12px;
+    border-radius: var(--radius-composer);
   }
 
   .inputRow {
@@ -858,6 +849,50 @@
     overflow: visible;
   }
 
+  /* Running mode has two jobs: choose how the next message is delivered,
+     and expose run controls. Keeping those on separate rows prevents the
+     model, Follow-up/Steer, Stop, and sound controls from fighting for one
+     320px-wide line. */
+  .bottomBarStreaming {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+
+  .bottomBarStreaming .bottomBarLeft {
+    display: grid;
+    width: 100%;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 6px;
+    overflow: visible;
+  }
+
+  .bottomBarStreaming .attachButton {
+    display: none;
+  }
+
+  .bottomBarStreaming .sendModeSwitch,
+  .bottomBarStreaming .bottomBarLeft > div {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .bottomBarStreaming .sendModeSwitch button {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bottomBarStreaming .bottomBarRightStreaming {
+    width: 100%;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
   .bottomBarLeft {
     flex: 1 1 auto;
     min-width: 0;
@@ -884,11 +919,11 @@
   .mobileToolsButton {
     display: grid;
     place-items: center;
-    width: 40px;
-    height: 40px;
-    flex: 0 0 40px;
+    width: var(--control-touch);
+    height: var(--control-touch);
+    flex: 0 0 var(--control-touch);
     border: 0;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
     color: var(--text-muted);
     background: transparent;
   }
@@ -914,26 +949,32 @@
     gap: 6px;
     padding: 6px;
     border: 1px solid var(--glass-border);
-    border-radius: 12px;
+  border-radius: var(--radius-menu);
     background: var(--glass-bg);
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
     backdrop-filter: blur(18px) saturate(1.4);
     box-shadow: var(--color-shadow-popup);
   }
 
-  .bottomBarRightMobileOpen .mobileLabeledControl {
+.bottomBarRightMobileOpen .mobileLabeledControl {
+    position: relative;
     display: flex;
     min-width: 0;
     min-height: 58px;
     flex-direction: column;
     justify-content: center;
-    gap: 4px;
-    padding: 6px 8px;
-    border-radius: 10px;
+    gap: 0;
+    padding: 0;
+  border-radius: var(--radius-control);
     background: var(--bg-elev-1);
   }
 
   .bottomBarRightMobileOpen .mobileControlLabel {
+    position: absolute;
+    top: 8px;
+    right: 9px;
+    left: 9px;
+    z-index: 1;
     display: block;
     overflow: hidden;
     color: var(--text-dim);
@@ -945,6 +986,7 @@
     text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
+    pointer-events: none;
   }
 
   .bottomBarRightMobileOpen .mobileControlValue {
@@ -962,15 +1004,20 @@
     max-width: none !important;
   }
 
+  .bottomBarRightMobileOpen .mobileLabeledControl > div {
+    min-height: 58px;
+  }
+
   .bottomBarRightMobileOpen .mobileLabeledControl > button,
   .bottomBarRightMobileOpen .mobileLabeledControl > div > button {
     display: flex !important;
-    height: 28px !important;
-    min-height: 28px;
+    height: 58px !important;
+    min-height: 58px;
     align-items: center;
     justify-content: flex-start;
     gap: 6px;
-    padding: 0 !important;
+    padding: 19px 9px 3px !important;
+    border-radius: var(--radius-control);
   }
 
   .bottomBarRightMobileOpen .compactControls {
@@ -982,7 +1029,7 @@
     width: 100%;
     min-width: 0;
     min-height: 58px;
-    border-radius: 10px;
+    border-radius: var(--radius-control);
     background: var(--bg-elev-1);
   }
 
@@ -994,20 +1041,26 @@
   .bottomBarRightMobileOpen .compactWrapper {
     display: flex;
     align-items: center;
-    padding: 6px 8px;
+    padding: 0;
   }
 
   .bottomBarRightMobileOpen .compactWrapper > button {
     width: 100%;
-    min-height: 40px;
+    min-height: 58px;
     justify-content: flex-start;
-    padding: 0 2px;
+    padding: 0 10px;
+    border-radius: var(--radius-control);
   }
 
   .bottomBarRightStreaming {
     display: flex;
     flex: 0 0 auto;
     margin-left: 0;
+  }
+
+  .bottomBarRightStreaming .stopButton {
+    min-width: 92px;
+    justify-content: center;
   }
 
   .bottomBarRightStreaming > :not(.stopButton):not(.mobileSoundControl) {
@@ -1058,7 +1111,7 @@
 :global(html[data-ui-style="trae"]) .innerWrapper:not(.innerWrapperExpanded) {
   padding: 8px;
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  border-radius: 26px;
+  border-radius: var(--radius-composer);
   background: var(--bg-elev-1);
   box-shadow: var(--color-shadow-input);
   transition: border-color 160ms ease, box-shadow 160ms ease;
@@ -1073,7 +1126,7 @@
   gap: 10px;
   padding: 9px 10px 7px 12px;
   border: 0;
-  border-radius: 18px;
+  border-radius: var(--radius-composer);
   background: transparent;
   box-shadow: none;
 }
@@ -1096,7 +1149,7 @@
   justify-content: center;
   gap: 0;
   padding: 0;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
 }
 
 :global(html[data-ui-style="trae"]) .sendButton .actionLabel {
@@ -1116,7 +1169,7 @@
 :global(html[data-ui-style="trae"]) .bottomBarLeft button,
 :global(html[data-ui-style="trae"]) .mobileToolsButton,
 :global(html[data-ui-style="trae"]) .expandButton {
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
 }
 
 :global(html[data-ui-style="trae"]) .attachButton {
@@ -1141,12 +1194,12 @@
 
   :global(html[data-ui-style="trae"]) .innerWrapper:not(.innerWrapperExpanded) {
     padding: 7px;
-    border-radius: 28px;
+    border-radius: var(--radius-composer);
   }
 
   :global(html[data-ui-style="trae"]) .inputWrapper {
     padding: 7px 5px 5px 9px;
-    border-radius: 21px;
+    border-radius: var(--radius-composer);
   }
 
   :global(html[data-ui-style="trae"]) .textarea {
@@ -1180,7 +1233,7 @@
   :global(html[data-ui-style="trae"]) .bottomBarRightMobileOpen {
     bottom: calc(100% + 12px);
     padding: 8px;
-    border-radius: 20px;
+    border-radius: var(--radius-menu);
     background: var(--bg-elev-1);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;

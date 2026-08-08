@@ -5,7 +5,7 @@
   min-width: 184px;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-menu);
   box-shadow: var(--color-shadow-dropdown);
   padding: 4px;
   display: flex;
@@ -30,7 +30,7 @@
   padding: 0 10px;
   background: none;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-row);
   color: var(--text);
   font-family: inherit;
   font-size: var(--text-sm);
@@ -81,7 +81,7 @@
   height: 30px;
   padding: 0 10px;
   background: var(--bg-hover);
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   color: var(--text-muted);
 }
 
@@ -117,7 +117,7 @@
   font-size: var(--text-xs);
   line-height: var(--leading-tight);
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid transparent;
   font-weight: var(--weight-medium);
 }
@@ -140,10 +140,10 @@
 :global(html[data-ui-style="trae"]) .menu {
   padding: 6px;
   border-color: var(--trae-hairline);
-  border-radius: 14px;
+  border-radius: var(--radius-menu);
   background: var(--glass-bg);
   box-shadow: var(--color-shadow-dropdown);
 }
-:global(html[data-ui-style="trae"]) .menuItem { height: 36px; border-radius: 9px; }
+:global(html[data-ui-style="trae"]) .menuItem { height: 36px; border-radius: var(--radius-row); }
 :global(html[data-ui-style="trae"]) .separator { background: var(--trae-hairline); }
-:global(html[data-ui-style="trae"]) .tagForm { height: 38px; border-radius: 9px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .tagForm { height: 38px; border-radius: var(--radius-control-prominent); background: var(--trae-control); }

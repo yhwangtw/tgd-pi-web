@@ -3,7 +3,7 @@
   flex-shrink: 0;
   width: 44px;
   height: 24px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   border: none;
   padding: 0;
   position: relative;
@@ -18,7 +18,7 @@
   width: 40px;
   height: 22px;
   transform: translate(-50%, -50%);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   background: var(--toggle-track);
   content: "";
   transition: background var(--motion-normal) var(--ease-standard);
@@ -49,7 +49,7 @@
   top: 50%;
   width: 16px;
   height: 16px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--bg);
   box-shadow: var(--color-shadow-dropdown);
   transform: translateY(-50%);
@@ -112,7 +112,7 @@
 .tag {
   font-size: var(--text-xs);
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   flex-shrink: 0;
 }
 
@@ -173,7 +173,7 @@
 /* The modal detail panel owns scrolling; avoid a second nested scroll area. */
 .contentBox {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   background: var(--bg);
   padding: 16px 18px;
   overflow: visible;
@@ -182,8 +182,8 @@
 
 :global(html[data-ui-style="trae"]) .container { gap: 18px; }
 :global(html[data-ui-style="trae"]) .skillHeader { border-color: var(--trae-hairline); }
-:global(html[data-ui-style="trae"]) .tag { padding: 2px 7px; border-radius: 999px; }
-:global(html[data-ui-style="trae"]) .contentBox { border-color: transparent; border-radius: 14px; background: var(--trae-surface-solid); box-shadow: none; }
+:global(html[data-ui-style="trae"]) .tag { padding: 2px 7px; border-radius: var(--radius-pill); }
+:global(html[data-ui-style="trae"]) .contentBox { border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: none; }
 
 @media (max-width: 600px) {
   .skillHeader { grid-template-columns: 1fr; gap: 12px; }

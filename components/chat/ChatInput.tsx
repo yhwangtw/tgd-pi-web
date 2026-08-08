@@ -940,7 +940,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         </div>
 
         {/* Bottom bar: left | center (context) | right */}
-        <div className={styles.bottomBar}>
+        <div className={`${styles.bottomBar} ${isStreaming ? styles.bottomBarStreaming : ""}`}>
 
           {/* LEFT: attach + model selector (idle) or steer/followup toggle (streaming) */}
           <div className={styles.bottomBarLeft}>

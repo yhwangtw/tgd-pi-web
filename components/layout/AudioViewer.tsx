@@ -62,7 +62,7 @@ export function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string 
             style={{
               width: 7,
               height: 7,
-              borderRadius: "50%",
+              borderRadius: "var(--radius-circle)",
               background: watching ? "var(--color-success)" : "var(--border)",
               display: "inline-block",
               boxShadow: watching ? "0 0 4px var(--color-success)" : "none",

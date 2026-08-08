@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const MAIN = "/?session=aaaa1111-2222-3333-4444-555566667777";
+const MAIN_ID = "aaaa1111-2222-3333-4444-555566667777";
 // This fixture is never activated through the agent API, so the System action
 // must remain unavailable even when another spec has started MAIN's wrapper.
 const INACTIVE = "/?session=dddd1111-2222-3333-4444-555566667777";
@@ -38,6 +39,47 @@ test.describe("responsive shell", () => {
       await expectNoPageOverflow(page);
     });
   }
+
+  test("AC-RWD-1b: tablet sidebar is an opaque modal layer over the transcript", async ({ page }) => {
+    await page.setViewportSize({ width: 840, height: 889 });
+    await openSession(page);
+
+    const sidebar = page.locator(".sidebar-container");
+    const backdrop = page.locator(".sidebar-overlay-backdrop");
+    await expect(sidebar).toHaveClass(/sidebar-closed/);
+
+    await page.getByRole("button", { name: "Sessions", exact: true }).click();
+    await expect(sidebar).toHaveClass(/sidebar-open/);
+    await expect(backdrop).toBeVisible();
+
+    const overlayStyles = await page.evaluate(() => {
+      const panel = document.querySelector<HTMLElement>(".sidebar-container")!;
+      const shade = document.querySelector<HTMLElement>(".sidebar-overlay-backdrop")!;
+      return {
+        panelBackground: getComputedStyle(panel).backgroundColor,
+        panelOverflow: getComputedStyle(panel).overflow,
+        shadeBackground: getComputedStyle(shade).backgroundColor,
+        shadePosition: getComputedStyle(shade).position,
+        shadePointerEvents: getComputedStyle(shade).pointerEvents,
+      };
+    });
+
+    expect(overlayStyles.panelBackground).not.toBe("rgba(0, 0, 0, 0)");
+    expect(overlayStyles.panelBackground).not.toBe("transparent");
+    expect(overlayStyles.panelOverflow).toBe("hidden");
+    expect(overlayStyles.shadeBackground).not.toBe("rgba(0, 0, 0, 0)");
+    expect(overlayStyles.shadePosition).toBe("fixed");
+    expect(overlayStyles.shadePointerEvents).toBe("auto");
+
+    const [railBox, backdropBox] = await Promise.all([
+      page.getByRole("navigation", { name: "Primary" }).boundingBox(),
+      backdrop.boundingBox(),
+    ]);
+    expect(railBox).not.toBeNull();
+    expect(backdropBox).not.toBeNull();
+    expect(backdropBox!.x).toBeCloseTo(railBox!.x + railBox!.width, 0);
+    await expectNoPageOverflow(page);
+  });
 
   for (const modal of [
     {
@@ -144,6 +186,17 @@ test.describe("responsive shell", () => {
     expect(viewerBox).not.toBeNull();
     expect(viewerBox!.x).toBeGreaterThanOrEqual(0);
     expect(viewerBox!.x + viewerBox!.width).toBeLessThanOrEqual(320);
+    const touchControls = viewer.locator("[data-testid='right-panel-tab-bar'] button, [data-testid='file-viewer-toolbar'] button");
+    const touchControlHeights = await touchControls.evaluateAll((buttons) =>
+      buttons
+        .filter((button) => {
+          const rect = button.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        })
+        .map((button) => button.getBoundingClientRect().height),
+    );
+    expect(touchControlHeights.length).toBeGreaterThanOrEqual(3);
+    expect(Math.min(...touchControlHeights)).toBeGreaterThanOrEqual(44);
     await expectNoPageOverflow(page);
 
     await page.getByRole("button", { name: "Files", exact: true }).click();
@@ -238,29 +291,74 @@ test.describe("responsive shell", () => {
     await openSession(page);
 
     const topBar = page.getByTestId("top-bar");
+    const identity = page.getByTestId("session-identity");
+    const workspace = identity.getByRole("button", { name: /Select project/ });
+    const repository = identity.getByTestId("workspace-repository");
+    const branch = identity.getByTestId("workspace-branch");
     const title = topBar.locator("[class*='chatTitle']");
     const sessionMenu = topBar.getByRole("button", { name: "Session actions" });
     const usage = page.getByTestId("session-usage-summary");
+    const filePanel = topBar.getByRole("button", { name: "Show file panel" });
 
     await expect(usage).toBeVisible();
     await expect(topBar.getByText("IN", { exact: true })).toHaveCount(0);
     await expect(topBar.getByText("OUT", { exact: true })).toHaveCount(0);
     await expect(topBar.getByText("CACHE", { exact: true })).toHaveCount(0);
 
-    const [titleBox, menuBox, usageBox] = await Promise.all([
+    const [topBarBox, identityBox, workspaceBox, titleBox, menuBox, usageBox, filePanelBox] = await Promise.all([
+      topBar.boundingBox(),
+      identity.boundingBox(),
+      workspace.boundingBox(),
       title.boundingBox(),
       sessionMenu.boundingBox(),
       usage.boundingBox(),
+      filePanel.boundingBox(),
     ]);
+    expect(topBarBox).not.toBeNull();
+    expect(identityBox).not.toBeNull();
+    expect(workspaceBox).not.toBeNull();
     expect(titleBox).not.toBeNull();
     expect(menuBox).not.toBeNull();
     expect(usageBox).not.toBeNull();
+    expect(filePanelBox).not.toBeNull();
+    expect(identityBox!.y).toBeGreaterThan(topBarBox!.y);
+    expect(identityBox!.y + identityBox!.height).toBeLessThan(topBarBox!.y + topBarBox!.height);
+    expect(Math.abs(
+      workspaceBox!.y + workspaceBox!.height / 2
+      - (titleBox!.y + titleBox!.height / 2),
+    )).toBeLessThanOrEqual(1);
     expect(menuBox!.x).toBeGreaterThanOrEqual(titleBox!.x + titleBox!.width);
-    expect(usageBox!.x).toBeGreaterThanOrEqual(menuBox!.x + menuBox!.width);
-    expect(usageBox!.width).toBeLessThanOrEqual(150);
+    expect(usageBox!.x - (menuBox!.x + menuBox!.width)).toBeGreaterThanOrEqual(6);
+    expect(filePanelBox!.x - (usageBox!.x + usageBox!.width)).toBeGreaterThanOrEqual(6);
+    expect(usageBox!.width).toBeLessThanOrEqual(160);
+    await expect(title).toHaveCSS("font-size", "14px");
+    await expect(repository).toHaveCSS("font-size", "12px");
+    await expect(branch).toHaveCSS("font-size", "12px");
+    await expect(sessionMenu).toHaveCSS("font-size", "13px");
+    expect(await branch.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 
     await usage.click();
     await expect(page.getByRole("heading", { name: "Session Analytics" })).toBeVisible();
+    await expectNoPageOverflow(page);
+  });
+
+  test("AC-RWD-9a: mobile TRAE analytics tables remain horizontally scrollable", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => {
+      localStorage.setItem("pi-ui-style", "trae");
+      localStorage.setItem("pi-skin", "trae");
+    });
+    await openSession(page);
+
+    await page.getByRole("button", { name: "More", exact: true }).click();
+    await page.getByRole("button", { name: "Analytics", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Session Analytics" });
+    await expect(dialog).toBeVisible();
+
+    const table = dialog.locator("[class*='table']").first();
+    await expect(table).toBeVisible();
+    await expect.poll(() => table.evaluate((element) => getComputedStyle(element).overflowX)).toBe("auto");
+    await expect.poll(() => table.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
     await expectNoPageOverflow(page);
   });
 
@@ -291,6 +389,16 @@ test.describe("responsive shell", () => {
     await expect(identity.getByTestId("workspace-branch")).not.toHaveText("");
     await expect(identity.getByTestId("workspace-repository")).toBeVisible();
     await expect(identity.getByTestId("workspace-branch")).toBeVisible();
+    await expect(identity.locator("[class*='chatTitle']")).toBeHidden();
+
+    const [topBarBox, workspaceBox] = await Promise.all([
+      page.getByTestId("top-bar").boundingBox(),
+      identity.getByRole("button", { name: /Select project/ }).boundingBox(),
+    ]);
+    expect(topBarBox).not.toBeNull();
+    expect(workspaceBox).not.toBeNull();
+    expect(workspaceBox!.y).toBeGreaterThan(topBarBox!.y);
+    expect(workspaceBox!.y + workspaceBox!.height).toBeLessThan(topBarBox!.y + topBarBox!.height);
 
     const workspaceButton = identity.getByRole("button", { name: /Select project/ });
     await expect(workspaceButton).toBeVisible();
@@ -303,6 +411,12 @@ test.describe("responsive shell", () => {
   test("AC-RWD-11: mobile session actions stay in one compact row", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     await openSession(page);
+    const activation = await page.request.post(`/api/agent/${MAIN_ID}`, {
+      data: { type: "get_state" },
+    });
+    expect(activation.ok()).toBe(true);
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Message…" })).toBeVisible();
 
     await page.getByRole("button", { name: "Session actions", exact: true }).click();
     const panel = page.locator("[class*='chatActionsMobileOpen']");
@@ -325,6 +439,26 @@ test.describe("responsive shell", () => {
     expect(panelBox!.height).toBeLessThanOrEqual(64);
     expect(Math.abs(exportBox!.y - analyticsBox!.y)).toBeLessThanOrEqual(1);
     expect(Math.abs(analyticsBox!.y - systemBox!.y)).toBeLessThanOrEqual(1);
+
+    await exportAction.click();
+    const exportMenu = page.getByRole("menu");
+    await expect(exportMenu).toBeVisible();
+    const exportMenuBox = await exportMenu.boundingBox();
+    expect(exportMenuBox).not.toBeNull();
+    expect(exportMenuBox!.x).toBeGreaterThanOrEqual(8);
+    expect(exportMenuBox!.x + exportMenuBox!.width).toBeLessThanOrEqual(312);
+
+    await exportAction.click();
+    await expect(systemAction).toBeEnabled();
+    await systemAction.click();
+    const systemPanel = page.getByTestId("system-prompt-panel");
+    await expect(systemPanel).toBeVisible();
+    const systemPanelBox = await systemPanel.boundingBox();
+    expect(systemPanelBox).not.toBeNull();
+    expect(systemPanelBox!.y + systemPanelBox!.height).toBeLessThanOrEqual(746);
+    await expect
+      .poll(() => systemPanel.locator("[class*='systemPromptContent']").evaluate((element) => getComputedStyle(element).maxHeight))
+      .not.toBe("none");
     await expectNoPageOverflow(page);
   });
 
@@ -345,6 +479,16 @@ test.describe("responsive shell", () => {
     expect(panelBox!.width).toBeLessThanOrEqual(320);
     expect(panelBox!.x).toBeGreaterThanOrEqual(0);
     expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(320);
+    const controlHeights = await panel.getByRole("button").evaluateAll((buttons) =>
+      buttons
+        .filter((button) => {
+          const rect = button.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        })
+        .map((button) => button.getBoundingClientRect().height),
+    );
+    expect(controlHeights.length).toBeGreaterThanOrEqual(6);
+    expect(Math.min(...controlHeights)).toBeGreaterThanOrEqual(44);
     await expectNoPageOverflow(page);
   });
 

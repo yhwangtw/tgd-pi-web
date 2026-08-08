@@ -18,7 +18,7 @@
   flex-direction: column;
   background: var(--bg-panel, var(--bg));
   border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-dialog);
   overflow: hidden;
   box-shadow: var(--color-shadow-modal);
 }
@@ -83,7 +83,7 @@
   font-family: var(--font-mono);
   font-size: var(--text-md);
   padding: 5px 9px;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
@@ -112,7 +112,7 @@
   font-size: var(--text-md);
   line-height: var(--leading-relaxed);
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
@@ -132,7 +132,7 @@
 .cancelBtn {
   font-size: var(--text-sm);
   padding: 5px 12px;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-muted);
@@ -147,7 +147,7 @@
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   padding: 5px 14px;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   border: 1px solid transparent;
   background: var(--color-accent);
   color: var(--color-accent-fg);
@@ -184,7 +184,7 @@
   align-items: center;
   gap: 10px;
   padding: 7px 9px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   border: 1px solid transparent;
 }
 
@@ -228,7 +228,7 @@
 .itemBtn {
   font-size: var(--text-sm);
   padding: 3px 9px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-muted);
@@ -266,6 +266,7 @@
   .cancelBtn,
   .saveBtn,
   .itemBtn {
+    min-width: var(--control-touch);
     min-height: 44px;
   }
 
@@ -280,6 +281,7 @@
 
   .nameInput {
     width: 100%;
+    min-height: var(--control-touch);
   }
 
   .item {
@@ -295,23 +297,23 @@
 }
 
 :global(html[data-ui-style="trae"]) .overlay { background: var(--trae-overlay); backdrop-filter: blur(8px); }
-:global(html[data-ui-style="trae"]) .modal { border-color: var(--trae-hairline); border-radius: 20px; background: var(--trae-canvas); }
+:global(html[data-ui-style="trae"]) .modal { border-color: var(--trae-hairline); border-radius: var(--radius-dialog); background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .header { min-height: 58px; padding: 12px 20px; border-bottom-color: var(--trae-hairline); background: var(--trae-surface); }
 :global(html[data-ui-style="trae"]) .body { padding: 20px; }
 :global(html[data-ui-style="trae"]) .list { gap: 8px; }
 :global(html[data-ui-style="trae"]) .item {
   border-color: transparent;
-  border-radius: 14px;
+  border-radius: var(--radius-control-prominent);
   background: var(--trae-surface-solid);
   box-shadow: var(--trae-card-shadow);
 }
 :global(html[data-ui-style="trae"]) .itemEditing { border-color: var(--color-accent-border-focus); }
 :global(html[data-ui-style="trae"]) .nameInput,
-:global(html[data-ui-style="trae"]) .bodyInput { border-color: transparent; border-radius: 11px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .bodyInput { border-color: transparent; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .itemBtn,
 :global(html[data-ui-style="trae"]) .saveBtn,
-:global(html[data-ui-style="trae"]) .cancelBtn { border-radius: 10px; }
-:global(html[data-ui-style="trae"]) .empty { border: 0; border-radius: 14px; background: var(--trae-surface); }
+:global(html[data-ui-style="trae"]) .cancelBtn { border-radius: var(--radius-control); }
+:global(html[data-ui-style="trae"]) .empty { border: 0; border-radius: var(--radius-card); background: var(--trae-surface); }
 
 @media (max-width: 700px) {
   :global(html[data-ui-style="trae"]) .modal { border: 0; border-radius: 0; }

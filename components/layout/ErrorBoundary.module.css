@@ -32,8 +32,8 @@
   padding: 6px 16px;
   background: var(--accent);
   border: none;
-  border-radius: var(--radius-md);
-  color: var(--color-white);
+  border-radius: var(--radius-control);
+  color: var(--accent-fg);
   cursor: pointer;
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
@@ -43,14 +43,14 @@
   padding: 6px 16px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   cursor: pointer;
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
 }
 
-:global(html[data-ui-style="trae"]) .container { margin: 16px; border-radius: 16px; background: var(--trae-surface); }
+:global(html[data-ui-style="trae"]) .container { margin: 16px; border-radius: var(--radius-card); background: var(--trae-surface); }
 :global(html[data-ui-style="trae"]) .retryBtn,
-:global(html[data-ui-style="trae"]) .reloadBtn { min-height: 38px; border-color: transparent; border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .reloadBtn { min-height: 38px; border-color: transparent; border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .reloadBtn { background: var(--trae-control); }

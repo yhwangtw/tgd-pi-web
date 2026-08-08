@@ -18,7 +18,7 @@
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-card);
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
   backdrop-filter: blur(14px) saturate(1.4);
@@ -36,7 +36,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   flex-shrink: 0;
 }
 
@@ -54,7 +54,7 @@
   padding: 0;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   color: var(--text-dim);
   cursor: pointer;
   flex-shrink: 0;
@@ -118,7 +118,7 @@
 }
 
 :global(html[data-ui-style="trae"]) .container { gap: 10px; }
-:global(html[data-ui-style="trae"]) .toast { min-height: 48px; padding: 11px 13px; border-color: var(--trae-hairline); border-radius: 14px; box-shadow: var(--color-shadow-popup); }
+:global(html[data-ui-style="trae"]) .toast { min-height: 48px; padding: 11px 13px; border-color: var(--trae-hairline); border-radius: var(--radius-card); box-shadow: var(--color-shadow-popup); }
 :global(html[data-ui-style="trae"]) .success { box-shadow: inset 3px 0 var(--color-success), var(--color-shadow-popup); }
 :global(html[data-ui-style="trae"]) .error { box-shadow: inset 3px 0 var(--color-error), var(--color-shadow-popup); }
 :global(html[data-ui-style="trae"]) .warning { box-shadow: inset 3px 0 var(--color-warning), var(--color-shadow-popup); }

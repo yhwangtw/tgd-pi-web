@@ -72,7 +72,7 @@
   width: 16px;
   height: 16px;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-control-compact);
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
@@ -86,7 +86,7 @@
   min-width: 150px;
   padding: 4px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-menu);
   box-shadow: var(--color-shadow-modal);
   display: flex;
   flex-direction: column;
@@ -98,7 +98,7 @@
   color: var(--text-muted);
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-row);
   cursor: pointer;
 }
 .tabMenuItem:hover { background: var(--bg-hover); color: var(--text); }
@@ -115,8 +115,30 @@
   min-width: 88px;
   padding: 0 6px 0 9px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 :global(html[data-ui-style="trae"]) .tabActive { background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .tabInactive { background: transparent; }
-:global(html[data-ui-style="trae"]) .tabMenu { border-color: var(--trae-hairline); border-radius: 14px; background: var(--glass-bg); }
+:global(html[data-ui-style="trae"]) .tabMenu { border-color: var(--trae-hairline); border-radius: var(--radius-menu); background: var(--glass-bg); }
+
+@media (max-width: 700px), (pointer: coarse) {
+  .tabBar,
+  :global(html[data-ui-style="trae"]) .tabBar {
+    height: var(--control-touch);
+  }
+
+  .tab,
+  :global(html[data-ui-style="trae"]) .tab {
+    height: var(--control-touch);
+  }
+
+  .closeBtn {
+    width: var(--control-touch);
+    height: var(--control-touch);
+    border-radius: var(--radius-control);
+  }
+
+  .tabMenuItem {
+    min-height: var(--control-touch);
+  }
+}

@@ -64,6 +64,32 @@ describe("AssistantMessageView conversation chrome", () => {
     expect(summary?.getAttribute("title")).toContain("1,060 in");
   });
 
+  it("summarizes billing failures and keeps the raw provider response collapsed", async () => {
+    const billingUrl = "https://opencode.ai/workspace/wrk_123/billing";
+    await render({
+      ...baseMessage,
+      stopReason: "error",
+      errorMessage: `401 Insufficient balance. Manage your billing here: ${billingUrl}`,
+    });
+
+    const alert = container!.querySelector<HTMLElement>('[role="alert"]')!;
+    expect(alert.textContent).toContain("Insufficient balance");
+    expect(alert.querySelector<HTMLAnchorElement>('a[href="' + billingUrl + '"]')?.textContent).toContain("Manage billing");
+    const details = alert.querySelector("details");
+    expect(details).not.toBeNull();
+    expect(details!.hasAttribute("open")).toBe(false);
+  });
+
+  it("keeps shell variables literal instead of rendering them as inline math", async () => {
+    await render({
+      ...baseMessage,
+      content: [{ type: "text", text: "Set $TGD_DIR before running setup." }],
+    });
+
+    expect(container!.textContent).toContain("$TGD_DIR");
+    expect(container!.querySelector(".katex")).toBeNull();
+  });
+
   it("rolls an entire agent loop into one expandable work log", async () => {
     const activity: AssistantMessage[] = [
       { ...baseMessage, timestamp: 2_000, content: [{ type: "thinking", thinking: "inspect" }, { type: "toolCall", toolCallId: "read-1", toolName: "read", input: { path: "src/a.ts" } }] },

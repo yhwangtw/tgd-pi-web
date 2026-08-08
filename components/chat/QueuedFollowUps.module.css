@@ -6,7 +6,7 @@
   max-width: 900px;
   margin: 0 auto;
   border: 1px solid var(--color-warning-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--color-warning-bg);
   color: var(--color-warning-text);
   overflow: hidden;
@@ -45,7 +45,7 @@
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-warning-bg-strong);
   font-family: var(--font-mono);
 }
@@ -54,7 +54,7 @@
 .updating {
   flex: 0 0 auto;
   padding: 3px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   color: inherit;
   font-size: var(--text-xs);
 }
@@ -94,7 +94,7 @@
   width: 18px;
   height: 18px;
   flex: 0 0 auto;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg);
   color: var(--text-dim);
   font-family: var(--font-mono);
@@ -124,7 +124,7 @@
 .message small {
   flex: 0 0 auto;
   padding: 2px 5px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: var(--color-warning-bg-strong);
   color: inherit;
   font-size: var(--text-xs);
@@ -142,7 +142,7 @@
   place-items: center;
   width: 27px;
   height: 27px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   color: inherit;
   cursor: pointer;
 }
@@ -169,7 +169,7 @@
   flex: 1;
   resize: vertical;
   border: 1px solid var(--color-warning-border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   padding: 6px 8px;
   background: var(--bg);
   color: var(--text);
@@ -191,7 +191,7 @@
 .editor button {
   height: 28px;
   padding: 0 8px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   color: inherit;
   font-size: var(--text-xs);
   cursor: pointer;
@@ -250,9 +250,9 @@
   }
 }
 
-:global(html[data-ui-style="trae"]) .panel { border-color: transparent; border-radius: 14px; box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .panel { border-color: transparent; border-radius: var(--radius-panel); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .header,
 :global(html[data-ui-style="trae"]) .item + .item { border-color: color-mix(in srgb, var(--color-warning-border) 60%, transparent); }
 :global(html[data-ui-style="trae"]) .position,
-:global(html[data-ui-style="trae"]) .message small { border-radius: 999px; }
-:global(html[data-ui-style="trae"]) .editor textarea { border-radius: 11px; }
+:global(html[data-ui-style="trae"]) .message small { border-radius: var(--radius-pill); }
+:global(html[data-ui-style="trae"]) .editor textarea { border-radius: var(--radius-control); }

@@ -13,7 +13,7 @@
 .modal {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-dialog);
   width: min(700px, 100%);
   height: min(720px, calc(100dvh - 48px));
   max-height: 100%;
@@ -50,7 +50,7 @@
   color: var(--text-dim);
   cursor: pointer;
   padding: 4px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   display: flex;
 }
 
@@ -89,7 +89,7 @@
 .stat {
   background: var(--bg-elev-1);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -142,7 +142,7 @@
 .barTrack {
   background: var(--bg-elev-1);
   height: 14px;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 
@@ -150,7 +150,7 @@
   background: var(--color-accent);
   height: 100%;
   transition: width var(--motion-normal) var(--ease-standard);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-pill);
 }
 
 .barValue {
@@ -169,7 +169,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   overflow: hidden;
 }
 
@@ -225,7 +225,7 @@
   padding: 8px 12px;
   background: var(--bg-elev-1);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   font-size: var(--text-sm);
 }
 
@@ -294,22 +294,22 @@
 }
 
 :global(html[data-ui-style="trae"]) .overlay { background: var(--trae-overlay); backdrop-filter: blur(8px); }
-:global(html[data-ui-style="trae"]) .modal { border-color: transparent; border-radius: var(--radius-lg); background: var(--trae-surface-solid); }
+:global(html[data-ui-style="trae"]) .modal { border-color: transparent; border-radius: var(--radius-dialog); background: var(--trae-surface-solid); }
 :global(html[data-ui-style="trae"]) .header { min-height: 64px; padding: 12px 20px; border-bottom-color: transparent; background: transparent; }
 :global(html[data-ui-style="trae"]) .body { padding: 14px 20px 22px; }
 :global(html[data-ui-style="trae"]) .stat {
   border-color: transparent;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--trae-control);
   box-shadow: none;
 }
 :global(html[data-ui-style="trae"]) .section h3 { letter-spacing: var(--tracking-normal); text-transform: none; }
-:global(html[data-ui-style="trae"]) .barTrack { border-radius: var(--radius-full); background: var(--trae-control); }
-:global(html[data-ui-style="trae"]) .barFill { border-radius: var(--radius-full); }
+:global(html[data-ui-style="trae"]) .barTrack { border-radius: var(--radius-pill); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .barFill { border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .table {
   overflow: hidden;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--trae-control);
   box-shadow: none;
 }
@@ -319,4 +319,8 @@
 @media (max-width: 700px) {
   :global(html[data-ui-style="trae"]) .modal { border: 0; border-radius: 0; }
   :global(html[data-ui-style="trae"]) .body { padding: 12px 12px 28px; }
+  /* The desktop TRAE table clips its rounded surface. On phones the data
+     columns intentionally remain wider than the viewport, so restore the
+     horizontal scroller after that desktop override in the cascade. */
+  :global(html[data-ui-style="trae"]) .table { overflow-x: auto; }
 }

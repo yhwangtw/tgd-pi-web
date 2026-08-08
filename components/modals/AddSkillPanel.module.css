@@ -28,7 +28,7 @@
   font-size: var(--text-md);
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   color: var(--text);
   outline: none;
 }
@@ -36,10 +36,10 @@
 .searchBtn {
   padding: 7px 16px;
   font-size: var(--text-md);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   border: none;
   background: var(--accent);
-  color: var(--color-white);
+  color: var(--accent-fg);
   flex-shrink: 0;
 }
 
@@ -61,7 +61,7 @@
 
 .scopeToggle {
   display: flex;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   border: 1px solid var(--border);
   overflow: hidden;
   font-size: var(--text-sm);
@@ -169,7 +169,7 @@
   padding: 5px 14px;
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   border: 1px solid var(--border);
   transition: color 0.12s;
 }
@@ -210,10 +210,10 @@
 }
 
 :global(html[data-ui-style="trae"]) .headerArea { gap: 14px; }
-:global(html[data-ui-style="trae"]) .searchInput { min-height: 42px; border-color: transparent; border-radius: 11px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .searchInput { min-height: 42px; border-color: transparent; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .searchBtn,
-:global(html[data-ui-style="trae"]) .installBtn { min-height: 38px; border-color: transparent; border-radius: 10px; }
-:global(html[data-ui-style="trae"]) .scopeToggle { padding: 3px; border: 0; border-radius: 11px; background: var(--trae-control); }
-:global(html[data-ui-style="trae"]) .scopeBtn { min-height: 30px; border: 0; border-radius: 8px; }
+:global(html[data-ui-style="trae"]) .installBtn { min-height: 38px; border-color: transparent; border-radius: var(--radius-control); }
+:global(html[data-ui-style="trae"]) .scopeToggle { padding: 3px; border: 0; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .scopeBtn { min-height: 30px; border: 0; border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .scopeBtnActive { background: var(--trae-surface-solid); box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 9%, transparent); }
-:global(html[data-ui-style="trae"]) .resultItem { margin-bottom: 8px; padding: 12px; border: 0; border-radius: 13px; background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .resultItem { margin-bottom: 8px; padding: 12px; border: 0; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }

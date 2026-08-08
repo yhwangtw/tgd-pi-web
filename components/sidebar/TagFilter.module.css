@@ -18,7 +18,7 @@
   font-size: var(--text-xs);
   line-height: var(--leading-tight);
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid transparent;
   font-weight: var(--weight-medium);
   cursor: pointer;
@@ -34,7 +34,7 @@
   margin-left: 2px;
   font-size: var(--text-2xs);
   padding: 0 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .clear {
@@ -52,4 +52,4 @@
 }
 
 :global(html[data-ui-style="trae"]) .row { padding: 7px 10px; border-bottom-color: var(--trae-hairline); }
-:global(html[data-ui-style="trae"]) .chip { min-height: 26px; padding: 3px 9px; border-radius: 999px; }
+:global(html[data-ui-style="trae"]) .chip { min-height: 26px; padding: 3px 9px; border-radius: var(--radius-pill); }

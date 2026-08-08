@@ -63,6 +63,7 @@ export type ModelTestState =
   | { phase: "error"; message: string; latencyMs?: number; status?: number };
 
 export type Selection =
+  | { type: "health" }
   | { type: "provider"; name: string }
   | { type: "model"; providerName: string; index: number }
   | { type: "oauth"; providerId: string }

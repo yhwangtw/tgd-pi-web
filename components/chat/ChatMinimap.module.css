@@ -40,13 +40,13 @@
 .dotUser {
   width: 8px;
   height: 8px;
-  border-radius: 2px;
+  border-radius: var(--radius-indicator);
 }
 
 .dotAssistant {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
 }
 
 .dotNearest {
@@ -79,7 +79,7 @@
   right: 100%;
   margin-right: 6px;
   background: var(--bg);
-  border-radius: 4px;
+  border-radius: var(--radius-menu);
   padding: 2px 7px;
   width: 200px;
   z-index: 100;
@@ -120,4 +120,4 @@
 :global(html[data-ui-style="trae"]) .container { border-left-color: var(--trae-hairline); background: transparent; }
 :global(html[data-ui-style="trae"]) .viewportIndicator { border-color: var(--trae-hairline); background: var(--color-accent-bg-subtle); }
 :global(html[data-ui-style="trae"]) .centerLine { background: var(--trae-hairline); }
-:global(html[data-ui-style="trae"]) .tooltip { padding: 5px 9px; border-radius: 9px; background: var(--glass-bg); box-shadow: var(--color-shadow-dropdown); }
+:global(html[data-ui-style="trae"]) .tooltip { padding: 5px 9px; border-radius: var(--radius-menu); background: var(--glass-bg); box-shadow: var(--color-shadow-dropdown); }

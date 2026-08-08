@@ -6,7 +6,7 @@
   margin-bottom: 8px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-menu);
   box-shadow: var(--color-shadow-popup);
   overflow: hidden;
   z-index: 100;
@@ -47,6 +47,6 @@
   unicode-bidi: plaintext;
 }
 
-:global(html[data-ui-style="trae"]) .menu { padding: 6px; border-color: var(--trae-hairline); border-radius: 15px; background: var(--glass-bg); }
-:global(html[data-ui-style="trae"]) .item { min-height: 40px; padding: 7px 10px; border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .menu { padding: 6px; border-color: var(--trae-hairline); border-radius: var(--radius-menu); background: var(--glass-bg); }
+:global(html[data-ui-style="trae"]) .item { min-height: 40px; padding: 7px 10px; border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .itemSelected { background: var(--bg-selected); }

@@ -14,7 +14,7 @@
   max-width: 94vw;
   max-height: 92vh;
   object-fit: contain;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   box-shadow: var(--color-shadow-modal);
 }
 
@@ -31,5 +31,5 @@
 }
 
 :global(html[data-ui-style="trae"]) .overlay { backdrop-filter: blur(10px); }
-:global(html[data-ui-style="trae"]) .image { border-radius: var(--radius-lg); box-shadow: var(--color-shadow-modal); }
-:global(html[data-ui-style="trae"]) .close { display: grid; width: var(--control-touch); height: var(--control-touch); place-items: center; border-radius: var(--radius-full); background: var(--color-image-overlay-control); }
+:global(html[data-ui-style="trae"]) .image { border-radius: var(--radius-media); box-shadow: var(--color-shadow-modal); }
+:global(html[data-ui-style="trae"]) .close { display: grid; width: var(--control-touch); height: var(--control-touch); place-items: center; border-radius: var(--radius-pill); background: var(--color-image-overlay-control); }

@@ -49,6 +49,10 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
     () => palette.results.filter((result) => result.kind === "tag"),
     [palette.results],
   );
+  const visibleCommandResults = useMemo(
+    () => trimmed || scope === "commands" ? commandResults : commandResults.slice(0, 6),
+    [commandResults, scope, trimmed],
+  );
 
   const showSessions = scope === "all" || scope === "sessions";
   const showFiles = scope === "all" || scope === "files";
@@ -58,7 +62,7 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
     (showSessions ? sessionHits.length + tagResults.length : 0)
     + (showFiles ? fileHits.length : 0)
     + (showContent ? contentHits.length : 0)
-    + (showCommands ? commandResults.length : 0);
+    + (showCommands ? visibleCommandResults.length : 0);
 
   const runPaletteResult = (result: PaletteResult) => {
     if (result.kind === "tag") onSelectTag((result.data as { tag: string }).tag);
@@ -153,7 +157,7 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
         fileHits={fileHits}
         contentHits={contentHits}
         tagResults={tagResults}
-        commandResults={commandResults}
+        commandResults={visibleCommandResults}
         inputRef={inputRef}
         onPaletteResult={runPaletteResult}
         onSelectSession={onSelectSession}

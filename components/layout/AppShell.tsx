@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect, useLayoutEffect, lazy, Suspen
 import { createPortal } from "react-dom";
 import { SessionSidebar } from "../sidebar/SessionSidebar";
 import { ChatWindow } from "../chat/ChatWindow";
+import { ContextInspector } from "../chat/ContextInspector";
 import { FileViewer } from "./FileViewer";
 import { FilesPanel } from "./FilesPanel";
 import { SearchPanel } from "./SearchPanel";
@@ -79,6 +80,8 @@ export function AppShell() {
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarOpenRef = useRef(sidebarOpen);
+  const autoCollapsedSidebarRef = useRef(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [designModeOpen, setDesignModeOpen] = useState(false);
   const [panelView, setPanelView] = useState<PanelView>("sessions");
@@ -144,6 +147,25 @@ export function AppShell() {
   useLayoutEffect(() => {
     if (window.matchMedia("(max-width: 1024px)").matches) setSidebarOpen(false);
   }, []);
+
+  useEffect(() => {
+    sidebarOpenRef.current = sidebarOpen;
+  }, [sidebarOpen]);
+
+  /* Three simultaneous panes leave the transcript too narrow on ordinary
+     laptops. Opening a file therefore borrows the contextual panel's width
+     below 1600px, and restores it when the file viewer closes. */
+  useEffect(() => {
+    if (rightPanelOpen && window.innerWidth < 1600 && sidebarOpenRef.current) {
+      autoCollapsedSidebarRef.current = true;
+      setSidebarOpen(false);
+      return;
+    }
+    if (!rightPanelOpen && autoCollapsedSidebarRef.current) {
+      autoCollapsedSidebarRef.current = false;
+      setSidebarOpen(true);
+    }
+  }, [rightPanelOpen]);
 
   // Rail behavior: clicking the active view collapses the panel; clicking the
   // other view switches to it (opening the panel if needed).
@@ -460,7 +482,13 @@ export function AppShell() {
     if (!anchor) return;
     const update = () => {
       const rect = anchor.getBoundingClientRect();
-      setExportMenuPos({ top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) });
+      const desiredRight = window.innerWidth - rect.right;
+      // The mobile action strip places Export in the left column. Aligning a
+      // fixed-width menu to that button's right edge can push the menu past
+      // the viewport's left edge, so clamp both horizontal gutters.
+      const menuWidth = Math.min(248, Math.max(0, window.innerWidth - 16));
+      const maxRight = Math.max(8, window.innerWidth - menuWidth - 8);
+      setExportMenuPos({ top: rect.bottom + 4, right: Math.max(8, Math.min(desiredRight, maxRight)) });
     };
     update();
     window.addEventListener("resize", update);
@@ -623,7 +651,7 @@ export function AppShell() {
       />
       {/* Mobile overlay backdrop */}
       <div
-        className="sidebar-overlay-backdrop"
+        className={`${s.sidebarOverlay} sidebar-overlay-backdrop`}
         onClick={() => setSidebarOpen(false)}
         style={{
           opacity: sidebarOpen ? 1 : 0,
@@ -634,6 +662,7 @@ export function AppShell() {
       {/* Left sidebar */}
       <div
         className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"} ${s.sidebarContainer}`}
+        data-panel-view={panelView}
       >
         {sidebarContent}
       </div>
@@ -667,9 +696,12 @@ export function AppShell() {
                 <span
                   className={`${s.workspaceBranch} ${visibleWorkspaceIdentity.isGit ? "" : s.workspaceBranchNeutral}`}
                   data-testid="workspace-branch"
+                  title={visibleWorkspaceIdentity.detached && visibleWorkspaceIdentity.branch
+                    ? `${t("topbar.detached")} · ${visibleWorkspaceIdentity.branch}`
+                    : visibleWorkspaceIdentity.branch ?? t("topbar.notGitRepository")}
                 >
                   {visibleWorkspaceIdentity.detached && visibleWorkspaceIdentity.branch
-                    ? `${t("topbar.detached")} · ${visibleWorkspaceIdentity.branch}`
+                    ? <>{visibleWorkspaceIdentity.branch}<span className={s.detachedLabel}> · {t("topbar.detached")}</span></>
                     : visibleWorkspaceIdentity.branch
                     ?? (workspaceIdentity?.sourceCwd === workspaceCwd ? t("topbar.notGitRepository") : "…")}
                 </span>
@@ -948,7 +980,7 @@ export function AppShell() {
           >
             <div className={s.systemPanel}>
               <header className={s.systemPanelHeader}>
-                <strong>{t("topbar.system")}</strong>
+                <strong>{t("context.title")}</strong>
                 <button
                   type="button"
                   className={s.systemPanelClose}
@@ -962,19 +994,9 @@ export function AppShell() {
                   </svg>
                 </button>
               </header>
-              {state.systemPrompt ? (
-                <div className={s.systemPromptContent}>
-                  {state.systemPrompt}
-                </div>
-              ) : state.systemPrompt === "" ? (
-                <div className={s.systemPromptPlaceholder}>
-                  {t("system.empty")}
-                </div>
-              ) : (
-                <div className={s.systemPromptPlaceholder}>
-                  {systemPromptUnavailable ? t("system.unavailable") : t("system.notLoaded")}
-                </div>
-              )}
+              <div className={s.systemPromptContent}>
+                <ContextInspector sessionId={state.selectedSession?.id ?? null} fallbackPrompt={state.systemPrompt} />
+              </div>
             </div>
           </section>,
           document.body,

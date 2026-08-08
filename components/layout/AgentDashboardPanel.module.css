@@ -29,7 +29,7 @@
 .daemonIndicator i {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--color-success);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success) 14%, transparent);
 }
@@ -43,12 +43,12 @@
 .secondaryButton,
 .cardActions button {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   font: inherit;
   cursor: pointer;
 }
 .newButton {
-  height: 27px;
+  min-height: var(--control-md);
   margin-left: auto;
   padding: 0 8px;
   display: inline-flex;
@@ -63,10 +63,10 @@
 .newButton:hover { background: var(--color-accent-bg-strong); }
 .newButton:disabled { opacity: 0.45; cursor: default; }
 .compareButton {
-  height: 27px;
+  min-height: var(--control-md);
   padding: 0 8px;
   border: 1px solid var(--color-accent-border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--accent);
   font: inherit;
@@ -96,7 +96,7 @@
   align-items: center;
   gap: 1px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-dim);
   font: inherit;
@@ -118,7 +118,7 @@
   justify-content: center;
   gap: 4px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   outline: none;
   background: transparent;
   color: var(--text);
@@ -146,7 +146,7 @@
   grid-template-columns: repeat(2, 1fr);
   gap: 3px;
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: var(--radius-menu);
   background: var(--glass-bg);
   box-shadow: var(--color-shadow-dropdown);
   backdrop-filter: blur(16px);
@@ -160,7 +160,7 @@
   justify-content: center;
   gap: 2px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-row);
   background: transparent;
   color: var(--text-muted);
   font: inherit;
@@ -176,14 +176,14 @@
 
 .filterBar {
   flex: 0 0 auto;
-  height: 35px;
+  min-height: 40px;
   margin: 8px 8px 0;
   padding: 0 8px;
   display: flex;
   align-items: center;
   gap: 6px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: var(--bg-elev-1);
   color: var(--text-dim);
 }
@@ -240,7 +240,7 @@
 .card {
   padding: 9px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   background: var(--bg-elev-1);
 }
 .cardWaiting {
@@ -258,21 +258,21 @@
   color: var(--text);
   font-size: var(--text-sm);
 }
-.statusDot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
+.statusDot { width: 6px; height: 6px; flex-shrink: 0; border-radius: var(--radius-circle); background: currentColor; }
 .branch {
   max-width: 40%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 1px 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg-hover);
   color: var(--text-dim);
   font-size: var(--text-2xs);
 }
 .cardMeta { margin-top: 5px; display: flex; align-items: center; gap: 6px; }
 .cardMeta time { margin-left: auto; color: var(--text-dim); font-size: var(--text-2xs); }
-.statusBadge { padding: 2px 5px; border-radius: 999px; background: var(--bg-hover); font-size: var(--text-2xs); }
+.statusBadge { padding: 2px 5px; border-radius: var(--radius-pill); background: var(--bg-hover); font-size: var(--text-2xs); }
 .promptPreview {
   display: -webkit-box;
   margin: 7px 0 0;
@@ -294,8 +294,8 @@
 .runError { margin-top: 6px; color: var(--color-error-text); font-size: var(--text-2xs); line-height: var(--leading-snug); overflow-wrap: anywhere; }
 .cardActions { margin-top: 8px; display: flex; gap: 5px; flex-wrap: wrap; }
 .cardActions button {
-  min-height: 25px;
-  padding: 3px 7px;
+  min-height: var(--control-sm);
+  padding: 4px 9px;
   background: transparent;
   color: var(--text-muted);
   font-size: var(--text-2xs);
@@ -329,19 +329,19 @@
 .empty span { max-width: 230px; line-height: var(--leading-ui); }
 .empty .primaryButton { margin-top: 5px; }
 .skeleton { display: flex; flex-direction: column; gap: 7px; }
-.skeleton span { height: 96px; border-radius: 8px; background: var(--bg-elev-1); animation: pulse 1.2s ease-in-out infinite alternate; }
+.skeleton span { height: 96px; border-radius: var(--radius-control-prominent); background: var(--bg-elev-1); animation: pulse 1.2s ease-in-out infinite alternate; }
 @keyframes pulse { to { opacity: 0.5; } }
 
 .iconButton {
-  width: 28px;
-  height: 28px;
+  width: var(--control-md);
+  height: var(--control-md);
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
@@ -366,7 +366,7 @@
   width: 100%;
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   outline: none;
   background: var(--bg-elev-1);
   color: var(--text);
@@ -374,19 +374,19 @@
   font-size: var(--text-xs);
 }
 .field input,
-.field select { height: 34px; padding: 0 9px; }
+.field select { height: 38px; padding: 0 10px; }
 .field textarea { min-height: 130px; padding: 8px 9px; resize: vertical; line-height: var(--leading-copy); }
 .field input:focus,
 .field textarea:focus,
 .field select:focus { border-color: var(--color-accent-border-focus); box-shadow: 0 0 0 2px var(--color-accent-bg); }
 .monoInput { font-family: var(--font-mono) !important; font-size: var(--text-2xs) !important; }
 .twoColumns { display: grid; grid-template-columns: 1.35fr 1fr; gap: 8px; }
-.segmented { display: grid; grid-template-columns: repeat(3, 1fr); padding: 2px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-elev-1); }
+.segmented { display: grid; grid-template-columns: repeat(3, 1fr); padding: 2px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); }
 .segment,
 .segmentActive {
-  height: 29px;
+  min-height: var(--control-md);
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   background: transparent;
   color: var(--text-dim);
   font: inherit;
@@ -405,13 +405,13 @@
   background: var(--bg-panel);
 }
 .primaryButton,
-.secondaryButton { min-height: 31px; padding: 5px 10px; font-size: var(--text-xs); }
+.secondaryButton { min-height: var(--control-md); padding: 6px 11px; font-size: var(--text-sm); }
 .primaryButton { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .primaryButton:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
 .secondaryButton { background: var(--bg-elev-1); color: var(--text-muted); }
 .primaryButton:disabled { opacity: 0.45; cursor: default; }
 .formError,
-.listError { padding: 8px; border: 1px solid var(--color-error-border); border-radius: 7px; background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--text-2xs); overflow-wrap: anywhere; }
+.listError { padding: 8px; border: 1px solid var(--color-error-border); border-radius: var(--radius-control); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--text-2xs); overflow-wrap: anywhere; }
 .listError { margin-bottom: 8px; }
 
 @media (max-width: 380px) {
@@ -429,11 +429,11 @@
   background: transparent;
 }
 :global(html[data-ui-style="trae"]) .header strong { font-size: var(--text-sm); }
-:global(html[data-ui-style="trae"]) .newButton { height: 30px; }
+:global(html[data-ui-style="trae"]) .newButton { min-height: var(--control-md); }
 :global(html[data-ui-style="trae"]) .newButton,
 :global(html[data-ui-style="trae"]) .primaryButton,
 :global(html[data-ui-style="trae"]) .secondaryButton,
-:global(html[data-ui-style="trae"]) .cardActions button { border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .cardActions button { border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .summary {
   gap: 3px;
   padding: 6px 10px;
@@ -446,7 +446,7 @@
   flex-direction: row;
   justify-content: center;
   gap: 4px;
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   background: var(--trae-surface);
 }
 
@@ -459,7 +459,7 @@
   height: 40px;
   margin: 2px 10px 8px;
   border-color: transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-control-prominent);
   background: var(--trae-control);
 }
 :global(html[data-ui-style="trae"]) .body { padding: 4px 10px 14px; }
@@ -467,7 +467,7 @@
 :global(html[data-ui-style="trae"]) .card {
   padding: 12px;
   border-color: transparent;
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--trae-surface-solid);
   box-shadow: var(--trae-card-shadow);
 }
@@ -480,6 +480,8 @@
   .concurrencyTrigger,
   .concurrencyMenu button,
   .summary > button,
+  .segment,
+  .segmentActive,
   :global(html[data-ui-style="trae"]) .newButton,
   :global(html[data-ui-style="trae"]) .primaryButton,
   :global(html[data-ui-style="trae"]) .secondaryButton,
@@ -496,6 +498,6 @@
 :global(html[data-ui-style="trae"]) .field select,
 :global(html[data-ui-style="trae"]) .segmented {
   border-color: transparent;
-  border-radius: 11px;
+  border-radius: var(--radius-control-prominent);
   background: var(--trae-control);
 }

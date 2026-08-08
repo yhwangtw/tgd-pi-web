@@ -156,7 +156,7 @@ test.describe("project switcher", () => {
     // Type the fixture project path minus its last few characters
     const partial = PROJECT_CWD.slice(0, -4);
     await input.fill(partial);
-    const suggestion = page.getByTestId("project-switcher").locator("[role=option]").filter({ hasText: "demo-project" }).first();
+    const suggestion = page.getByTestId("path-completion-option").filter({ hasText: "demo-project" }).first();
     await expect(suggestion).toBeVisible({ timeout: 10_000 });
     // Tab completes to the highlighted dir
     await input.press("Tab");

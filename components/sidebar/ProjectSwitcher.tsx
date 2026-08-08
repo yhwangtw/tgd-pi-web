@@ -307,7 +307,11 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
                       onClick={() => pick(row)}
                       className={`${s.row} ${active ? s.rowActive : ""} ${row.kind === "worktree" ? s.rowNested : ""}`}
                       title={row.path}
-                      data-testid={row.kind === "worktree" ? "worktree-row" : undefined}
+                      data-testid={row.kind === "worktree"
+                        ? "worktree-row"
+                        : row.kind === "dir"
+                          ? "path-completion-option"
+                          : undefined}
                     >
                       <span className={s.rowIcon}>
                         {row.kind === "worktree" || row.kind === "discovered" ? (

@@ -88,7 +88,7 @@
   margin: 0 6px 0 2px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: transparent;
   color: var(--accent);
   cursor: pointer;
@@ -113,7 +113,7 @@
   resize: vertical;
   padding: 7px 9px;
   border: 1px solid var(--color-accent-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--bg-elev-1);
   color: var(--text);
   font: inherit;
@@ -124,7 +124,7 @@
 .annotationActions button {
   padding: 5px 9px;
   border: 1px solid var(--color-accent-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--accent);
   color: var(--accent-fg);
   cursor: pointer;

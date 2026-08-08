@@ -1,7 +1,7 @@
 .root {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--bg-elev-1);
 }
 
@@ -74,10 +74,13 @@
 
 .body {
   display: grid;
+  max-height: min(56dvh, 560px);
   gap: 7px;
   padding: 8px;
+  overflow-y: auto;
   border-top: 1px solid var(--border);
   background: var(--bg);
+  overscroll-behavior: contain;
 }
 
 @media (max-width: 700px) {
@@ -85,9 +88,10 @@
   .meta { gap: 6px; }
   .meta span + span::before { margin-right: 6px; }
   .meta span:nth-child(n + 3) { display: none; }
+  .body { max-height: min(48dvh, 420px); }
 }
 
-:global(html[data-ui-style="trae"]) .root { border-color: transparent; border-radius: 14px; background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .root { border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .rootError { box-shadow: inset 3px 0 var(--color-error), var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .summary { min-height: 42px; padding: 8px 12px; }
 :global(html[data-ui-style="trae"]) .body { gap: 8px; padding: 9px; border-top-color: var(--trae-hairline); background: var(--trae-canvas); }

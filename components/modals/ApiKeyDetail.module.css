@@ -19,7 +19,7 @@
 .statusDot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   display: inline-block;
 }
 
@@ -62,7 +62,7 @@
 .saveBtn {
   padding: 6px 12px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   flex-shrink: 0;
@@ -76,7 +76,7 @@
 
 .saveBtnActive {
   background: var(--accent);
-  color: var(--color-white);
+  color: var(--accent-fg);
   cursor: pointer;
 }
 
@@ -97,7 +97,7 @@
   padding: 5px 12px;
   background: none;
   border: 1px solid var(--color-error-border);
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   color: var(--color-error);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -108,6 +108,6 @@
 }
 
 :global(html[data-ui-style="trae"]) .root { gap: 18px; }
-:global(html[data-ui-style="trae"]) .inputField { min-height: 42px; border-color: transparent; border-radius: 11px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .inputField { min-height: 42px; border-color: transparent; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .saveBtn,
-:global(html[data-ui-style="trae"]) .disconnectBtn { min-height: 38px; border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .disconnectBtn { min-height: 38px; border-radius: var(--radius-control); }

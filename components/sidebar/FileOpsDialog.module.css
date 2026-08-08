@@ -14,7 +14,7 @@
   max-width: 360px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-dialog);
   padding: 18px;
   box-shadow: var(--color-shadow-modal);
 }
@@ -39,7 +39,7 @@
   padding: 0 10px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   color: var(--text);
   font-size: var(--text-base);
   outline: none;
@@ -63,7 +63,7 @@
 .btn {
   height: 30px;
   padding: 0 14px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   font-size: var(--text-sm);
   cursor: pointer;
   border: 1px solid var(--border);
@@ -88,8 +88,8 @@
 .danger:hover { opacity: 0.9; color: var(--color-white); }
 
 :global(html[data-ui-style="trae"]) .overlay { background: var(--trae-overlay); backdrop-filter: blur(8px); }
-:global(html[data-ui-style="trae"]) .dialog { border-color: var(--trae-hairline); border-radius: 18px; background: var(--glass-bg); }
-:global(html[data-ui-style="trae"]) .input { height: 42px; border-color: transparent; border-radius: 11px; background: var(--trae-control); }
-:global(html[data-ui-style="trae"]) .btn { height: 38px; border-color: transparent; border-radius: 10px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .dialog { border-color: var(--trae-hairline); border-radius: var(--radius-dialog); background: var(--glass-bg); }
+:global(html[data-ui-style="trae"]) .input { height: 42px; border-color: transparent; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .btn { height: 38px; border-color: transparent; border-radius: var(--radius-control); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .primary { background: var(--accent); color: var(--accent-fg); }
 :global(html[data-ui-style="trae"]) .danger { background: var(--color-error); color: var(--color-white); }

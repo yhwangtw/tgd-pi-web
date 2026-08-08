@@ -14,7 +14,7 @@
   height: 74vh;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-dialog);
   display: flex;
   flex-direction: column;
   box-shadow: var(--color-shadow-modal);
@@ -36,6 +36,36 @@
   color: var(--text);
 }
 
+.titleGroup {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.viewTabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+}
+
+.viewTab,
+.viewTabActive {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-control-compact);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
+
+.viewTab { background: transparent; color: var(--text-muted); }
+.viewTab:hover { color: var(--text); }
+.viewTabActive { background: var(--bg-elev-1); color: var(--text); box-shadow: var(--color-shadow-sm); }
+
 .sessionCode {
   font-size: var(--text-xs);
   color: var(--text-muted);
@@ -56,7 +86,7 @@
   height: 26px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-muted);
   font-size: var(--text-sm);
@@ -96,7 +126,7 @@
 /* Diagnostics banner */
 .diag {
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   padding: 10px 12px;
   margin-bottom: 16px;
   display: flex;
@@ -118,7 +148,7 @@
   font-weight: var(--weight-bold);
   text-transform: uppercase;
   padding: 1px 6px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   border: 1px solid currentColor;
 }
 .diagBadgeError { color: var(--color-error); }
@@ -141,6 +171,15 @@
   margin-bottom: 6px;
 }
 .sectionEmpty { font-size: var(--text-sm); color: var(--text-dim); }
+.inventoryEmpty {
+  margin: 10px 0 18px;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  text-align: center;
+}
 .supportNote {
   margin: 8px 0 0;
   font-size: var(--text-xs);
@@ -161,7 +200,7 @@
   min-width: 0;
   padding: 6px 8px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-row);
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
@@ -170,7 +209,7 @@
 .statusError {
   flex-shrink: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   padding: 1px 6px;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
@@ -204,7 +243,7 @@
   align-items: baseline;
   gap: 10px;
   padding: 5px 8px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-row);
 }
 .row:hover { background: var(--bg-hover); }
 
@@ -247,7 +286,7 @@
   flex-shrink: 0;
   width: 30px;
   height: 17px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: var(--bg-subtle);
   position: relative;
@@ -261,7 +300,7 @@
   left: 1px;
   width: 13px;
   height: 13px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--bg);
   transition: transform 0.15s ease;
 }
@@ -275,7 +314,7 @@
   font-family: var(--font-mono);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   color: var(--text);
   outline: none;
 }
@@ -295,8 +334,11 @@
   }
   .header { min-height: 56px; padding: 8px 12px; }
   .body { padding: 12px; }
-  .reloadButton, .closeButton { min-height: 44px; }
+  .reloadButton, .closeButton { min-height: var(--control-touch); }
+  .closeButton { min-width: var(--control-touch); border-radius: var(--radius-control); }
   .sessionCode { display: none; }
+  .titleGroup { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .viewTab, .viewTabActive { min-height: var(--control-touch); }
   .supportGrid { grid-template-columns: 1fr; }
   .row { align-items: flex-start; flex-wrap: wrap; }
   .rowSource { margin-left: 0; max-width: 100%; }
@@ -304,24 +346,35 @@
 }
 
 :global(html[data-ui-style="trae"]) .overlay { background: var(--trae-overlay); backdrop-filter: blur(8px); }
-:global(html[data-ui-style="trae"]) .modal { border-color: var(--trae-hairline); border-radius: 20px; background: var(--trae-canvas); }
+:global(html[data-ui-style="trae"]) .modal { border-color: var(--trae-hairline); border-radius: var(--radius-dialog); background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .header { min-height: 58px; padding: 12px 20px; border-bottom-color: var(--trae-hairline); background: var(--trae-surface); }
 :global(html[data-ui-style="trae"]) .body { padding: 20px; }
 :global(html[data-ui-style="trae"]) .diag,
 :global(html[data-ui-style="trae"]) .supportItem {
   border-color: transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-control-prominent);
   background: var(--trae-surface-solid);
   box-shadow: var(--trae-card-shadow);
 }
 :global(html[data-ui-style="trae"]) .section { margin-bottom: 24px; }
 :global(html[data-ui-style="trae"]) .sectionTitle { letter-spacing: var(--tracking-label); text-transform: none; }
-:global(html[data-ui-style="trae"]) .row { min-height: 38px; border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .row { min-height: 38px; border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .reloadButton,
-:global(html[data-ui-style="trae"]) .flagInput { border-color: transparent; border-radius: 10px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .flagInput { border-color: transparent; border-radius: var(--radius-control); background: var(--trae-control); }
 
 @media (max-width: 560px) {
   :global(html[data-ui-style="trae"]) .modal { border: 0; border-radius: 0; }
   :global(html[data-ui-style="trae"]) .body { padding: 16px 12px 28px; }
   :global(html[data-ui-style="trae"]) .supportItem { min-height: 48px; }
+}
+
+@media (pointer: coarse) {
+  .viewTab,
+  .viewTabActive,
+  .reloadButton,
+  .closeButton,
+  .flagToggle {
+    min-width: var(--control-touch);
+    min-height: var(--control-touch);
+  }
 }

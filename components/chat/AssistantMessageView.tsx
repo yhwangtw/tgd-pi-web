@@ -26,6 +26,28 @@ export function isProviderAuthError(errorMessage?: string): boolean {
   return !!errorMessage && /(?:no api key|unauthori[sz]ed|authentication|credential|sign[ -]?in|log[ -]?in|openai-codex)/i.test(errorMessage);
 }
 
+export function presentProviderError(errorMessage: string | undefined, fallback: string): {
+  summary: string;
+  actionUrl: string | null;
+  details: string | null;
+} {
+  const raw = errorMessage?.trim();
+  if (!raw) return { summary: fallback, actionUrl: null, details: null };
+  const url = raw.match(/https?:\/\/[^\s<>]+/i)?.[0]?.replace(/[),.;]+$/, "") ?? null;
+  const withoutUrl = url ? raw.replace(url, "") : raw;
+  const summary = withoutUrl
+    .replace(/^\s*(?:error\s*)?\d{3}\s*[:\-]?\s*/i, "")
+    .replace(/\s*(?:manage|update)\s+(?:your\s+)?billing\s+(?:here\s*)?:?\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.:\-\s]+$/, "") || fallback;
+  return {
+    summary,
+    actionUrl: url,
+    details: url || summary !== raw ? raw : null,
+  };
+}
+
 function formatTime(ts?: number, locale: "en" | "zh" = "en"): string | null {
   if (!ts) return null;
   const d = new Date(ts);
@@ -100,6 +122,7 @@ export function AssistantMessageView({
 }) {
   const { locale, t } = useI18n();
   const time = showTimestamp ? formatTime(message.timestamp, locale) : null;
+  const errorPresentation = presentProviderError(message.errorMessage, t("chat.modelFailed"));
   const blocks = useMemo(() => message.content ?? [], [message.content]);
   const [copied, setCopied] = useState(false);
   const streamStartRef = useRef<number | null>(null);
@@ -330,14 +353,27 @@ export function AssistantMessageView({
             <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
           <div className={styles.errorBody}>
-            <span>{message.errorMessage || t("chat.modelFailed")}</span>
-            {isProviderAuthError(message.errorMessage) && (
-              onOpenModels ? (
+            <div className={styles.errorContent}>
+              <span className={styles.errorSummary}>{errorPresentation.summary}</span>
+              {errorPresentation.details && (
+                <details className={styles.errorDetails}>
+                  <summary>{t("chat.technicalDetails")}</summary>
+                  <div>{errorPresentation.details}</div>
+                </details>
+              )}
+            </div>
+            <div className={styles.errorActions}>
+              {errorPresentation.actionUrl && (
+                <a className={styles.reconnectButton} href={errorPresentation.actionUrl} target="_blank" rel="noreferrer">
+                  {t("chat.manageBilling")}
+                </a>
+              )}
+              {isProviderAuthError(message.errorMessage) && onOpenModels && (
                 <button type="button" className={styles.reconnectButton} onClick={onOpenModels}>
                   {t("chat.reconnectModel")}
                 </button>
-              ) : null
-            )}
+              )}
+            </div>
           </div>
         </div>
         )

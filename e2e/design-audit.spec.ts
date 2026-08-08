@@ -320,6 +320,127 @@ test("bundled typefaces and every readability preference render consistently", a
   }
 });
 
+test("XL mono Traditional Chinese reflows at phone, tablet, and desktop widths", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.addInitScript(() => {
+    localStorage.setItem("pi-ui-style", "trae");
+    localStorage.setItem("pi-skin", "trae");
+    localStorage.setItem("pi-font-size", "xlarge");
+    localStorage.setItem("pi-font-family", "mono");
+    localStorage.setItem("pi-locale", "zh");
+    localStorage.setItem("pi-density", "comfortable");
+  });
+
+  for (const viewport of [
+    { width: 320, height: 800 },
+    { width: 840, height: 889 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto(MAIN);
+    await expect(page.locator("textarea").first()).toBeVisible({ timeout: 20_000 });
+    if (viewport.width <= 700) {
+      await page.getByRole("button", { name: "對話", exact: true }).click();
+      await expect(page.locator(".sidebar-container")).toHaveClass(/sidebar-closed/);
+    }
+
+    const root = page.getByTestId("app-shell");
+    await auditControls(page, root, `high-risk/${viewport.width}/xl-mono-zh`, viewport.width <= 700);
+    await expectNoPageOverflow(page, `high-risk/${viewport.width}/xl-mono-zh`);
+  }
+});
+
+test("Original and TRAE share one semantic radius contract with distinct geometry", async ({ browser }) => {
+  const expected = {
+    original: {
+      inline: 3,
+      controlCompact: 4,
+      control: 6,
+      controlProminent: 8,
+      row: 6,
+      card: 8,
+      menu: 8,
+      panel: 12,
+      dialog: 16,
+      composer: 12,
+      message: 12,
+      messageTail: 4,
+      media: 8,
+    },
+    trae: {
+      inline: 5,
+      controlCompact: 7,
+      control: 10,
+      controlProminent: 14,
+      row: 10,
+      card: 14,
+      menu: 14,
+      panel: 18,
+      dialog: 22,
+      composer: 18,
+      message: 18,
+      messageTail: 7,
+      media: 14,
+    },
+  } as const;
+
+  for (const style of ["original", "trae"] as const) {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await openMain(page, style, 1440, 900);
+      const measured = await page.evaluate(() => {
+        const tokenNames = [
+          "inline",
+          "control-compact",
+          "control",
+          "control-prominent",
+          "row",
+          "card",
+          "menu",
+          "panel",
+          "dialog",
+          "composer",
+          "message",
+          "message-tail",
+          "media",
+        ] as const;
+        const values = Object.fromEntries(tokenNames.map((name) => {
+          const probe = document.createElement("div");
+          probe.style.cssText = `position:fixed;width:100px;height:100px;border-radius:var(--radius-${name})`;
+          document.body.appendChild(probe);
+          const radius = Number.parseFloat(getComputedStyle(probe).borderTopLeftRadius);
+          probe.remove();
+          return [name.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase()), radius];
+        }));
+        const radiusOf = (selector: string) => {
+          const element = document.querySelector(selector);
+          return element ? Number.parseFloat(getComputedStyle(element).borderTopLeftRadius) : -1;
+        };
+        return {
+          ...values,
+          railButton: radiusOf("[class*='railButton']"),
+          sessionCard: radiusOf("[role='option'][aria-selected='true']"),
+          composerSurface: radiusOf("[class*='inputWrapper']"),
+        };
+      });
+
+      expect(measured).toMatchObject(expected[style]);
+      expect(measured.railButton).toBe(expected[style].controlCompact);
+      expect(measured.sessionCard).toBe(expected[style].row);
+      expect(measured.composerSurface).toBe(expected[style].composer);
+
+      await page.getByRole("button", { name: "Token usage and cost report" }).last().click();
+      const analytics = page.getByRole("dialog", { name: "Session Analytics" });
+      await expect(analytics).toBeVisible();
+      expect(Number.parseFloat(await analytics.evaluate((element) => getComputedStyle(element).borderTopLeftRadius)))
+        .toBe(expected[style].dialog);
+    } finally {
+      await context.close().catch(() => {});
+    }
+  }
+});
+
 async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: boolean) {
   const viewport = mobile ? "mobile" : "desktop";
   const chat = page.getByTestId("top-bar").locator("..");

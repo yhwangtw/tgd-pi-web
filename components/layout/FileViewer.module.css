@@ -2,7 +2,7 @@
   flex-shrink: 0;
   padding: var(--space-0-5) var(--space-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: var(--bg-hover);
   color: var(--text-muted);
   font-size: var(--text-xs);

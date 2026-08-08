@@ -5,6 +5,7 @@ import type { ExtensionsReport, ExtensionFlagInfo } from "@/lib/extensions-info"
 import { showToast } from "@/hooks/useToast";
 import { useI18n } from "@/lib/i18n";
 import { ExtensionInventoryDetails } from "./ExtensionInventoryDetails";
+import { PackageCenter } from "./PackageCenter";
 import styles from "./ExtensionsConfig.module.css";
 
 interface Props {
@@ -28,6 +29,7 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [reloading, setReloading] = useState(false);
+  const [view, setView] = useState<"loaded" | "packages">("loaded");
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -97,6 +99,17 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
   }, [sessionId, reloading, load, t, onReload]);
 
   const hasErrors = report?.diagnostics.some((d) => d.type === "error");
+  const hasExtensionItems = !!report && (
+    report.providers.length > 0
+    || report.commands.length > 0
+    || report.tools.length > 0
+    || report.flags.length > 0
+    || report.shortcuts.length > 0
+    || report.events.length > 0
+    || report.renderers.length > 0
+    || report.resources.length > 0
+    || report.paths.length > 0
+  );
 
   return (
     <div className={styles.overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -108,22 +121,34 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
         aria-labelledby="extensions-config-title"
       >
         <div className={styles.header}>
-          <span id="extensions-config-title" className={styles.title}>{t("extensions.title")}</span>
+          <div className={styles.titleGroup}>
+            <span id="extensions-config-title" className={styles.title}>{t("extensions.title")}</span>
+            <div className={styles.viewTabs} role="tablist" aria-label={t("extensions.title")}>
+              <button type="button" role="tab" aria-selected={view === "loaded"}
+                className={view === "loaded" ? styles.viewTabActive : styles.viewTab}
+                onClick={() => setView("loaded")}>{t("extensions.loaded")}</button>
+              <button type="button" role="tab" aria-selected={view === "packages"}
+                className={view === "packages" ? styles.viewTabActive : styles.viewTab}
+                onClick={() => setView("packages")}>{t("packages.title")}</button>
+            </div>
+          </div>
           {sessionId && <code className={styles.sessionCode}>{sessionId.slice(0, 8)}</code>}
           <div className={styles.headerActions}>
-            <button className={styles.reloadButton} onClick={() => void reload()} disabled={reloading || !sessionId}>
+            {view === "loaded" && <button className={styles.reloadButton} onClick={() => void reload()} disabled={reloading || !sessionId}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <polyline points="23 4 23 10 17 10" />
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
               </svg>
               {reloading ? t("extensions.reloading") : t("extensions.reload")}
-            </button>
+            </button>}
             <button onClick={onClose} className={styles.closeButton} aria-label={t("common.close")}>×</button>
           </div>
         </div>
 
         <div className={styles.body}>
-          {!sessionId ? (
+          {view === "packages" ? (
+            <PackageCenter sessionId={sessionId} />
+          ) : !sessionId ? (
             <div className={styles.stateText}>{t("extensions.noSession")}</div>
           ) : state === "loading" ? (
             <div className={styles.stateText}>Loading…</div>
@@ -146,9 +171,10 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
 
               <ExtensionInventoryDetails report={report} />
 
-              <div className={styles.section}>
+              {!hasExtensionItems && <div className={styles.inventoryEmpty}>{t("extensions.none")}</div>}
+
+              {report.commands.length > 0 && <div className={styles.section}>
                 <div className={styles.sectionTitle}>{t("extensions.commands")} ({report.commands.length})</div>
-                {report.commands.length === 0 && <div className={styles.sectionEmpty}>{t("extensions.none")}</div>}
                 {report.commands.map((c) => (
                   <div key={c.invocationName} className={styles.row}>
                     <span className={styles.rowName}>/{c.invocationName}</span>
@@ -156,11 +182,10 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
                     {c.source && <span className={styles.rowSource} title={c.source}>{tail(c.source)}</span>}
                   </div>
                 ))}
-              </div>
+              </div>}
 
-              <div className={styles.section}>
+              {report.tools.length > 0 && <div className={styles.section}>
                 <div className={styles.sectionTitle}>{t("extensions.tools")} ({report.tools.length})</div>
-                {report.tools.length === 0 && <div className={styles.sectionEmpty}>{t("extensions.none")}</div>}
                 {report.tools.map((tool) => (
                   <div key={tool.name} className={styles.row}>
                     <span className={styles.rowName}>{tool.name}</span>
@@ -168,11 +193,10 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
                     {tool.source && <span className={styles.rowSource} title={tool.source}>{tail(tool.source)}</span>}
                   </div>
                 ))}
-              </div>
+              </div>}
 
-              <div className={styles.section}>
+              {report.flags.length > 0 && <div className={styles.section}>
                 <div className={styles.sectionTitle}>{t("extensions.flags")} ({report.flags.length})</div>
-                {report.flags.length === 0 && <div className={styles.sectionEmpty}>{t("extensions.none")}</div>}
                 {report.flags.map((f) => (
                   <div key={f.name} className={styles.row}>
                     {f.type === "boolean" ? (
@@ -199,15 +223,14 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
                     {f.source && <span className={styles.rowSource} title={f.source}>{tail(f.source)}</span>}
                   </div>
                 ))}
-              </div>
+              </div>}
 
-              <div className={styles.section}>
+              {report.paths.length > 0 && <div className={styles.section}>
                 <div className={styles.sectionTitle}>{t("extensions.loadedFrom")} ({report.paths.length})</div>
-                {report.paths.length === 0 && <div className={styles.sectionEmpty}>{t("extensions.none")}</div>}
                 {report.paths.map((p) => (
                   <div key={p} className={styles.pathRow}>{p}</div>
                 ))}
-              </div>
+              </div>}
             </>
           )}
         </div>

@@ -39,7 +39,7 @@
   margin: 8px 10px 2px;
   padding: 8px 10px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   background: var(--trae-control);
 }
 :global(html[data-ui-style="trae"]) .tree { padding: 6px 6px 14px; }

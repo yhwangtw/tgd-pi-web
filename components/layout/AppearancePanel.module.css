@@ -8,7 +8,7 @@
   padding: var(--space-3);
   overflow-y: auto;
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-panel);
   box-shadow: var(--color-shadow-modal);
   animation: appearance-in var(--motion-normal) var(--ease-standard);
 }
@@ -52,7 +52,7 @@
   flex: 0 0 auto;
   place-items: center;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -65,7 +65,7 @@
   gap: var(--space-1);
   padding: var(--radius-xs);
   margin-bottom: var(--space-2-5);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-row);
   background: var(--bg-subtle);
 }
 
@@ -79,7 +79,7 @@
   padding: var(--space-1) 0;
   font-size: var(--text-sm);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -110,7 +110,7 @@
   gap: var(--radius-xs);
   padding: var(--radius-xs);
   margin-bottom: var(--space-2-5);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-row);
   background: var(--bg-subtle);
 }
 
@@ -120,7 +120,7 @@
   gap: var(--radius-xs);
   padding: var(--radius-xs);
   margin-bottom: var(--space-2-5);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-row);
   background: var(--bg-subtle);
 }
 
@@ -130,7 +130,7 @@
   gap: var(--radius-xs);
   padding: var(--radius-xs);
   margin-bottom: var(--space-2-5);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-row);
   background: var(--bg-subtle);
 }
 
@@ -143,7 +143,7 @@
   min-height: var(--control-md);
   padding: var(--space-1-5) var(--space-0-5);
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-muted);
   font-size: var(--text-2xs);
@@ -175,7 +175,7 @@
   min-height: var(--control-lg);
   padding: var(--space-1-5) var(--space-2);
   border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-row);
   background: transparent;
   color: var(--text-muted);
   font-size: var(--text-sm);
@@ -196,7 +196,7 @@
 .swatches {
   display: inline-flex;
   flex-shrink: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   overflow: hidden;
   border: 1px solid var(--border);
 }
@@ -227,7 +227,7 @@
   margin-top: var(--space-2);
   padding: var(--space-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-row);
   background: transparent;
   color: var(--text-muted);
   font-size: var(--text-sm);
@@ -248,7 +248,7 @@
   margin-top: var(--space-2);
   padding: var(--space-1-5) var(--space-2);
   border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-row);
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
@@ -292,7 +292,7 @@
 
 :global(html[data-ui-style="trae"]) .panel {
   border-color: var(--trae-hairline);
-  border-radius: 18px;
+  border-radius: var(--radius-panel);
   background: var(--glass-bg);
   box-shadow: var(--color-shadow-modal);
 }
@@ -301,13 +301,13 @@
 :global(html[data-ui-style="trae"]) .fontSizeRow,
 :global(html[data-ui-style="trae"]) .messageLayoutRow {
   padding: 4px;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   background: var(--trae-control);
 }
 :global(html[data-ui-style="trae"]) .themeBtn,
 :global(html[data-ui-style="trae"]) .fontSizeBtn {
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   background: transparent;
 }
 :global(html[data-ui-style="trae"]) .themeBtnActive,
@@ -316,14 +316,14 @@
   box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 9%, transparent);
 }
 :global(html[data-ui-style="trae"]) .skinList { gap: 5px; }
-:global(html[data-ui-style="trae"]) .skinRow { min-height: 42px; border: 0; border-radius: 11px; }
+:global(html[data-ui-style="trae"]) .skinRow { min-height: 42px; border: 0; border-radius: var(--radius-control-prominent); }
 :global(html[data-ui-style="trae"]) .skinRowActive { background: var(--bg-selected); }
 :global(html[data-ui-style="trae"]) .resetRow,
-:global(html[data-ui-style="trae"]) .logoutRow { border-color: transparent; border-radius: 11px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .logoutRow { border-color: transparent; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
 
 @media (max-width: 700px) {
   :global(html[data-ui-style="trae"]) .panel {
-    border-radius: 22px 22px 0 0;
+    border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
     box-shadow: 0 -16px 50px color-mix(in srgb, var(--text) 14%, transparent);
   }
 }

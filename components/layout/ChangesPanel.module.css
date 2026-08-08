@@ -28,7 +28,7 @@
 .count {
   flex-shrink: 0;
   padding: 0 6px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   background: var(--color-accent-bg);
   color: var(--accent);
   font-size: var(--text-xs);
@@ -45,7 +45,7 @@
   padding: 0;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   color: var(--text-dim);
   cursor: pointer;
 }
@@ -78,7 +78,7 @@
   padding: 5px 8px;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-row);
   cursor: pointer;
   text-align: left;
   font-size: var(--text-sm);
@@ -207,7 +207,7 @@
   flex-shrink: 0;
   font-size: var(--text-xs);
   padding: 3px 9px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-muted);
@@ -232,7 +232,7 @@
   width: 20px;
   height: 20px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: none;
   color: var(--text-dim);
   cursor: pointer;
@@ -253,7 +253,7 @@
   padding: 6px 8px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   color: var(--text);
   font-size: var(--text-sm);
   font-family: inherit;
@@ -263,7 +263,7 @@
 .commitBtn {
   height: 30px;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--accent);
   color: var(--accent-fg);
   font-size: var(--text-sm);
@@ -279,15 +279,15 @@
   margin: 8px 8px 2px;
   padding: 8px 10px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--trae-surface);
 }
-:global(html[data-ui-style="trae"]) .count { border-radius: 999px; }
+:global(html[data-ui-style="trae"]) .count { border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .list { gap: 3px; padding: 6px 8px; }
-:global(html[data-ui-style="trae"]) .item { min-height: 36px; border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .item { min-height: 36px; border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .snapSection,
 :global(html[data-ui-style="trae"]) .commitBox { border-top-color: var(--trae-hairline); }
-:global(html[data-ui-style="trae"]) .snapItem { margin: 0 8px 4px; border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .snapItem { margin: 0 8px 4px; border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .snapRestore,
-:global(html[data-ui-style="trae"]) .commitInput { border-color: transparent; border-radius: 10px; background: var(--trae-control); }
-:global(html[data-ui-style="trae"]) .commitBtn { border-radius: 10px; color: var(--accent-fg); }
+:global(html[data-ui-style="trae"]) .commitInput { border-color: transparent; border-radius: var(--radius-control); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .commitBtn { border-radius: var(--radius-control); color: var(--accent-fg); }

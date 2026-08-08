@@ -96,7 +96,7 @@ export function ProviderIcon({ id, size }: { id: string; size: number }) {
           width: size,
           height: size,
           border: "1px solid var(--border)",
-          borderRadius: "var(--radius-sm)",
+          borderRadius: "var(--radius-control-compact)",
           color: "var(--text-dim)",
           display: "inline-flex",
           alignItems: "center",

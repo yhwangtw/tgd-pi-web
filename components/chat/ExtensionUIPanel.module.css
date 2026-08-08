@@ -17,7 +17,7 @@
   max-height: min(64dvh, 560px);
   overflow: hidden;
   border: 1px solid var(--color-accent-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-card);
   background: var(--bg-elev-1);
   box-shadow: var(--color-shadow-dropdown);
 }
@@ -54,7 +54,7 @@
   width: 9px;
   height: 9px;
   flex: 0 0 auto;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--accent);
   box-shadow: 0 0 0 4px var(--color-accent-bg);
 }
@@ -92,7 +92,7 @@
   width: 24px;
   height: 24px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -126,7 +126,7 @@
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
   color: var(--text);
   cursor: pointer;
@@ -146,12 +146,12 @@
   flex: 0 0 auto;
   margin-top: 1px;
   border: 1.5px solid var(--text-dim);
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
 }
 .choiceMark::after {
   position: absolute;
   inset: 3px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--accent);
   content: "";
   opacity: 0;
@@ -170,7 +170,7 @@
   width: calc(100% - 28px);
   margin: 12px 14px 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   outline: none;
   background: var(--bg-panel);
   color: var(--text);
@@ -225,7 +225,7 @@
 .secondaryButton {
   min-height: 32px;
   padding: 0 13px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   cursor: pointer;
@@ -254,14 +254,14 @@
   align-items: center;
   gap: 6px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
 
 .statusChip { padding: 4px 8px; }
-.statusDot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.statusDot { width: 6px; height: 6px; border-radius: var(--radius-circle); background: var(--accent); }
 .statusKey,
 .widgetKey { color: var(--text-dim); }
 .widget { align-items: flex-start; padding: 6px 8px; }
@@ -302,12 +302,22 @@
   .outer { padding: 0 8px 4px; }
   .choices { grid-template-columns: minmax(0, 1fr); }
   .cardHeader { min-height: 56px; padding-inline: 11px; }
+  .closeButton {
+    width: var(--control-touch);
+    height: var(--control-touch);
+    border-radius: var(--radius-control);
+  }
   .questionLegend { flex-direction: column; gap: 2px; }
   .questionGroup { padding: 11px 12px; }
   .actions { padding: 9px 12px; }
   .questionActions .primaryButton { width: 100%; }
+  .textInput,
+  .editor {
+    min-height: var(--control-touch);
+    font-size: 16px;
+  }
   .primaryButton,
-  .secondaryButton { min-height: 36px; }
+  .secondaryButton { min-height: var(--control-touch); }
 }
 
 :global(html[data-ui-style="trae"]) .outer {
@@ -316,7 +326,7 @@
 
 :global(html[data-ui-style="trae"]) .card {
   border-color: color-mix(in srgb, var(--text) 10%, transparent);
-  border-radius: 22px;
+  border-radius: var(--radius-card);
   box-shadow: var(--color-shadow-raised);
 }
 
@@ -330,7 +340,7 @@
 :global(html[data-ui-style="trae"]) .choice,
 :global(html[data-ui-style="trae"]) .textInput,
 :global(html[data-ui-style="trae"]) .editor {
-  border-radius: 14px;
+  border-radius: var(--radius-control-prominent);
   background: var(--bg-panel);
 }
 
@@ -347,7 +357,7 @@
 :global(html[data-ui-style="trae"]) .primaryButton,
 :global(html[data-ui-style="trae"]) .secondaryButton {
   min-height: 40px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
 }
 
 @media (max-width: 700px) {
@@ -357,7 +367,7 @@
 
   :global(html[data-ui-style="trae"]) .card {
     max-height: min(70dvh, 560px);
-    border-radius: 20px;
+    border-radius: var(--radius-card);
   }
 
   :global(html[data-ui-style="trae"]) .choices {
@@ -367,5 +377,11 @@
   :global(html[data-ui-style="trae"]) .choice {
     min-height: 60px;
     padding: 10px 12px;
+  }
+
+  :global(html[data-ui-style="trae"]) .closeButton,
+  :global(html[data-ui-style="trae"]) .primaryButton,
+  :global(html[data-ui-style="trae"]) .secondaryButton {
+    min-height: var(--control-touch);
   }
 }

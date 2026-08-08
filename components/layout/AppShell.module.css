@@ -55,7 +55,7 @@
   padding: 0;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   color: var(--text-dim);
   cursor: pointer;
   transition: color 0.12s, background 0.12s;
@@ -100,10 +100,10 @@
 .topBar {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   flex-shrink: 0;
-  height: 46px;
-  padding: 0 8px 0 14px;
+  height: 50px;
+  padding: 0 12px 0 16px;
   background: var(--glass-bg);
   box-shadow: 0 12px 28px -30px color-mix(in srgb, var(--text) 42%, transparent);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
@@ -116,16 +116,18 @@
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  padding: 0 12px 0 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px 0 2px;
 }
 
 .workspaceIdentity {
   display: flex;
-  min-height: 28px;
+  min-height: 34px;
   min-width: 0;
+  max-width: min(52%, 440px);
+  flex: 0 1 auto;
   align-items: center;
   gap: 6px;
   padding: 0;
@@ -142,7 +144,7 @@
 
 .workspaceIdentity:hover .workspaceRepository { color: var(--text); }
 .workspaceIdentity:focus-visible {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   outline: 2px solid var(--color-accent-border-focus);
   outline-offset: 2px;
 }
@@ -155,14 +157,14 @@
 }
 
 .workspaceBranch {
-  max-width: 46%;
+  max-width: 200px;
   flex: 0 1 auto;
-  padding: 2px 5px;
+  padding: 2px 6px;
   overflow: hidden;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   background: var(--color-accent-bg);
   color: var(--accent);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -173,13 +175,19 @@
   color: var(--text-dim);
 }
 
+.detachedLabel {
+  color: var(--text-dim);
+  font-weight: var(--weight-medium);
+}
+
 .chatTitle {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--text);
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
-  line-height: var(--leading-compact);
+  line-height: var(--leading-tight);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -188,12 +196,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   background: none;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   cursor: pointer;
   flex-shrink: 0;
@@ -214,7 +222,7 @@
   padding: 0 8px 0 10px;
   background: var(--bg-hover);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   color: var(--text-dim);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -248,7 +256,7 @@
   padding: 0 5px;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-inline);
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -281,14 +289,14 @@
 
 .sessionMenuButton {
   display: inline-flex;
-  height: 30px;
+  height: 34px;
   align-items: center;
-  gap: 6px;
-  padding: 0 10px;
+  gap: 8px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   cursor: pointer;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
 }
 .sessionMenuButton:hover { background: var(--bg-hover); color: var(--text); }
 
@@ -301,7 +309,7 @@
   gap: 2px;
   padding: 5px;
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-menu);
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
   backdrop-filter: blur(18px) saturate(1.4);
@@ -317,7 +325,7 @@
   gap: 2px;
   padding: 6px 10px;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-row);
   background: transparent;
   color: var(--text);
   cursor: pointer;
@@ -345,7 +353,7 @@
   padding: 0 10px;
   background: none;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   flex-shrink: 0;
   font-size: var(--text-xs);
   white-space: nowrap;
@@ -372,7 +380,7 @@
   justify-content: center;
   width: 18px;
   height: 18px;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   background: transparent;
   flex-shrink: 0;
 }
@@ -390,11 +398,13 @@
      inside the top bar the backdrop-filter stacking context painted it under
      the tGD pipeline bar, and .chatActions' overflow-x clipped it. */
   position: fixed;
+  box-sizing: border-box;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-menu);
   box-shadow: var(--color-shadow-dropdown);
-  min-width: 200px;
+  width: min(248px, calc(100vw - 16px));
+  min-width: 0;
   padding: 4px;
   z-index: 600;
   display: flex;
@@ -410,7 +420,7 @@
   padding: 8px 10px;
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-row);
   text-align: left;
   cursor: pointer;
   color: var(--text);
@@ -439,7 +449,7 @@
   height: 30px;
   padding: 0 10px;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   cursor: pointer;
   font-size: var(--text-xs);
   white-space: nowrap;
@@ -469,11 +479,11 @@
   align-items: center;
   flex: 0 0 auto;
   gap: 8px;
-  height: 30px;
-  margin-left: 2px;
-  padding: 0 9px;
+  height: 34px;
+  margin-left: 0;
+  padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: transparent;
   font-size: var(--text-xs);
   color: var(--text-muted);
@@ -530,7 +540,7 @@
   z-index: 620;
   overflow: hidden;
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-menu);
   background: var(--bg-elev-1);
   box-shadow: var(--color-shadow-popup);
 }
@@ -561,7 +571,7 @@
   flex: 0 0 auto;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -574,13 +584,13 @@
 
 .systemPromptContent {
   max-height: min(520px, calc(100dvh - 120px));
-  overflow-y: auto;
-  padding: 14px 16px 18px;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-  white-space: pre-wrap;
-  font-family: var(--font-mono);
+  overflow: hidden;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  line-height: normal;
+  white-space: normal;
+  font-family: inherit;
 }
 
 .systemPromptPlaceholder {
@@ -630,7 +640,7 @@
 .placeholderIconBg {
   width: 56px;
   height: 56px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control-prominent);
   background: var(--bg-hover);
   display: flex;
   align-items: center;
@@ -673,7 +683,7 @@
 .welcomeIconBg {
   width: 72px;
   height: 72px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   background: linear-gradient(135deg, var(--color-accent-bg-strong), var(--color-accent-bg-subtle));
   display: flex;
   align-items: center;
@@ -723,14 +733,14 @@
   gap: 10px;
   padding: 10px 12px;
   background: var(--bg-hover);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   border: 1px solid var(--border);
 }
 
 .welcomeStepNumber {
   width: 22px;
   height: 22px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-compact);
   background: var(--color-accent-bg-strong);
   color: var(--accent);
   display: flex;
@@ -869,34 +879,44 @@
     height: 44px;
     flex: 0 0 44px;
     border: 0;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--text-muted);
   }
 
+  .filePanelToggle {
+    width: var(--control-touch);
+    height: var(--control-touch);
+    flex: 0 0 var(--control-touch);
+  }
+
   .chatTitle {
-    display: block;
-    max-width: none;
-    font-size: var(--text-sm);
-    color: var(--text);
-    text-align: left;
+    display: none;
   }
 
   .sessionIdentity {
     flex: 1 1 auto;
-    align-items: flex-start;
-    gap: 3px;
+    flex-direction: row;
+    align-items: center;
+    gap: 0;
     padding: 0 2px;
   }
 
   .workspaceIdentity {
     width: 100%;
+    max-width: 100%;
     min-height: var(--control-touch);
     font-size: var(--text-xs);
   }
 
+  .workspaceRepository {
+    max-width: 58%;
+    flex: 1 1 58%;
+  }
+
   .workspaceBranch {
-    max-width: 50%;
+    max-width: 42%;
+    flex: 0 1 42%;
     font-size: var(--text-2xs);
   }
 
@@ -925,7 +945,7 @@
     padding: 6px;
     overflow: visible;
     border: 1px solid var(--glass-border);
-    border-radius: 12px;
+    border-radius: var(--radius-control-prominent);
     background: var(--glass-bg);
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
     backdrop-filter: blur(18px) saturate(1.4);
@@ -968,7 +988,12 @@
   }
 
   .systemPromptContent {
-    max-height: calc(100dvh - var(--safe-area-top) - var(--mobile-nav-height) - 132px);
+    /* This panel is portalled to <body>, so it cannot inherit the phone-nav
+       variable declared on .container. Fallbacks keep the calculation valid
+       and prevent a long system prompt from expanding to document height. */
+    max-height: calc(
+      100dvh - var(--safe-area-top, 0px) - var(--mobile-nav-height, 54px) - 132px
+    );
   }
 
   .parallelContainer {
@@ -995,6 +1020,11 @@
   .rightPanelTabBar {
     height: 52px;
     padding: 0 8px 0 4px;
+  }
+
+  .mobileFilePanelClose {
+    width: var(--control-touch);
+    height: var(--control-touch);
   }
 
   .rightPanelContent {
@@ -1027,7 +1057,7 @@
     gap: 2px;
     padding: 3px 2px;
     border: 0;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--text-dim);
     font-size: var(--text-2xs);
@@ -1069,7 +1099,7 @@
     padding: 6px 12px 14px;
     overflow-y: auto;
     border: 1px solid var(--glass-border);
-    border-radius: 14px;
+    border-radius: var(--radius-sheet);
     background: var(--glass-bg);
     -webkit-backdrop-filter: blur(22px) saturate(1.5);
     backdrop-filter: blur(22px) saturate(1.5);
@@ -1080,7 +1110,7 @@
     width: 34px;
     height: 4px;
     margin: 2px auto 7px;
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-pill);
     background: var(--border);
   }
 
@@ -1097,7 +1127,7 @@
     width: 40px;
     height: 40px;
     border: 0;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sheet);
     background: transparent;
     color: var(--text-muted);
     font-size: var(--text-2xl);
@@ -1133,7 +1163,7 @@
     gap: 6px;
     padding: 8px 4px;
     border: 1px solid transparent;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-control);
     background: var(--bg-elev-1);
     color: var(--text-muted);
     font-size: var(--text-xs);
@@ -1223,7 +1253,7 @@
   padding: 0;
   background: none;
   border: none;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   font-size: var(--text-sm);
   transition: background 0.12s, color 0.12s;
@@ -1255,7 +1285,7 @@
   -webkit-backdrop-filter: blur(20px) saturate(1.5);
   backdrop-filter: blur(20px) saturate(1.5);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-dialog);
   box-shadow: var(--color-shadow-modal);
 }
 .shortcutsTitle {
@@ -1279,7 +1309,7 @@
   padding: 0 6px;
   background: var(--bg-elev-2, var(--bg-hover));
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-control-compact);
   color: var(--text);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -1304,7 +1334,7 @@
 :global(html[data-ui-style="trae"]) .railButton {
   width: var(--control-lg);
   height: var(--control-lg);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control-compact);
 }
 
 :global(html[data-ui-style="trae"]) .railButtonActive {
@@ -1320,14 +1350,15 @@
 :global(html[data-ui-style="trae"]) .centerPanel {
   margin: 8px 8px 8px 0;
   overflow: hidden;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control-prominent);
   background: var(--bg);
   box-shadow: var(--color-shadow-card);
 }
 
 :global(html[data-ui-style="trae"]) .topBar {
-  height: 48px;
-  padding: 0 12px;
+  height: 52px;
+  gap: 8px;
+  padding: 0 16px;
   border: 0;
   background: color-mix(in srgb, var(--bg) 96%, transparent);
   box-shadow: none;
@@ -1338,18 +1369,18 @@
 :global(html[data-ui-style="trae"]) .topBarButton,
 :global(html[data-ui-style="trae"]) .commandPaletteTrigger,
 :global(html[data-ui-style="trae"]) .sessionMenuButton {
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
 }
 
 :global(html[data-ui-style="trae"]) .workspaceBranch {
-  padding: 4px 8px;
+  padding: 4px 10px;
 }
 
 :global(html[data-ui-style="trae"]) .rightPanelContainer {
   margin: 8px 8px 8px 0;
   overflow: hidden;
   border: 0;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-card);
   background: var(--bg-elev-1);
   box-shadow: var(--color-shadow-card);
 }
@@ -1363,8 +1394,19 @@
 }
 
 @media (min-width: 701px) and (max-width: 1024px) {
+  .sidebarOverlay {
+    left: calc(var(--safe-area-left) + 44px);
+  }
+
+  :global(html[data-ui-style="trae"]) .sidebarOverlay {
+    left: calc(var(--safe-area-left) + 50px);
+  }
+
   :global(html[data-ui-style="trae"]) .sidebarContainer {
     left: calc(var(--safe-area-left) + 50px);
+    overflow: hidden;
+    background: var(--bg-panel);
+    box-shadow: var(--color-shadow-popup);
   }
 
   :global(html[data-ui-style="trae"]) .rightPanelContainer {
@@ -1399,7 +1441,7 @@
     width: var(--control-touch);
     height: var(--control-touch);
     flex-basis: var(--control-touch);
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-pill);
     background: var(--bg-elev-1);
     box-shadow: var(--color-shadow-card);
   }
@@ -1415,7 +1457,7 @@
     justify-content: center;
     gap: 0;
     padding: 3px;
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-pill);
     background: var(--bg-panel);
     color: var(--text);
     font-family: var(--font-ui);
@@ -1424,17 +1466,20 @@
 
   :global(html[data-ui-style="trae"]) .workspaceRepository,
   :global(html[data-ui-style="trae"]) .workspaceBranch {
-    max-width: 34vw;
-    padding: 8px 11px;
-    border-radius: var(--radius-full);
+    padding: 8px 9px;
+    border-radius: var(--radius-pill);
     text-align: center;
   }
 
   :global(html[data-ui-style="trae"]) .workspaceRepository {
+    max-width: 58%;
+    flex-basis: 58%;
     font-weight: var(--weight-semibold);
   }
 
   :global(html[data-ui-style="trae"]) .workspaceBranch {
+    max-width: 42%;
+    flex-basis: 42%;
     background: var(--bg-elev-1);
     color: var(--text);
     box-shadow: var(--color-shadow-card);
@@ -1464,7 +1509,7 @@
   }
 
   :global(html[data-ui-style="trae"]) .mobileNavButton {
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
   }
 
   :global(html[data-ui-style="trae"]) .mobileNavButtonActive {
@@ -1478,13 +1523,13 @@
     right: calc(var(--safe-area-right) + 12px);
     bottom: calc(var(--safe-area-bottom) + var(--mobile-nav-height) + 10px);
     padding: 8px 14px 16px;
-    border-radius: 24px;
+    border-radius: var(--radius-sheet);
   }
 
   :global(html[data-ui-style="trae"]) .chatActionsMobileOpen {
     top: calc(var(--safe-area-top) + 70px);
     right: calc(var(--safe-area-right) + 12px);
-    border-radius: 20px;
+    border-radius: var(--radius-control-prominent);
   }
 
   :global(html[data-ui-style="trae"]) .rightPanelContainer {
@@ -1492,4 +1537,8 @@
     border-radius: 0;
     box-shadow: none;
   }
+}
+
+@media (max-width: 380px) {
+  .detachedLabel { display: none; }
 }

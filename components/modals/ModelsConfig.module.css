@@ -20,7 +20,7 @@
   min-width: 0;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-dialog);
   display: flex;
   flex-direction: column;
   box-shadow: var(--color-shadow-modal);
@@ -110,9 +110,36 @@
   align-items: center;
   gap: 7px;
   padding: 5px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   cursor: pointer;
   background: none;
+}
+
+.healthRow {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius-control-compact);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.healthIcon {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-circle);
+  color: var(--color-success);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
 }
 
 .treeItemSelected {
@@ -137,7 +164,7 @@
   align-items: center;
   gap: 6px;
   padding: 7px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   cursor: pointer;
   background: none;
 }
@@ -171,7 +198,7 @@
   align-items: center;
   gap: 6px;
   padding: 5px 8px 5px 26px;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   cursor: pointer;
   background: none;
 }
@@ -199,7 +226,7 @@
   padding: 1px 4px;
   background: var(--color-project-bg);
   color: var(--color-project-text);
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   flex-shrink: 0;
 }
 
@@ -208,7 +235,7 @@
   align-items: center;
   gap: 4px;
   padding: 4px 8px 4px 26px;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   cursor: pointer;
   color: var(--text-dim);
 }
@@ -231,7 +258,7 @@
   padding: 6px 0;
   background: none;
   border: 1px dashed var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   color: var(--text-muted);
   cursor: pointer;
   font-size: var(--text-sm);
@@ -251,11 +278,21 @@
 .emptyState {
   height: 100%;
   display: flex;
+  min-height: 220px;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 7px;
+  padding: 24px;
   color: var(--text-dim);
   font-size: var(--text-md);
+  text-align: center;
 }
+.emptyState svg { opacity: 0.72; }
+.emptyState strong { color: var(--text); font-size: var(--text-base); }
+.emptyState span { max-width: 320px; line-height: var(--leading-copy); }
+.emptyState button { min-height: var(--control-md); margin-top: 6px; padding: 0 13px; border: 1px solid var(--color-accent-border); border-radius: var(--radius-control); background: var(--color-accent-bg); color: var(--accent); cursor: pointer; font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.emptyState button:hover { background: var(--color-accent-bg-strong); }
 
 /* ── Detail Sections (ProviderDetail / ModelDetail) ──────────────────────── */
 
@@ -275,7 +312,7 @@
   padding: 3px 8px;
   background: none;
   border: 1px solid var(--color-error-border);
-  border-radius: 4px;
+  border-radius: var(--radius-control-compact);
   color: var(--color-error);
   cursor: pointer;
   font-size: var(--text-xs);
@@ -286,8 +323,8 @@
   padding: 3px 10px;
   background: var(--accent);
   border: none;
-  border-radius: 4px;
-  color: var(--color-white);
+  border-radius: var(--radius-control-compact);
+  color: var(--accent-fg);
   cursor: pointer;
   font-size: var(--text-xs);
   align-self: flex-start;
@@ -315,7 +352,7 @@
   max-width: 260px;
   height: 28px;
   padding: 0 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-control-compact);
   color: var(--text);
   font-size: var(--text-xs);
   display: inline-flex;
@@ -346,7 +383,7 @@
   padding: 0 8px;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-control-compact);
   color: var(--text-muted);
   cursor: pointer;
   font-size: var(--text-xs);
@@ -365,7 +402,7 @@
 .testButtonSuccess {
   background: var(--color-success);
   border-color: var(--color-success);
-  color: var(--color-white);
+  color: var(--accent-fg);
 }
 
 .removeButton {
@@ -373,7 +410,7 @@
   padding: 0 8px;
   background: none;
   border: 1px solid var(--color-error-border);
-  border-radius: 4px;
+  border-radius: var(--radius-control-compact);
   color: var(--color-error);
   cursor: pointer;
   font-size: var(--text-xs);
@@ -415,7 +452,7 @@
   padding: 2px 7px;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-control-compact);
   color: var(--text-dim);
   cursor: pointer;
 }
@@ -431,7 +468,7 @@
   align-items: center;
   gap: 8px;
   padding: 5px 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: transparent;
   border: 1px solid transparent;
 }
@@ -447,7 +484,7 @@
 .levelDot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   flex-shrink: 0;
 }
 
@@ -468,7 +505,7 @@
 
 .thinkingBtnGroup {
   display: flex;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   border: 1px solid var(--border);
   overflow: hidden;
   flex-shrink: 0;
@@ -488,7 +525,7 @@
 
 .thinkingBtnActive {
   background: var(--accent);
-  color: var(--color-white);
+  color: var(--accent-fg);
   font-weight: var(--weight-semibold);
 }
 
@@ -509,7 +546,7 @@
 
 .customInputGroup {
   display: flex;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   overflow: hidden;
   transition: border-color 0.1s;
 }
@@ -564,7 +601,7 @@
   padding: 6px 14px;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   cursor: pointer;
   font-size: var(--text-md);
@@ -575,7 +612,7 @@
   padding: 6px 16px;
   min-width: 92px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
   display: inline-flex;
@@ -587,7 +624,7 @@
 
 .saveButtonReady {
   background: var(--accent);
-  color: var(--color-white);
+  color: var(--accent-fg);
   cursor: pointer;
 }
 
@@ -602,6 +639,13 @@
   color: var(--color-white);
   cursor: default;
   animation: saved-pop 0.45s ease;
+}
+
+.saveButton:disabled:not(.saveButtonSaved) {
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .saveCheckIcon {
@@ -628,6 +672,15 @@
 
   .header {
     padding: 10px 12px;
+  }
+
+  .closeButton {
+    display: grid;
+    width: var(--control-touch);
+    height: var(--control-touch);
+    padding: 0;
+    place-items: center;
+    border-radius: var(--radius-control);
   }
 
   .configPath {
@@ -678,7 +731,7 @@
 :global(html[data-ui-style="trae"]) .overlay { background: var(--trae-overlay); backdrop-filter: blur(8px); }
 :global(html[data-ui-style="trae"]) .modal {
   border-color: var(--trae-hairline);
-  border-radius: 20px;
+  border-radius: var(--radius-dialog);
   background: var(--trae-canvas);
 }
 :global(html[data-ui-style="trae"]) .header,
@@ -688,24 +741,24 @@
 :global(html[data-ui-style="trae"]) .sidebarScroll { padding: 10px 8px; }
 :global(html[data-ui-style="trae"]) .treeItem,
 :global(html[data-ui-style="trae"]) .providerRow,
-:global(html[data-ui-style="trae"]) .modelRow { min-height: 36px; border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .modelRow { min-height: 36px; border-radius: var(--radius-row); }
 :global(html[data-ui-style="trae"]) .treeItemSelected,
 :global(html[data-ui-style="trae"]) .providerRowSelected,
 :global(html[data-ui-style="trae"]) .modelRowSelected { background: var(--bg-selected); }
 :global(html[data-ui-style="trae"]) .divider,
 :global(html[data-ui-style="trae"]) .addProviderWrapper { border-color: var(--trae-hairline); }
-:global(html[data-ui-style="trae"]) .addProviderButton { min-height: 36px; border-color: transparent; border-radius: 10px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .addProviderButton { min-height: 36px; border-color: transparent; border-radius: var(--radius-control); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .rightPanel { padding: 24px; }
 :global(html[data-ui-style="trae"]) .testButton,
 :global(html[data-ui-style="trae"]) .deleteButton,
 :global(html[data-ui-style="trae"]) .renameButton,
 :global(html[data-ui-style="trae"]) .clearAllButton,
 :global(html[data-ui-style="trae"]) .saveButton,
-:global(html[data-ui-style="trae"]) .cancelButton { border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .cancelButton { border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .thinkingBtnGroup,
 :global(html[data-ui-style="trae"]) .customInputGroup,
 :global(html[data-ui-style="trae"]) .customInput,
-:global(html[data-ui-style="trae"]) .thinkingBtn { border-color: transparent; border-radius: 9px; }
+:global(html[data-ui-style="trae"]) .thinkingBtn { border-color: transparent; border-radius: var(--radius-control); }
 
 @media (max-width: 600px) {
   :global(html[data-ui-style="trae"]) .modal { border: 0; border-radius: 0; }
@@ -714,7 +767,22 @@
 }
 
 @media (pointer: coarse) {
+  .healthRow,
+  .treeItem,
+  .providerRow,
+  .modelRow,
+  .addModelButton,
   .addProviderButton,
+  .emptyState button,
+  .deleteButton,
+  .renameButton,
+  .testButton,
+  .removeButton,
+  .clearAllButton,
+  .thinkingBtn,
+  .cancelButton,
+  .saveButton,
+  .closeButton,
   :global(html[data-ui-style="trae"]) .addProviderButton {
     min-height: var(--control-touch);
   }

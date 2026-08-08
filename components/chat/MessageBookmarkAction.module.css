@@ -20,5 +20,5 @@
   color: var(--color-warning-text-strong);
 }
 
-:global(html[data-ui-style="trae"]) .action { border-radius: 9px; }
+:global(html[data-ui-style="trae"]) .action { border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .actionActive { background: var(--color-warning-bg); }

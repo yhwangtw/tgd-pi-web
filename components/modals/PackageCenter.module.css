@@ -1,0 +1,57 @@
+.root { display: flex; flex-direction: column; gap: 18px; }
+.security { padding: 12px 14px; border: 1px solid var(--color-warning-border); border-radius: var(--radius-card); background: var(--color-warning-bg); color: var(--color-warning-text); }
+.security strong { color: var(--color-warning-text-strong); font-size: var(--text-sm); }
+.security p { margin: 4px 0 0; font-size: var(--text-xs); line-height: var(--leading-copy); }
+.installCard { padding: 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--bg-panel); }
+.sectionTitle { margin-bottom: 9px; color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.formRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
+.sourceInput { min-width: 0; min-height: var(--control-md); padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg); color: var(--text); font-family: var(--font-mono); font-size: var(--text-sm); outline: none; }
+.sourceInput:focus { border-color: var(--accent); }
+.userScope { display: inline-flex; min-height: var(--control-md); align-items: center; padding: 0 10px; border-radius: var(--radius-control); background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-xs); white-space: nowrap; }
+.acknowledge { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; color: var(--text-muted); cursor: pointer; font-size: var(--text-xs); line-height: var(--leading-copy); }
+.acknowledge input { margin-top: 2px; accent-color: var(--accent); }
+.scopeNote { margin: 7px 0 0; color: var(--text-dim); font-size: var(--text-xs); line-height: var(--leading-copy); }
+.primaryButton, .secondaryButton, .removeButton, .dangerButton { min-height: var(--control-md); padding: 0 11px; border-radius: var(--radius-control); cursor: pointer; font-size: var(--text-sm); white-space: nowrap; }
+.primaryButton { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); font-weight: var(--weight-semibold); }
+.secondaryButton { border: 1px solid var(--border); background: var(--bg-elev-1); color: var(--text-muted); }
+.removeButton { border: 1px solid transparent; background: transparent; color: var(--text-muted); }
+.dangerButton { border: 1px solid var(--color-error-border); background: var(--color-error-bg); color: var(--color-error-text); }
+.primaryButton:disabled, .secondaryButton:disabled, .removeButton:disabled, .dangerButton:disabled { opacity: .5; cursor: default; }
+.secondaryButton:not(:disabled):hover, .removeButton:not(:disabled):hover { background: var(--bg-hover); color: var(--text); }
+.confirmation { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 14px; border: 1px solid var(--color-accent-border); border-radius: var(--radius-card); background: var(--color-accent-bg); }
+.confirmation > div:first-child { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.confirmation strong { color: var(--text); font-size: var(--text-sm); }
+.confirmation code { overflow: hidden; color: var(--accent); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.confirmation span { color: var(--text-muted); font-size: var(--text-xs); }
+.listHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.listHeader > div { display: flex; align-items: baseline; gap: 7px; color: var(--text); }
+.listHeader strong { font-size: var(--text-md); }
+.listHeader span { color: var(--text-dim); font-family: var(--font-mono); font-size: var(--text-xs); }
+.list { display: flex; flex-direction: column; gap: 8px; }
+.packageCard { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--bg-panel); }
+.packageMain { min-width: 0; flex: 1; }
+.packageTitle { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.packageTitle strong { overflow: hidden; color: var(--text); font-size: var(--text-md); text-overflow: ellipsis; white-space: nowrap; }
+.packageTitle code, .source { color: var(--text-dim); font-size: var(--text-xs); }
+.source { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.meta span { padding: 1px 6px; border-radius: var(--radius-pill); background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-2xs); }
+.meta .missing { background: var(--color-error-bg); color: var(--color-error-text); }
+.actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.readOnly { color: var(--text-dim); font-size: var(--text-xs); }
+.error { padding: 10px 12px; border: 1px solid var(--color-error-border); border-radius: var(--radius-control); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.state, .empty { padding: 30px 12px; color: var(--text-muted); font-size: var(--text-sm); text-align: center; }
+.empty { border: 1px dashed var(--border); border-radius: var(--radius-card); }
+
+:global(html[data-ui-style="trae"]) .installCard,
+:global(html[data-ui-style="trae"]) .packageCard { border-color: transparent; background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .sourceInput,
+:global(html[data-ui-style="trae"]) .secondaryButton { border-color: transparent; background: var(--trae-control); }
+
+@media (max-width: 640px) {
+  .formRow { grid-template-columns: 1fr; }
+  .sourceInput, .primaryButton { min-height: var(--control-touch); font-size: 16px; }
+  .confirmation, .packageCard { align-items: stretch; flex-direction: column; }
+  .actions { justify-content: flex-start; }
+  .secondaryButton, .removeButton, .dangerButton { min-height: var(--control-touch); }
+}

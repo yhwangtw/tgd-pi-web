@@ -19,7 +19,7 @@
 .statusDot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   display: inline-block;
 }
 
@@ -76,7 +76,7 @@
   padding: 6px 9px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   color: var(--text);
   cursor: pointer;
   font-size: var(--text-sm);
@@ -105,7 +105,7 @@
   padding: 6px 9px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   color: var(--text);
   font-size: var(--text-sm);
   outline: none;
@@ -116,7 +116,7 @@
 .submitBtn {
   padding: 6px 12px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   flex-shrink: 0;
@@ -124,7 +124,7 @@
 
 .submitBtnEnabled {
   background: var(--accent);
-  color: var(--color-white);
+  color: var(--accent-fg);
   cursor: pointer;
 }
 
@@ -138,7 +138,7 @@
   padding: 8px 10px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   color: var(--text);
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
@@ -167,7 +167,7 @@
   padding: 5px 12px;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   color: var(--text-muted);
   cursor: pointer;
   font-size: var(--text-sm);
@@ -177,8 +177,8 @@
   padding: 5px 14px;
   background: var(--accent);
   border: none;
-  border-radius: 5px;
-  color: var(--color-white);
+  border-radius: var(--radius-control-compact);
+  color: var(--accent-fg);
   cursor: pointer;
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
@@ -188,7 +188,7 @@
   padding: 5px 12px;
   background: none;
   border: 1px solid var(--color-error-border);
-  border-radius: 5px;
+  border-radius: var(--radius-control-compact);
   color: var(--color-error);
   cursor: pointer;
   font-size: var(--text-sm);
@@ -196,9 +196,9 @@
 
 :global(html[data-ui-style="trae"]) .optionButton,
 :global(html[data-ui-style="trae"]) .textInput,
-:global(html[data-ui-style="trae"]) .codeDisplay { min-height: 42px; border-color: transparent; border-radius: 11px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .codeDisplay { min-height: 42px; border-color: transparent; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .optionButton:hover { background: var(--bg-hover); }
 :global(html[data-ui-style="trae"]) .submitBtn,
 :global(html[data-ui-style="trae"]) .cancelBtn,
 :global(html[data-ui-style="trae"]) .loginBtn,
-:global(html[data-ui-style="trae"]) .disconnectBtn { min-height: 38px; border-radius: 10px; }
+:global(html[data-ui-style="trae"]) .disconnectBtn { min-height: 38px; border-radius: var(--radius-control); }

@@ -18,7 +18,7 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control-prominent);
   background: var(--bg);
   box-shadow: var(--color-shadow-modal);
 }
@@ -51,7 +51,7 @@
   min-height: 34px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
   color: var(--text-muted);
   cursor: pointer;
@@ -71,9 +71,9 @@
 }
 
 :global(html[data-ui-style="trae"]) .overlay { background: var(--trae-overlay); }
-:global(html[data-ui-style="trae"]) .panel { border-color: var(--trae-hairline); border-radius: 20px; background: var(--trae-canvas); }
+:global(html[data-ui-style="trae"]) .panel { border-color: var(--trae-hairline); border-radius: var(--radius-dialog); background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .header { min-height: 56px; padding: 8px 12px 8px 18px; border-bottom-color: var(--trae-hairline); background: var(--trae-surface); }
-:global(html[data-ui-style="trae"]) .actions button { border-color: transparent; border-radius: 10px; background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .actions button { border-color: transparent; border-radius: var(--radius-control); background: var(--trae-control); }
 
 @media (max-width: 700px) {
   :global(html[data-ui-style="trae"]) .panel { border: 0; border-radius: 0; }
