@@ -984,6 +984,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               model={model}
               isStreaming={isStreaming}
               onModelChange={onModelChange}
+              className={styles.modelControl}
             />
           </div>
 

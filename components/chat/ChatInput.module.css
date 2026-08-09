@@ -452,6 +452,10 @@
   gap: 2px;
 }
 
+.modelControl {
+  min-width: 0;
+}
+
 .sendModeSwitch {
   display: inline-flex;
   align-items: center;
@@ -849,22 +853,20 @@
     overflow: visible;
   }
 
-  /* Running mode has two jobs: choose how the next message is delivered,
-     and expose run controls. Keeping those on separate rows prevents the
-     model, Follow-up/Steer, Stop, and sound controls from fighting for one
-     320px-wide line. */
+  /* While a run is active, keep the actionable controls on one compact row.
+     The model cannot be changed mid-run, so hiding that disabled label on
+     mobile leaves room for delivery mode, Stop, and sound without wrapping. */
   .bottomBarStreaming {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    row-gap: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
   .bottomBarStreaming .bottomBarLeft {
-    display: grid;
-    width: 100%;
-    grid-column: 1 / -1;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-    gap: 6px;
+    display: flex;
+    width: auto;
+    flex: 1 1 auto;
+    gap: 4px;
     overflow: visible;
   }
 
@@ -872,25 +874,35 @@
     display: none;
   }
 
-  .bottomBarStreaming .sendModeSwitch,
-  .bottomBarStreaming .bottomBarLeft > div {
-    width: 100%;
+  .bottomBarStreaming .sendModeSwitch {
+    width: auto;
     min-width: 0;
+    min-height: 44px;
+    flex: 0 1 auto;
+    padding: 3px;
+  }
+
+  .bottomBarStreaming .modelControl {
+    display: none;
   }
 
   .bottomBarStreaming .sendModeSwitch button {
     min-width: 0;
+    height: 36px;
+    padding-right: 10px;
+    padding-left: 10px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .bottomBarStreaming .bottomBarRightStreaming {
-    width: 100%;
-    grid-column: 1 / -1;
+    width: auto;
+    flex: 0 0 auto;
     justify-content: flex-end;
-    padding-top: 6px;
-    border-top: 1px solid var(--border-subtle);
+    margin-left: auto;
+    padding-top: 0;
+    border-top: 0;
   }
 
   .bottomBarLeft {

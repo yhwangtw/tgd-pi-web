@@ -170,4 +170,26 @@ describe("composer controls", () => {
     await act(async () => steer.click());
     expect(textarea.placeholder).toBe("Steer the current run…");
   });
+
+  it("marks the disabled model control separately from active streaming actions", async () => {
+    await render(
+      <ChatInput
+        onSend={vi.fn()}
+        onAbort={vi.fn()}
+        onSteer={vi.fn()}
+        onFollowUp={vi.fn()}
+        isStreaming
+        model={{ provider: "openai", modelId: "gpt-test" }}
+        modelNames={{ "openai:gpt-test": "GPT Test" }}
+        modelList={[{ provider: "openai", id: "gpt-test", name: "GPT Test" }]}
+        onModelChange={vi.fn()}
+      />,
+    );
+
+    const modelButton = [...container!.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "GPT Test")!;
+    expect(modelButton.disabled).toBe(true);
+    expect(modelButton.parentElement?.className).toContain("modelControl");
+    expect(container!.querySelector('[role="group"][aria-label="Message delivery mode"]')).not.toBeNull();
+  });
 });

@@ -16,6 +16,7 @@ interface ModelSelectorProps {
   model?: { provider: string; modelId: string } | null;
   isStreaming: boolean;
   onModelChange?: (provider: string, modelId: string) => void;
+  className?: string;
 }
 
 export function ModelSelector({
@@ -25,6 +26,7 @@ export function ModelSelector({
   model,
   isStreaming,
   onModelChange,
+  className,
 }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -56,7 +58,7 @@ export function ModelSelector({
   if (!modelOptions.length || !currentName || !onModelChange) return null;
 
   return (
-    <div ref={dropdownRef} className={styles.root}>
+    <div ref={dropdownRef} className={`${styles.root} ${className ?? ""}`}>
       <button
         type="button"
         aria-expanded={open}
