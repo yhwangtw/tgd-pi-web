@@ -87,9 +87,16 @@ describe("ExtensionUIPanel", () => {
 
     expect(container!.textContent).toContain("Waiting for approval");
     expect(container!.textContent).toContain("2 checks remaining");
+    expect(container!.textContent).toContain("Question 1 / 2");
+    expect(container!.querySelector<HTMLInputElement>('[data-question-id="note"]')).toBeNull();
     await act(async () => container!.querySelector<HTMLButtonElement>(
       '[data-question-id="target"][data-value="Production"]',
     )!.click());
+    const next = container!.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    expect(next.textContent).toBe("Next");
+    await act(async () => next.click());
+
+    expect(container!.textContent).toContain("Question 2 / 2");
     const note = container!.querySelector<HTMLInputElement>('[data-question-id="note"]')!;
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
@@ -103,6 +110,42 @@ describe("ExtensionUIPanel", () => {
       id: "ask-1",
       answers: { target: "Production", note: "Roll out after smoke tests" },
     });
+  });
+
+  it("preserves earlier answers when moving back through ask_user questions", async () => {
+    const state: ExtensionUIState = {
+      dialogs: [{
+        type: "extension_ui_request",
+        id: "ask-back",
+        method: "ask_user",
+        questions: [
+          {
+            id: "target",
+            question: "Where should this release go?",
+            options: [{ label: "Staging" }, { label: "Production" }],
+            allowOther: false,
+          },
+          {
+            id: "timing",
+            question: "When should it run?",
+            options: [{ label: "Now" }, { label: "Later" }],
+            allowOther: false,
+          },
+        ],
+      }],
+      statuses: {},
+      widgets: {},
+    };
+    await render(state);
+
+    await act(async () => container!.querySelector<HTMLButtonElement>('[data-value="Production"]')!.click());
+    await act(async () => container!.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+    const back = [...container!.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Back")!;
+    await act(async () => back.click());
+
+    expect(container!.textContent).toContain("Question 1 / 2");
+    expect(container!.querySelector<HTMLButtonElement>('[data-value="Production"]')!.getAttribute("aria-pressed")).toBe("true");
   });
 
   it("keeps the custom answer inside the option grid and submits it", async () => {

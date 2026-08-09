@@ -138,6 +138,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const mobileToolsButtonRef = useRef<HTMLButtonElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
@@ -343,13 +344,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     });
   }, [expanded]);
 
+  const closeMobileTools = useCallback((restoreFocus = false) => {
+    setMobileToolsOpen(false);
+    if (restoreFocus) requestAnimationFrame(() => mobileToolsButtonRef.current?.focus());
+  }, []);
+
   useEffect(() => {
     if (!mobileToolsOpen) return;
     const closeOnPointer = (event: PointerEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) setMobileToolsOpen(false);
     };
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") setMobileToolsOpen(false);
+      if (event.key === "Escape") closeMobileTools(true);
     };
     document.addEventListener("pointerdown", closeOnPointer);
     document.addEventListener("keydown", closeOnEscape);
@@ -357,7 +363,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       document.removeEventListener("pointerdown", closeOnPointer);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [mobileToolsOpen]);
+  }, [closeMobileTools, mobileToolsOpen]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -672,6 +678,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   const toggleExpanded = useCallback(() => {
     setExpanded((current) => !current);
+    setMobileToolsOpen(false);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, []);
 
@@ -992,6 +999,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
           {!isStreaming && (
             <button
+              ref={mobileToolsButtonRef}
               type="button"
               className={`${styles.mobileToolsButton} ${mobileToolsOpen ? styles.mobileToolsButtonActive : ""}`}
               onClick={() => setMobileToolsOpen((open) => !open)}
@@ -1003,6 +1011,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <line x1="4" y1="7" x2="20" y2="7" /><circle cx="9" cy="7" r="2" fill="var(--bg)" />
                 <line x1="4" y1="17" x2="20" y2="17" /><circle cx="15" cy="17" r="2" fill="var(--bg)" />
               </svg>
+              <span className={styles.mobileToolsText}>{t("input.controls")}</span>
             </button>
           )}
 
@@ -1010,7 +1019,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div
             id="composer-secondary-tools"
             className={`${styles.bottomBarRight} ${mobileToolsOpen ? styles.bottomBarRightMobileOpen : ""} ${isStreaming ? styles.bottomBarRightStreaming : ""}`}
+            role={mobileToolsOpen && !isStreaming ? "region" : undefined}
+            aria-label={mobileToolsOpen && !isStreaming ? t("input.controlsTitle") : undefined}
           >
+            <div className={styles.mobileToolsHeader}>
+              <span>{t("input.controlsTitle")}</span>
+              <button type="button" onClick={(event) => closeMobileTools(event.detail === 0)}>
+                {t("input.controlsDone")}
+              </button>
+            </div>
             <div className={styles.mobileLabeledControl}>
               <span className={styles.mobileControlLabel}>{t("input.composerSize")}</span>
               <button
@@ -1053,43 +1070,49 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             </div>
 
             {!isStreaming && onCompact && (
-              <div className={styles.compactControls}>
+              <>
                 {autoCompactionEnabled !== null && autoCompactionEnabled !== undefined && onAutoCompactionChange && (
-                  <button
-                    type="button"
-                    onClick={() => onAutoCompactionChange(!autoCompactionEnabled)}
-                    disabled={isCompacting || autoCompactionUpdating}
-                    aria-label={`${t("chat.autoCompact")} ${autoCompactionEnabled ? t("chat.on") : t("chat.off")}`}
-                    aria-pressed={autoCompactionEnabled}
-                    title={autoCompactionEnabled ? t("chat.autoCompactOnTitle") : t("chat.autoCompactOffTitle")}
-                    className={autoCompactionEnabled ? styles.autoCompactButtonOn : styles.autoCompactButtonOff}
-                  >
-                    <span className={styles.autoCompactDot} aria-hidden />
-                    {t("chat.autoCompact")}
-                  </button>
+                  <div className={styles.mobileLabeledControl}>
+                    <span className={styles.mobileControlLabel}>{t("chat.autoCompact")}</span>
+                    <button
+                      type="button"
+                      onClick={() => onAutoCompactionChange(!autoCompactionEnabled)}
+                      disabled={isCompacting || autoCompactionUpdating}
+                      aria-label={`${t("chat.autoCompact")} ${autoCompactionEnabled ? t("chat.on") : t("chat.off")}`}
+                      aria-pressed={autoCompactionEnabled}
+                      title={autoCompactionEnabled ? t("chat.autoCompactOnTitle") : t("chat.autoCompactOffTitle")}
+                      className={autoCompactionEnabled ? styles.autoCompactButtonOn : styles.autoCompactButtonOff}
+                    >
+                      <span className={styles.autoCompactDot} aria-hidden />
+                      <span className={styles.mobileControlValue}>{t(autoCompactionEnabled ? "chat.on" : "chat.off")}</span>
+                    </button>
+                  </div>
                 )}
-                <div className={styles.compactWrapper}>
-                  {compactError && (
-                    <div className={styles.compactErrorTooltip}>
-                      {compactError}
-                    </div>
-                  )}
-                  <button
-                    onClick={isCompacting ? onAbortCompaction : onCompact}
-                    className={isCompacting ? styles.compactButtonCompacting : styles.compactButtonIdle}
-                    title={isCompacting ? t("chat.stopCompaction") : t("chat.compactTitle")}
-                  >
-                    {isCompacting ? (
-                      <><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>{t("chat.compacting")}</>
-                    ) : (
-                      <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
-                        <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
-                      </svg>{t("chat.compactNow")}</>
+                <div className={styles.mobileLabeledControl}>
+                  <span className={styles.mobileControlLabel}>{t("input.contextControl")}</span>
+                  <div className={styles.compactWrapper}>
+                    {compactError && (
+                      <div className={styles.compactErrorTooltip}>
+                        {compactError}
+                      </div>
                     )}
-                  </button>
+                    <button
+                      onClick={isCompacting ? onAbortCompaction : onCompact}
+                      className={isCompacting ? styles.compactButtonCompacting : styles.compactButtonIdle}
+                      title={isCompacting ? t("chat.stopCompaction") : t("chat.compactTitle")}
+                    >
+                      {isCompacting ? (
+                        <><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>{t("chat.compacting")}</>
+                      ) : (
+                        <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+                          <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
+                        </svg>{t("chat.compactNow")}</>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </>
             )}
 
             {isStreaming && (

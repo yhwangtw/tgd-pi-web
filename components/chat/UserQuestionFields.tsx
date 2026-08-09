@@ -67,8 +67,9 @@ export function QuestionChoiceList({
   );
 }
 
-export function AskUserFields({ request, answers, setAnswers, customAnswers, setCustomAnswers, firstControlRef, firstInputRef }: {
+export function AskUserFields({ request, activeQuestionIndex, answers, setAnswers, customAnswers, setCustomAnswers, firstControlRef, firstInputRef }: {
   request: Extract<WebExtensionUIDialogRequest, { method: "ask_user" }>;
+  activeQuestionIndex: number;
   answers: Record<string, string>;
   setAnswers: Dispatch<SetStateAction<Record<string, string>>>;
   customAnswers: Set<string>;
@@ -77,18 +78,20 @@ export function AskUserFields({ request, answers, setAnswers, customAnswers, set
   firstInputRef: RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
 }) {
   const { t } = useI18n();
-  return request.questions.map((question, index) => (
+  const question = request.questions[activeQuestionIndex];
+  if (!question) return null;
+  return (
     <fieldset key={question.id} className={styles.questionGroup}>
       <legend className={styles.questionLegend}>
         {question.header && <span className={styles.questionHeader}>{question.header}</span>}
-        <span>{question.question}</span>
+        <span className={styles.questionPrompt}>{question.question}</span>
       </legend>
       {question.options.length > 0 && (
         <QuestionChoiceList
           questionId={question.id}
           options={question.options}
           selected={customAnswers.has(question.id) ? undefined : answers[question.id]}
-          firstRef={index === 0 ? firstControlRef : undefined}
+          firstRef={firstControlRef}
           allowOther={question.allowOther}
           otherLabel={t("extensionUI.other")}
           otherSelected={customAnswers.has(question.id)}
@@ -99,12 +102,13 @@ export function AskUserFields({ request, answers, setAnswers, customAnswers, set
           onSelectOther={() => {
             setCustomAnswers((current) => new Set(current).add(question.id));
             setAnswers((current) => ({ ...current, [question.id]: "" }));
+            requestAnimationFrame(() => firstInputRef.current?.focus());
           }}
         />
       )}
       {question.allowOther && (question.options.length === 0 || customAnswers.has(question.id)) && (
         <input
-          ref={index === 0 ? firstInputRef as RefObject<HTMLInputElement> : undefined}
+          ref={firstInputRef as RefObject<HTMLInputElement>}
           data-question-id={question.id}
           className={styles.textInput}
           aria-label={question.question}
@@ -114,5 +118,5 @@ export function AskUserFields({ request, answers, setAnswers, customAnswers, set
         />
       )}
     </fieldset>
-  ));
+  );
 }

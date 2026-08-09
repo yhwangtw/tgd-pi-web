@@ -205,10 +205,14 @@ const MESSAGES = {
   "input.toolsDesc.default": { en: "4 built-in tools", zh: "4 項內建工具" },
   "input.toolsDesc.full": { en: "All built-in tools", zh: "全部內建工具" },
   "input.moreControls": { en: "More composer controls", zh: "更多輸入框設定" },
+  "input.controls": { en: "Controls", zh: "設定" },
+  "input.controlsTitle": { en: "Composer controls", zh: "輸入框設定" },
+  "input.controlsDone": { en: "Done", zh: "完成" },
   "input.composerSize": { en: "Composer", zh: "輸入框" },
   "input.reasoning": { en: "Reasoning", zh: "推理" },
   "input.tools": { en: "Tools", zh: "工具" },
   "input.sound": { en: "Sound", zh: "提示音" },
+  "input.contextControl": { en: "Context", zh: "Context" },
 
   // ── Extensions panel ──
   "extensions.title": { en: "Extensions", zh: "擴充功能" },
@@ -324,8 +328,12 @@ const MESSAGES = {
   "context.noTools": { en: "No tools are available for this session.", zh: "這個 session 沒有可用工具。" },
 
   // ── Extension interaction ──
-  "extensionUI.waiting": { en: "Waiting for input", zh: "等待回答" },
-  "extensionUI.agentQuestion": { en: "The agent needs your input", zh: "Agent 需要你的回答" },
+  "extensionUI.waiting": { en: "Decision needed", zh: "需要你的決定" },
+  "extensionUI.agentQuestion": { en: "How should the agent continue?", zh: "接下來要怎麼進行？" },
+  "extensionUI.question": { en: "Question", zh: "問題" },
+  "extensionUI.chooseOne": { en: "Choose one answer", zh: "選擇一個回答" },
+  "extensionUI.back": { en: "Back", zh: "上一步" },
+  "extensionUI.next": { en: "Next", zh: "下一步" },
   "extensionUI.submit": { en: "Continue", zh: "繼續" },
   "extensionUI.cancel": { en: "Cancel", zh: "取消" },
   "extensionUI.yes": { en: "Confirm", zh: "確認" },

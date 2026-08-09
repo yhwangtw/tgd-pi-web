@@ -232,7 +232,25 @@ test.describe("responsive shell", () => {
     expect(Math.abs(textareaBox!.y - sendBox!.y)).toBeLessThanOrEqual(1);
     expect(Math.abs(textareaBox!.height - sendBox!.height)).toBeLessThanOrEqual(1);
     expect(sendBox!.x + sendBox!.width).toBeLessThanOrEqual(320);
+
+    const controlsTrigger = page.getByRole("button", { name: "More composer controls" });
+    await controlsTrigger.click();
+    const controls = page.locator("#composer-secondary-tools");
+    await expect(controls).toBeVisible();
+    await expect(controls.getByRole("button", { name: "Done", exact: true })).toBeVisible();
+    const [controlsBox, openTextareaBox] = await Promise.all([
+      controls.boundingBox(),
+      textarea.boundingBox(),
+    ]);
+    expect(controlsBox).not.toBeNull();
+    expect(openTextareaBox).not.toBeNull();
+    expect(controlsBox!.x).toBeGreaterThanOrEqual(0);
+    expect(controlsBox!.x + controlsBox!.width).toBeLessThanOrEqual(320);
+    expect(controlsBox!.y).toBeGreaterThanOrEqual(openTextareaBox!.y + openTextareaBox!.height - 1);
     await expectNoPageOverflow(page);
+
+    await controls.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(controls).toBeHidden();
   });
 
   test("AC-RWD-7: reasoning controls use Traditional Chinese without simplified Chinese", async ({ page }) => {

@@ -146,9 +146,18 @@ describe("composer controls", () => {
     await act(async () => trigger.click());
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(panel.className).toContain("bottomBarRightMobileOpen");
+    expect(panel.getAttribute("role")).toBe("region");
+    expect(panel.getAttribute("aria-label")).toBe("Composer controls");
     expect(panel.textContent).toContain("Composer");
     expect(panel.textContent).toContain("Reasoning");
     expect(panel.textContent).toContain("Tools");
+    expect(panel.textContent).toContain("Done");
+
+    const done = [...panel.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Done")!;
+    await act(async () => done.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(panel.className).not.toContain("bottomBarRightMobileOpen");
   });
 
   it("uses a short streaming placeholder for the selected delivery mode", async () => {
