@@ -12,11 +12,12 @@ interface Props {
   wrapLines: boolean;
   /** 1-based line to highlight + scroll to (in-file find / go-to-line). */
   activeLine?: number | null;
+  diagnosticLines?: Record<number, "error" | "warning">;
 }
 
 // Memoized: highlighting a big file is the most expensive render in the app,
 // and the parent re-renders on every toolbar keystroke.
-export const SourceView = memo(function SourceView({ content, language, wrapLines, activeLine }: Props) {
+export const SourceView = memo(function SourceView({ content, language, wrapLines, activeLine, diagnosticLines = {} }: Props) {
   const { isDark } = useTheme();
 
   useEffect(() => {
@@ -37,13 +38,13 @@ export const SourceView = memo(function SourceView({ content, language, wrapLine
       customStyle={CUSTOM_STYLE}
       codeTagProps={CODE_TAG_STYLE}
       wrapLongLines={wrapLines}
-      // Per-line spans are only emitted with wrapLines — enable them just
-      // while a line is highlighted so normal rendering stays cheap.
-      wrapLines={activeLine != null}
+      // Per-line nodes support selection-aware Agent actions, outline jumps,
+      // diagnostics, and durable line annotations.
+      wrapLines
       lineProps={(n: number) =>
         n === activeLine
-          ? { style: { display: "block", background: "var(--color-accent-bg-strong)" }, "data-active-line": "1" } as React.HTMLProps<HTMLElement>
-          : {}
+          ? { style: { display: "block", background: "var(--color-accent-bg-strong)", borderLeft: diagnosticLines[n] ? `3px solid var(--color-${diagnosticLines[n]})` : undefined }, "data-active-line": "1", "data-line-number": String(n), "data-diagnostic": diagnosticLines[n] } as React.HTMLProps<HTMLElement>
+          : { style: { display: "block", borderLeft: diagnosticLines[n] ? `3px solid var(--color-${diagnosticLines[n]})` : undefined }, "data-line-number": String(n), "data-diagnostic": diagnosticLines[n] } as React.HTMLProps<HTMLElement>
       }
     >
       {content}

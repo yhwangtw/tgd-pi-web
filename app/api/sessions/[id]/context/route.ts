@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveSessionPath, buildSessionContext, getSessionEntries } from "@/lib/session-reader";
+import { getRpcSession } from "@/lib/rpc-manager";
+import type { SessionEntry } from "@/lib/types";
 
 export async function GET(
   req: Request,
@@ -10,12 +12,23 @@ export async function GET(
   const leafId = url.searchParams.get("leafId") ?? undefined;
 
   try {
+    const live = getRpcSession(id);
     const filePath = await resolveSessionPath(id);
-    if (!filePath) {
+    let entries: SessionEntry[] | null = null;
+    if (filePath) {
+      try {
+        entries = getSessionEntries(filePath);
+      } catch {
+        // An unflushed live session has a future file path but no file yet.
+      }
+    }
+    if (!entries && live?.isAlive() && live.sessionId === id) {
+      entries = live.inner.sessionManager.getEntries() as unknown as SessionEntry[];
+    }
+    if (!entries) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
-
-    const context = buildSessionContext(getSessionEntries(filePath), leafId);
+    const context = buildSessionContext(entries, leafId);
 
     return NextResponse.json({ context });
   } catch (error) {

@@ -202,7 +202,17 @@ function getPathCache(): Map<string, string> {
 
 export async function resolveSessionPath(sessionId: string): Promise<string | null> {
   const cached = getPathCache().get(sessionId);
-  if (cached) return cached;
+  if (cached) {
+    try {
+      const cachedStat = await stat(cached);
+      if (cachedStat.isFile()) return cached;
+    } catch {
+      // Pi assigns the future path of a new session before it writes the file.
+      // Do not let that stale cache entry revive an empty phantom session after
+      // the live runtime switches away.
+    }
+    getPathCache().delete(sessionId);
+  }
 
   // Cache miss: scan all sessions to populate cache, then retry
   await listAllSessions();

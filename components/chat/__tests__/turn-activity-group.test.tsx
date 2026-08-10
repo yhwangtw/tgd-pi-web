@@ -37,7 +37,8 @@ describe("TurnActivityGroup", () => {
     const summary = host.querySelector<HTMLButtonElement>("button")!;
     expect(section.dataset.workLogExpanded).toBe("false");
     expect(summary.getAttribute("aria-expanded")).toBe("false");
-    expect(host.textContent).toContain("1 failed");
+    expect(host.textContent).toContain("Needs attention");
+    expect(summary.getAttribute("aria-label")).toContain("8 steps");
 
     await act(async () => {
       summary.click();

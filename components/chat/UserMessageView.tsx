@@ -257,7 +257,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
       {/* Bottom row: action buttons + timestamp (hidden while editing) */}
       {!editing && (
         <div className={styles.bottomRow}>
-          <div className={styles.desktopActionToolbar}>
+          <div className={styles.desktopActionToolbar} aria-hidden="true">
           <div className={`${styles.actionButtons} ${styles.primaryActions}`}>
             <button
               onClick={copyContent}
@@ -346,17 +346,6 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                   )}
                   {copied ? t("common.copied") : t("common.copy")}
                 </button>
-                {canEdit && (
-                  <button
-                    onClick={() => { closeActions(); startEdit(); }}
-                    className={`${styles.actionButton} text-dim hover-accent`}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                    </svg>
-                    {t("chat.edit")}
-                  </button>
-                )}
                 {onQuote && (
                   <button
                     type="button"
@@ -373,6 +362,17 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                     onToggle={() => { closeActions(); onToggleBookmark!(entryId!); }}
                     className={styles.actionButton}
                   />
+                )}
+                {canEdit && (
+                  <button
+                    onClick={() => { closeActions(); startEdit(); }}
+                    className={`${styles.actionButton} text-dim hover-accent`}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                    </svg>
+                    {t("chat.edit")}
+                  </button>
                 )}
                 {canFork && (
                   <button

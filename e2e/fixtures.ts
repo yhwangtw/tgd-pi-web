@@ -22,6 +22,9 @@ export function createFixtures(root: string): { cwd: string } {
   // ── Demo git project ──────────────────────────────────────────────────
   writeFileSync(path.join(cwd, "README.md"), "# Demo project\n\nE2E fixture.\n");
   writeFileSync(path.join(cwd, "src/index.ts"), "export const answer = 42;\n");
+  writeFileSync(path.join(cwd, "data.json"), JSON.stringify({ project: "demo", features: { viewer: true, mobile: true }, count: 2 }, null, 2) + "\n");
+  writeFileSync(path.join(cwd, "table.csv"), "name,status,count\nAlpha,active,2\nBeta,paused,10\n");
+  writeFileSync(path.join(cwd, "sample.bin"), Buffer.from([0x50, 0x69, 0x00, 0x57, 0x65, 0x62]));
   mkdirSync(path.join(cwd, ".pi", "extensions"), { recursive: true });
   writeFileSync(
     path.join(cwd, ".pi", "extensions", "web-ui.js"),
@@ -50,9 +53,55 @@ export function createFixtures(root: string): { cwd: string } {
       "      ctx.ui.notify(\"Saved \" + notes.split(\"\\n\").length + \" line(s) for \" + owner, \"info\");",
       "    },",
       "  });",
+      "  pi.registerCommand(\"e2e-new\", {",
+      "    description: \"Create a replacement session through AgentSessionRuntime\",",
+      "    handler: async (_args, ctx) => {",
+      "      const parentSession = ctx.sessionManager.getSessionFile();",
+      "      await ctx.newSession({",
+      "        parentSession,",
+      "        setup: async (manager) => {",
+      "          manager.appendSessionInfo(\"Runtime new session\");",
+      "        },",
+      "        withSession: async (next) => {",
+      "          next.ui.setStatus(\"runtime-e2e\", \"New session ready\");",
+      "        },",
+      "      });",
+      "    },",
+      "  });",
+      "  pi.registerCommand(\"e2e-fork\", {",
+      "    description: \"Fork through AgentSessionRuntime\",",
+      "    handler: async (args, ctx) => {",
+      "      await ctx.fork(args.trim(), {",
+      "        withSession: async (next) => {",
+      "          next.ui.setStatus(\"runtime-e2e\", \"Fork ready\");",
+      "        },",
+      "      });",
+      "    },",
+      "  });",
+      "  pi.registerCommand(\"e2e-switch\", {",
+      "    description: \"Switch through AgentSessionRuntime\",",
+      "    handler: async (args, ctx) => {",
+      "      let target = args.trim();",
+      "      if (target.startsWith('\\\"') && target.endsWith('\\\"')) target = JSON.parse(target);",
+      "      await ctx.switchSession(target, {",
+      "        withSession: async (next) => {",
+      "          next.ui.setStatus(\"runtime-e2e\", \"Switch ready\");",
+      "        },",
+      "      });",
+      "    },",
+      "  });",
       "}",
       "",
     ].join("\n"),
+  );
+  writeFileSync(
+    path.join(cwd, "importable-session.jsonl"),
+    [
+      JSON.stringify({ type: "session", version: 3, id: "99991111-2222-3333-4444-555566667777", timestamp: "2026-07-08T10:00:00.000Z", cwd }),
+      JSON.stringify({ type: "message", id: "i1000001", parentId: null, timestamp: "2026-07-08T10:00:05.000Z", message: { role: "user", content: "Imported from a project JSONL file", timestamp: 1751968805000 } }),
+      JSON.stringify({ type: "message", id: "i1000002", parentId: "i1000001", timestamp: "2026-07-08T10:00:10.000Z", message: { role: "assistant", content: [{ type: "text", text: "Import preview and runtime replacement verified." }], timestamp: 1751968810000 } }),
+      JSON.stringify({ type: "session_info", id: "i1000003", parentId: "i1000002", name: "Imported runtime session" }),
+    ].join("\n") + "\n",
   );
   const git = (args: string) =>
     execSync(`git -c user.email=e2e@test -c user.name=e2e ${args}`, { cwd, stdio: "pipe" });
@@ -132,6 +181,7 @@ export function createFixtures(root: string): { cwd: string } {
     { type: "model_change", id: "e1000001", parentId: null, provider: "anthropic", modelId: "claude-sonnet-5", timestamp: "2026-07-05T11:00:00.000Z" },
     { type: "message", id: "e1000002", parentId: "e1000001", timestamp: "2026-07-05T11:00:05.000Z", message: { role: "user", content: "把 answer 改成 100 並新增一個 utils 檔", timestamp: 1751713205000 } },
     { type: "message", id: "e1000003", parentId: "e1000002", timestamp: "2026-07-05T11:00:20.000Z", message: { role: "assistant", content: [
+      { type: "thinking", thinking: "Inspect the relevant files before editing." },
       { type: "text", text: "好,我先改 `src/index.ts`,再新增 `src/utils.ts`。" },
       { type: "toolCall", id: "tc_edit_1", name: "edit", arguments: { path: "src/index.ts", oldText: "export const answer = 42;", newText: "export const answer = 100;\n// clamped" } },
       { type: "toolCall", id: "tc_write_1", name: "write", arguments: { path: "src/utils.ts", content: "export function clamp(value: number, min: number, max: number): number {\n  return Math.min(Math.max(value, min), max);\n}\n" } },

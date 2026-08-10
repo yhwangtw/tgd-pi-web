@@ -13,7 +13,7 @@ test.describe("message bookmarks", () => {
     await openMain(page);
     const first = page.locator(".msg-item").first();
     await first.scrollIntoViewIfNeeded();
-    await first.hover();
+    await first.getByRole("button", { name: "More message actions" }).click();
     await first.getByRole("button", { name: "Bookmark this message" }).click();
     await expect(first).toHaveAttribute("data-bookmarked", "true");
     await expect(first.locator("[data-bookmark-indicator]")).toHaveCount(1);
@@ -26,7 +26,7 @@ test.describe("message bookmarks", () => {
     await expect(afterReload.locator("[data-bookmark-indicator]")).toHaveCount(1);
 
     // Clean up so other specs see a fresh state
-    await afterReload.hover();
+    await afterReload.getByRole("button", { name: "More message actions" }).click();
     await afterReload.getByRole("button", { name: "Remove bookmark" }).click();
     await expect(afterReload).not.toHaveAttribute("data-bookmarked", "true");
     await expect(afterReload.locator("[data-bookmark-indicator]")).toHaveCount(0);
@@ -105,7 +105,10 @@ test.describe("tool-call diff view", () => {
 
     // Tool calls are summarized per turn; expand the work log before opening
     // the individual edit/write disclosures.
-    await page.locator('section[aria-label="Work log"] > button').first().click();
+    const workLog = page.locator('section[aria-label="Work log"] > button').first();
+    await expect(workLog).toContainText("Completed");
+    await workLog.click();
+    await expect(page.getByText("Reasoning steps", { exact: true })).toBeVisible();
 
     // Expand the edit tool call → old/new rendered as removed/added lines
     await page.locator("button", { has: page.getByText("edit", { exact: true }) }).first().click();

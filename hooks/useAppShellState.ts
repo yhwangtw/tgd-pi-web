@@ -56,7 +56,7 @@ export interface AppShellActions {
   handleNewSession: (sessionId: string, cwd: string) => void;
   handleSessionCreated: (session: SessionInfo) => void;
   handleAgentEnd: () => void;
-  handleSessionForked: (newSessionId: string) => void;
+  handleSessionForked: (newSessionId: string, cwd?: string, sessionFile?: string) => void;
   handleInitialRestoreDone: () => void;
   handleSessionDeleted: (sessionId: string) => void;
   bumpRefreshKey: () => void;
@@ -207,14 +207,23 @@ export function useAppShellState(): {
   }, []);
 
   const handleSessionForked = useCallback(
-    (newSessionId: string) => {
+    (newSessionId: string, cwd?: string, sessionFile?: string) => {
+      const current = selectedSessionRef.current;
+      if (current?.id === newSessionId && (!cwd || current.cwd === cwd) && (!sessionFile || current.path === sessionFile)) {
+        return;
+      }
+      const nextSession: SessionInfo = {
+        ...(current ?? { path: "", cwd: "", created: "", modified: "", messageCount: 0, firstMessage: "" }),
+        id: newSessionId,
+        ...(cwd ? { cwd } : {}),
+        ...(sessionFile ? { path: sessionFile } : {}),
+      };
+      selectedSessionRef.current = nextSession;
       setRefreshKey((k) => k + 1);
       setSessionKey((k) => k + 1);
       setNewSessionCwd(null);
-      setSelectedSession((prev) => ({
-        ...(prev ?? { path: "", cwd: "", created: "", modified: "", messageCount: 0, firstMessage: "" }),
-        id: newSessionId,
-      }));
+      setSelectedSession(nextSession);
+      if (cwd) setActiveCwd(cwd);
       router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
     },
     [router],

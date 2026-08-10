@@ -29,7 +29,7 @@ interface Props {
   newSessionCwd: string | null;
   onAgentEnd?: () => void;
   onSessionCreated?: (session: SessionInfo) => void;
-  onSessionForked?: (newSessionId: string) => void;
+  onSessionForked?: (newSessionId: string, cwd?: string, sessionFile?: string) => void;
   modelsRefreshKey?: number;
   chatInputRef?: React.RefObject<ChatInputHandle | null>;
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
@@ -228,7 +228,7 @@ function activityText(messages: import("@/lib/types").AssistantMessage[], toolRe
 
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange, onSessionNamed, isParallel, paneLabel, onClosePane, wideChat, onOpenModels }: Props) {
   const {
-    loading, error, messages, entryIds, streamState,
+    loading, error, runtimeFailure, messages, entryIds, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
@@ -236,7 +236,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     isNew,
     messagesEndRef, scrollContainerRef,
     lastUserMsgRef,
-    handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
+    handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,
     handleUpdateQueued, handleMoveQueued,
     handleToolPresetChange, handleThinkingLevelChange, handleClearQueue, handleRemoveQueued, handleRetry, handleEditRerun, handleAbortBash, handleExtensionUIResponse, handleAgentEventRef,
@@ -874,6 +874,25 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     }
     return null;
   }, [messages]);
+  const [runAnnouncement, setRunAnnouncement] = useState("");
+  const wasAgentRunningRef = useRef(false);
+  useEffect(() => {
+    const wasRunning = wasAgentRunningRef.current;
+    wasAgentRunningRef.current = agentRunning;
+    if (agentRunning && !wasRunning) {
+      setRunAnnouncement(t("chat.responseInProgress"));
+      return;
+    }
+    if (!agentRunning && wasRunning) {
+      if (lastAssistantOutcome?.stopReason === "error") {
+        setRunAnnouncement(t("chat.responseFailed"));
+      } else if (lastAssistantOutcome?.stopReason === "aborted") {
+        setRunAnnouncement(t("chat.responseStopped"));
+      } else {
+        setRunAnnouncement(t("chat.responseComplete"));
+      }
+    }
+  }, [agentRunning, lastAssistantOutcome?.stopReason, t]);
 
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
@@ -1119,7 +1138,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </button>
         )}
         <div ref={scrollContainerRef} data-transcript-scroll className={`${styles.transcriptScroll} flex-1 overflow-y-auto pt-4 [scrollbar-width:none]`}>
-          <div className={`${styles.transcript} mx-auto px-4 ${wideChat ? "max-w-[1080px]" : "max-w-[900px]"}`}>
+          <div
+            className={`${styles.transcript} ${wideChat ? styles.transcriptWide : ""} mx-auto px-4`}
+            role="log"
+            aria-label={t("chat.conversation")}
+            aria-busy={agentRunning}
+            aria-live="off"
+          >
 
             {(() => {
               let lastUserIdx = -1;
@@ -1173,6 +1198,21 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 }
                 const turnIndex = conversationLayout.turnIndexByMessageIndex.get(idx);
                 const turn = turnIndex === undefined ? undefined : conversationLayout.turns[turnIndex];
+                const firstTurnMessageIndex = turn?.userIndex
+                  ?? turn?.displayAssistantIndices[0]
+                  ?? null;
+                const lastTurnMessageIndex = turn?.finalAssistantIndex
+                  ?? turn?.userIndex
+                  ?? null;
+                const turnPosition = turnIndex === undefined
+                  ? undefined
+                  : firstTurnMessageIndex === idx && lastTurnMessageIndex === idx
+                    ? "single"
+                    : firstTurnMessageIndex === idx
+                      ? "start"
+                      : lastTurnMessageIndex === idx
+                        ? "end"
+                        : "middle";
                 const turnStartedAt = turn?.userIndex !== null && turn?.userIndex !== undefined
                   ? (messages[turn.userIndex] as AgentMessage & { timestamp?: number }).timestamp
                   : undefined;
@@ -1210,6 +1250,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     turnStartedAt={turnStartedAt}
                     usageOverride={conversationLayout.usageByFinalAssistant.get(idx)}
                     showUsage={conversationLayout.finalAssistantIndices.has(idx)}
+                    showActions={conversationLayout.finalAssistantIndices.has(idx)}
                     onQuote={entryIds[idx] && (msg.role === "user" || msg.role === "assistant")
                       ? (text) => {
                           const nextQuote: MessageQuote = { entryId: entryIds[idx]!, role: msg.role, text };
@@ -1237,6 +1278,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     data-entry-id={entryId}
                     data-bookmarked={isBookmarked || undefined}
                     data-turn-start={startsNewTurn || undefined}
+                    data-turn-index={turnIndex}
+                    data-turn-position={turnPosition}
+                    role={compactionSummary !== null ? "note" : "article"}
+                    aria-label={compactionSummary !== null
+                      ? t("chat.compactionSummary")
+                      : `${msg.role === "user" ? t("chat.userMessage") : t("chat.assistantMessage")}${turnIndex === undefined ? "" : ` · ${t("chat.turns")} ${turnIndex + 1}`}`}
+                    tabIndex={0}
                     className={`msg-item hover-group relative ${styles.messageItem} ${msg.role === "user" && compactionSummary === null ? styles.messageItemUser : styles.messageItemAssistant} ${startsNewTurn ? styles.turnStart : ""}`}
                     ref={(el) => {
                     messageRefs.current[currentRefIdx] = el;
@@ -1323,6 +1371,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             )}
           </div>
         </div>
+        <div className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">
+          {runAnnouncement}
+        </div>
         <ChatMinimap
           messages={visibleMessages}
           streamingMessage={streamState.streamingMessage}
@@ -1339,7 +1390,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
              reserves the minimap rail) so the banner's box aligns exactly
              with the composer below instead of sticking out to the right. */
           <div className={`${styles.contextWarningWrap} pb-1 pl-4 pr-[52px]`}>
-          <div className={`mx-auto flex items-center gap-2 ${wideChat ? "max-w-[1080px]" : "max-w-[900px]"}`}>
+          <div className={`mx-auto flex items-center gap-2 ${wideChat ? "max-w-[1040px]" : "max-w-[780px]"}`}>
             <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-3 py-1.5 text-[12px] text-[var(--color-warning-text)]">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
               {/* min-w-0 flex-1: a flex child's min-width:auto refuses to shrink,
@@ -1372,21 +1423,34 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           onMove={handleMoveQueued}
           onClear={handleClearQueue}
         />
-        <ExtensionUIPanel
-          state={extensionUIState}
-          onRespond={handleExtensionUIResponse}
-          wide={wideChat}
-        />
-        {/* Keep the composer mounted while a blocking decision is visible.
-            Extensions can issue the one-shot setEditorText event before the
-            dialog-close event reaches React; unmounting here loses that draft. */}
-        <div
-          className={styles.composerMount}
-          hidden={extensionUIState.dialogs.length > 0}
-        >
-          {chatInputElement}
-        </div>
-        <ExtensionWidgets state={extensionUIState} placement="belowEditor" wide={wideChat} />
+        {runtimeFailure ? (
+          <div className={styles.runtimeRecovery} role="alert">
+            <div className={styles.runtimeRecoveryText}>
+              <strong>{t("chat.runtimeRecoveryTitle")}</strong>
+              <span>{runtimeFailure.message}</span>
+              {runtimeFailure.recoveryError && <small>{runtimeFailure.recoveryError}</small>}
+            </div>
+            <button type="button" onClick={() => void handleRuntimeReconnect()}>{t("chat.runtimeReconnect")}</button>
+          </div>
+        ) : (
+          <>
+            <ExtensionUIPanel
+              state={extensionUIState}
+              onRespond={handleExtensionUIResponse}
+              wide={wideChat}
+            />
+            {/* Keep the composer mounted while a blocking decision is visible.
+                Extensions can issue the one-shot setEditorText event before the
+                dialog-close event reaches React; unmounting here loses that draft. */}
+            <div
+              className={styles.composerMount}
+              hidden={extensionUIState.dialogs.length > 0}
+            >
+              {chatInputElement}
+            </div>
+            <ExtensionWidgets state={extensionUIState} placement="belowEditor" wide={wideChat} />
+          </>
+        )}
       </div>
       </>
       )}

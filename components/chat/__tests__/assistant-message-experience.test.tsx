@@ -64,6 +64,16 @@ describe("AssistantMessageView conversation chrome", () => {
     expect(summary?.getAttribute("title")).toContain("1,060 in");
   });
 
+  it("does not leave a dangling footer on intermediate assistant output", async () => {
+    await render(
+      { ...baseMessage, content: [{ type: "text", text: "Interim progress" }] },
+      { showActions: false, showUsage: false, showModelLabel: false, showTimestamp: false },
+    );
+
+    expect(container!.querySelector('[data-testid="assistant-message-footer"]')).toBeNull();
+    expect(container!.textContent).toContain("Interim progress");
+  });
+
   it("summarizes billing failures and keeps the raw provider response collapsed", async () => {
     const billingUrl = "https://opencode.ai/workspace/wrk_123/billing";
     await render({
@@ -109,13 +119,14 @@ describe("AssistantMessageView conversation chrome", () => {
     );
 
     expect(container!.textContent).toContain("Work log");
-    expect(container!.textContent).toContain("3 steps");
+    expect(container!.textContent).toContain("Completed");
     expect(container!.textContent).toContain("2 tools");
-    expect(container!.textContent).toContain("1 files");
+    expect(container!.textContent).toContain("1 file");
     expect(container!.textContent).not.toContain("src/a.ts");
     const summary = container!.querySelector<HTMLButtonElement>('section[aria-label="Work log"] > button')!;
     await act(async () => summary.click());
     expect(container!.textContent).toContain("src/a.ts");
+    expect(container!.textContent).toContain("Reasoning steps");
   });
 
   it("opens a navigable focus surface for fenced code", async () => {

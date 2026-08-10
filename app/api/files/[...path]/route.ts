@@ -15,6 +15,7 @@ import {
   getExt,
   getImageMime,
   getAudioMime,
+  getVideoMime,
   getDocumentMime,
   getLanguage,
   documentPreviewKind,
@@ -42,6 +43,10 @@ async function handleRead(
   if (audioMime) {
     return streamFile(filePath, stat, audioMime, request.headers.get("range"));
   }
+  const videoMime = getVideoMime(filePath);
+  if (videoMime) {
+    return streamFile(filePath, stat, videoMime, request.headers.get("range"));
+  }
   const documentMime = getDocumentMime(filePath);
   if (documentMime) {
     return streamFile(filePath, stat, documentMime, request.headers.get("range"));
@@ -64,11 +69,12 @@ function handleMeta(filePath: string, stat: fs.Stats): Response {
   }
   const imageMime = getImageMime(filePath);
   const audioMime = getAudioMime(filePath);
+  const videoMime = getVideoMime(filePath);
   const documentMime = getDocumentMime(filePath);
   return NextResponse.json({
     size: stat.size,
     language: getLanguage(filePath),
-    mime: imageMime || audioMime || documentMime || "text/plain",
+    mime: imageMime || audioMime || videoMime || documentMime || "text/plain",
     previewKind: documentPreviewKind(filePath),
   });
 }
@@ -214,7 +220,7 @@ export async function GET(
         if (!stat.isFile()) {
           return NextResponse.json({ error: "Not a file" }, { status: 400 });
         }
-        const mime = getImageMime(filePath) || getAudioMime(filePath) || getDocumentMime(filePath) || "application/octet-stream";
+        const mime = getImageMime(filePath) || getAudioMime(filePath) || getVideoMime(filePath) || getDocumentMime(filePath) || "application/octet-stream";
         return streamFile(filePath, stat, mime, request.headers.get("range"), "attachment");
       }
       case "raw": {
@@ -227,7 +233,7 @@ export async function GET(
         const mime =
           ext === "html" || ext === "htm"
             ? "text/html; charset=utf-8"
-            : getImageMime(filePath) || getAudioMime(filePath) || getDocumentMime(filePath) || "text/plain; charset=utf-8";
+            : getImageMime(filePath) || getAudioMime(filePath) || getVideoMime(filePath) || getDocumentMime(filePath) || "text/plain; charset=utf-8";
         return streamFile(filePath, stat, mime, request.headers.get("range"), "inline");
       }
       case "meta":

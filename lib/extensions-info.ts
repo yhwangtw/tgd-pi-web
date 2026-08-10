@@ -90,6 +90,17 @@ export interface ExtensionsReport {
   renderers: ExtensionRendererInfo[];
   resources: ExtensionResourceInfo[];
   diagnostics: ExtensionDiagnosticInfo[];
+  runtime?: {
+    state: "ready" | "replacing" | "failed" | "disposed";
+    sessionId: string;
+    sessionFile: string;
+    cwd: string;
+    connectedClients: number;
+    replacementCount: number;
+    pendingReplacement?: { reason: string; startedAt: string; previousSessionId: string };
+    lastReplacement?: { reason: string; at: string; previousSessionId: string; nextSessionId: string; cwd: string };
+    lastFailure?: { reason: string; at: string; message: string; recovered: boolean; recoveryError?: string };
+  };
   compatibility: {
     providers: ExtensionWebSupport;
     commands: ExtensionWebSupport;
@@ -154,6 +165,7 @@ export interface BuildExtensionsReportOptions {
   providers?: ExtensionProviderInfo[];
   resources?: ExtensionResourceInfo[];
   runtimeDiagnostics?: ExtensionDiagnosticInfo[];
+  runtime?: ExtensionsReport["runtime"];
 }
 
 export function collectExtensionResources(loader: ResourceLoaderLike): ExtensionResourceInfo[] {
@@ -257,12 +269,13 @@ export function buildExtensionsReport(
     renderers,
     resources: options.resources ?? [],
     diagnostics,
+    ...(options.runtime ? { runtime: options.runtime } : {}),
     compatibility: {
       providers: "supported",
       commands: "supported",
       tools: "supported",
       flags: "supported",
-      commandContext: "partial",
+      commandContext: "supported",
       shortcuts: "unsupported",
       events: "partial",
       renderers: "unsupported",

@@ -1,0 +1,10 @@
+.root { display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--bg); }
+.toolbar { min-height: 38px; display: flex; align-items: center; gap: 10px; padding: 4px 12px; border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: var(--text-xs); }
+.path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.download { color: var(--color-accent); text-decoration: none; }
+.body { min-height: 0; flex: 1; overflow: auto; }
+.banner { position: sticky; top: 0; padding: 6px 12px; color: var(--color-warning-text); background: var(--color-warning-bg); border-bottom: 1px solid var(--color-warning-border); font-size: var(--text-xs); }
+.hex { min-width: max-content; margin: 0; padding: 14px; color: var(--text-muted); background: transparent; font: var(--text-sm)/var(--leading-relaxed) var(--font-mono); }
+.notice { flex: 1; display: grid; place-items: center; color: var(--text-dim); }
+@media (max-width: 700px) { .toolbar { min-height: var(--control-touch); } .hex { font-size: var(--text-xs); } }
+:global(html[data-ui-style="trae"]) .root { background: var(--trae-canvas); }

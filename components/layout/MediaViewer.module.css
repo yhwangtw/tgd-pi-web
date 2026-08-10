@@ -1,0 +1,16 @@
+.root { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--bg-panel); }
+.toolbar { min-height: 38px; display: flex; align-items: center; gap: 10px; padding: 4px 12px; border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: var(--text-xs); background: var(--bg); }
+.path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.live { color: var(--color-success); }
+.static { color: var(--text-dim); }
+.stage { flex: 1; min-height: 0; display: grid; place-items: center; padding: 18px; overflow: auto; }
+.video { display: block; max-width: 100%; max-height: 100%; border-radius: var(--radius-card); background: var(--color-black); box-shadow: var(--color-shadow-card); }
+.error { color: var(--color-error-text); }
+
+@media (max-width: 700px) {
+  .toolbar { min-height: var(--control-touch); flex-wrap: wrap; gap: 5px 8px; }
+  .stage { padding: 10px; }
+}
+
+:global(html[data-ui-style="trae"]) .root { background: var(--trae-canvas); }
+:global(html[data-ui-style="trae"]) .toolbar { background: var(--trae-canvas); border-bottom-color: var(--trae-hairline); }

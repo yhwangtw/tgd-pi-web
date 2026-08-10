@@ -25,6 +25,7 @@ import {
   updateQueuedFollowUp,
   type QueuedFollowUp,
 } from "@/lib/queued-follow-ups";
+import { createSessionReplacementChannel, type SessionReplacementChannel } from "@/lib/session-replacement-channel";
 
 export type { SessionData, AgentPhase, ThinkingLevelOption, ChatInputHandle, AttachedImage };
 
@@ -53,6 +54,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [data, setData] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
+  const [runtimeFailure, setRuntimeFailure] = useState<{ message: string; recoveryError?: string } | null>(null);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
@@ -88,6 +90,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const hasSummarizedRef = useRef(Boolean(session?.name));
   const sessionNameRef = useRef<string | undefined>(session?.name);
   const sessionLoadRequestRef = useRef(0);
+  const replacementChannelRef = useRef<SessionReplacementChannel | null>(null);
 
   const { eventSourceRef, lastEventAtRef, connectEvents } = useAgentEvents(agentRunningRef, handleAgentEventRef);
   const { stalledSecs, setStalledSecs } = useStallWatchdog(
@@ -224,6 +227,65 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return;
     }
     switch (event.type) {
+      case "session_replaced": {
+        const previousSessionId = typeof event.previousSessionId === "string" ? event.previousSessionId : sessionIdRef.current ?? "";
+        const nextSessionId = typeof event.newSessionId === "string" ? event.newSessionId : "";
+        if (!nextSessionId) break;
+        sessionIdRef.current = nextSessionId;
+        dispatchExtensionUI({ type: "reset" });
+        replacementChannelRef.current?.publish({
+          previousSessionId,
+          newSessionId: nextSessionId,
+          ...(typeof event.cwd === "string" ? { cwd: event.cwd } : {}),
+          ...(typeof event.sessionFile === "string" ? { sessionFile: event.sessionFile } : {}),
+        });
+        onSessionForked?.(
+          nextSessionId,
+          typeof event.cwd === "string" ? event.cwd : undefined,
+          typeof event.sessionFile === "string" ? event.sessionFile : undefined,
+        );
+        break;
+      }
+      case "session_replacement_failed": {
+        const message = typeof event.message === "string" ? event.message : translate("toast.runtimeReplacementFailed");
+        const activeSessionId = typeof event.activeSessionId === "string" ? event.activeSessionId : "";
+        if (event.recovered === true) {
+          setRuntimeFailure(null);
+          const recoveryLabel = event.preflight === true
+            ? translate("toast.runtimeReplacementRejected")
+            : translate("toast.runtimeRecovered");
+          showToast(`${recoveryLabel}: ${message}`, { type: "warning", duration: 8000 });
+          if (activeSessionId && activeSessionId !== sessionIdRef.current) {
+            sessionIdRef.current = activeSessionId;
+            onSessionForked?.(
+              activeSessionId,
+              typeof event.cwd === "string" ? event.cwd : undefined,
+              typeof event.sessionFile === "string" ? event.sessionFile : undefined,
+            );
+          }
+        } else {
+          setRuntimeFailure({
+            message,
+            ...(typeof event.recoveryError === "string" ? { recoveryError: event.recoveryError } : {}),
+          });
+          showToast(translate("toast.runtimeRecoveryRequired"), { type: "error", duration: 10_000 });
+        }
+        break;
+      }
+      case "session_runtime_recovered": {
+        setRuntimeFailure(null);
+        const activeSessionId = typeof event.sessionId === "string" ? event.sessionId : "";
+        if (activeSessionId && activeSessionId !== sessionIdRef.current) {
+          sessionIdRef.current = activeSessionId;
+          onSessionForked?.(
+            activeSessionId,
+            typeof event.cwd === "string" ? event.cwd : undefined,
+            typeof event.sessionFile === "string" ? event.sessionFile : undefined,
+          );
+        }
+        showToast(translate("toast.runtimeReconnected"), { type: "success" });
+        break;
+      }
       case "session_restart_deferred":
         showToast(translate("toast.authRefreshDeferred"), { type: "info", duration: 6000 });
         break;
@@ -417,8 +479,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         break;
     }
-  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionNamed, lastEventAtRef, setStalledSecs, opts.chatInputRef]);
+  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionForked, onSessionNamed, lastEventAtRef, setStalledSecs, opts.chatInputRef]);
   handleAgentEventRef.current = handleAgentEvent;
+
+  useEffect(() => {
+    const channel = createSessionReplacementChannel((replacement) => {
+      if (sessionIdRef.current !== replacement.previousSessionId) return;
+      sessionIdRef.current = replacement.newSessionId;
+      dispatchExtensionUI({ type: "reset" });
+      onSessionForked?.(
+        replacement.newSessionId,
+        replacement.cwd,
+        replacement.sessionFile,
+      );
+    });
+    replacementChannelRef.current = channel;
+    return () => {
+      if (replacementChannelRef.current === channel) replacementChannelRef.current = null;
+      channel.close();
+    };
+  }, [onSessionForked]);
 
   const handleExtensionUIResponse = useCallback(async (response: WebExtensionUIResponse) => {
     const sid = sessionIdRef.current;
@@ -580,6 +660,29 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, []);
 
+  const handleRuntimeReconnect = useCallback(async () => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    try {
+      const active = await sendAgentCommand<{ sessionId: string; cwd: string; sessionFile: string }>(sid, {
+        type: "recover_runtime",
+      });
+      if (!active) throw new Error("Runtime recovery returned no active session");
+      setRuntimeFailure(null);
+      if (active.sessionId !== sid) {
+        sessionIdRef.current = active.sessionId;
+        onSessionForked?.(active.sessionId, active.cwd, active.sessionFile);
+      } else {
+        await loadSession(active.sessionId, false, true);
+      }
+    } catch (reason) {
+      showToast(`${translate("toast.runtimeRecoveryRequired")}: ${reason instanceof Error ? reason.message : reason}`, {
+        type: "error",
+        duration: 10_000,
+      });
+    }
+  }, [loadSession, onSessionForked]);
+
   const handleFork = useCallback(async (entryId: string) => {
     const sid = sessionIdRef.current;
     if (!sid) return;
@@ -590,7 +693,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         entryId,
       });
       const { cancelled, newSessionId } = result ?? {};
-      if (!cancelled && newSessionId) {
+      if (!cancelled && newSessionId && sessionIdRef.current !== newSessionId) {
+        sessionIdRef.current = newSessionId;
         onSessionForked?.(newSessionId);
       }
     } catch (e) {
@@ -977,7 +1081,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   return {
     // State
-    data, loading, error, activeLeafId, messages, entryIds, streamState,
+    data, loading, error, runtimeFailure, activeLeafId, messages, entryIds, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
     retryInfo, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, currentModel, displayModel, sessionStats,
@@ -987,7 +1091,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef,
     // Actions
-    handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
+    handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,
     handleToolPresetChange, handleThinkingLevelChange, handleClearQueue, handleRemoveQueued, handleUpdateQueued, handleMoveQueued, handleRetry, handleEditRerun, handleAbortBash, handleExtensionUIResponse, loadTools, setActiveLeafId, setData, setMessages,
     dispatch, setAgentRunning, setForkingEntryId,

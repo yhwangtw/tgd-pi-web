@@ -143,6 +143,13 @@ export function listSnapshots(sessionId: string): Omit<SnapshotMeta, "ref" | "co
   return readMeta(sessionId).map(({ id, ts, label, fileCount }) => ({ id, ts, label, fileCount }));
 }
 
+export async function readSnapshotFile(cwd: string, sessionId: string, id: string, relPath: string): Promise<string> {
+  if (!safeJoin(cwd, relPath) || relPath.startsWith("-")) throw new Error("path not allowed");
+  const meta = readMeta(sessionId).find((snapshot) => snapshot.id === id);
+  if (!meta) throw new Error("snapshot not found");
+  return git(cwd, ["show", `${meta.commit}:${relPath.split(sep).join("/")}`]);
+}
+
 export interface RestoreResult {
   restored: number;
   removed: number;

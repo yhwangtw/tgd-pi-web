@@ -171,6 +171,9 @@ parent/
 - 使用 `!command` 直接執行 shell；使用 `!!command` 讓結果不進入模型 context。
 - 在 session 中途切換模型與 thinking level。
 - 內建 `ask_user` 工具，並支援 Pi extension 的 `select`、`confirm`、`input`、`editor` 對話框、通知、狀態與文字 Widget；等待中的決定可跨斷線重連保留。
+- Pi extension 的 session 指令（`newSession`、`fork`、`switchSession`）改由原生 `AgentSessionRuntime` 執行；Web UI 會跟隨替換後的 session，並將 SSE 重連至新 session。
+- 替換失敗時會恢復原本的 runtime；目標 session 已被其他 runtime 使用時會在切換前拒絕，所有開啟中的分頁也會同步跟隨。Extensions 設定可查看即時 runtime 診斷。
+- 可透過預覽優先的對話框匯入 Pi `.jsonl`；切換前會驗證 header、實際 cwd、允許的根目錄、symlink、檔案大小與目的地衝突。
 - 每次執行都有錯誤卡、停滯警告、通知、完成音效與分頁狀態。
 - 可編輯過去的 turn、從先前分支點 retry、建立獨立 fork，或在 session 內切換分支。
 
@@ -268,7 +271,7 @@ Session 仍使用 Pi 原生格式：
 ## 架構
 
 ```text
-Browser                    Next.js server                 AgentSession
+Browser                    Next.js server             AgentSessionRuntime
   │                              │                            │
   ├─ GET /api/sessions ─────────▶│ incremental .jsonl cache   │
   ├─ POST /api/agent/[id] ──────▶│ startRpcSession() ────────▶│
@@ -278,7 +281,7 @@ Browser                    Next.js server                 AgentSession
   └─ GET /api/tgd/artifacts ────▶│ sibling tGD directory      │
 ```
 
-唯讀瀏覽只解析 session 檔，不會建立 `AgentSession`。送出訊息時，伺服器才會為每個 active session 建立一個 in-process wrapper，並透過 SSE 串流事件。
+唯讀瀏覽只解析 session 檔，不會建立 `AgentSession`。送出訊息時，伺服器才會為每個 active session 建立一個 in-process runtime wrapper，並透過 SSE 串流事件。Session 替換由 Pi 負責；wrapper 會把 cwd scoped services、extensions、registry key 與事件訂閱重綁至新的 `AgentSession`。
 
 ## 專案結構
 

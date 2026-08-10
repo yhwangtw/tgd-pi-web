@@ -23,12 +23,12 @@
 
 /* Max-width wrapper */
 .innerWrapper {
-  max-width: 900px;
+  max-width: 780px;
   margin: 0 auto;
 }
 
 .innerWrapperWide {
-  max-width: 1080px;
+  max-width: 1040px;
 }
 
 .innerWrapperExpanded {

@@ -3,7 +3,7 @@
   position: relative;
   min-width: 0;
   max-width: 100%;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
 @media (min-width: 701px) {
@@ -27,6 +27,17 @@
 .modelName {
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footerModel {
+  order: 0;
+  max-width: min(220px, 42vw);
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -229,7 +240,7 @@
   left: calc(100% + 6px);
   bottom: 50%;
   z-index: 20;
-  display: flex;
+  display: none;
   align-items: center;
   gap: 2px;
   padding: 3px;
@@ -244,7 +255,54 @@
   transform: translate(3px, 50%);
   transition: opacity 0.12s ease, transform 0.12s ease;
 }
-.mobileActionMenu { display: none; }
+.mobileActionMenu {
+  position: relative;
+  order: 4;
+  display: block;
+  flex: 0 0 auto;
+}
+
+.mobileActionMenu > summary {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: var(--radius-control-compact);
+  color: var(--text-dim);
+  cursor: pointer;
+  list-style: none;
+  touch-action: manipulation;
+}
+
+.mobileActionMenu > summary::-webkit-details-marker { display: none; }
+.mobileActionMenu > summary:hover,
+.mobileActionMenu[open] > summary { background: var(--bg-hover); color: var(--text); }
+
+.mobileActionPanel {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  min-width: 180px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-menu);
+  background: var(--bg-elev-1);
+  box-shadow: var(--color-shadow-popup);
+}
+
+.mobileActionPanel .copyButton {
+  width: 100%;
+  min-height: 36px;
+  justify-content: flex-start;
+  padding: 0 10px;
+  color: var(--text-muted);
+}
+
+.mobileActionPanelDown { top: calc(100% + 6px); bottom: auto; }
 .messageContainer:hover .actionToolbar,
 .messageContainer:focus-within .actionToolbar {
   opacity: 1;
@@ -263,7 +321,7 @@
 .actionToolbar .copyButton svg { width: 13px; height: 13px; }
 .actionToolbar .copyButton[aria-pressed="true"] { color: var(--color-warning-text-strong); }
 
-.usageDetails { position: relative; flex: 0 0 auto; }
+.usageDetails { position: relative; order: 1; flex: 0 0 auto; }
 .usageDetails > summary {
   display: inline-flex;
   height: 24px;
@@ -318,9 +376,9 @@
 }
 
 .timestamp {
-  order: 1;
+  order: 2;
   font-size: var(--text-xs);
-  color: var(--text-dim);
+  color: var(--text-muted);
   margin-left: 4px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -366,6 +424,30 @@
   background: var(--bg-panel);
   border-top: 1px solid var(--border);
 }
+
+.reasoningGroup {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--bg-panel);
+}
+
+.reasoningGroup > summary {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 9px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  list-style: none;
+}
+
+.reasoningGroup > summary::-webkit-details-marker { display: none; }
+.reasoningGroup[open] > summary { border-bottom: 1px solid var(--border-subtle); }
+.reasoningBody { display: grid; gap: 6px; padding: 6px; }
 
 /* Tool call block */
 .toolCallContainer {
@@ -583,7 +665,7 @@
   .toolDiffPath button { width: 40px; height: 40px; }
   .focusDiff { padding: 0; }
   .messageContainer {
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
 
   .modelLabel {
@@ -603,11 +685,9 @@
     opacity: 1;
   }
 
-  .actionToolbar { display: none; }
-
   .mobileActionMenu {
     position: relative;
-    order: 2;
+    order: 4;
     display: block;
     flex: 0 0 auto;
   }
@@ -647,6 +727,7 @@
   }
   .mobileActionPanelDown {
     top: auto;
+    bottom: calc(var(--safe-area-bottom) + var(--mobile-nav-height) + 10px);
   }
   .mobileActionPanel .copyButton {
     width: 100%;
@@ -658,7 +739,7 @@
   .mobileActionPanel .copyButton[aria-pressed="true"] { color: var(--color-warning-text-strong); }
 
   .timestamp {
-    order: 3;
+    order: 2;
     margin-left: 2px;
   }
 
@@ -696,7 +777,7 @@
 }
 
 :global(html[data-ui-style="trae"]) .messageContainer {
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 :global(html[data-ui-style="trae"]) .modelLabel {
@@ -707,7 +788,7 @@
 :global(html[data-ui-style="trae"]) .footer {
   min-height: 26px;
   margin-top: 3px;
-  opacity: 0.58;
+  opacity: 0.78;
 }
 
 :global(html[data-ui-style="trae"]) .actionToolbar,
@@ -743,7 +824,7 @@
 
 @media (max-width: 700px) {
   :global(html[data-ui-style="trae"]) .messageContainer {
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
 
   :global(html[data-ui-style="trae"]) .footer {

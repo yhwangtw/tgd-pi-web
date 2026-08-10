@@ -12,7 +12,7 @@
 .summary {
   display: flex;
   width: 100%;
-  min-height: 38px;
+  min-height: 36px;
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
@@ -44,6 +44,25 @@
   font-weight: var(--weight-semibold);
 }
 
+.outcome {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.outcomeSuccess {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.outcomeError {
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
+}
+
 .meta {
   display: flex;
   min-width: 0;
@@ -62,8 +81,6 @@
   color: var(--border-strong);
   content: "·";
 }
-
-.failed { color: var(--color-error-text); }
 
 .chevron {
   flex: 0 0 auto;
@@ -84,14 +101,18 @@
 }
 
 @media (max-width: 700px) {
-  .summary { min-height: 44px; padding: 8px 9px; }
+  .summary { min-height: 40px; padding: 7px 9px; }
   .meta { gap: 6px; }
   .meta span + span::before { margin-right: 6px; }
-  .meta span:nth-child(n + 3) { display: none; }
+  .meta span:nth-child(n + 2) { display: none; }
   .body { max-height: min(48dvh, 420px); }
+}
+
+@media (pointer: coarse) {
+  .summary { min-height: var(--control-touch); }
 }
 
 :global(html[data-ui-style="trae"]) .root { border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .rootError { box-shadow: inset 3px 0 var(--color-error), var(--trae-card-shadow); }
-:global(html[data-ui-style="trae"]) .summary { min-height: 42px; padding: 8px 12px; }
+:global(html[data-ui-style="trae"]) .summary { min-height: 38px; padding: 7px 11px; }
 :global(html[data-ui-style="trae"]) .body { gap: 8px; padding: 9px; border-top-color: var(--trae-hairline); background: var(--trae-canvas); }

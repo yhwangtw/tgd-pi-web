@@ -8,6 +8,9 @@ import { SourceView } from "./text-viewer/SourceView";
 import { PlainSourceView } from "./text-viewer/PlainSourceView";
 import { DiffViewMode } from "./text-viewer/DiffViewMode";
 import { PreviewView } from "./text-viewer/PreviewView";
+import { StructuredDataView } from "./text-viewer/StructuredDataView";
+import { FileInspectorDrawer } from "./FileInspectorDrawer";
+import { buildFileAgentPrompt, extractFileOutline, type TextSelectionRange } from "@/lib/file-workbench";
 import { showToast } from "@/hooks/useToast";
 import styles from "./TextFileViewer.module.css";
 
@@ -18,9 +21,13 @@ interface Props {
   gotoLine?: number;
   /** Bumped per jump request, so reopening an open file re-triggers the jump. */
   gotoNonce?: number;
+  onSendToAgent?: (prompt: string) => void;
+  sessionId?: string | null;
 }
 
-export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonce }: Props) {
+type InspectorTab = "outline" | "problems" | "history" | "blame" | "notes";
+
+export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonce, onSendToAgent, sessionId }: Props) {
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,7 +35,14 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   const [previewMode, setPreviewMode] = useState(false);
   const [viewMode, setViewMode] = useState<"source" | "diff">("source");
   const [wrapLines, setWrapLines] = useState(false);
+  const [structuredMode, setStructuredMode] = useState(false);
   const [changeCount, setChangeCount] = useState(0);
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [selection, setSelection] = useState<TextSelectionRange | null>(null);
+  const [version, setVersion] = useState<{ ref: string; label: string; content: string } | null>(null);
+  const [diagnostics, setDiagnostics] = useState<Array<{ line: number; severity: "error" | "warning" }>>([]);
   const { watching, refreshTrigger } = useFileWatch(filePath);
 
   // ── In-file find / go-to-line ────────────────────────────────────────────
@@ -88,7 +102,12 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     setPreviewMode(false);
     setViewMode("source");
     setWrapLines(false);
+    setStructuredMode(false);
     setChangeCount(0);
+    setInspectorTab(null);
+    setSelection(null);
+    setVersion(null);
+    setDiagnostics([]);
 
     fetchContent(filePath).then((d) => {
       if (d?.language === "markdown") setPreviewMode(true);
@@ -112,6 +131,9 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     setEditing(false);
     setDraft("");
     setForceHighlight(false);
+    setMoreOpen(false);
+    setSelection(null);
+    setVersion(null);
   }, [filePath]);
 
   // Jump to a line requested by a search hit. Reuses the ":N" go-to-line path
@@ -184,6 +206,72 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     }
   }, [draft, filePath, saving]);
 
+  const relativePath = getRelativeFilePath(filePath, cwd);
+  const outline = useMemo(() => data ? extractFileOutline(data.content, data.language) : [], [data]);
+  const diagnosticLines = useMemo(() => Object.fromEntries(diagnostics.map((diagnostic) => [diagnostic.line, diagnostic.severity])) as Record<number, "error" | "warning">, [diagnostics]);
+  const extension = filePath.toLowerCase().split(".").pop() ?? "";
+  const structuredKind = data?.language === "json" ? "json" as const
+    : data?.language === "yaml" ? "yaml" as const
+      : extension === "csv" ? "csv" as const
+        : extension === "tsv" ? "tsv" as const
+          : null;
+
+  const sendToAgent = useCallback((action: "explain" | "review" | "fix" | "context") => {
+    if (!onSendToAgent) return;
+    onSendToAgent(buildFileAgentPrompt(action, relativePath, selection));
+    showToast(selection ? `Added lines ${selection.startLine}–${selection.endLine} to the prompt` : "Added file to the prompt", { type: "success" });
+  }, [onSendToAgent, relativePath, selection]);
+
+  const handleTextSelection = useCallback(() => {
+    const selected = window.getSelection();
+    const text = selected?.toString() ?? "";
+    if (!text.trim() || !data) { setSelection(null); return; }
+    const elementOf = (node: Node | null) => node instanceof Element ? node : node?.parentElement ?? null;
+    const startNode = elementOf(selected?.anchorNode ?? null)?.closest("[data-line-number]");
+    const endNode = elementOf(selected?.focusNode ?? null)?.closest("[data-line-number]");
+    let startLine = Number(startNode?.getAttribute("data-line-number"));
+    let endLine = Number(endNode?.getAttribute("data-line-number"));
+    if (!startLine || !endLine) {
+      const offset = data.content.indexOf(text);
+      if (offset < 0) { setSelection(null); return; }
+      startLine = data.content.slice(0, offset).split("\n").length;
+      endLine = startLine + text.split("\n").length - 1;
+    }
+    if (startLine > endLine) [startLine, endLine] = [endLine, startLine];
+    setSelection({ startLine, endLine, text });
+  }, [data]);
+
+  const compareVersion = useCallback(async (commit: { sha: string; shortSha: string; subject: string }) => {
+    if (!cwd) return;
+    try {
+      const response = await fetch(`/api/files/insights?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(relativePath)}&mode=version&ref=${encodeURIComponent(commit.sha)}`);
+      const payload = await response.json() as { content?: string; error?: string };
+      if (!response.ok || payload.error) throw new Error(payload.error ?? `HTTP ${response.status}`);
+      setVersion({ ref: commit.sha, label: `${commit.shortSha} · ${commit.subject}`, content: payload.content ?? "" });
+      setPreviewMode(false);
+      setStructuredMode(false);
+      setViewMode("diff");
+    } catch (reason) { showToast(`Version load failed: ${reason instanceof Error ? reason.message : String(reason)}`, { type: "error" }); }
+  }, [cwd, relativePath]);
+
+  const compareSnapshot = useCallback(async (snapshot: { id: string; label: string }) => {
+    if (!cwd || !sessionId) return;
+    try {
+      const response = await fetch(`/api/git/snapshots/file?cwd=${encodeURIComponent(cwd)}&sessionId=${encodeURIComponent(sessionId)}&id=${encodeURIComponent(snapshot.id)}&path=${encodeURIComponent(relativePath)}`);
+      const payload = await response.json() as { content?: string; error?: string };
+      if (!response.ok || payload.error) throw new Error(payload.error ?? `HTTP ${response.status}`);
+      setVersion({ ref: snapshot.id, label: `Snapshot · ${snapshot.label}`, content: payload.content ?? "" });
+      setPreviewMode(false); setStructuredMode(false); setViewMode("diff");
+    } catch (reason) { showToast(`Snapshot load failed: ${reason instanceof Error ? reason.message : String(reason)}`, { type: "error" }); }
+  }, [cwd, relativePath, sessionId]);
+
+  useEffect(() => {
+    if (!fullscreen && !moreOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { setFullscreen(false); setMoreOpen(false); } };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [fullscreen, moreOpen]);
+
   if (loading) {
     return <div className={styles.loadingState}>Loading...</div>;
   }
@@ -197,19 +285,19 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   const isHtml = data.language === "html";
   const isMarkdown = data.language === "markdown";
   const lines = data.content.split("\n");
-  const hasDiff = prevContent !== null && prevContent !== data.content;
+  const diffBase = version?.content ?? prevContent;
+  const hasComparedDiff = diffBase !== null && diffBase !== data.content;
 
   return (
-    <div className={styles.root}>
-      {/* Status bar */}
+    <div className={`${styles.root} ${fullscreen ? styles.fullscreen : ""}`}>
       <div className={styles.statusBar} data-testid="file-viewer-toolbar">
         <div className={styles.fileSummary}>
           <span className={styles.filePath} title={filePath}>
-            {getRelativeFilePath(filePath, cwd)}
+            {relativePath}
           </span>
           <span className={styles.fileMeta}>
             <span className={styles.language}>{data.language}</span>
-            {viewMode === "source" && <span>{lines.length} lines</span>}
+            {viewMode === "source" && !structuredMode && <span>{lines.length} lines</span>}
             <span>{formatSize(data.size)}</span>
 
             {/* Live watch indicator */}
@@ -224,12 +312,30 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
         </div>
 
         <div className={styles.fileActions}>
+        {onSendToAgent && !editing && (
+          <button className={styles.askPi} onClick={() => sendToAgent("context")} title="Add this file or selected lines to the composer">
+            Ask Pi
+          </button>
+        )}
 
-        {/* Diff / Source toggle */}
-        {hasDiff && (
+        {(isHtml || isMarkdown) && viewMode === "source" && (
+          <div className={styles.toggleGroup}>
+            <button onClick={() => { setPreviewMode(false); setStructuredMode(false); }} className={`${styles.toggleGroupFirst} ${!previewMode && !structuredMode ? styles.toggleActive : styles.toggleInactive}`}>{isHtml ? "Code" : "Raw"}</button>
+            <button onClick={() => { setPreviewMode(true); setStructuredMode(false); }} className={`${styles.toggleGroupSecond} ${previewMode ? styles.toggleActive : styles.toggleInactive}`}>Preview</button>
+          </div>
+        )}
+
+        {structuredKind && viewMode === "source" && (
+          <div className={styles.toggleGroup}>
+            <button onClick={() => { setStructuredMode(false); setPreviewMode(false); }} className={`${styles.toggleGroupFirst} ${!structuredMode ? styles.toggleActive : styles.toggleInactive}`}>Raw</button>
+            <button onClick={() => { setStructuredMode(true); setPreviewMode(false); }} className={`${styles.toggleGroupSecond} ${structuredMode ? styles.toggleActive : styles.toggleInactive}`}>{structuredKind === "csv" || structuredKind === "tsv" ? "Table" : "Tree"}</button>
+          </div>
+        )}
+
+        {hasComparedDiff && (
           <div className={styles.toggleGroup}>
             <button
-              onClick={() => setViewMode("source")}
+              onClick={() => { setViewMode("source"); setVersion(null); }}
               className={`${styles.toggleGroupFirst} ${viewMode === "source" ? styles.toggleActive : styles.toggleInactive}`}
             >
               Source
@@ -238,174 +344,115 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
               onClick={() => setViewMode("diff")}
               className={`${styles.toggleGroupSecond} ${viewMode === "diff" ? styles.toggleActive : styles.toggleInactive}`}
             >
-              Diff {changeCount > 0 && <span className={styles.changeCount}>+{changeCount}</span>}
+              {version ? version.label : `Diff${changeCount > 0 ? ` +${changeCount}` : ""}`}
             </button>
           </div>
         )}
 
-        {/* Word wrap toggle */}
-        {viewMode === "source" && !previewMode && !editing && (
-          <button
-            onClick={() => setWrapLines((v) => !v)}
-            title={wrapLines ? "Disable word wrap" : "Enable word wrap"}
-            className={`${styles.toggleStandalone} ${wrapLines ? styles.toggleActive : styles.toggleInactive}`}
-          >
-            wrap
-          </button>
+        {viewMode === "source" && !previewMode && !structuredMode && !data.truncated && editing && (
+          <div className={styles.toggleGroup}>
+            <button onClick={() => void saveEdit()} disabled={saving} className={`${styles.toggleGroupFirst} ${styles.toggleActive}`}>{saving ? "Saving…" : "Save"}</button>
+            <button onClick={() => { setEditing(false); setDraft(""); }} disabled={saving} className={`${styles.toggleGroupSecond} ${styles.toggleInactive}`}>Cancel</button>
+          </div>
         )}
 
-        {/* Large-file highlight toggle (plain is the default for big files) */}
-        {viewMode === "source" && !previewMode && !editing && isLarge && (
-          <button
-            onClick={() => setForceHighlight((v) => !v)}
-            title={usePlain
-              ? "Large file — rendered without highlighting. Click to force syntax highlighting (slow)."
-              : "Switch back to fast plain rendering"}
-            className={`${styles.toggleStandalone} ${forceHighlight ? styles.toggleActive : styles.toggleInactive}`}
-          >
-            {usePlain ? "plain·large" : "highlighted"}
-          </button>
-        )}
+        {!editing && <button className={`${styles.toggleStandalone} ${inspectorTab ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setInspectorTab((current) => current ? null : "outline")} aria-expanded={Boolean(inspectorTab)}>Inspector</button>}
+        <div className={styles.moreWrap}>
+          <button className={`${styles.moreButton} ${moreOpen ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setMoreOpen((current) => !current)} aria-label="More file actions" aria-expanded={moreOpen}>•••</button>
+          {moreOpen && <><button className={styles.menuBackdrop} aria-label="Close menu" onClick={() => setMoreOpen(false)} /><div className={styles.moreMenu} role="menu">
+            <button onClick={() => { copyContent(); setMoreOpen(false); }}>Copy file</button>
+            {viewMode === "source" && !previewMode && !structuredMode && !editing && !data.truncated && <button onClick={() => { startEditing(); setMoreOpen(false); }}>Edit file</button>}
+            {viewMode === "source" && !previewMode && !structuredMode && !editing && <button onClick={() => { setWrapLines((current) => !current); setMoreOpen(false); }}>{wrapLines ? "Disable" : "Enable"} word wrap</button>}
+            {isLarge && <button onClick={() => { setForceHighlight((current) => !current); setMoreOpen(false); }}>{usePlain ? "Force syntax highlighting" : "Use fast plain view"}</button>}
+            <button onClick={() => { setInspectorTab("outline"); setMoreOpen(false); }}>Outline</button>
+            <button onClick={() => { setInspectorTab("problems"); setMoreOpen(false); }}>Problems</button>
+            <button onClick={() => { setInspectorTab("history"); setMoreOpen(false); }}>History</button>
+            <button onClick={() => { setInspectorTab("blame"); setMoreOpen(false); }}>Git blame</button>
+            <button onClick={() => { setInspectorTab("notes"); setMoreOpen(false); }}>Notes</button>
+            <button onClick={() => { setFullscreen((current) => !current); setMoreOpen(false); }}>{fullscreen ? "Exit focus mode" : "Focus mode"}</button>
+            <a href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>Download</a>
+          </div></>}
+        </div>
+        </div>
+      </div>
 
-        {/* Copy contents */}
-        {!editing && (
-          <button onClick={copyContent} title="Copy file contents" className={`${styles.toggleStandalone} ${styles.toggleInactive}`}>
-            copy
-          </button>
-        )}
-
-        {/* Edit / Save / Cancel. Hidden for truncated previews — saving a
-            256KB prefix over a bigger file would destroy the rest of it. */}
-        {viewMode === "source" && !previewMode && !data.truncated && (
-          editing ? (
-            <div className={styles.toggleGroup}>
-              <button
-                onClick={() => void saveEdit()}
-                disabled={saving}
-                className={`${styles.toggleGroupFirst} ${styles.toggleActive}`}
-              >
-                {saving ? "Saving…" : "Save"}
-              </button>
-              <button
-                onClick={() => { setEditing(false); setDraft(""); }}
-                disabled={saving}
-                className={`${styles.toggleGroupSecond} ${styles.toggleInactive}`}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button onClick={startEditing} title="Edit this file in place" className={`${styles.toggleStandalone} ${styles.toggleInactive}`}>
-              edit
-            </button>
-          )
-        )}
-
-        {/* In-file find / go-to-line */}
-        {viewMode === "source" && !previewMode && !editing && (
+      {viewMode === "source" && !previewMode && !structuredMode && !editing && (
+        <div className={styles.sourceTools}>
           <span className={styles.findWrap}>
             <input
               value={findQuery}
               onChange={(e) => { setFindQuery(e.target.value); setFindPos(0); }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && matches.length > 0) {
-                  e.preventDefault();
-                  setFindPos((p) => e.shiftKey
-                    ? (p - 1 + matches.length) % matches.length
-                    : (p + 1) % matches.length);
-                } else if (e.key === "Escape") {
-                  setFindQuery("");
-                }
+                if (e.key === "Enter" && matches.length > 0) { e.preventDefault(); setFindPos((p) => e.shiftKey ? (p - 1 + matches.length) % matches.length : (p + 1) % matches.length); }
+                else if (e.key === "Escape") setFindQuery("");
               }}
               placeholder="find / :line"
               className={styles.findInput}
               spellCheck={false}
             />
-            {findQuery.trim() && !findQuery.trim().startsWith(":") && (
-              <span className={styles.findCount}>
-                {matches.length > 0 ? `${Math.min(findPos, matches.length - 1) + 1}/${matches.length}` : "0/0"}
-              </span>
-            )}
+            {findQuery.trim() && !findQuery.trim().startsWith(":") && <span className={styles.findCount}>{matches.length > 0 ? `${Math.min(findPos, matches.length - 1) + 1}/${matches.length}` : "0/0"}</span>}
           </span>
-        )}
-
-        {/* HTML Code/Preview toggle */}
-        {isHtml && viewMode === "source" && (
-          <div className={styles.toggleGroup}>
-            <button
-              onClick={() => setPreviewMode(false)}
-              className={`${styles.toggleGroupFirst} ${!previewMode ? styles.toggleActive : styles.toggleInactive}`}
-            >
-              Code
-            </button>
-            <button
-              onClick={() => setPreviewMode(true)}
-              className={`${styles.toggleGroupSecond} ${previewMode ? styles.toggleActive : styles.toggleInactive}`}
-            >
-              Preview
-            </button>
-          </div>
-        )}
-
-        {/* Markdown Preview/Raw toggle */}
-        {isMarkdown && viewMode === "source" && (
-          <div className={styles.toggleGroup}>
-            <button
-              onClick={() => setPreviewMode(true)}
-              className={`${styles.toggleGroupFirst} ${previewMode ? styles.toggleActive : styles.toggleInactive}`}
-            >
-              Preview
-            </button>
-            <button
-              onClick={() => setPreviewMode(false)}
-              className={`${styles.toggleGroupSecond} ${!previewMode ? styles.toggleActive : styles.toggleInactive}`}
-            >
-              Raw
-            </button>
-          </div>
-        )}
+          {outline.length > 0 && <button onClick={() => setInspectorTab("outline")}>{outline.length} symbols</button>}
+          {wrapLines && <span>wrapped</span>}
+          {usePlain && <span>large-file mode</span>}
         </div>
-      </div>
+      )}
+
+      {selection && !editing && (
+        <div className={styles.selectionBar} role="toolbar" aria-label={`Selected lines ${selection.startLine} to ${selection.endLine}`}>
+          <strong>L{selection.startLine}{selection.endLine !== selection.startLine ? `–${selection.endLine}` : ""}</strong>
+          {onSendToAgent && <><button onClick={() => sendToAgent("explain")}>Explain</button><button onClick={() => sendToAgent("review")}>Review</button><button onClick={() => sendToAgent("fix")}>Fix</button><button onClick={() => sendToAgent("context")}>Add to prompt</button></>}
+          <button className={styles.selectionClose} onClick={() => { window.getSelection()?.removeAllRanges(); setSelection(null); }} aria-label="Clear selection">×</button>
+        </div>
+      )}
 
       {/* Partial-preview banner: the API returned only the file's first chunk */}
       {data.truncated && (
         <div className={styles.truncatedNotice}>
           Large file ({formatSize(data.size)}) — showing the beginning only; editing disabled.{" "}
-          <a href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>
-            Download the full file
-          </a>
+          <a href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>Download the full file</a>
         </div>
       )}
 
-      {/* Content area — dispatch to mode-specific component */}
-      <div className={styles.contentArea}>
+      <div className={styles.workspaceBody}>
+      <div className={styles.contentArea} onPointerUp={handleTextSelection}>
         {editing ? (
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-                e.preventDefault();
-                void saveEdit();
-              }
+              if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); void saveEdit(); }
             }}
             className={styles.editor}
             spellCheck={false}
             aria-label="File editor"
           />
-        ) : viewMode === "diff" && hasDiff ? (
-          <DiffViewMode
-            oldContent={prevContent!}
-            newContent={data.content}
-            language={data.language}
-          />
+        ) : viewMode === "diff" && hasComparedDiff ? (
+          <DiffViewMode oldContent={diffBase!} newContent={data.content} language={data.language} />
+        ) : structuredMode && structuredKind ? (
+          <StructuredDataView content={data.content} kind={structuredKind} onGotoLine={(line) => { setStructuredMode(false); setFindQuery(`:${line}`); }} />
         ) : (isHtml || isMarkdown) && previewMode ? (
           <PreviewView content={data.content} language={data.language} filePath={filePath} />
         ) : usePlain ? (
-          <PlainSourceView content={data.content} activeLine={activeLine} />
+          <PlainSourceView content={data.content} activeLine={activeLine} diagnosticLines={diagnosticLines} />
         ) : (
-          <SourceView content={data.content} language={data.language} wrapLines={wrapLines} activeLine={activeLine} />
+          <SourceView content={data.content} language={data.language} wrapLines={wrapLines} activeLine={activeLine} diagnosticLines={diagnosticLines} />
         )}
+      </div>
+      {inspectorTab && <FileInspectorDrawer
+        filePath={filePath}
+        relativePath={relativePath}
+        cwd={cwd}
+        sessionId={sessionId}
+        outline={outline}
+        initialTab={inspectorTab}
+        onClose={() => setInspectorTab(null)}
+        onGotoLine={(line) => { setViewMode("source"); setPreviewMode(false); setStructuredMode(false); setFindQuery(`:${line}`); }}
+        onCompareVersion={(commit) => void compareVersion(commit)}
+        onCompareSnapshot={(snapshot) => void compareSnapshot(snapshot)}
+        onDiagnosticsLoaded={(items) => setDiagnostics(items)}
+        onSendDiagnostic={onSendToAgent ? (diagnostic) => onSendToAgent(buildFileAgentPrompt("diagnostic", relativePath, { startLine: diagnostic.line, endLine: diagnostic.line, text: data.content.split("\n")[diagnostic.line - 1] ?? "" }, `${diagnostic.code ?? diagnostic.source}: ${diagnostic.message}`)) : undefined}
+      />}
       </div>
     </div>
   );

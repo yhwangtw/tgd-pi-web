@@ -466,6 +466,18 @@ async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: bool
     const openPanel = page.locator(".sidebar-container.sidebar-open");
     await expect(openPanel, `${panel.button} panel`).toBeVisible();
     await expect.poll(async () => (await openPanel.boundingBox())?.x ?? -999).toBeGreaterThanOrEqual(-1);
+    if (!mobile) {
+      const settledWidth = panel.button === "Agents" || panel.button === "Schedules"
+        ? 340
+        : panel.button === "Explorer" || panel.button === "Search"
+          ? 300
+          : 260;
+      // Desktop panels animate between their compact and operational widths.
+      // Audit only after the clip boundary reaches its final width, otherwise
+      // valid controls can be filtered as transiently outside overflow: clip.
+      await expect.poll(async () => (await openPanel.boundingBox())?.width ?? 0)
+        .toBeGreaterThanOrEqual(settledWidth - 1);
+    }
     await auditControls(page, openPanel, `${style}/${viewport}/${panel.button}`, mobile);
   }
 

@@ -103,6 +103,34 @@ describe("Pi Web runtime integration", () => {
     await expect(bindings.commandContextActions.newSession()).rejects.toThrow("not supported by Pi Web");
   });
 
+  it("delegates session replacement actions when hosted by AgentSessionRuntime", async () => {
+    const bindExtensions = vi.fn().mockResolvedValue(undefined);
+    const newSession = vi.fn().mockResolvedValue({ cancelled: false });
+    const fork = vi.fn().mockResolvedValue({ cancelled: false });
+    const switchSession = vi.fn().mockResolvedValue({ cancelled: false });
+
+    await bindWebExtensions(
+      {
+        bindExtensions,
+        waitForIdle: vi.fn().mockResolvedValue(undefined),
+        navigateTree: vi.fn().mockResolvedValue({ cancelled: false }),
+        reload: vi.fn().mockResolvedValue(undefined),
+      },
+      vi.fn(),
+      {} as never,
+      { newSession, fork, switchSession },
+    );
+
+    const actions = bindExtensions.mock.calls[0][0].commandContextActions;
+    await actions.newSession({ parentSession: "/sessions/parent.jsonl" });
+    await actions.fork("entry-1", { position: "at" });
+    await actions.switchSession("/sessions/next.jsonl", { cwdOverride: "/work/next" });
+
+    expect(newSession).toHaveBeenCalledWith({ parentSession: "/sessions/parent.jsonl" });
+    expect(fork).toHaveBeenCalledWith("entry-1", { position: "at" });
+    expect(switchSession).toHaveBeenCalledWith("/sessions/next.jsonl", { cwdOverride: "/work/next" });
+  });
+
   it("lets session_before_fork handlers cancel a Web fork", async () => {
     const emit = vi.fn().mockResolvedValue({ cancel: true });
     const runner = { hasHandlers: vi.fn().mockReturnValue(true), emit };

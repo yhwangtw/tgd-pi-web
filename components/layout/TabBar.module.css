@@ -78,6 +78,8 @@
   flex-shrink: 0;
   transition: background 0.1s, color 0.1s;
 }
+.pinned { color: var(--color-accent); font-size: var(--text-2xs); transform: scale(0.7); }
+.splitMark { color: var(--text-dim); font: var(--text-2xs) var(--font-mono); }
 
 .menuBackdrop { position: fixed; inset: 0; z-index: 1099; }
 .tabMenu {

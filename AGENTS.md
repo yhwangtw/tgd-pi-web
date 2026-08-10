@@ -47,12 +47,12 @@ scroll before visibility asserts. UI strings use the ellipsis character
 ## Architecture
 
 ```
-Browser                Next.js Server              AgentSession (in-process)
+Browser                Next.js Server          AgentSessionRuntime (in-process)
   │                        │                               │
   ├─ GET /api/sessions ────▶ incremental cache over        │
   │                        │  ~/.pi/agent/sessions/        │
   ├─ send message ─────────▶ POST /api/agent/[id]          │
-  │                        │   startRpcSession() ─────────▶│ createAgentSession()
+  │                        │   startRpcSession() ─────────▶│ createAgentSessionRuntime()
   │                        │   session.send(cmd) ─────────▶│ prompt/steer/bash/…
   ├─ SSE connect ──────────▶ GET /api/agent/[id]/events    │
   │◀── data: {...} ─────────│   session.onEvent() ◀────────│ session.subscribe()
@@ -63,7 +63,7 @@ Browser                Next.js Server              AgentSession (in-process)
 ```
 
 **Session browsing** (read-only): parses `.jsonl` files via `lib/session-reader.ts` — no AgentSession created.  
-**Sending a message**: `startRpcSession()` in `lib/rpc-manager.ts` creates an AgentSession in-process.
+**Sending a message**: `startRpcSession()` in `lib/rpc-manager.ts` creates an `AgentSessionRuntime` in-process. The runtime owns the active `AgentSession` and native new/switch/fork replacement lifecycle.
 
 ### Layout (post-redesign)
 
@@ -80,6 +80,7 @@ app/api/
   agent/new/route.ts              POST { cwd, message, toolNames?, provider?, modelId? }
   agent/[id]/route.ts             GET state | POST any command (see rpc-manager)
   agent/[id]/events/route.ts      GET SSE stream (30s comment heartbeats)
+  agent/[id]/import/route.ts      POST preview/import a validated Pi JSONL
   agent/[id]/summarize/route.ts   POST — auto-naming (skips named sessions)
   schedules/route.ts              GET list/history | POST create
   schedules/[id]/route.ts         PATCH update/pause | DELETE
@@ -95,13 +96,14 @@ app/api/
   files/, models*, auth/, skills/, cwd/   unchanged surfaces
 
 lib/
-  rpc-manager.ts      AgentSessionWrapper + registry + command dispatch
+  rpc-manager.ts      AgentSessionRuntime host + wrapper registry + command dispatch
                       (prompt/steer/follow_up/fork/bash/clear_queue/…);
                       owns the WebExtensionUIBridge and ask_user tool
   schedule-core.ts    timezone-aware once/daily/weekly/5-field-cron math
   schedule-store.ts   atomic <agent-dir>/schedules.json persistence
   schedule-runner.ts  process timer, run lifecycle, history + ask_user wait
   session-reader.ts   incremental listing (stat cache) + context building
+  session-import.ts   allowed-root JSONL validation + collision-free preview
   i18n.tsx            en/zh-TW strings — module store, useI18n()/translate()
   skin.ts             appearance skins — html[data-skin] token overrides
   font-size.ts        persisted UI font scale — html[data-font-size]
@@ -126,7 +128,8 @@ components/
   sidebar/  SessionSidebar (+embedded explorer, showExplorer prop, archived
             toggle), SessionItem, SessionContextMenu (tags/archive/delete),
             FileExplorer, CwdPicker, TagFilter
-  modals/   ModelsConfig, SkillsConfig, AnalyticsModal, ToolPanel
+  modals/   ModelsConfig, SkillsConfig, AnalyticsModal, ToolPanel,
+            SessionImportDialog
   ui/       CommandPalette, Toast, Skeleton
 
 hooks/    useAgentSession (chat orchestration; extracted pieces live in
@@ -180,13 +183,29 @@ idempotent.
 re-parses only changed ones with pi's pure `parseSessionEntries`.
 **Do not use `SessionManager.open()` for read-only scanning** — it rewrites
 empty/corrupted files as a side effect. Cache lives on `globalThis`
-(hot-reload safe); entries for deleted files are evicted each pass.
+(hot-reload safe); entries for deleted files are evicted each pass. A cached
+future path is returned only after the file exists — Pi does not write a new
+session until its first assistant response, and opening that future path would
+otherwise manufacture a phantom session.
 
 ### AgentSession lifecycle (`lib/rpc-manager.ts`)
 - One `AgentSessionWrapper` per session id, keyed in `globalThis.__piSessions`
 - Idle timeout 10 min; concurrent `startRpcSession()` share a start Promise
-- **Fork must destroy the wrapper immediately**: `AgentSession.fork()` mutates
-  inner state in place; `send("fork")` captures the new id then `destroy()`s.
+- The wrapper hosts Pi's `AgentSessionRuntime`. Native `newSession()`, `fork()`,
+  and `switchSession()` replace the inner session while the wrapper survives.
+  The runtime's invalidation/rebind callbacks clear old extension UI, recreate
+  cwd-bound services, rebind extensions and event subscriptions, and rekey the
+  global registry. `session_replaced` is emitted only after the entire operation,
+  including `withSession`, succeeds. Browser POST responses and SSE events may
+  both carry the new id; client navigation is deliberately idempotent.
+- Replacement failures rebuild the previous runtime and surface recovery state
+  in the composer and Extensions diagnostics. A target already owned by another
+  live runtime is rejected before invalidation, preserving the active session.
+- Every replacement event is mirrored through `BroadcastChannel` (with a
+  localStorage fallback) so idle tabs displaying the outgoing session follow it.
+- JSONL import is preview-first: source path, effective cwd, destination, header,
+  allowed-root containment, symlink escape, size, and destination collision are
+  validated before Pi's native `importFromJsonl()` replaces the runtime.
 - `bash` command wraps `executeBash` and streams synthetic
   `bash_start/bash_chunk/bash_end` events through the wrapper's listeners →
   existing SSE channel. pi records the result itself (role `bashExecution`).

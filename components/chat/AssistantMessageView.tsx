@@ -96,6 +96,7 @@ export function AssistantMessageView({
   turnStartedAt,
   usageOverride,
   showUsage = true,
+  showActions = true,
   onQuote,
   bookmarkEntryId,
   isBookmarked = false,
@@ -115,6 +116,7 @@ export function AssistantMessageView({
   turnStartedAt?: number;
   usageOverride?: AssistantUsage;
   showUsage?: boolean;
+  showActions?: boolean;
   onQuote?: (text: string) => void;
   bookmarkEntryId?: string;
   isBookmarked?: boolean;
@@ -171,7 +173,18 @@ export function AssistantMessageView({
     .filter((b): b is TextContent => b.type === "text")
     .map((b) => b.text)
     .join("\n");
-  const canBookmark = !!bookmarkEntryId && !!onToggleBookmark && !!textContent && !isStreaming;
+  const canBookmark = showActions && !!bookmarkEntryId && !!onToggleBookmark && !!textContent && !isStreaming;
+  const resolvedModelName = message.provider
+    ? modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model
+    : null;
+  const footerUsage = usageOverride ?? message.usage;
+  const showFooter = !isStreaming && (
+    (showModelLabel && !!resolvedModelName)
+    || (showUsage && !!footerUsage)
+    || (showActions && !!textContent)
+    || !!time
+    || canBookmark
+  );
 
   const closeActions = useCallback(() => {
     actionsRef.current?.removeAttribute("open");
@@ -280,9 +293,9 @@ export function AssistantMessageView({
   return (
     <div ref={rootRef} data-testid="assistant-message" className={`hover-group ${styles.messageContainer}`}>
       {/* Model label */}
-      {showModelLabel && <div className={styles.modelLabel}>
-        {message.provider && (
-          <span className={styles.modelName}>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
+      {showModelLabel && isStreaming && <div className={styles.modelLabel}>
+        {resolvedModelName && (
+          <span className={styles.modelName}>{resolvedModelName}</span>
         )}
         {isStreaming && (() => {
           let chars = 0;
@@ -382,18 +395,21 @@ export function AssistantMessageView({
         <div className={styles.abortedNote}>{t("chat.stopped")}</div>
       )}
 
-      <div data-testid="assistant-message-footer" className={styles.footer}>
-        {showUsage && (usageOverride ?? message.usage) && !isStreaming && (
-          <UsageDetails usage={(usageOverride ?? message.usage)!} />
+      {showFooter && <div data-testid="assistant-message-footer" className={styles.footer}>
+        {showModelLabel && resolvedModelName && !isStreaming && (
+          <span className={styles.footerModel} title={resolvedModelName}>{resolvedModelName}</span>
         )}
-        {textContent && !isStreaming && <div data-testid="assistant-message-actions" className={styles.actionToolbar}>
+        {showUsage && footerUsage && (
+          <UsageDetails usage={footerUsage} />
+        )}
+        {showActions && textContent && !isStreaming && <div data-testid="assistant-message-actions" className={styles.actionToolbar} aria-hidden="true">
         {textContent && !isStreaming && onQuote && (
           <button type="button" onClick={quoteContent} title={t("chat.quote")} className={`${styles.copyButton} text-dim hover-accent`}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 21c3-6 7-9 14-9" /><path d="M13 7l5 5-5 5" /></svg>
             <span className={styles.copyLabel}>{t("chat.quote")}</span>
           </button>
         )}
-        {textContent && !isStreaming && (
+        {showActions && textContent && !isStreaming && (
           <button
             onClick={copyContent}
             title={t("chat.copyMessage")}
@@ -431,12 +447,6 @@ export function AssistantMessageView({
               data-mobile-action-panel
               className={`${styles.mobileActionPanel} ${actionPlacement === "down" ? styles.mobileActionPanelDown : ""}`}
             >
-              {onQuote && (
-                <button type="button" onClick={() => { closeActions(); quoteContent(); }} className={`${styles.copyButton} text-dim hover-accent`}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 21c3-6 7-9 14-9" /><path d="M13 7l5 5-5 5" /></svg>
-                  <span>{t("chat.quote")}</span>
-                </button>
-              )}
               <button type="button" onClick={() => { closeActions(); copyContent(); }} className={`${styles.copyButton} ${copied ? "text-accent" : "text-dim hover-accent"}`}>
                 {copied ? (
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
@@ -445,6 +455,12 @@ export function AssistantMessageView({
                 )}
                 <span>{copied ? t("common.copied") : t("common.copy")}</span>
               </button>
+              {onQuote && (
+                <button type="button" onClick={() => { closeActions(); quoteContent(); }} className={`${styles.copyButton} text-dim hover-accent`}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 21c3-6 7-9 14-9" /><path d="M13 7l5 5-5 5" /></svg>
+                  <span>{t("chat.quote")}</span>
+                </button>
+              )}
               {canBookmark && (
                 <MessageBookmarkAction
                   isBookmarked={isBookmarked}
@@ -459,7 +475,7 @@ export function AssistantMessageView({
         {time && !isStreaming && (
           <span className={styles.timestamp}>{time}</span>
         )}
-      </div>
+      </div>}
     </div>
   );
 
@@ -472,6 +488,7 @@ function TurnWorkLog({
   toolResults?: Map<string, ToolResultMessage>;
   turnStartedAt?: number;
 }) {
+  const { t } = useI18n();
   const entries = messages.flatMap((activityMessage) =>
     activityMessage.content
       .filter((block) => block.type === "thinking" || block.type === "toolCall")
@@ -479,6 +496,9 @@ function TurnWorkLog({
   );
   const toolEntries = entries.filter(
     (entry): entry is typeof entry & { block: ToolCallContent } => entry.block.type === "toolCall",
+  );
+  const thinkingEntries = entries.filter(
+    (entry): entry is typeof entry & { block: ThinkingContent } => entry.block.type === "thinking",
   );
   const files = new Set<string>();
   let failed = messages.filter((activityMessage) => activityMessage.stopReason === "error").length;
@@ -504,16 +524,26 @@ function TurnWorkLog({
       failed={failed}
       elapsed={elapsed}
     >
-      {entries.map(({ activityMessage, block, index }) => {
-        if (block.type === "thinking") {
-          return <ThinkingBlock key={`thinking-${activityMessage.timestamp ?? 0}-${index}`} block={block} />;
-        }
+      {toolEntries.map(({ activityMessage, block }) => {
         const result = toolResults?.get(block.toolCallId);
         const duration = result?.timestamp && activityMessage.timestamp
           ? Math.max(1, Math.round((result.timestamp - activityMessage.timestamp) / 1000))
           : undefined;
         return <ToolCallBlock key={block.toolCallId} block={block} result={result} duration={duration} />;
       })}
+      {thinkingEntries.length > 0 && (
+        <details className={styles.reasoningGroup}>
+          <summary>
+            <span>{t("chat.reasoningSteps")}</span>
+            <span>{thinkingEntries.length}</span>
+          </summary>
+          <div className={styles.reasoningBody}>
+            {thinkingEntries.map(({ activityMessage, block, index }) => (
+              <ThinkingBlock key={`thinking-${activityMessage.timestamp ?? 0}-${index}`} block={block} />
+            ))}
+          </div>
+        </details>
+      )}
     </TurnActivityGroup>
   );
 }

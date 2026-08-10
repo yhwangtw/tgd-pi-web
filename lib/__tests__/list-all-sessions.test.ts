@@ -128,4 +128,17 @@ describe("listAllSessions", () => {
     expect(after).toHaveLength(0);
     expect(globalThis.__piSessionInfoCache?.has(filePath)).toBe(false);
   });
+
+  it("does not resolve a cached future path until the session file exists", async () => {
+    const dir = join(sessionsDir, "--tmp-proj");
+    const futurePath = join(dir, "future.jsonl");
+    const { cacheSessionPath, resolveSessionPath } = await import("../session-reader");
+
+    cacheSessionPath("future-1", futurePath);
+    expect(await resolveSessionPath("future-1")).toBeNull();
+    expect(globalThis.__piSessionPathCache?.has("future-1")).toBe(false);
+
+    sessionFile(dir, "future.jsonl", [header("future-1")]);
+    expect(await resolveSessionPath("future-1")).toBe(futurePath);
+  });
 });

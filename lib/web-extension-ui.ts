@@ -217,6 +217,19 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
     }
   }
 
+  /**
+   * Drop session-scoped extension UI before AgentSessionRuntime replaces the
+   * active session. Persistent status/widget/title state belongs to the old
+   * extension runtime and must not replay into the replacement session.
+   */
+  resetForSessionReplacement(): void {
+    this.closeAll();
+    this.statuses.clear();
+    this.widgets.clear();
+    this.titleEvent = undefined;
+    this.editorTextEvent = undefined;
+  }
+
   select(title: string, options: string[], opts?: ExtensionUIDialogOptions): Promise<string | undefined> {
     return this.openDialog<string | undefined>({
       type: "extension_ui_request",

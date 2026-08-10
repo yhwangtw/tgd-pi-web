@@ -161,6 +161,9 @@ Das mobile Layout hält aktive Phase, Gespräch, Composer, Modellsteuerung und H
 - Direkter Shell-Modus mit `!command`; `!!command` lässt das Ergebnis aus dem Modellkontext.
 - Wechsel von Modell und Thinking Level während einer Session.
 - Integriertes `ask_user`-Tool sowie Pi-Extension-Dialoge (`select`, `confirm`, `input` und `editor`), Benachrichtigungen, Statusanzeigen und Text-Widgets; ausstehende Entscheidungen bleiben bei einer Neuverbindung erhalten.
+- Pi-Extension-Sessionbefehle (`newSession`, `fork` und `switchSession`) laufen über die native `AgentSessionRuntime`; die Web-UI folgt der ersetzten Session und verbindet SSE mit ihr neu.
+- Bei einem fehlgeschlagenen Wechsel wird die vorherige Runtime wiederhergestellt; von einer anderen Runtime verwendete Sessions werden vor dem Wechsel abgelehnt. Alle offenen Tabs folgen derselben Ersetzung, und die Extensions-Einstellungen zeigen Runtime-Diagnosen.
+- Pi-`.jsonl`-Dateien lassen sich über einen Preview-Dialog importieren, der Header, effektives cwd, erlaubte Roots, Symlinks, Größe und Zielkonflikte vor dem Wechsel prüft.
 - Fehlerkarten pro Lauf, Stall-Warnungen, Benachrichtigungen, Abschlusston und Tab-Status.
 - Frühere Turns bearbeiten, vom vorherigen Verzweigungspunkt erneut ausführen, unabhängige Forks und In-Session-Branches.
 
@@ -258,7 +261,7 @@ Session-Dateien bleiben im nativen Pi-Format:
 ## Architektur
 
 ```text
-Browser                    Next.js server                 AgentSession
+Browser                    Next.js server             AgentSessionRuntime
   │                              │                            │
   ├─ GET /api/sessions ─────────▶│ incremental .jsonl cache   │
   ├─ POST /api/agent/[id] ──────▶│ startRpcSession() ────────▶│
@@ -268,7 +271,7 @@ Browser                    Next.js server                 AgentSession
   └─ GET /api/tgd/artifacts ────▶│ sibling tGD directory      │
 ```
 
-Beim schreibgeschützten Browsen werden Session-Dateien analysiert, ohne eine `AgentSession` zu erstellen. Erst beim Senden einer Nachricht erzeugt der Server einen In-Process-Wrapper pro aktiver Session und streamt Ereignisse über SSE.
+Beim schreibgeschützten Browsen werden Session-Dateien analysiert, ohne eine `AgentSession` zu erstellen. Erst beim Senden einer Nachricht erzeugt der Server einen In-Process-Runtime-Wrapper pro aktiver Session und streamt Ereignisse über SSE. Pi verwaltet den Sessionwechsel; der Wrapper bindet cwd-spezifische Dienste, Extensions, Registry-Schlüssel und Event-Abonnements an die neue `AgentSession`.
 
 ## Projektstruktur
 

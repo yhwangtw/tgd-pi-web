@@ -121,8 +121,8 @@ test.describe("chat transcript", () => {
     const userMsg = page.getByText("services 層有沒有需要重構的地方").first();
     await userMsg.scrollIntoViewIfNeeded();
     const messageItem = page.locator(".msg-item").filter({ has: userMsg }).first();
-    await messageItem.hover({ position: { x: 4, y: 4 } });
-    await page.getByRole("button", { name: "Edit", exact: true }).first().click();
+    await messageItem.getByRole("button", { name: "More message actions" }).click();
+    await messageItem.getByRole("button", { name: "Edit", exact: true }).click();
     // The bubble becomes a textarea prefilled with the message text, plus Rerun.
     await expect
       .poll(async () => {
@@ -139,23 +139,39 @@ test.describe("chat transcript", () => {
     await expect(page.getByText("services 層有沒有需要重構的地方").first()).toBeVisible();
   });
 
-  test("assistant message actions stay attached to their footer", async ({ page }) => {
+  test("assistant message actions use a discoverable menu attached to their footer", async ({ page }) => {
     await openMain(page);
     const message = page.getByTestId("assistant-message").last();
     await message.scrollIntoViewIfNeeded();
-    await message.hover({ position: { x: 8, y: 8 } });
 
     const footer = message.getByTestId("assistant-message-footer");
-    const actions = message.getByTestId("assistant-message-actions");
-    await expect(actions).toBeVisible();
-    await page.waitForTimeout(200); // let the 120ms hover transition settle
+    const menuButton = message.getByRole("button", { name: "More message actions" });
+    await expect(menuButton).toBeVisible();
 
     const footerBox = await footer.boundingBox();
-    const actionsBox = await actions.boundingBox();
+    const buttonBox = await menuButton.boundingBox();
     expect(footerBox).not.toBeNull();
-    expect(actionsBox).not.toBeNull();
-    expect(Math.abs(actionsBox!.x - (footerBox!.x + footerBox!.width + 6))).toBeLessThanOrEqual(2);
-    expect(actionsBox!.x + actionsBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    expect(buttonBox).not.toBeNull();
+    expect(buttonBox!.x).toBeGreaterThanOrEqual(footerBox!.x);
+    expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(footerBox!.x + footerBox!.width + 1);
+
+    await menuButton.click();
+    await expect(message.getByRole("button", { name: "Copy", exact: true })).toBeVisible();
+    await expect(message.getByRole("button", { name: "Quote", exact: true })).toBeVisible();
+    await expect(message.getByRole("button", { name: "Bookmark this message" })).toBeVisible();
+  });
+
+  test("turns expose semantic message articles inside a readable conversation column", async ({ page }) => {
+    await openMain(page);
+    const conversation = page.getByRole("log", { name: "Conversation" });
+    await expect(conversation).toBeVisible();
+    const articles = conversation.getByRole("article");
+    expect(await articles.count()).toBeGreaterThan(1);
+    await expect(articles.first()).toHaveAttribute("aria-label", /Your message.*Turns 1/);
+    await expect(articles.first()).toHaveAttribute("data-turn-position", "start");
+
+    const width = await conversation.evaluate((node) => node.getBoundingClientRect().width);
+    expect(width).toBeLessThanOrEqual(781);
   });
 
   test("always-follow toggle persists via the palette", async ({ page }) => {

@@ -1,6 +1,6 @@
 /* Root */
 .root {
-  margin-bottom: 12px;
+  margin-bottom: 4px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -188,7 +188,7 @@
   right: calc(100% + 6px);
   bottom: 50%;
   z-index: 20;
-  display: flex;
+  display: none;
   align-items: center;
   gap: 2px;
   padding: 3px;
@@ -227,7 +227,59 @@
   gap: 3px;
 }
 
-.mobileActionMenu { display: none; }
+.mobileActionMenu {
+  position: relative;
+  order: 4;
+  display: block;
+  flex: 0 0 auto;
+}
+
+.mobileActionMenu > summary {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: var(--radius-control-compact);
+  color: var(--text-dim);
+  cursor: pointer;
+  list-style: none;
+  touch-action: manipulation;
+}
+
+.mobileActionMenu > summary::-webkit-details-marker { display: none; }
+.mobileActionMenu > summary:hover,
+.mobileActionMenu[open] > summary { background: var(--bg-hover); color: var(--text); }
+
+.mobileActionPanel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 40;
+  display: flex;
+  min-width: 190px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-menu);
+  background: var(--bg-elev-1);
+  box-shadow: var(--color-shadow-popup);
+}
+
+:global(html[data-message-layout="left"]) .mobileActionPanel {
+  right: auto;
+  left: 0;
+}
+
+.mobileActionPanel .actionButton {
+  width: 100%;
+  min-height: 36px;
+  justify-content: flex-start;
+  padding: 0 10px;
+  color: var(--text-muted);
+}
+
+.mobileActionPanelDown { top: calc(100% + 6px); bottom: auto; }
 
 .actionButton {
   display: flex;
@@ -250,8 +302,9 @@
 }
 
 .timestamp {
+  order: 2;
   font-size: var(--text-xs);
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -332,7 +385,7 @@
   :global(html[data-density="compact"]) .root { margin-bottom: 5px; }
 
   .root {
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
 
   .messageRow {
@@ -416,6 +469,7 @@
 
   .mobileActionPanelDown {
     top: auto;
+    bottom: calc(var(--safe-area-bottom) + var(--mobile-nav-height) + 10px);
   }
 
   :global(html[data-message-layout="left"]) .bubble {
@@ -448,7 +502,7 @@
 }
 
 :global(html[data-ui-style="trae"]) .root {
-  margin-bottom: 10px;
+  margin-bottom: 4px;
 }
 
 :global(html[data-ui-style="trae"]) .messageRow {

@@ -97,6 +97,20 @@ describe("WebExtensionUIBridge", () => {
       expect.objectContaining({ method: "set_editor_text" }),
     ]));
   });
+
+  it("clears session-scoped UI when the runtime replaces its session", async () => {
+    const bridge = new WebExtensionUIBridge({ theme, emit: vi.fn() });
+    const answerPromise = bridge.input("Old session question");
+    bridge.setStatus("build", "Running");
+    bridge.setWidget("review", ["Pending"]);
+    bridge.setTitle("Old session");
+    bridge.setEditorText("old draft");
+
+    bridge.resetForSessionReplacement();
+
+    await expect(answerPromise).resolves.toBeUndefined();
+    expect(bridge.snapshot()).toEqual([]);
+  });
 });
 
 describe("ask_user tool", () => {

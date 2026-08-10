@@ -156,6 +156,30 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
             <div className={styles.stateText}>{error}</div>
           ) : report && (
             <>
+              {report.runtime && (
+                <div className={styles.runtimeCard} data-runtime-state={report.runtime.state}>
+                  <div className={styles.runtimeHeader}>
+                    <span className={styles.sectionTitle}>{t("extensions.runtime")}</span>
+                    <span className={styles.runtimeState}>{report.runtime.state}</span>
+                  </div>
+                  <dl className={styles.runtimeGrid}>
+                    <div><dt>{t("extensions.runtimeSession")}</dt><dd>{report.runtime.sessionId}</dd></div>
+                    <div><dt>{t("extensions.runtimeCwd")}</dt><dd>{report.runtime.cwd}</dd></div>
+                    <div><dt>{t("extensions.runtimeClients")}</dt><dd>{report.runtime.connectedClients}</dd></div>
+                    <div><dt>{t("extensions.runtimeReplacements")}</dt><dd>{report.runtime.replacementCount}</dd></div>
+                  </dl>
+                  {report.runtime.lastReplacement && (
+                    <p className={styles.runtimeNote}>
+                      {t("extensions.runtimeLastReplacement")}: {report.runtime.lastReplacement.reason} · {report.runtime.lastReplacement.previousSessionId.slice(0, 8)} → {report.runtime.lastReplacement.nextSessionId.slice(0, 8)}
+                    </p>
+                  )}
+                  {report.runtime.lastFailure && (
+                    <p className={report.runtime.lastFailure.recovered ? styles.runtimeRecovered : styles.runtimeFailure}>
+                      {report.runtime.lastFailure.recovered ? t("extensions.runtimeRecovered") : t("extensions.runtimeFailed")}: {report.runtime.lastFailure.message}
+                    </p>
+                  )}
+                </div>
+              )}
               {report.diagnostics.length > 0 && (
                 <div className={`${styles.diag} ${hasErrors ? styles.diagError : ""}`}>
                   {report.diagnostics.map((d, i) => (

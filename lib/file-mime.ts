@@ -22,7 +22,14 @@ const AUDIO_EXT_TO_MIME: Record<string, string> = {
   aac: "audio/aac",
   flac: "audio/flac",
   weba: "audio/webm",
-  webm: "audio/webm",
+};
+
+const VIDEO_EXT_TO_MIME: Record<string, string> = {
+  mp4: "video/mp4",
+  m4v: "video/mp4",
+  mov: "video/quicktime",
+  webm: "video/webm",
+  ogv: "video/ogg",
 };
 
 const DOCUMENT_EXT_TO_MIME: Record<string, string> = {
@@ -58,6 +65,10 @@ export function getAudioMime(filePath: string): string | null {
   return AUDIO_EXT_TO_MIME[getExt(filePath)] ?? null;
 }
 
+export function getVideoMime(filePath: string): string | null {
+  return VIDEO_EXT_TO_MIME[getExt(filePath)] ?? null;
+}
+
 export function getDocumentMime(filePath: string): string | null {
   return DOCUMENT_EXT_TO_MIME[getExt(filePath)] ?? null;
 }
@@ -82,6 +93,7 @@ export function documentPreviewKind(filePath: string): "pdf" | "docx" | null {
 export {
   IMAGE_EXT_TO_MIME,
   AUDIO_EXT_TO_MIME,
+  VIDEO_EXT_TO_MIME,
   DOCUMENT_EXT_TO_MIME,
   EXT_TO_LANGUAGE,
 };

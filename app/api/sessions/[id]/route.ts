@@ -12,6 +12,7 @@ import {
   readSessionFile,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
+import type { SessionEntry, SessionHeader } from "@/lib/types";
 
 export async function GET(
   req: Request,
@@ -19,22 +20,39 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const filePath = await resolveSessionPath(id);
-    if (!filePath) {
+    const live = getRpcSession(id);
+    let filePath = await resolveSessionPath(id);
+    let header: SessionHeader | null = null;
+    let entries: SessionEntry[] = [];
+    let readFromDisk = false;
+    if (filePath) {
+      try {
+        ({ header, entries } = readSessionFile(filePath));
+        readFromDisk = true;
+      } catch {
+        // Pi intentionally defers writing a new session until its first
+        // assistant message. Fall through to the live in-memory manager.
+      }
+    }
+    if (!readFromDisk && live?.isAlive() && live.sessionId === id) {
+      filePath = live.sessionFile;
+      header = live.inner.sessionManager.getHeader() as unknown as SessionHeader | null;
+      entries = live.inner.sessionManager.getEntries() as unknown as SessionEntry[];
+    }
+    if (!header) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
-
-    const { header, entries } = readSessionFile(filePath);
+    const responseFilePath = filePath ?? live?.sessionFile ?? "";
     const tree = buildTree(entries);
     const leafId = getLeafId(entries);
     const context = buildSessionContext(entries, leafId);
 
     let modified = header?.timestamp ?? new Date().toISOString();
-    try { modified = statSync(filePath).mtime.toISOString(); } catch { /* use header timestamp */ }
+    try { modified = statSync(responseFilePath).mtime.toISOString(); } catch { /* use header timestamp */ }
     const allSessions = await listAllSessions();
     const parentSessionId = allSessions.find((s) => s.id === id)?.parentSessionId;
     const info = header ? {
-      path: filePath,
+      path: responseFilePath,
       id: header.id,
       cwd: header.cwd ?? "",
       name: [...entries].reverse().find((entry) => entry.type === "session_info")?.name?.trim() || undefined,
@@ -60,7 +78,7 @@ export async function GET(
     }
     let agentState: { running: boolean; state?: unknown } | undefined;
     if (url.searchParams.has("includeState")) {
-      const rpc = getRpcSession(id);
+      const rpc = live;
       if (rpc?.isAlive()) {
         const state = await rpc.send({ type: "get_state" });
         agentState = { running: true, state };
@@ -71,7 +89,7 @@ export async function GET(
 
     return NextResponse.json({
       sessionId: id,
-      filePath,
+      filePath: responseFilePath,
       info,
       tree,
       leafId,

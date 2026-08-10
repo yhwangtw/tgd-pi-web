@@ -5,6 +5,8 @@ import { ImageViewer } from "./ImageViewer";
 import { AudioViewer } from "./AudioViewer";
 import { DocumentViewer } from "./DocumentViewer";
 import { TextFileViewer } from "./TextFileViewer";
+import { VideoViewer } from "./VideoViewer";
+import { BinaryViewer } from "./BinaryViewer";
 import styles from "./FileViewer.module.css";
 
 interface Props {
@@ -14,6 +16,8 @@ interface Props {
   gotoLine?: number;
   /** Changes each time a jump is requested, to re-trigger it for an open file. */
   gotoNonce?: number;
+  onSendToAgent?: (prompt: string) => void;
+  sessionId?: string | null;
 }
 
 export interface FileData {
@@ -30,10 +34,18 @@ export function isImagePath(filePath: string): boolean {
 }
 
 export function isAudioPath(filePath: string): boolean {
-  const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "oga", "opus", "m4a", "aac", "flac", "weba", "webm"]);
+  const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "oga", "opus", "m4a", "aac", "flac", "weba"]);
   const base = getFileName(filePath);
   const ext = base.toLowerCase().split(".").pop() ?? "";
   return AUDIO_EXTS.has(ext);
+}
+
+export function isVideoPath(filePath: string): boolean {
+  return new Set(["mp4", "m4v", "mov", "webm", "ogv"]).has(getFileExt(filePath));
+}
+
+export function isBinaryPath(filePath: string): boolean {
+  return new Set(["zip", "gz", "tgz", "bz2", "xz", "7z", "rar", "wasm", "bin", "dat", "dmg", "pkg", "exe", "dll", "so", "dylib", "class", "pyc"]).has(getFileExt(filePath));
 }
 
 export function getFileExt(filePath: string): string {
@@ -66,15 +78,21 @@ export function formatDuration(seconds: number): string {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
-export function FileViewer({ filePath, cwd, gotoLine, gotoNonce }: Props) {
+export function FileViewer({ filePath, cwd, gotoLine, gotoNonce, onSendToAgent, sessionId }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} />;
   }
   if (isAudioPath(filePath)) {
     return <AudioViewer filePath={filePath} cwd={cwd} />;
   }
+  if (isVideoPath(filePath)) {
+    return <VideoViewer filePath={filePath} cwd={cwd} />;
+  }
   if (isDocumentPreviewPath(filePath)) {
     return <DocumentViewer filePath={filePath} cwd={cwd} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} gotoLine={gotoLine} gotoNonce={gotoNonce} />;
+  if (isBinaryPath(filePath)) {
+    return <BinaryViewer filePath={filePath} cwd={cwd} />;
+  }
+  return <TextFileViewer filePath={filePath} cwd={cwd} gotoLine={gotoLine} gotoNonce={gotoNonce} onSendToAgent={onSendToAgent} sessionId={sessionId} />;
 }

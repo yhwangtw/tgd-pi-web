@@ -1,12 +1,31 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { Tab } from "@/components/layout/TabBar";
 
 export function useFileTabs() {
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
+  const [splitFileTabId, setSplitFileTabId] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [restored, setRestored] = useState(false);
+
+  useEffect(() => {
+    try {
+      const restored = JSON.parse(localStorage.getItem("pi-file-workspace-v1") ?? "null") as { tabs?: Tab[]; active?: string | null; split?: string | null } | null;
+      const tabs = restored?.tabs?.filter((tab) => typeof tab?.filePath === "string").slice(0, 30) ?? [];
+      setFileTabs(tabs);
+      setActiveFileTabId(restored?.active && tabs.some((tab) => tab.id === restored.active) ? restored.active : tabs[0]?.id ?? null);
+      setSplitFileTabId(restored?.split && tabs.some((tab) => tab.id === restored.split) ? restored.split : null);
+      if (tabs.length > 0) setRightPanelOpen(true);
+    } catch { /* start with an empty workspace */ }
+    setRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!restored) return;
+    localStorage.setItem("pi-file-workspace-v1", JSON.stringify({ tabs: fileTabs, active: activeFileTabId, split: splitFileTabId }));
+  }, [activeFileTabId, fileTabs, restored, splitFileTabId]);
 
   const handleOpenFile = useCallback((filePath: string, fileName: string, gotoLine?: number) => {
     const tabId = `file:${filePath}`;
@@ -31,6 +50,7 @@ export function useFileTabs() {
       if (next.length === 0) setRightPanelOpen(false);
       return next;
     });
+    setSplitFileTabId((current) => current === tabId ? null : current);
     setActiveFileTabId((cur) => {
       if (cur !== tabId) return cur;
       const remaining = fileTabs.filter((t) => t.id !== tabId);
@@ -47,7 +67,25 @@ export function useFileTabs() {
     setFileTabs([]);
     setActiveFileTabId(null);
     setRightPanelOpen(false);
+    setSplitFileTabId(null);
   }, []);
+
+  const handleTogglePin = useCallback((tabId: string) => {
+    setFileTabs((prev) => prev.map((tab) => tab.id === tabId ? { ...tab, pinned: !tab.pinned } : tab));
+  }, []);
+
+  const handleOpenSplit = useCallback((tabId: string) => {
+    if (splitFileTabId === tabId) {
+      setSplitFileTabId(null);
+      return;
+    }
+    if (activeFileTabId === tabId) {
+      const other = fileTabs.find((tab) => tab.id !== tabId);
+      if (other) setActiveFileTabId(other.id);
+    }
+    setSplitFileTabId(tabId);
+    setRightPanelOpen(true);
+  }, [activeFileTabId, fileTabs, splitFileTabId]);
 
   const handleReorderTabs = useCallback((tabId: string, toIndex: number) => {
     setFileTabs((prev) => {
@@ -63,6 +101,7 @@ export function useFileTabs() {
   return {
     fileTabs,
     activeFileTabId,
+    splitFileTabId,
     rightPanelOpen,
     setRightPanelOpen,
     setActiveFileTabId,
@@ -71,5 +110,7 @@ export function useFileTabs() {
     handleCloseOthers,
     handleCloseAll,
     handleReorderTabs,
+    handleTogglePin,
+    handleOpenSplit,
   };
 }

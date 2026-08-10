@@ -36,6 +36,12 @@
   color: var(--text);
 }
 
+.hunkNav { display: flex; align-items: center; gap: 3px; margin-left: auto; }
+.hunkNav button { min-height: 28px; padding: 0 7px; border: 1px solid var(--border); border-radius: var(--radius-control-compact); background: var(--bg-hover); color: var(--text-muted); cursor: pointer; }
+.hunkNav span { padding: 0 3px; color: var(--text-dim); font-size: var(--text-2xs); }
+.hunkNav .reviewed { color: var(--color-success); border-color: var(--color-success-border); background: var(--color-success-bg); }
+.hunkNav .revertHunk { color: var(--color-error-text); }
+
 .close {
   flex-shrink: 0;
   display: flex;
@@ -75,6 +81,9 @@
 :global(html[data-ui-style="trae"]) .close { width: 30px; height: 30px; border-radius: var(--radius-control); }
 
 @media (max-width: 700px), (pointer: coarse) {
+  .header { min-height: auto; flex-wrap: wrap; padding-block: 5px; }
+  .hunkNav { width: 100%; order: 2; margin-left: 0; overflow-x: auto; }
+  .hunkNav button { min-height: var(--control-touch); }
   .close,
   :global(html[data-ui-style="trae"]) .close {
     width: var(--control-touch);

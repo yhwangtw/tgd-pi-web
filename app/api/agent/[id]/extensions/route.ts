@@ -37,6 +37,7 @@ export async function GET(
       providers: session.getExtensionProviders(),
       resources: loader ? collectExtensionResources(loader) : [],
       runtimeDiagnostics: session.getExtensionDiagnostics(),
+      runtime: session.getRuntimeDiagnostics(),
     }));
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

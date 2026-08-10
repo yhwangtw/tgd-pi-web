@@ -52,6 +52,7 @@ const SkillsConfig = lazy(() => import("../modals/SkillsConfig").then((m) => ({ 
 const ExtensionsConfig = lazy(() => import("../modals/ExtensionsConfig").then((m) => ({ default: m.ExtensionsConfig })));
 const PromptsConfig = lazy(() => import("../modals/PromptsConfig").then((m) => ({ default: m.PromptsConfig })));
 const AnalyticsModal = lazy(() => import("../modals/AnalyticsModal").then((m) => ({ default: m.AnalyticsModal })));
+const SessionImportDialog = lazy(() => import("../modals/SessionImportDialog").then((m) => ({ default: m.SessionImportDialog })));
 
 // Home dir for expanding ~/ file links; fetched once, shared across clicks.
 let homeDirPromise: Promise<string | null> | null = null;
@@ -70,7 +71,7 @@ export function AppShell() {
   const { toggleTheme } = useTheme();
   const { locale, t } = useI18n();
   const { state, actions, refs, topBarRef } = useAppShellState();
-  const { fileTabs, activeFileTabId, rightPanelOpen, setRightPanelOpen, setActiveFileTabId, handleOpenFile: openFileTab, handleCloseFileTab, handleCloseOthers, handleCloseAll, handleReorderTabs } = useFileTabs();
+  const { fileTabs, activeFileTabId, splitFileTabId, rightPanelOpen, setRightPanelOpen, setActiveFileTabId, handleOpenFile: openFileTab, handleCloseFileTab, handleCloseOthers, handleCloseAll, handleReorderTabs, handleTogglePin, handleOpenSplit } = useFileTabs();
 
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
@@ -78,6 +79,7 @@ export function AppShell() {
   const [extensionsConfigOpen, setExtensionsConfigOpen] = useState(false);
   const [promptsConfigOpen, setPromptsConfigOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [sessionImportOpen, setSessionImportOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const sidebarOpenRef = useRef(sidebarOpen);
@@ -87,6 +89,7 @@ export function AppShell() {
   const [panelView, setPanelView] = useState<PanelView>("sessions");
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
   const [revealSignal, setRevealSignal] = useState(0);
+  const [pendingReviewFiles, setPendingReviewFiles] = useState<string[]>([]);
   const revealInExplorer = useCallback((filePath: string) => {
     setActiveFileTabId(`file:${filePath}`);
     setPanelView("files");
@@ -327,6 +330,10 @@ export function AppShell() {
           : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
         handleNewSessionFromSidebar(tempId, effectiveCwdForPalette);
       },
+      importSession: () => {
+        if (state.selectedSession) setSessionImportOpen(true);
+        else showToast(translate("sessionImport.openSessionFirst"), { type: "warning" });
+      },
       openParallelForActive: () => {
         if (state.selectedSession) actions.openParallel(state.selectedSession);
       },
@@ -424,6 +431,35 @@ export function AppShell() {
     chatInputRef.current?.insertText(prompt);
     showToast(t("diff.annotationAdded"), { type: "success" });
   }, [t]);
+
+  const handleFileAgentPrompt = useCallback((prompt: string) => {
+    if (!state.selectedSession) {
+      showToast(t("extensionUI.noSession"), { type: "warning" });
+      return;
+    }
+    chatInputRef.current?.insertText(prompt);
+    showToast("Added file context to the composer", { type: "success" });
+  }, [state.selectedSession, t]);
+
+  const handleAgentEndWithReview = useCallback(() => {
+    actions.handleAgentEnd();
+    const cwd = state.selectedSession?.cwd ?? state.activeCwd;
+    if (!cwd) return;
+    window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/git/changes?cwd=${encodeURIComponent(cwd)}`);
+        if (!response.ok) return;
+        const payload = await response.json() as { files?: Array<{ path: string }> };
+        const paths = (payload.files ?? []).map((file) => file.path);
+        setPendingReviewFiles(paths);
+        if (paths.length === 0) return;
+        const first = paths[0];
+        const absolute = `${cwd.replace(/[\\/]$/, "")}/${first}`;
+        openFileTab(absolute, first.split(/[\\/]/).pop() ?? first);
+        showToast(`${paths.length} changed file${paths.length === 1 ? "" : "s"} ready to review`, { type: "success" });
+      } catch { /* changes are optional outside git workspaces */ }
+    }, 450);
+  }, [actions, openFileTab, state.activeCwd, state.selectedSession?.cwd]);
 
   const handleExportSession = useCallback(() => {
     if (!state.selectedSession) return;
@@ -523,6 +559,22 @@ export function AppShell() {
   const showChat = centerView === "session" || centerView === "new";
 
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
+  const splitFileTab = fileTabs.find((t) => t.id === splitFileTabId && t.id !== activeFileTabId) ?? null;
+
+  useEffect(() => {
+    if (!activeFileTab?.filePath || pendingReviewFiles.length === 0) return;
+    const cwd = state.selectedSession?.cwd ?? state.activeCwd;
+    if (!cwd) return;
+    const relative = activeFileTab.filePath.startsWith(`${cwd}/`) ? activeFileTab.filePath.slice(cwd.length + 1) : activeFileTab.filePath;
+    setPendingReviewFiles((current) => current.filter((path) => path !== relative));
+  }, [activeFileTab?.filePath, pendingReviewFiles.length, state.activeCwd, state.selectedSession?.cwd]);
+
+  const openNextReviewFile = useCallback(() => {
+    const cwd = state.selectedSession?.cwd ?? state.activeCwd;
+    const next = pendingReviewFiles[0];
+    if (!cwd || !next) return;
+    openFileTab(`${cwd.replace(/[\\/]$/, "")}/${next}`, next.split(/[\\/]/).pop() ?? next);
+  }, [openFileTab, pendingReviewFiles, state.activeCwd, state.selectedSession?.cwd]);
 
   const panelCwd = state.selectedSession?.cwd ?? state.newSessionCwd ?? state.activeCwd ?? null;
 
@@ -663,6 +715,8 @@ export function AppShell() {
       <div
         className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"} ${s.sidebarContainer}`}
         data-panel-view={panelView}
+        aria-hidden={!sidebarOpen}
+        inert={!sidebarOpen}
       >
         {sidebarContent}
       </div>
@@ -1013,7 +1067,7 @@ export function AppShell() {
                     wideChat={wideChat}
                     session={state.selectedSession}
                     newSessionCwd={effectiveNewSessionCwd}
-                    onAgentEnd={actions.handleAgentEnd}
+                    onAgentEnd={handleAgentEndWithReview}
                     onSessionCreated={actions.handleSessionCreated}
                     onSessionForked={actions.handleSessionForked}
                     modelsRefreshKey={modelsRefreshKey}
@@ -1037,7 +1091,7 @@ export function AppShell() {
                     session={session}
                     newSessionCwd={null}
                     modelsRefreshKey={modelsRefreshKey}
-                    onAgentEnd={actions.handleAgentEnd}
+                    onAgentEnd={handleAgentEndWithReview}
                     onSessionCreated={actions.handleSessionCreated}
                     onSessionForked={actions.handleSessionForked}
                     onSessionNamed={actions.bumpRefreshKey}
@@ -1057,7 +1111,7 @@ export function AppShell() {
               wideChat={wideChat}
               session={state.selectedSession}
               newSessionCwd={effectiveNewSessionCwd}
-              onAgentEnd={actions.handleAgentEnd}
+              onAgentEnd={handleAgentEndWithReview}
               onSessionCreated={actions.handleSessionCreated}
               onSessionForked={actions.handleSessionForked}
               modelsRefreshKey={modelsRefreshKey}
@@ -1149,8 +1203,16 @@ export function AppShell() {
               onCloseAll={handleCloseAll}
               onReorder={handleReorderTabs}
               onReveal={revealInExplorer}
+              onTogglePin={handleTogglePin}
+              onOpenSplit={handleOpenSplit}
+              splitTabId={splitFileTabId}
             />
           </div>
+          {pendingReviewFiles.length > 0 && (
+            <button type="button" className={s.reviewQueueButton} onClick={openNextReviewFile} title="Open next changed file">
+              {pendingReviewFiles.length} to review
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setRightPanelOpen(false)}
@@ -1169,7 +1231,30 @@ export function AppShell() {
           {diffFile && panelCwd ? (
             <DiffPanel cwd={panelCwd} path={diffFile} onClose={() => setDiffFile(null)} onAnnotate={handleDiffAnnotation} />
           ) : activeFileTab?.filePath ? (
-            <FileViewer filePath={activeFileTab.filePath} cwd={state.activeCwd ?? undefined} gotoLine={activeFileTab.gotoLine} gotoNonce={activeFileTab.gotoNonce} />
+            <div className={`${s.fileWorkspace} ${splitFileTab ? s.fileWorkspaceSplit : ""}`}>
+              <div className={s.fileWorkspacePane}>
+                <FileViewer
+                  filePath={activeFileTab.filePath}
+                  cwd={state.activeCwd ?? undefined}
+                  gotoLine={activeFileTab.gotoLine}
+                  gotoNonce={activeFileTab.gotoNonce}
+                  onSendToAgent={state.selectedSession ? handleFileAgentPrompt : undefined}
+                  sessionId={state.selectedSession?.id ?? null}
+                />
+              </div>
+              {splitFileTab && (
+                <div className={s.fileWorkspacePane} data-testid="file-split-pane">
+                  <FileViewer
+                    filePath={splitFileTab.filePath}
+                    cwd={state.activeCwd ?? undefined}
+                    gotoLine={splitFileTab.gotoLine}
+                    gotoNonce={splitFileTab.gotoNonce}
+                    onSendToAgent={state.selectedSession ? handleFileAgentPrompt : undefined}
+                    sessionId={state.selectedSession?.id ?? null}
+                  />
+                </div>
+              )}
+            </div>
           ) : (
             <div className={s.rightPanelEmpty}>
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -1200,6 +1285,17 @@ export function AppShell() {
       /></Suspense>
     )}
     {analyticsOpen && <Suspense fallback={null}><AnalyticsModal open={analyticsOpen} onClose={() => setAnalyticsOpen(false)} /></Suspense>}
+    {sessionImportOpen && state.selectedSession && (
+      <Suspense fallback={null}><SessionImportDialog
+        sessionId={state.selectedSession.id}
+        onClose={() => setSessionImportOpen(false)}
+        onImported={(sessionId, cwd, sessionFile) => {
+          setSessionImportOpen(false);
+          actions.handleSessionForked(sessionId, cwd, sessionFile);
+          showToast(translate("sessionImport.done"), { type: "success" });
+        }}
+      /></Suspense>
+    )}
     {appearanceOpen && <AppearancePanel onClose={() => setAppearanceOpen(false)} />}
     {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
     <DesignInspector active={designModeOpen && showChat} onClose={() => setDesignModeOpen(false)} onCapture={handleDesignCapture} />

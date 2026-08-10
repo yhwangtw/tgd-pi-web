@@ -45,6 +45,7 @@ export type PaletteActionId =
   | "skin:glass"
   | "view:clear-tag"
   | "session:new"
+  | "session:import"
   | "session:open-parallel"
   | "help:shortcuts";
 
@@ -74,6 +75,7 @@ export interface PaletteCallbacks {
   setSkin: (skin: Skin) => void;
   setUiStyle: (style: UiStyle) => void;
   newSession: () => void;
+  importSession: () => void;
   openParallelForActive: () => void;
   openHelp: () => void;
 }
@@ -242,6 +244,14 @@ const ACTIONS: PaletteResult[] = [
     subtitle: "Start a fresh session in the active project",
     keywords: "create new chat 新增",
     data: { action: "session:new" } as { action: PaletteActionId },
+  },
+  {
+    id: "action:import-session",
+    kind: "action",
+    title: "Import Pi Session",
+    subtitle: "Preview and import an allowed local .jsonl session",
+    keywords: "session import jsonl 匯入 對話",
+    data: { action: "session:import" } as { action: PaletteActionId },
   },
   {
     id: "action:open-parallel",
@@ -430,6 +440,7 @@ export function useCommandPalette({
       case "skin:editorial": cbs.setSkin("editorial"); break;
       case "skin:glass": cbs.setSkin("glass"); break;
       case "session:new": cbs.newSession(); break;
+      case "session:import": cbs.importSession(); break;
       case "session:open-parallel": cbs.openParallelForActive(); break;
       case "help:shortcuts": cbs.openHelp(); break;
     }

@@ -171,6 +171,9 @@ The mobile layout keeps the active phase, transcript, composer, model controls, 
 - Direct shell mode with `!command`; use `!!command` to omit the result from model context.
 - Model and thinking-level switching during a session.
 - A built-in `ask_user` tool plus Pi extension dialogs (`select`, `confirm`, `input`, and `editor`), notifications, status indicators, and text widgets; pending decisions survive reconnects.
+- Pi extension session commands (`newSession`, `fork`, and `switchSession`) use the native `AgentSessionRuntime`; the Web UI follows the replacement session and reconnects SSE to it.
+- Replacement failures restore the previous runtime, active-session conflicts are rejected before switching, and every open tab follows the same replacement. Extensions settings expose live runtime diagnostics.
+- Import a Pi `.jsonl` through a preview-first dialog that validates its header, effective cwd, allowed roots, symlinks, size, and destination collision before switching.
 - Per-run error cards, stall warnings, notifications, completion sound, and React-owned tab status.
 - Editable past turns, retry from the previous branch point, independent forks, and in-session branch navigation.
 
@@ -269,7 +272,7 @@ Session files remain in Pi's native format:
 ## Architecture
 
 ```text
-Browser                    Next.js server                 AgentSession
+Browser                    Next.js server             AgentSessionRuntime
   │                              │                            │
   ├─ GET /api/sessions ─────────▶│ incremental .jsonl cache   │
   ├─ POST /api/agent/[id] ──────▶│ startRpcSession() ────────▶│
@@ -279,7 +282,7 @@ Browser                    Next.js server                 AgentSession
   └─ GET /api/tgd/artifacts ────▶│ sibling tGD directory      │
 ```
 
-Read-only browsing parses session files without creating an `AgentSession`. Sending a message creates one in-process wrapper per active session and streams events over SSE.
+Read-only browsing parses session files without creating an `AgentSession`. Sending a message creates one in-process runtime wrapper per active session and streams events over SSE. Pi owns session replacement; the wrapper rebinds cwd-scoped services, extensions, registry keys, and event subscriptions to the new `AgentSession`.
 
 ## Project Structure
 

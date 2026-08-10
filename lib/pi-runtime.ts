@@ -251,6 +251,10 @@ export async function bindWebExtensions(
   },
   onError: (error: ExtensionError) => void,
   uiContext: ExtensionUIContext,
+  runtimeActions: Partial<Pick<
+    ExtensionCommandContextActions,
+    "newSession" | "fork" | "switchSession"
+  >> = {},
 ): Promise<void> {
   // SDK hosts must bind extensions after session creation. This emits
   // session_start and resources_discover and installs runtime error handling.
@@ -262,9 +266,9 @@ export async function bindWebExtensions(
     waitForIdle: () => session.waitForIdle(),
     navigateTree: (targetId, options) => session.navigateTree(targetId, options),
     reload: () => session.reload(),
-    newSession: unsupported("newSession"),
-    fork: unsupported("fork"),
-    switchSession: unsupported("switchSession"),
+    newSession: runtimeActions.newSession ?? unsupported("newSession"),
+    fork: runtimeActions.fork ?? unsupported("fork"),
+    switchSession: runtimeActions.switchSession ?? unsupported("switchSession"),
   };
   await session.bindExtensions({ mode: "rpc", uiContext, commandContextActions, onError });
 }

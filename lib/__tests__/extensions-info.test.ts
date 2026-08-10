@@ -128,7 +128,7 @@ describe("buildExtensionsReport", () => {
       commands: "supported",
       tools: "supported",
       flags: "supported",
-      commandContext: "partial",
+      commandContext: "supported",
       tuiUi: "partial",
       shortcuts: "unsupported",
       renderers: "unsupported",

@@ -118,7 +118,7 @@ export interface UseAgentSessionOptions {
   newSessionCwd: string | null;
   onAgentEnd?: () => void;
   onSessionCreated?: (session: SessionInfo) => void;
-  onSessionForked?: (newSessionId: string) => void;
+  onSessionForked?: (newSessionId: string, cwd?: string, sessionFile?: string) => void;
   modelsRefreshKey?: number;
   chatInputRef?: React.RefObject<ChatInputHandle | null>;
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;

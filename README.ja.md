@@ -161,6 +161,9 @@ artifacts が別の場所にある場合は `TGD_DIR` を設定してくださ�
 - `!command` でシェルを直接実行。`!!command` では結果をモデルコンテキストに含めません。
 - セッション途中でモデルと thinking level を切り替え。
 - 組み込みの `ask_user` ツールに加え、Pi extension の `select`、`confirm`、`input`、`editor` ダイアログ、通知、ステータス、テキスト Widget に対応。保留中の回答は再接続後も維持されます。
+- Pi extension のセッションコマンド（`newSession`、`fork`、`switchSession`）はネイティブの `AgentSessionRuntime` で実行され、Web UI は置換後のセッションへ追従して SSE を再接続します。
+- 置換に失敗した場合は以前の runtime を復元し、別の runtime が使用中のセッションは切り替え前に拒否します。開いているすべてのタブが同じ置換に追従し、Extensions 設定で runtime 診断を確認できます。
+- プレビュー優先のダイアログから Pi `.jsonl` を import でき、切り替え前に header、実効 cwd、許可 root、symlink、サイズ、保存先の衝突を検証します。
 - 実行エラーカード、stall 警告、通知、完了音、タブ状態。
 - 過去 turn の編集、以前の分岐点からの retry、独立 fork、セッション内ブランチ移動。
 
@@ -258,7 +261,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 ## アーキテクチャ
 
 ```text
-Browser                    Next.js server                 AgentSession
+Browser                    Next.js server             AgentSessionRuntime
   │                              │                            │
   ├─ GET /api/sessions ─────────▶│ incremental .jsonl cache   │
   ├─ POST /api/agent/[id] ──────▶│ startRpcSession() ────────▶│
@@ -268,7 +271,7 @@ Browser                    Next.js server                 AgentSession
   └─ GET /api/tgd/artifacts ────▶│ sibling tGD directory      │
 ```
 
-読み取り専用の閲覧では、`AgentSession` を作らずにセッションファイルを解析します。メッセージ送信時のみ、アクティブなセッションごとに in-process wrapper を作成し、イベントを SSE で配信します。
+読み取り専用の閲覧では、`AgentSession` を作らずにセッションファイルを解析します。メッセージ送信時のみ、アクティブなセッションごとに in-process runtime wrapper を作成し、イベントを SSE で配信します。セッション置換は Pi が管理し、wrapper は cwd 固有サービス、extensions、registry key、イベント購読を新しい `AgentSession` に再バインドします。
 
 ## プロジェクト構成
 

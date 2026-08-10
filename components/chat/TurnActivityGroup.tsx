@@ -22,6 +22,20 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
     overflowAnchor: string;
   } | null>(null);
   const { t } = useI18n();
+  const statusText = failed > 0
+    ? `${t("chat.workNeedsAttention")} · ${failed}`
+    : t("chat.workComplete");
+  const stepLabel = t(steps === 1 ? "chat.step" : "chat.steps");
+  const toolLabel = t(tools === 1 ? "chat.tool" : "chat.tools");
+  const fileLabel = t(filesChanged === 1 ? "chat.fileChanged" : "chat.filesChanged");
+  const summaryLabel = [
+    t("chat.workLog"),
+    statusText,
+    `${steps} ${stepLabel}`,
+    tools > 0 ? `${tools} ${toolLabel}` : null,
+    filesChanged > 0 ? `${filesChanged} ${fileLabel}` : null,
+    elapsed !== undefined && elapsed > 0 ? `${elapsed}s` : null,
+  ].filter(Boolean).join(" · ");
 
   const toggleExpanded = () => {
     const container = rootRef.current?.closest<HTMLElement>("[data-transcript-scroll]");
@@ -66,6 +80,7 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
         className={styles.summary}
         onClick={toggleExpanded}
         aria-expanded={expanded}
+        aria-label={summaryLabel}
       >
         <span className={styles.stateIcon} aria-hidden>
           {failed ? (
@@ -75,11 +90,12 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
           )}
         </span>
         <span className={styles.title}>{t("chat.workLog")}</span>
+        <span className={`${styles.outcome} ${failed ? styles.outcomeError : styles.outcomeSuccess}`}>
+          {statusText}
+        </span>
         <span className={styles.meta}>
-          <span>{steps} {t("chat.steps")}</span>
-          {failed > 0 && <span className={styles.failed}>{failed} {t("chat.failed")}</span>}
-          {tools > 0 && <span>{tools} {t("chat.tools")}</span>}
-          {filesChanged > 0 && <span>{filesChanged} {t("chat.filesChanged")}</span>}
+          {tools > 0 ? <span>{tools} {toolLabel}</span> : <span>{steps} {stepLabel}</span>}
+          {filesChanged > 0 && <span>{filesChanged} {fileLabel}</span>}
           {elapsed !== undefined && elapsed > 0 && <span>{elapsed}s</span>}
         </span>
         <svg className={styles.chevron} width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
