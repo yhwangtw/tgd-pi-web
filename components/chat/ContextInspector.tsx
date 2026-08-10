@@ -53,6 +53,7 @@ export function ContextInspector({ sessionId, fallbackPrompt }: { sessionId: str
   const [view, setView] = useState<View>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [trustBusy, setTrustBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -73,6 +74,16 @@ export function ContextInspector({ sessionId, fallbackPrompt }: { sessionId: str
   useEffect(() => { void load(); }, [load]);
 
   const visiblePrompt = report?.effectiveSystemPrompt ?? fallbackPrompt ?? "";
+  const toggleTrust = async () => {
+    if (!sessionId || !report || trustBusy) return;
+    setTrustBusy(true);
+    try {
+      const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "set_project_trust", trusted: !report.projectTrusted }) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setReport({ ...report, projectTrusted: !report.projectTrusted });
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setTrustBusy(false); }
+  };
   const counts = useMemo(() => ({
     instructions: report?.sources.length ?? 0,
     skills: report?.skills.length ?? 0,
@@ -106,7 +117,7 @@ export function ContextInspector({ sessionId, fallbackPrompt }: { sessionId: str
             <dl className={styles.facts}>
               <div><dt>{t("context.model")}</dt><dd>{report?.model ? `${report.model.provider} / ${report.model.id}` : "—"}</dd></div>
               <div><dt>{t("context.workspace")}</dt><dd title={report?.cwd}>{report?.cwd ?? "—"}</dd></div>
-              <div><dt>{t("context.projectTrust")}</dt><dd>{report?.projectTrusted ? t("context.trusted") : t("context.notTrusted")}</dd></div>
+              <div><dt>{t("context.projectTrust")}</dt><dd className={styles.trustValue}><span>{report?.projectTrusted ? t("context.trusted") : t("context.notTrusted")}</span><button type="button" disabled={!report || trustBusy} onClick={() => void toggleTrust()}>{report?.projectTrusted ? t("context.revokeTrust") : t("context.grantTrust")}</button></dd></div>
               <div><dt>{t("context.window")}</dt><dd>{report?.contextUsage?.contextWindow.toLocaleString() ?? "—"}</dd></div>
             </dl>
             {report?.diagnostics.length ? <div className={styles.diagnostics}>{report.diagnostics.map((diagnostic, index) => (

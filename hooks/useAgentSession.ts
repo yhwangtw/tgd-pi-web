@@ -70,6 +70,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [agentRunning, setAgentRunning] = useState(false);
   const [toolPreset, setToolPreset] = useState<"none" | "default" | "full">("default");
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
+  const [ephemeralNewSession, setEphemeralNewSession] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [autoProviderFallback, setAutoProviderFallback] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -591,6 +592,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         type: "prompt",
         message,
         toolNames,
+        ephemeral: ephemeralNewSession,
         ...(piImages?.length ? { images: piImages } : {}),
         ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.modelId } : {}),
         ...(thinkingLevel !== "auto" ? { thinkingLevel } : {}),
@@ -609,9 +611,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       modified: new Date().toISOString(),
       messageCount: 1,
       firstMessage: message,
+      ephemeral: ephemeralNewSession,
     });
     return result.sessionId;
-  }, [newSessionCwd, newSessionModel, toolPreset, thinkingLevel, connectEvents, onSessionCreated]);
+  }, [newSessionCwd, newSessionModel, toolPreset, thinkingLevel, ephemeralNewSession, connectEvents, onSessionCreated]);
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]): Promise<boolean> => {
     if (!message.trim() && !images?.length) return false;
@@ -1071,6 +1074,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (session) {
       sessionIdRef.current = session.id;
       setIdleTitle(session.name);
+      if (session.ephemeral) {
+        setLoading(false);
+        void loadTools(session.id);
+        return;
+      }
       loadSession(session.id, true, true).then((agentState) => {
         if (agentState?.running) {
           loadTools(session.id);
@@ -1162,7 +1170,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // State
     data, loading, error, runtimeFailure, activeLeafId, messages, entryIds, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
-    retryInfo, providerRecovery, autoProviderFallback, contextUsage, systemPrompt, forkingEntryId,
+    retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, currentModel, displayModel, sessionStats,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, stalledSecs, extensionUIState,
     isNew,
@@ -1172,7 +1180,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // Actions
     handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,
-    handleToolPresetChange, handleThinkingLevelChange, handleClearQueue, handleRemoveQueued, handleUpdateQueued, handleMoveQueued, handleRetry, handleRetryWithModel, handleAutoProviderFallbackChange, setProviderRecovery, handleEditRerun, handleAbortBash, handleExtensionUIResponse, loadTools, setActiveLeafId, setData, setMessages,
+    handleToolPresetChange, handleThinkingLevelChange, setEphemeralNewSession, handleClearQueue, handleRemoveQueued, handleUpdateQueued, handleMoveQueued, handleRetry, handleRetryWithModel, handleAutoProviderFallbackChange, setProviderRecovery, handleEditRerun, handleAbortBash, handleExtensionUIResponse, loadTools, setActiveLeafId, setData, setMessages,
     dispatch, setAgentRunning, setForkingEntryId,
     // Subscriptions
     handleAgentEventRef,

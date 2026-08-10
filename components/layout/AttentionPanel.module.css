@@ -6,7 +6,9 @@
 .headerActions { display: flex; align-items: center; gap: 4px; }
 .headerActions button, .filters button, .actions button { border: 1px solid var(--border); border-radius: var(--radius-control-compact); background: var(--bg-elev-1); color: var(--text-muted); }
 .headerActions button { min-height: 30px; padding: 0 8px; font-size: var(--text-xs); }
-.headerActions button:first-child { width: 30px; padding: 0; font-size: var(--text-lg); }
+.headerActions button { min-width: 30px; }
+.headerActions .pushButton, .headerActions button:nth-last-child(2) { width: 30px; padding: 0; font-size: var(--text-lg); }
+.headerActions .pushButton[aria-pressed="true"] { border-color: var(--color-accent-border); background: var(--color-accent-bg); color: var(--accent); }
 .headerActions button:disabled { opacity: .4; }
 .filters { display: flex; gap: 4px; padding: 0 12px 10px; overflow-x: auto; }
 .filters button { flex: 0 0 auto; min-height: 28px; padding: 0 9px; font-size: var(--text-xs); }

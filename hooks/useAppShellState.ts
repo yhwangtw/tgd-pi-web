@@ -195,8 +195,8 @@ export function useAppShellState(): {
       setActiveCwd(session.cwd ?? null);
       setNewSessionCwd(null);
       setSelectedSession(session);
-      setRefreshKey((k) => k + 1);
-      router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
+      if (!session.ephemeral) setRefreshKey((k) => k + 1);
+      router.replace(session.ephemeral ? "/" : `?session=${encodeURIComponent(session.id)}`, { scroll: false });
     },
     [router],
   );

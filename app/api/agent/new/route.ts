@@ -18,10 +18,10 @@ export async function POST(req: Request) {
     }
 
     // Use a one-time key so startRpcSession's lock doesn't conflict with real session ids
-    const { provider, modelId, toolNames, thinkingLevel, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; thinkingLevel?: string; [key: string]: unknown };
+    const { provider, modelId, toolNames, thinkingLevel, ephemeral, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; thinkingLevel?: string; ephemeral?: boolean; [key: string]: unknown };
 
     const tempKey = `__new__${Date.now()}`;
-    const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames);
+    const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames, { ephemeral: ephemeral === true });
 
     // Keep the files-route allowed-roots cache (see app/api/files/[...path]/route.ts)
     // in sync so the new cwd is immediately readable via /api/files. Without this,
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
     const result = await session.send(promptCommand);
 
-    return NextResponse.json({ success: true, sessionId: realSessionId, data: result });
+    return NextResponse.json({ success: true, sessionId: realSessionId, ephemeral: ephemeral === true, data: result });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

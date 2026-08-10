@@ -250,6 +250,7 @@ export class ScheduleRunner {
           if (isWebExtensionUIDialogRequest(event)) {
             pendingDialogs.add(event.id);
             this.updateRun(runId, "waiting_for_input");
+            void import("./web-push").then(({ sendWebPush }) => sendWebPush(`/?session=${encodeURIComponent(started.realSessionId)}`)).catch(() => {});
           } else if (event.type === "extension_ui_closed") {
             pendingDialogs.delete(event.id);
             if (pendingDialogs.size === 0) this.updateRun(runId, "running");
@@ -258,6 +259,7 @@ export class ScheduleRunner {
         }
         if (event.type === "agent_end") {
           const error = eventRunError(event);
+          if (error) void import("./web-push").then(({ sendWebPush }) => sendWebPush(`/?session=${encodeURIComponent(started.realSessionId)}`)).catch(() => {});
           finish(error ? "failed" : "completed", error ?? undefined);
         }
       });

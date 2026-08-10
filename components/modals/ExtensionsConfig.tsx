@@ -30,6 +30,7 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
   const [error, setError] = useState("");
   const [reloading, setReloading] = useState(false);
   const [view, setView] = useState<"loaded" | "packages">("loaded");
+  const [shortcutBusy, setShortcutBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -99,6 +100,17 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
   }, [sessionId, reloading, load, t, onReload]);
 
   const hasErrors = report?.diagnostics.some((d) => d.type === "error");
+  const runShortcut = useCallback(async (shortcut: string) => {
+    if (!sessionId || shortcutBusy) return;
+    setShortcutBusy(shortcut);
+    try {
+      const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/extensions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "run_shortcut", shortcut }) });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? `HTTP ${response.status}`);
+      showToast(t("extensions.shortcutRan"), { type: "success" });
+    } catch (error) { showToast(error instanceof Error ? error.message : String(error), { type: "error" }); }
+    finally { setShortcutBusy(null); }
+  }, [sessionId, shortcutBusy, t]);
   const hasExtensionItems = !!report && (
     report.providers.length > 0
     || report.commands.length > 0
@@ -193,7 +205,7 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
                 </div>
               )}
 
-              <ExtensionInventoryDetails report={report} />
+              <ExtensionInventoryDetails report={report} onRunShortcut={(shortcut) => void runShortcut(shortcut)} shortcutBusy={shortcutBusy} />
 
               {!hasExtensionItems && <div className={styles.inventoryEmpty}>{t("extensions.none")}</div>}
 

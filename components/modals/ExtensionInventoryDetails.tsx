@@ -22,7 +22,7 @@ function SupportBadge({ value }: { value: ExtensionSupportDisplay }) {
   return <span className={styles.supportBadge} data-support={value}>{t(SUPPORT_LABELS[value])}</span>;
 }
 
-export function ExtensionInventoryDetails({ report }: { report: ExtensionsReport }) {
+export function ExtensionInventoryDetails({ report, onRunShortcut, shortcutBusy }: { report: ExtensionsReport; onRunShortcut?: (shortcut: string) => void; shortcutBusy?: string | null }) {
   const { t } = useI18n();
   const compatibility: Array<[MsgKey, ExtensionSupportDisplay]> = [
     ["extensions.providers", report.compatibility.providers],
@@ -83,6 +83,7 @@ export function ExtensionInventoryDetails({ report }: { report: ExtensionsReport
             <span className={styles.rowName}>{shortcut.shortcut}</span>
             {shortcut.description && <span className={styles.rowDesc}>{shortcut.description}</span>}
             {shortcut.source && <span className={styles.rowSource} title={shortcut.source}>{tail(shortcut.source)}</span>}
+            {onRunShortcut && <button type="button" className={styles.inlineAction} disabled={shortcutBusy === shortcut.shortcut} onClick={() => onRunShortcut(shortcut.shortcut)}>{t("extensions.runShortcut")}</button>}
           </div>
         ))}
       </div>}

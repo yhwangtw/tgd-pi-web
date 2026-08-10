@@ -55,7 +55,20 @@ export async function POST(
 ) {
   const { id } = await params;
   try {
-    const body = await req.json() as { action?: string; name?: string; value?: boolean | string };
+    const body = await req.json() as { action?: string; name?: string; value?: boolean | string; shortcut?: string };
+
+    if (body.action === "run_shortcut") {
+      if (!body.shortcut) return NextResponse.json({ error: "shortcut is required" }, { status: 400 });
+      const session = await ensureSession(id);
+      if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      const runner = session.inner.extensionRunner;
+      const extensions = session.inner.resourceLoader?.getExtensions().extensions ?? [];
+      if (!runner) return NextResponse.json({ error: "Extensions not loaded" }, { status: 500 });
+      const registration = extensions.flatMap((extension) => [...extension.shortcuts.values()]).find((shortcut) => shortcut.shortcut === body.shortcut);
+      if (!registration) return NextResponse.json({ error: "Shortcut not found" }, { status: 404 });
+      await registration.handler(runner.createContext());
+      return NextResponse.json({ ok: true, shortcut: body.shortcut });
+    }
 
     if (body.action === "set_flag") {
       if (!body.name || body.value === undefined) {

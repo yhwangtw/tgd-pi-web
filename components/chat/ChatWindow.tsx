@@ -231,7 +231,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const {
     loading, error, runtimeFailure, messages, entryIds, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
-    retryInfo, providerRecovery, autoProviderFallback, contextUsage, forkingEntryId,
+    retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, stalledSecs, extensionUIState,
     isNew,
@@ -240,7 +240,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,
     handleUpdateQueued, handleMoveQueued,
-    handleToolPresetChange, handleThinkingLevelChange, handleClearQueue, handleRemoveQueued, handleRetry,
+    handleToolPresetChange, handleThinkingLevelChange, setEphemeralNewSession, handleClearQueue, handleRemoveQueued, handleRetry,
     handleRetryWithModel, handleAutoProviderFallbackChange, setProviderRecovery,
     handleEditRerun, handleAbortBash, handleExtensionUIResponse, handleAgentEventRef,
   } = useAgentSession({
@@ -931,6 +931,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       availableThinkingLevels={availableThinkingLevels}
       thinkingLevelMap={currentThinkingLevelMap}
       retryInfo={retryInfo}
+      ephemeral={ephemeralNewSession}
+      onEphemeralChange={isNew ? setEphemeralNewSession : undefined}
       soundEnabled={soundEnabled}
       onSoundToggle={onSoundToggle}
       cwd={tgdCwd}

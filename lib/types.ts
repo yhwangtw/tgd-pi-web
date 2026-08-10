@@ -191,6 +191,7 @@ export interface SessionInfo {
   messageCount: number;
   firstMessage: string;
   parentSessionId?: string; // set if this session was forked from another
+  ephemeral?: boolean; // live only; intentionally disappears after reload/server restart
 }
 
 export interface SessionContext {

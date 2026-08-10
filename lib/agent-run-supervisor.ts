@@ -238,6 +238,7 @@ export class AgentRunSupervisor {
           if (isWebExtensionUIDialogRequest(event)) {
             active.pendingDialogs.add(event.id);
             this.updateRun(run.id, "waiting_for_input");
+            void import("./web-push").then(({ sendWebPush }) => sendWebPush(`/?session=${encodeURIComponent(started.realSessionId)}`)).catch(() => {});
           } else if (event.type === "extension_ui_closed") {
             active.pendingDialogs.delete(event.id);
             if (active.pendingDialogs.size === 0) this.updateRun(run.id, "running");
@@ -246,6 +247,7 @@ export class AgentRunSupervisor {
         }
         if (event.type === "agent_end") {
           const error = eventRunError(event);
+          if (error) void import("./web-push").then(({ sendWebPush }) => sendWebPush(`/?session=${encodeURIComponent(started.realSessionId)}`)).catch(() => {});
           this.finish(run.id, error ? "failed" : "completed", error ?? undefined, event.messages as AgentMessage[]);
         }
       });

@@ -6,12 +6,14 @@ import type {
   UserMessage,
   AssistantMessage,
   ToolResultMessage,
+  CustomMessage,
 } from "@/lib/types";
 import { UserMessageView } from "./UserMessageView";
 import { AssistantMessageView } from "./AssistantMessageView";
 import { BashBlock } from "./BashBlock";
 import type { BashExecutionMessage } from "@/lib/types";
 import type { AssistantUsage } from "@/lib/usage-aggregation";
+import { CustomMessageView } from "./CustomMessageView";
 
 interface Props {
   message: AgentMessage;
@@ -64,6 +66,9 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
   }
   if (message.role === "toolResult") {
     return null;
+  }
+  if (message.role === "custom") {
+    return <CustomMessageView message={message as CustomMessage} />;
   }
   return null;
 });

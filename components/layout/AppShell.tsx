@@ -474,6 +474,18 @@ export function AppShell() {
     window.location.href = `/api/sessions/${encodeURIComponent(state.selectedSession.id)}/export-md`;
   }, [state.selectedSession]);
 
+  const handleCloneSession = useCallback(async () => {
+    const selected = state.selectedSession;
+    if (!selected) return;
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(selected.id)}/clone`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const payload = await response.json() as { sessionId?: string; sessionFile?: string; cwd?: string; error?: string };
+      if (!response.ok || !payload.sessionId) throw new Error(payload.error ?? `HTTP ${response.status}`);
+      actions.handleSessionForked(payload.sessionId, payload.cwd ?? selected.cwd, payload.sessionFile);
+      showToast(t("session.cloned"), { type: "success" });
+    } catch (error) { showToast(`${t("session.cloneFailed")}: ${error instanceof Error ? error.message : error}`, { type: "error" }); }
+  }, [actions, state.selectedSession, t]);
+
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const exportMenuPanelRef = useRef<HTMLDivElement>(null);
@@ -863,6 +875,9 @@ export function AppShell() {
                     </small>
                   </button>
                   <div className={s.sessionMenuDivider} />
+                  <button type="button" className={s.sessionMenuItem} role="menuitem" disabled={!state.selectedSession} onClick={() => { void handleCloneSession(); setSessionMenuOpen(false); }}>
+                    <span>{t("session.clone")}</span><small>{t("session.cloneHint")}</small>
+                  </button>
                   <button type="button" className={s.sessionMenuItem} role="menuitem" disabled={!state.selectedSession} onClick={() => { handleExportSession(); setSessionMenuOpen(false); }}>
                     <span>{t("topbar.exportHtmlLabel")}</span><small>{t("topbar.exportHtmlHint")}</small>
                   </button>
@@ -923,6 +938,10 @@ export function AppShell() {
                     >
                       <strong>{t("topbar.exportMdLabel")}</strong>
                       <span className={s.exportMenuHint}>{t("topbar.exportMdHint")}</span>
+                    </button>
+                    <button onClick={() => { void handleCloneSession(); setExportMenuOpen(false); setMobileActionsOpen(false); }} className={s.exportMenuItem} role="menuitem">
+                      <strong>{t("session.clone")}</strong>
+                      <span className={s.exportMenuHint}>{t("session.cloneHint")}</span>
                     </button>
                   </div>,
                   document.body,

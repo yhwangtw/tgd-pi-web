@@ -305,6 +305,8 @@
   white-space: nowrap;
   direction: rtl; /* show the tail of the path — the informative part */
 }
+.inlineAction { min-height: var(--control-sm); padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-hover); color: var(--text-muted); font: inherit; font-size: var(--text-2xs); cursor: pointer; }
+.inlineAction:disabled { opacity: .45; cursor: wait; }
 
 .pathRow {
   font-family: var(--font-mono);

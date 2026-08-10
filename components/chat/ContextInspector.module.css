@@ -17,6 +17,10 @@
 .facts > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; padding: 7px 2px; border-bottom: 1px solid var(--border-subtle); }
 .facts dt { color: var(--text-dim); font-size: var(--text-xs); }
 .facts dd { min-width: 0; margin: 0; overflow: hidden; color: var(--text); font-family: var(--font-mono); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.facts .trustValue { display: flex; align-items: center; gap: 8px; overflow: visible; }
+.trustValue span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trustValue button { min-height: var(--control-sm); margin-left: auto; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-hover); color: var(--text-muted); font: inherit; font-size: var(--text-2xs); cursor: pointer; }
+.trustValue button:disabled { opacity: .45; cursor: default; }
 .diagnostics { display: flex; flex-direction: column; gap: 5px; margin-top: 14px; }
 .diagnostics div { display: flex; gap: 8px; padding: 8px 10px; border: 1px solid var(--color-warning-border); border-radius: var(--radius-control); background: var(--color-warning-bg); color: var(--color-warning-text); font-size: var(--text-xs); }
 .sourceList, .resourceList { display: flex; flex-direction: column; gap: 8px; }

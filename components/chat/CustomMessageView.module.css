@@ -1,0 +1,6 @@
+.root { margin: 6px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--bg-elev-1); color: var(--text-muted); }
+.root header { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+.root header span { padding: 1px 5px; border-radius: var(--radius-pill); background: var(--color-accent-bg); color: var(--accent); font-family: var(--font-mono); font-size: var(--text-2xs); }
+.root header strong { font-family: var(--font-mono); font-size: var(--text-xs); }
+.root details { margin-top: 8px; color: var(--text-dim); font-size: var(--text-xs); }
+.root pre { max-height: 240px; overflow: auto; padding: 8px; border-radius: var(--radius-control); background: var(--bg-subtle); font: var(--text-2xs) var(--font-mono); white-space: pre-wrap; }

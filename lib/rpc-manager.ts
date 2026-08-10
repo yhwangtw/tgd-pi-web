@@ -696,6 +696,13 @@ export class AgentSessionWrapper {
         return null;
       }
 
+      case "set_project_trust": {
+        const trusted = command.trusted === true;
+        this.inner.settingsManager.setProjectTrusted(trusted);
+        this.emitEvent({ type: "project_trust_changed", trusted, cwd: this.cwd });
+        return { trusted };
+      }
+
       case "extension_ui_response":
         return this.webExtensionUI?.respond(command as unknown as WebExtensionUIResponse)
           ?? { accepted: false, reason: "not_found" };
@@ -867,7 +874,8 @@ export async function startRpcSession(
   sessionId: string,
   sessionFile: string,
   cwd: string,
-  toolNames?: string[]
+  toolNames?: string[],
+  options: { ephemeral?: boolean } = {},
 ): Promise<{ session: AgentSessionWrapper; realSessionId: string }> {
   const registry = getRegistry();
   const locks = getLocks();
@@ -879,7 +887,9 @@ export async function startRpcSession(
   if (inflight) return inflight;
 
   const starting = (async () => {
-    const sessionManager = sessionFile
+    const sessionManager = options.ephemeral
+      ? SessionManager.inMemory(cwd)
+      : sessionFile
       ? SessionManager.open(sessionFile, undefined)
       : SessionManager.create(cwd, undefined);
 

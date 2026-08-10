@@ -176,6 +176,14 @@ The mobile layout keeps the active phase, transcript, composer, model controls, 
 - Import a Pi `.jsonl` through a preview-first dialog that validates its header, effective cwd, allowed roots, symlinks, size, and destination collision before switching.
 - Per-run error cards, stall warnings, notifications, completion sound, and React-owned tab status.
 - Editable past turns, retry from the previous branch point, independent forks, and in-session branch navigation.
+- Clone the active branch into a separate session, or start an ephemeral session that intentionally leaves no JSONL after a server restart.
+- Provider errors are classified (rate limit, billing, auth, outage, network, or context) with one-click fallback and an opt-in single automatic cross-provider retry.
+- Project trust can be reviewed and changed from the Context inspector. Extension shortcuts can be invoked from the Extensions panel, while TUI-only custom messages receive a safe generic Web rendering.
+
+### Attention and recovery
+
+- A global Attention Center combines failed sessions, background agents, scheduled runs, and agents waiting for a decision; read state stays per device.
+- Optional Web Push works after explicit browser enrollment. Remote enrollment requires the app access gate; localhost works without a password. Push payloads are deliberately generic and never contain prompts, repository paths, or error text.
 
 ### Scheduled agents
 
@@ -191,6 +199,7 @@ The mobile layout keeps the active phase, transcript, composer, model controls, 
 - Conversation find, user-turn navigation, bookmarks, minimap, long-message collapse, and optional always-follow streaming.
 - Project switcher with recent projects, pins, discovery, filesystem completion, and linked git worktrees.
 - Reusable prompt templates alongside built-in `/tgd-*` commands.
+- Local hybrid semantic search spans session history, tGD artifacts, and project source, alongside exact filename/content search.
 
 ### Files and git
 
@@ -199,6 +208,7 @@ The mobile layout keeps the active phase, transcript, composer, model controls, 
 - Tool-call presentation for `edit` and `write` operations instead of raw JSON.
 - Allowed-root checks, path guards, `execFile` git calls, and response-size limits on file and git APIs.
 - Snapshot restore applies a precise delta and never rewrites the user's index or `HEAD`.
+- The file inspector includes symbols, definition/reference lookup, TypeScript/ESLint/related-test diagnostics, Git history, blame, and agent snapshots.
 
 ### Rendering and appearance
 

@@ -55,6 +55,8 @@ interface Props {
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
+  ephemeral?: boolean;
+  onEphemeralChange?: (enabled: boolean) => void;
   soundEnabled?: boolean;
   onSoundToggle?: () => void;
   /** Project cwd — enables the `@file` mention autocomplete. */
@@ -108,6 +110,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onCompact, onAbortCompaction, isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
+  ephemeral = false, onEphemeralChange,
   soundEnabled, onSoundToggle,
   cwd,
   persistKey,
@@ -1068,6 +1071,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 onToolPresetChange={onToolPresetChange}
               />
             </div>
+
+            {!isStreaming && onEphemeralChange && (
+              <div className={styles.mobileLabeledControl}>
+                <span className={styles.mobileControlLabel}>{t("input.sessionStorage")}</span>
+                <button type="button" onClick={() => onEphemeralChange(!ephemeral)} aria-pressed={ephemeral} className={ephemeral ? styles.autoCompactButtonOn : styles.autoCompactButtonOff} title={t("input.ephemeralHint")}>
+                  <span className={styles.autoCompactDot} aria-hidden />
+                  <span className={styles.mobileControlValue}>{t(ephemeral ? "input.ephemeral" : "input.persisted")}</span>
+                </button>
+              </div>
+            )}
 
             {!isStreaming && onCompact && (
               <>

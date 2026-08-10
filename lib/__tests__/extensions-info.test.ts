@@ -130,8 +130,8 @@ describe("buildExtensionsReport", () => {
       flags: "supported",
       commandContext: "supported",
       tuiUi: "partial",
-      shortcuts: "unsupported",
-      renderers: "unsupported",
+      shortcuts: "partial",
+      renderers: "partial",
     });
   });
 
