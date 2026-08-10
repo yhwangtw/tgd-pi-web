@@ -12,6 +12,7 @@ import { ChangesPanel } from "./ChangesPanel";
 import { TgdArtifactsPanel } from "./TgdArtifactsPanel";
 import { AgentDashboardPanel } from "./AgentDashboardPanel";
 import { SchedulePanel } from "./SchedulePanel";
+import { AttentionPanel } from "./AttentionPanel";
 import { DiffPanel } from "./DiffPanel";
 import type { DiffAnnotation } from "./DiffView";
 import { DesignInspector } from "./DesignInspector";
@@ -29,6 +30,7 @@ import { useSessions } from "@/hooks/useSessions";
 import { useTags } from "@/hooks/useTags";
 import { useCommandPalette } from "@/hooks/useCommandPalette";
 import { useToast, showToast } from "@/hooks/useToast";
+import { useAttentionCenter } from "@/hooks/useAttentionCenter";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { onOpenFileRequest } from "@/lib/file-links";
 import { useI18n, translate } from "@/lib/i18n";
@@ -71,6 +73,7 @@ export function AppShell() {
   const { toggleTheme } = useTheme();
   const { locale, t } = useI18n();
   const { state, actions, refs, topBarRef } = useAppShellState();
+  const attention = useAttentionCenter();
   const { fileTabs, activeFileTabId, splitFileTabId, rightPanelOpen, setRightPanelOpen, setActiveFileTabId, handleOpenFile: openFileTab, handleCloseFileTab, handleCloseOthers, handleCloseAll, handleReorderTabs, handleTogglePin, handleOpenSplit } = useFileTabs();
 
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
@@ -601,6 +604,21 @@ export function AppShell() {
           onSelectTagFilter={setActiveTagFilter}
           showExplorer={false}
         />
+      ) : panelView === "attention" ? (
+        <AttentionPanel
+          items={attention.items}
+          readIds={attention.readIds}
+          loading={attention.loading}
+          error={attention.error}
+          onRefresh={() => void attention.refresh()}
+          onMarkRead={attention.markItemRead}
+          onMarkAllRead={attention.markAllRead}
+          onOpenSession={handleOpenScheduledSession}
+          onOpenSource={(source) => {
+            setPanelView(source === "agent" ? "agents" : "schedule");
+            setSidebarOpen(true);
+          }}
+        />
       ) : panelView === "agents" ? (
         <AgentDashboardPanel
           defaultCwd={panelCwd}
@@ -685,6 +703,7 @@ export function AppShell() {
         skillsDisabled={!panelCwd}
         onOpenExtensions={() => setExtensionsConfigOpen(true)}
         appearanceOpen={appearanceOpen}
+        attentionUnreadCount={attention.unreadCount}
         onToggleAppearance={() => setAppearanceOpen((v) => !v)}
       />
       <MobileNavigation
@@ -700,6 +719,7 @@ export function AppShell() {
         onOpenExtensions={() => setExtensionsConfigOpen(true)}
         onOpenAppearance={() => setAppearanceOpen(true)}
         onOpenDesignMode={() => setDesignModeOpen(true)}
+        attentionUnreadCount={attention.unreadCount}
       />
       {/* Mobile overlay backdrop */}
       <div

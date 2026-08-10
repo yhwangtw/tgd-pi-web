@@ -32,6 +32,27 @@ async function git(cwd: string, args: string[]) {
   return (await execFileAsync("git", ["-C", cwd, ...args], { timeout: 15_000, maxBuffer: MAX_BUFFER })).stdout;
 }
 
+async function symbolMatches(cwd: string, symbol: string, definitionsOnly: boolean) {
+  if (!/^[A-Za-z_$][\w$]*$/.test(symbol)) throw new Error("valid identifier required");
+  const escaped = symbol.replace(/[$]/g, "\\$");
+  const pattern = definitionsOnly
+    ? `\\b(?:class|function|const|let|var|interface|type|enum|def)\\s+${escaped}\\b`
+    : `\\b${escaped}\\b`;
+  try {
+    const { stdout } = await execFileAsync("rg", ["--json", "--line-number", "--glob", "!node_modules/**", "--glob", "!.git/**", "--glob", "!dist/**", "--glob", "!.next/**", pattern, "."], { cwd, timeout: 12_000, maxBuffer: MAX_BUFFER });
+    return stdout.split("\n").filter(Boolean).flatMap((row) => {
+      try {
+        const event = JSON.parse(row) as { type?: string; data?: { path?: { text?: string }; line_number?: number; lines?: { text?: string } } };
+        if (event.type !== "match" || !event.data?.path?.text) return [];
+        return [{ path: event.data.path.text.replace(/^\.\//, ""), line: event.data.line_number ?? 1, preview: event.data.lines?.text?.trim().slice(0, 240) ?? "" }];
+      } catch { return []; }
+    }).slice(0, 250);
+  } catch (error) {
+    if ((error as { code?: number }).code === 1) return [];
+    throw error;
+  }
+}
+
 function parseTsc(stdout: string, cwd: string, abs: string, relPath: string): Diagnostic[] {
   const normalizedAbs = abs.replace(/\\/g, "/");
   return stdout.split("\n").flatMap((line) => {
@@ -100,6 +121,10 @@ export async function GET(req: Request) {
   try {
     if (mode === "diagnostics") return NextResponse.json({ diagnostics: await diagnostics(checked.cwd, checked.abs, checked.relPath) });
     if (mode === "tests") return NextResponse.json({ diagnostics: await testDiagnostics(checked.cwd, checked.relPath) });
+    if (mode === "definition" || mode === "references") {
+      const symbol = url.searchParams.get("symbol") ?? "";
+      return NextResponse.json({ symbol, matches: await symbolMatches(checked.cwd, symbol, mode === "definition") });
+    }
     if (mode === "history") {
       const output = await git(checked.cwd, ["log", "--follow", "-n", "40", "--date=iso-strict", "--format=%H%x1f%h%x1f%an%x1f%ad%x1f%s", "--", checked.relPath]);
       const commits = output.trim().split("\n").filter(Boolean).map((line) => {

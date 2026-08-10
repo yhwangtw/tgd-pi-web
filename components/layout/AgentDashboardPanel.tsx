@@ -40,6 +40,7 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [concurrencyOpen, setConcurrencyOpen] = useState(false);
   const concurrencyRef = useRef<HTMLDivElement>(null);
 
@@ -138,15 +139,17 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
     });
   };
 
-  const compare = async () => {
+  const openComparedSessions = async () => {
     if (!onCompareSessions || compareIds.length < 2) return;
     const sessionIds = compareIds
       .map((id) => runs.find((run) => run.id === id)?.sessionId)
       .filter((id): id is string => Boolean(id));
     if (sessionIds.length < 2) return;
     await onCompareSessions(sessionIds);
-    setCompareIds([]);
+    setCompareOpen(false);
   };
+
+  const comparedRuns = compareIds.map((id) => runs.find((run) => run.id === id)).filter((run): run is AgentRun => Boolean(run));
 
   const updateConcurrency = async (nextValue: number) => {
     if (savingConcurrency || nextValue === maxConcurrency) return;
@@ -211,13 +214,33 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
             className={s.compareButton}
             type="button"
             disabled={compareIds.length < 2}
-            onClick={() => void compare()}
+            onClick={() => setCompareOpen(true)}
             title={t("agents.compareHint")}
           >
             {t("agents.compare")} {compareIds.length > 0 ? `(${compareIds.length})` : ""}
           </button>
         )}
       </div>
+      {compareOpen && comparedRuns.length >= 2 && (
+        <section className={s.compareTray} aria-label={t("agents.compareResults")}>
+          <div className={s.compareTrayHeader}>
+            <strong>{t("agents.compareResults")}</strong>
+            <button type="button" onClick={() => setCompareOpen(false)} aria-label={t("common.close")}>×</button>
+          </div>
+          <div className={s.compareGrid}>
+            {comparedRuns.map((run) => <article key={run.id}>
+              <strong>{run.name}</strong>
+              <span>{run.report?.summary ?? run.error ?? t("agents.noReport")}</span>
+              <dl>
+                <div><dt>{t("agents.files")}</dt><dd>{run.report?.changedFiles.length ?? 0}</dd></div>
+                <div><dt>{t("agents.tests")}</dt><dd>{run.report?.tests.length ?? 0}</dd></div>
+                <div><dt>{t("agents.cost")}</dt><dd>${(run.report?.usage.cost ?? 0).toFixed(3)}</dd></div>
+              </dl>
+            </article>)}
+          </div>
+          <button type="button" className={s.compareOpenSessions} onClick={() => void openComparedSessions()}>{t("agents.openComparedSessions")}</button>
+        </section>
+      )}
       <div className={s.summary} aria-label="Agent run summary">
         <button className={filter === "active" ? s.summaryActive : ""} onClick={() => setFilter(filter === "active" ? "all" : "active")}>
           <strong>{activeCount}</strong><span>{t("agents.active")}</span>

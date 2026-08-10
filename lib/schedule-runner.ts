@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { startRpcSession, type AgentEvent, type AgentSessionWrapper } from "./rpc-manager";
 import { nextScheduleRunAt } from "./schedule-core";
 import { mutateScheduleStore, readScheduleStore, reconcileInterruptedRuns } from "./schedule-store";
-import { ACTIVE_SCHEDULE_RUN_STATUSES, type AgentSchedule, type ScheduleRun, type ScheduleRunStatus } from "./schedule-types";
+import { ACTIVE_SCHEDULE_RUN_STATUSES, type AgentSchedule, type ScheduleRun, type ScheduleRunStatus, type SchedulerHealth } from "./schedule-types";
 import type { WebExtensionUIEvent } from "./web-extension-ui";
 import { isWebExtensionUIDialogRequest, isWebExtensionUIEvent } from "./web-extension-ui-types";
 
@@ -40,30 +40,61 @@ export class ScheduleRunner {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private ticking = false;
   private started = false;
+  private readonly startedAt = new Date().toISOString();
+  private lastHeartbeatAt = this.startedAt;
+  private lastTickAt: string | null = null;
+  private nextWakeAt: string | null = null;
+  private tickCount = 0;
+  private missedRuns = 0;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
 
   start(): void {
     if (this.started) return;
     this.started = true;
     reconcileInterruptedRuns();
+    this.heartbeat = setInterval(() => { this.lastHeartbeatAt = new Date().toISOString(); }, 30_000);
+    this.heartbeat.unref?.();
     this.reschedule();
   }
 
   dispose(): void {
     this.started = false;
     if (this.timer) clearTimeout(this.timer);
+    if (this.heartbeat) clearInterval(this.heartbeat);
     this.timer = null;
+    this.heartbeat = null;
+    this.nextWakeAt = null;
+  }
+
+  getHealth(): SchedulerHealth {
+    return {
+      state: this.nextWakeAt ? "healthy" : "idle",
+      startedAt: this.startedAt,
+      lastHeartbeatAt: this.lastHeartbeatAt,
+      lastTickAt: this.lastTickAt,
+      nextWakeAt: this.nextWakeAt,
+      tickCount: this.tickCount,
+      missedRuns: this.missedRuns,
+    };
+  }
+
+  async wake(now = new Date()): Promise<SchedulerHealth> {
+    await this.tick(now);
+    return this.getHealth();
   }
 
   reschedule(): void {
     if (!this.started) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this.nextWakeAt = null;
     const next = readScheduleStore().schedules
       .filter((schedule) => schedule.enabled && schedule.nextRunAt)
       .map((schedule) => Date.parse(schedule.nextRunAt as string))
       .filter(Number.isFinite)
       .sort((a, b) => a - b)[0];
     if (next === undefined) return;
+    this.nextWakeAt = new Date(next).toISOString();
     const delay = Math.max(25, Math.min(MAX_TIMER_MS, next - Date.now()));
     this.timer = setTimeout(() => void this.tick(), delay);
     this.timer.unref?.();
@@ -72,6 +103,9 @@ export class ScheduleRunner {
   async tick(now = new Date()): Promise<void> {
     if (this.ticking) return;
     this.ticking = true;
+    this.lastHeartbeatAt = now.toISOString();
+    this.lastTickAt = now.toISOString();
+    this.tickCount += 1;
     try {
       const due = readScheduleStore().schedules.filter((schedule) =>
         schedule.enabled && schedule.nextRunAt !== null
@@ -81,6 +115,7 @@ export class ScheduleRunner {
         const scheduledFor = schedule.nextRunAt as string;
         const missed = now.getTime() - Date.parse(scheduledFor) > MISSED_GRACE_MS;
         if (missed && schedule.missedRunPolicy === "skip") {
+          this.missedRuns += 1;
           this.skipRun(schedule.id, scheduledFor, "Missed while the server was unavailable", now);
           continue;
         }

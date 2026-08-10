@@ -13,9 +13,9 @@ function requiresJson(req: Request): Response | null {
 }
 
 export async function GET(): Promise<Response> {
-  ensureScheduleRunner();
+  const runner = ensureScheduleRunner();
   const store = readScheduleStore();
-  return Response.json({ ...store, serverTime: new Date().toISOString() }, {
+  return Response.json({ ...store, serverTime: new Date().toISOString(), health: runner.getHealth() }, {
     headers: { "Cache-Control": "no-store" },
   });
 }

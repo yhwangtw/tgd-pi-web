@@ -16,7 +16,7 @@ interface Props {
   onOpenFile: (filePath: string, fileName: string, line?: number) => void;
 }
 
-const SCOPES: SearchScope[] = ["all", "sessions", "files", "content", "commands"];
+const SCOPES: SearchScope[] = ["all", "semantic", "sessions", "files", "content", "commands"];
 
 /**
  * One search surface for sessions, recursive file names, file contents, tags,
@@ -29,7 +29,7 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
   const [caseSensitive, setCaseSensitive] = useState(false);
   const query = palette.query;
   const trimmed = query.trim();
-  const { sessionHits, fileHits, contentHits, loading, error } = useUnifiedSearchResults(
+  const { sessionHits, fileHits, contentHits, semanticHits, loading, error } = useUnifiedSearchResults(
     cwd,
     trimmed,
     scope,
@@ -58,7 +58,10 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
   const showFiles = scope === "all" || scope === "files";
   const showContent = scope === "all" || scope === "content";
   const showCommands = scope === "all" || scope === "commands";
+  const showSemantic = scope === "semantic";
   const visibleResultCount =
+    (showSemantic ? semanticHits.length : 0)
+    +
     (showSessions ? sessionHits.length + tagResults.length : 0)
     + (showFiles ? fileHits.length : 0)
     + (showContent ? contentHits.length : 0)
@@ -153,9 +156,11 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
         showFiles={showFiles}
         showContent={showContent}
         showCommands={showCommands}
+        showSemantic={showSemantic}
         sessionHits={sessionHits}
         fileHits={fileHits}
         contentHits={contentHits}
+        semanticHits={semanticHits}
         tagResults={tagResults}
         commandResults={visibleCommandResults}
         inputRef={inputRef}

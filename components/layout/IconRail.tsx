@@ -3,7 +3,7 @@
 import { useI18n } from "@/lib/i18n";
 import s from "./AppShell.module.css";
 
-export type PanelView = "sessions" | "agents" | "schedule" | "files" | "search" | "changes" | "tgd";
+export type PanelView = "sessions" | "attention" | "agents" | "schedule" | "files" | "search" | "changes" | "tgd";
 
 interface IconRailProps {
   panelView: PanelView;
@@ -15,6 +15,7 @@ interface IconRailProps {
   skillsDisabled: boolean;
   onOpenExtensions: () => void;
   appearanceOpen: boolean;
+  attentionUnreadCount?: number;
   onToggleAppearance: () => void;
 }
 
@@ -33,6 +34,7 @@ export function IconRail({
   skillsDisabled,
   onOpenExtensions,
   appearanceOpen,
+  attentionUnreadCount = 0,
   onToggleAppearance,
 }: IconRailProps) {
   const { t } = useI18n();
@@ -49,6 +51,18 @@ export function IconRail({
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
+      </button>
+      <button
+        onClick={() => onSelectView("attention")}
+        title={t("attention.title")}
+        aria-label={`${t("attention.title")}${attentionUnreadCount > 0 ? ` · ${attentionUnreadCount}` : ""}`}
+        aria-pressed={panelView === "attention" && sidebarOpen}
+        className={`${s.railButton} ${panelView === "attention" && sidebarOpen ? s.railButtonActive : ""}`}
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" />
+        </svg>
+        {attentionUnreadCount > 0 && <span className={s.railBadge}>{Math.min(attentionUnreadCount, 99)}</span>}
       </button>
       <button
         onClick={() => onSelectView("agents")}

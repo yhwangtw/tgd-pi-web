@@ -69,6 +69,11 @@
 }
 
 .body { padding: 8px; }
+.schedulerHealth { min-height: 34px; margin-bottom: 8px; padding: 6px 8px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text-dim); font-size: var(--text-2xs); }
+.schedulerHealth strong { color: var(--text-muted); }
+.schedulerHealth time { margin-left: auto; white-space: nowrap; }
+.healthOk, .healthIdle { width: 7px; height: 7px; border-radius: var(--radius-circle); background: var(--color-success); }
+.healthIdle { background: var(--text-dim); }
 .form {
   padding: 12px;
 }

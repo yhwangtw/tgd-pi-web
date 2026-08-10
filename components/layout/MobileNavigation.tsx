@@ -18,6 +18,7 @@ interface Props {
   onOpenExtensions: () => void;
   onOpenAppearance: () => void;
   onOpenDesignMode?: () => void;
+  attentionUnreadCount?: number;
 }
 
 interface NavButtonProps {
@@ -49,9 +50,10 @@ interface MoreActionProps {
   onClick: () => void;
   disabled?: boolean;
   active?: boolean;
+  badge?: number;
 }
 
-function MoreAction({ icon, label, onClick, disabled, active }: MoreActionProps) {
+function MoreAction({ icon, label, onClick, disabled, active, badge }: MoreActionProps) {
   return (
     <button
       type="button"
@@ -61,6 +63,7 @@ function MoreAction({ icon, label, onClick, disabled, active }: MoreActionProps)
     >
       <span aria-hidden>{icon}</span>
       <span>{label}</span>
+      {badge ? <span className={s.mobileActionBadge}>{Math.min(badge, 99)}</span> : null}
     </button>
   );
 }
@@ -89,10 +92,11 @@ export function MobileNavigation({
   onOpenExtensions,
   onOpenAppearance,
   onOpenDesignMode,
+  attentionUnreadCount = 0,
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(false);
   const { t } = useI18n();
-  const secondaryViewActive = panelOpen && ["agents", "schedule", "changes", "tgd"].includes(panelView);
+  const secondaryViewActive = panelOpen && ["attention", "agents", "schedule", "changes", "tgd"].includes(panelView);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -162,6 +166,7 @@ export function MobileNavigation({
           <div className={s.mobileMoreGroup}>
             <div className={s.mobileMoreGroupTitle}>{t("mobile.work")}</div>
             <div className={s.mobileMoreGrid}>
+              <MoreAction label={t("attention.title")} badge={attentionUnreadCount} active={panelOpen && panelView === "attention"} onClick={() => run(() => onSelectView("attention"))} icon={<svg {...iconProps}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>} />
               <MoreAction label={t("agents.title")} active={panelOpen && panelView === "agents"} onClick={() => run(() => onSelectView("agents"))} icon={<svg {...iconProps}><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M9 9h6M9 13h4" /></svg>} />
               <MoreAction label={t("schedule.title")} active={panelOpen && panelView === "schedule"} onClick={() => run(() => onSelectView("schedule"))} icon={<svg {...iconProps}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></svg>} />
               <MoreAction label={t("mobile.changes")} active={panelOpen && panelView === "changes"} onClick={() => run(() => onSelectView("changes"))} icon={<svg {...iconProps}><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>} />

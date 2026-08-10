@@ -71,6 +71,17 @@ export interface SchedulesResponse {
   schedules: AgentSchedule[];
   runs: ScheduleRun[];
   serverTime: string;
+  health?: SchedulerHealth;
+}
+
+export interface SchedulerHealth {
+  state: "healthy" | "idle";
+  startedAt: string;
+  lastHeartbeatAt: string;
+  lastTickAt: string | null;
+  nextWakeAt: string | null;
+  tickCount: number;
+  missedRuns: number;
 }
 
 export const ACTIVE_SCHEDULE_RUN_STATUSES = new Set<ScheduleRunStatus>([

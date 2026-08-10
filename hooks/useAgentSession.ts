@@ -26,6 +26,12 @@ import {
   type QueuedFollowUp,
 } from "@/lib/queued-follow-ups";
 import { createSessionReplacementChannel, type SessionReplacementChannel } from "@/lib/session-replacement-channel";
+import {
+  classifyProviderError,
+  selectFallbackModel,
+  type ProviderErrorKind,
+  type ProviderRecoveryModel,
+} from "@/lib/provider-recovery";
 
 export type { SessionData, AgentPhase, ThinkingLevelOption, ChatInputHandle, AttachedImage };
 
@@ -42,6 +48,8 @@ interface AgentStateEnvelope {
   running: boolean;
   state?: LiveAgentState;
 }
+
+const AUTO_PROVIDER_FALLBACK_KEY = "pi-auto-provider-fallback";
 
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
@@ -63,6 +71,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [toolPreset, setToolPreset] = useState<"none" | "default" | "full">("default");
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
+  const [autoProviderFallback, setAutoProviderFallback] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem(AUTO_PROVIDER_FALLBACK_KEY) === "1"; } catch { return false; }
+  });
+  const [providerRecovery, setProviderRecovery] = useState<{
+    message: string;
+    kind: ProviderErrorKind;
+    retryAfterSeconds: number | null;
+    candidate: ProviderRecoveryModel | null;
+    automatic: boolean;
+  } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
@@ -91,6 +110,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const sessionNameRef = useRef<string | undefined>(session?.name);
   const sessionLoadRequestRef = useRef(0);
   const replacementChannelRef = useRef<SessionReplacementChannel | null>(null);
+  const autoProviderFallbackRef = useRef(autoProviderFallback);
+  const autoFallbackAttemptedRef = useRef(false);
+  const autoFallbackInFlightRef = useRef(false);
+  const autoFallbackRetryRef = useRef<((model: ProviderRecoveryModel) => void) | null>(null);
 
   const { eventSourceRef, lastEventAtRef, connectEvents } = useAgentEvents(agentRunningRef, handleAgentEventRef);
   const { stalledSecs, setStalledSecs } = useStallWatchdog(
@@ -117,6 +140,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const currentModel = currentModelOverride ?? data?.context.model ?? pendingModel ?? null;
   const displayModel = isNew ? newSessionModel : currentModel;
+  const currentModelRef = useRef(currentModel);
+  const modelListRef = useRef(modelList);
+  currentModelRef.current = currentModel;
+  modelListRef.current = modelList;
+  autoProviderFallbackRef.current = autoProviderFallback;
 
   const sessionStats = computeSessionStats(messages);
 
@@ -337,10 +365,34 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         {
           const runError = getRunError(event);
           if (runError) {
+            const classified = classifyProviderError(runError);
+            const current = currentModelRef.current;
+            let candidate = selectFallbackModel(
+              current,
+              modelListRef.current.map((model) => ({ provider: model.provider, modelId: model.id, name: model.name })),
+            );
+            if ((classified.kind === "billing" || classified.kind === "authentication")
+              && candidate?.provider === current?.provider) candidate = null;
+            setProviderRecovery({
+              message: runError,
+              kind: classified.kind,
+              retryAfterSeconds: classified.retryAfterSeconds,
+              candidate,
+              automatic: autoProviderFallbackRef.current,
+            });
+            if (autoProviderFallbackRef.current
+              && classified.recoverableWithFallback
+              && candidate
+              && !autoFallbackAttemptedRef.current) {
+              autoFallbackAttemptedRef.current = true;
+              window.setTimeout(() => autoFallbackRetryRef.current?.(candidate as ProviderRecoveryModel), 350);
+            }
             showToast(`Model error: ${runError}`, { type: "error", duration: 8000 });
             setErrorTitle(sessionNameRef.current);
             notifyDone(sessionNameRef.current, runError);
           } else {
+            setProviderRecovery(null);
+            autoFallbackAttemptedRef.current = false;
             setDoneTitle(sessionNameRef.current);
             notifyDone(sessionNameRef.current);
           }
@@ -564,6 +616,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]): Promise<boolean> => {
     if (!message.trim() && !images?.length) return false;
     if (agentRunning) return false;
+    const fallbackRetry = autoFallbackInFlightRef.current;
+    autoFallbackInFlightRef.current = false;
+    if (!fallbackRetry) {
+      autoFallbackAttemptedRef.current = false;
+      setProviderRecovery(null);
+    }
     requestNotifyPermission();
 
     // Bash mode: `!cmd` runs the shell directly (streamed, recorded into the
@@ -723,21 +781,24 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [loadContext]);
 
-  const handleModelChange = useCallback(async (provider: string, modelId: string) => {
+  const handleModelChange = useCallback(async (provider: string, modelId: string): Promise<boolean> => {
     if (isNew) {
       setNewSessionModel({ provider, modelId });
-      return;
+      return true;
     }
     const sid = sessionIdRef.current;
-    if (!sid) return;
+    if (!sid) return false;
     try {
       await sendAgentCommand(sid, { type: "set_model", provider, modelId });
       // Any session fetch already in flight was started before this model
       // change and must not overwrite the optimistic selection when it lands.
       sessionLoadRequestRef.current += 1;
       setCurrentModelOverride({ provider, modelId });
+      return true;
     } catch (e) {
       console.error("Failed to set model:", e);
+      showToast(`${translate("recovery.switchFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
+      return false;
     }
   }, [isNew, setNewSessionModel]);
 
@@ -930,6 +991,24 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     await handleSend(text);
   }, [messages, entryIds, agentRunning, handleNavigate, handleSend]);
 
+  const handleRetryWithModel = useCallback(async (model: ProviderRecoveryModel) => {
+    if (agentRunning) return;
+    const changed = await handleModelChange(model.provider, model.modelId);
+    if (!changed) return;
+    autoFallbackInFlightRef.current = true;
+    setProviderRecovery(null);
+    showToast(translate("recovery.switched").replace("{model}", model.name), { type: "success" });
+    await handleRetry();
+  }, [agentRunning, handleModelChange, handleRetry]);
+  autoFallbackRetryRef.current = (model) => { void handleRetryWithModel(model); };
+
+  const handleAutoProviderFallbackChange = useCallback((enabled: boolean) => {
+    setAutoProviderFallback(enabled);
+    autoProviderFallbackRef.current = enabled;
+    try { localStorage.setItem(AUTO_PROVIDER_FALLBACK_KEY, enabled ? "1" : "0"); } catch { /* best effort */ }
+    setProviderRecovery((current) => current ? { ...current, automatic: enabled } : current);
+  }, []);
+
   // Edit an earlier user turn in place and re-run from there: roll the tree
   // back to the entry before it (prevEntryId — the assistant turn that
   // preceded it, same target the "Edit from here" nav uses) and send the new
@@ -1083,7 +1162,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // State
     data, loading, error, runtimeFailure, activeLeafId, messages, entryIds, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
-    retryInfo, contextUsage, systemPrompt, forkingEntryId,
+    retryInfo, providerRecovery, autoProviderFallback, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, currentModel, displayModel, sessionStats,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, stalledSecs, extensionUIState,
     isNew,
@@ -1093,7 +1172,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // Actions
     handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,
-    handleToolPresetChange, handleThinkingLevelChange, handleClearQueue, handleRemoveQueued, handleUpdateQueued, handleMoveQueued, handleRetry, handleEditRerun, handleAbortBash, handleExtensionUIResponse, loadTools, setActiveLeafId, setData, setMessages,
+    handleToolPresetChange, handleThinkingLevelChange, handleClearQueue, handleRemoveQueued, handleUpdateQueued, handleMoveQueued, handleRetry, handleRetryWithModel, handleAutoProviderFallbackChange, setProviderRecovery, handleEditRerun, handleAbortBash, handleExtensionUIResponse, loadTools, setActiveLeafId, setData, setMessages,
     dispatch, setAgentRunning, setForkingEntryId,
     // Subscriptions
     handleAgentEventRef,

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useI18n, type MsgKey } from "@/lib/i18n";
 import {
   ACTIVE_AGENT_RUN_STATUSES,
@@ -30,6 +31,7 @@ interface Props {
 
 export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCancel, onRetry, onOpenSession }: Props) {
   const { locale, t } = useI18n();
+  const [reportOpen, setReportOpen] = useState(false);
   const active = run.status === "queued" || ACTIVE_AGENT_RUN_STATUSES.has(run.status);
   const terminal = TERMINAL_AGENT_RUN_STATUSES.has(run.status);
   const time = new Intl.DateTimeFormat(locale === "zh" ? "zh-TW" : "en", {
@@ -62,6 +64,21 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
       <p className={s.promptPreview}>{run.prompt}</p>
       <div className={`${s.path} chrome-mono`} title={run.cwd}>{run.cwd}</div>
       {run.error && <div className={s.runError} role="status">{run.error}</div>}
+      {run.report && (
+        <div className={s.runReport}>
+          <button type="button" className={s.reportToggle} aria-expanded={reportOpen} onClick={() => setReportOpen((open) => !open)}>
+            <span>{t("agents.report")}</span>
+            <span className="chrome-mono">
+              {run.report.changedFiles.length} {t("agents.files")} · {run.report.tests.length} {t("agents.tests")} · ${run.report.usage.cost.toFixed(3)}
+            </span>
+          </button>
+          {reportOpen && <div className={s.reportBody}>
+            <p>{run.report.summary}</p>
+            {run.report.changedFiles.length > 0 && <div><strong>{t("agents.changedFiles")}</strong><ul>{run.report.changedFiles.map((file) => <li key={file} className="chrome-mono">{file}</li>)}</ul></div>}
+            {run.report.tests.length > 0 && <div><strong>{t("agents.tests")}</strong><ul>{run.report.tests.map((test, index) => <li key={`${test.name}-${index}`}><span className={s[`test_${test.status}`]}>{test.status}</span> {test.name}</li>)}</ul></div>}
+          </div>}
+        </div>
+      )}
       <div className={s.cardActions}>
         {run.sessionId && (
           <button type="button" onClick={() => void onOpenSession(run.sessionId as string)}>

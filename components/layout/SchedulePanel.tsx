@@ -474,6 +474,14 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
         </button>
       </div>
       <div className={s.body}>
+        {data.health && (
+          <div className={s.schedulerHealth} role="status">
+            <span className={data.health.state === "healthy" ? s.healthOk : s.healthIdle} aria-hidden />
+            <strong>{t("schedule.schedulerHealth")}</strong>
+            <span>{data.health.state === "healthy" ? t("schedule.schedulerHealthy") : t("schedule.schedulerIdle")}</span>
+            {data.health.nextWakeAt && <time dateTime={data.health.nextWakeAt}>{formatRunTime(data.health.nextWakeAt)}</time>}
+          </div>
+        )}
         {loading ? (
           <div className={s.empty}>{t("search.searching")}</div>
         ) : data.schedules.length === 0 ? (

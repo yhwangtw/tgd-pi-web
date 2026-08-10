@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FileOutlineItem } from "@/lib/file-workbench";
 import styles from "./FileInspectorDrawer.module.css";
+import { requestOpenFile } from "@/lib/file-links";
 
 type InspectorTab = "outline" | "problems" | "history" | "blame" | "notes";
 interface Diagnostic { source: "typescript" | "eslint" | "test"; line: number; column: number; severity: "error" | "warning"; code?: string; message: string }
@@ -10,6 +11,7 @@ interface Commit { sha: string; shortSha: string; author: string; date: string; 
 interface BlameLine { line: number; sha: string; author: string; date: string; text: string }
 interface FileNote { id: string; line: number; text: string; createdAt: number }
 interface Snapshot { id: string; ts: number; label: string; fileCount: number }
+interface SymbolMatch { path: string; line: number; preview: string }
 
 interface Props {
   filePath: string;
@@ -44,6 +46,9 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
   const [notes, setNotes] = useState<FileNote[]>(() => typeof window === "undefined" ? [] : readNotes(filePath));
   const [noteLine, setNoteLine] = useState("1");
   const [noteText, setNoteText] = useState("");
+  const [symbol, setSymbol] = useState("");
+  const [symbolMode, setSymbolMode] = useState<"definition" | "references">("definition");
+  const [symbolMatches, setSymbolMatches] = useState<SymbolMatch[] | null>(null);
 
   useEffect(() => { setTab(initialTab); }, [initialTab]);
   useEffect(() => { setNotes(readNotes(filePath)); setDiagnostics(null); setHistory(null); setBlame(null); }, [filePath]);
@@ -99,6 +104,18 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
     finally { setRunningTests(false); }
   };
 
+  const findSymbol = async (mode: "definition" | "references") => {
+    if (!cwd || !symbol.trim()) return;
+    setLoading(true); setError(""); setSymbolMode(mode);
+    try {
+      const response = await fetch(`${endpoint("outline")}&mode=${mode}&symbol=${encodeURIComponent(symbol.trim())}`);
+      const payload = await response.json() as { matches?: SymbolMatch[]; error?: string };
+      if (!response.ok || payload.error) throw new Error(payload.error ?? `HTTP ${response.status}`);
+      setSymbolMatches(payload.matches ?? []);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setLoading(false); }
+  };
+
   return (
     <div className={styles.drawer} role="complementary" aria-label="File inspector" data-testid="file-inspector">
       <div className={styles.header}><strong>Inspector</strong><button onClick={onClose} aria-label="Close inspector">×</button></div>
@@ -108,7 +125,17 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
       <div className={styles.body}>
         {loading && <div className={styles.empty}>Loading…</div>}
         {error && <div className={styles.error}>{error}</div>}
-        {!loading && !error && tab === "outline" && (outline.length ? <div className={styles.list}>{outline.map((item) => <button key={item.id} className={styles.row} style={{ paddingLeft: 10 + (item.level - 1) * 14 }} onClick={() => onGotoLine(item.line)}><span className={styles.kind}>{item.kind.slice(0, 2)}</span><span className={styles.label}>{item.label}</span><span className={styles.line}>L{item.line}</span></button>)}</div> : <div className={styles.empty}>No symbols found</div>)}
+        {!loading && !error && tab === "outline" && <>
+          <form className={styles.symbolSearch} onSubmit={(event) => { event.preventDefault(); void findSymbol("definition"); }}>
+            <input value={symbol} onChange={(event) => setSymbol(event.target.value)} placeholder="Find symbol…" aria-label="Symbol" />
+            <button type="submit" disabled={!symbol.trim()}>Definition</button>
+            <button type="button" disabled={!symbol.trim()} onClick={() => void findSymbol("references")}>References</button>
+          </form>
+          {symbolMatches && <div className={styles.list} aria-label={`${symbolMode} results`}>
+            {symbolMatches.length === 0 ? <div className={styles.empty}>No {symbolMode} found</div> : symbolMatches.map((match, index) => <button key={`${match.path}:${match.line}:${index}`} className={styles.symbolResult} onClick={() => match.path === relativePath ? onGotoLine(match.line) : requestOpenFile({ path: match.path, line: match.line })}><span className="chrome-mono">{match.path}:{match.line}</span><span>{match.preview}</span></button>)}
+          </div>}
+          {outline.length ? <div className={styles.list}>{outline.map((item) => <button key={item.id} className={styles.row} style={{ paddingLeft: 10 + (item.level - 1) * 14 }} onClick={() => onGotoLine(item.line)}><span className={styles.kind}>{item.kind.slice(0, 2)}</span><span className={styles.label}>{item.label}</span><span className={styles.line}>L{item.line}</span></button>)}</div> : !symbolMatches && <div className={styles.empty}>No symbols found</div>}
+        </>}
         {!loading && !error && tab === "problems" && <div className={styles.problemsPane}>
           <div className={styles.problemActions}><span>TypeScript · ESLint · related tests</span><button disabled={runningTests} onClick={() => void runRelatedTests()}>{runningTests ? "Running…" : "Run related tests"}</button></div>
           {diagnostics?.length ? <div className={styles.list}>{diagnostics.map((item, index) => <div key={`${item.source}-${item.line}-${index}`} className={styles.problem}><button className={styles.problemMain} onClick={() => onGotoLine(item.line)}><span className={item.severity === "error" ? styles.problemError : styles.problemWarning}>{item.severity === "error" ? "●" : "▲"}</span><span><strong>{item.code ?? item.source}</strong> {item.message}</span><span className={styles.line}>{item.source === "test" ? "test" : `L${item.line}:${item.column}`}</span></button>{onSendDiagnostic && <button className={styles.fix} onClick={() => onSendDiagnostic(item)}>Ask Pi to fix</button>}</div>)}</div> : diagnostics && <div className={styles.empty}>No TypeScript, ESLint, or test problems</div>}

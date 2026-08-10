@@ -77,6 +77,17 @@
 }
 .compareButton:hover:not(:disabled) { background: var(--color-accent-bg); }
 .compareButton:disabled { opacity: .4; cursor: not-allowed; }
+.compareTray { margin: 8px 8px 0; padding: 8px; border: 1px solid var(--color-accent-border-subtle); border-radius: var(--radius-card); background: var(--bg-elev-1); }
+.compareTrayHeader { display: flex; align-items: center; justify-content: space-between; font-size: var(--text-xs); }
+.compareTrayHeader button { border: 0; background: transparent; color: var(--text-dim); cursor: pointer; font-size: var(--text-lg); }
+.compareGrid { margin-top: 7px; display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 6px; }
+.compareGrid article { min-width: 0; padding: 7px; border-radius: var(--radius-control); background: var(--bg-hover); display: grid; gap: 4px; }
+.compareGrid article > strong, .compareGrid article > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-2xs); }
+.compareGrid article > span { color: var(--text-dim); }
+.compareGrid dl { margin: 0; display: flex; gap: 8px; }
+.compareGrid dl div { display: flex; gap: 3px; color: var(--text-dim); font-size: var(--text-2xs); }
+.compareGrid dd { margin: 0; color: var(--text); }
+.compareOpenSessions { margin-top: 7px; min-height: var(--control-sm); padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--text-2xs); cursor: pointer; }
 
 .summary {
   flex: 0 0 auto;
@@ -292,6 +303,16 @@
   font-size: var(--text-2xs);
 }
 .runError { margin-top: 6px; color: var(--color-error-text); font-size: var(--text-2xs); line-height: var(--leading-snug); overflow-wrap: anywhere; }
+.runReport { margin-top: 7px; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
+.reportToggle { width: 100%; min-height: 32px; padding: 5px 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 0; background: var(--bg-hover); color: var(--text-muted); font: inherit; font-size: var(--text-2xs); cursor: pointer; }
+.reportToggle span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.reportBody { padding: 8px; display: grid; gap: 8px; color: var(--text-muted); font-size: var(--text-2xs); line-height: var(--leading-snug); }
+.reportBody p { margin: 0; white-space: pre-wrap; }
+.reportBody strong { color: var(--text); }
+.reportBody ul { max-height: 110px; margin: 4px 0 0; padding-left: 16px; overflow: auto; }
+.test_passed { color: var(--color-success); }
+.test_failed { color: var(--color-error-text); }
+.test_run { color: var(--text-dim); }
 .cardActions { margin-top: 8px; display: flex; gap: 5px; flex-wrap: wrap; }
 .cardActions button {
   min-height: var(--control-sm);

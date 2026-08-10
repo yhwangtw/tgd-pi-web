@@ -182,7 +182,7 @@ The mobile layout keeps the active phase, transcript, composer, model controls, 
 - The left-rail Schedule Center supports one-time, daily, weekly, and five-field cron schedules with an explicit IANA timezone.
 - Choose the project, prompt, model, thinking level, tool access, missed-run policy, and whether the schedule is active; pause, resume, run now, retry, or inspect run history from one panel.
 - Every run creates a normal local Pi session. If `ask_user` needs a decision, the run changes to **Waiting for input** and opens directly into that session.
-- Scheduling is provided by the local Node server, which must be running. On restart, each schedule either catches up once or skips the missed run according to its policy, and overlapping runs are never started.
+- Scheduling is provided by the local Node server, with a visible heartbeat, next-wake health, missed-run accounting, and an optional independent watchdog (`npm run scheduler:watch`) that wakes the runner through its local endpoint. On restart, each schedule either catches up once or skips the missed run according to its policy, and overlapping runs are never started.
 
 ### Sessions and navigation
 
@@ -324,7 +324,7 @@ The application does not include a hosted session backend. It reads local Pi fil
 
 ### Do schedules run while tGD Pi Web is stopped?
 
-No. The scheduler runs inside the local Node server. Keep `npm start` running for on-time execution; after a restart, each schedule applies its configured **run once** or **skip** missed-run policy.
+The agent execution runtime still needs the local Node server. Keep `npm start` running; for a separate wake/health process, run `npm run scheduler:watch` under launchd/systemd. After a restart, each schedule applies its configured **run once** or **skip** missed-run policy.
 
 ### Why is Playwright not in `package.json`?
 

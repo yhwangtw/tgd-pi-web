@@ -18,6 +18,8 @@ import {
 import type { WebExtensionUIEvent } from "./web-extension-ui";
 import { isWebExtensionUIDialogRequest, isWebExtensionUIEvent } from "./web-extension-ui-types";
 import { isTrustedAgentRunWorkspace } from "./agent-run-workspace";
+import { buildAgentRunReport } from "./agent-run-report";
+import type { AgentMessage } from "./types";
 
 const KEEP_ALIVE_MS = 4 * 60_000;
 const MAX_RUN_MS = 24 * 60 * 60_000;
@@ -192,11 +194,14 @@ export class AgentRunSupervisor {
     }
   }
 
-  private finish(runId: string, status: "completed" | "failed", error?: string): void {
+  private finish(runId: string, status: "completed" | "failed", error?: string, messages?: AgentMessage[]): void {
     if (!this.active.has(runId)) return;
+    const existing = readAgentRunStore().runs.find((run) => run.id === runId);
+    const finishedAt = new Date().toISOString();
     this.updateRun(runId, status, {
-      finishedAt: new Date().toISOString(),
+      finishedAt,
       ...(error ? { error } : {}),
+      ...(messages ? { report: buildAgentRunReport(messages, existing?.startedAt, finishedAt) } : {}),
     });
     this.cleanup(runId);
     this.drain();
@@ -241,7 +246,7 @@ export class AgentRunSupervisor {
         }
         if (event.type === "agent_end") {
           const error = eventRunError(event);
-          this.finish(run.id, error ? "failed" : "completed", error ?? undefined);
+          this.finish(run.id, error ? "failed" : "completed", error ?? undefined, event.messages as AgentMessage[]);
         }
       });
 

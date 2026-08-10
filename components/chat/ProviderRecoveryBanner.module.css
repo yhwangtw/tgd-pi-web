@@ -1,0 +1,13 @@
+.root { display: flex; width: min(780px, calc(100% - 24px)); gap: 10px; margin: 0 auto 8px; padding: 10px 12px; border: 1px solid var(--color-warning-border); border-radius: var(--radius-card); background: var(--color-warning-bg); color: var(--text); }
+.icon { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--color-warning-text-strong); font-size: var(--text-lg); }
+.body { min-width: 0; flex: 1; }
+.titleRow { display: flex; align-items: center; gap: 8px; }
+.titleRow strong { font-size: var(--text-sm); }
+.dismiss { width: 28px; height: 28px; margin-left: auto; border: 0; border-radius: var(--radius-control-compact); background: transparent; color: var(--text-dim); font-size: var(--text-lg); }
+.body p { display: -webkit-box; margin: 2px 0 6px; overflow: hidden; color: var(--text-muted); font-size: var(--text-xs); line-height: var(--leading-normal); -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.retryAfter { color: var(--color-warning-text-strong); font-family: var(--font-mono); font-size: var(--text-2xs); }
+.actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.primary { min-height: 32px; padding: 0 11px; border: 1px solid var(--color-warning-border); border-radius: var(--radius-control-compact); background: var(--bg-elev-1); color: var(--text); font-size: var(--text-xs); }
+.actions label { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: var(--text-xs); }
+.actions input { accent-color: var(--accent); }
+@media (max-width: 700px) { .root { width: calc(100% - 20px); } .actions { align-items: stretch; flex-direction: column; } .actions label, .primary { min-height: var(--control-touch); } }

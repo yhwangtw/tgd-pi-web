@@ -6,6 +6,7 @@ import type { ContentHit, FileHit, SessionHit } from "@/hooks/useUnifiedSearchRe
 import { getFileName } from "@/lib/file-paths";
 import { useI18n } from "@/lib/i18n";
 import styles from "./SearchPanel.module.css";
+import type { SemanticHit } from "@/lib/semantic-search";
 
 interface Props {
   query: string;
@@ -15,9 +16,11 @@ interface Props {
   showFiles: boolean;
   showContent: boolean;
   showCommands: boolean;
+  showSemantic: boolean;
   sessionHits: SessionHit[];
   fileHits: FileHit[];
   contentHits: ContentHit[];
+  semanticHits: SemanticHit[];
   tagResults: PaletteResult[];
   commandResults: PaletteResult[];
   inputRef: RefObject<HTMLInputElement | null>;
@@ -63,6 +66,21 @@ export function UnifiedSearchResults(props: Props) {
 
   return (
     <div className={styles.results} data-unified-results>
+      {props.showSemantic && props.semanticHits.length > 0 && (
+        <div className={styles.group}>
+          <div className={styles.groupTitle}>{t("search.scope.semantic")}</div>
+          {props.semanticHits.map((hit) => (
+            <button key={hit.id} data-search-result className={styles.result} onClick={() => hit.sessionId ? props.onSelectSession(hit.sessionId) : hit.path ? props.onOpenFile(hit.path, getFileName(hit.path), hit.line) : undefined} onKeyDown={keyDown}>
+              <span className={styles.resultIcon}>{hit.source === "session" ? "◌" : hit.source === "artifact" ? "◇" : "□"}</span>
+              <span className={styles.resultBody}>
+                <span className={styles.resultTitle}>{hit.title}</span>
+                <span className={styles.resultMeta}>{hit.source} · {Math.round(hit.score * 10) / 10}</span>
+                <span className={styles.snippet}>{hit.snippet}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       {props.showSessions && (props.sessionHits.length > 0 || props.tagResults.length > 0) && (
         <div className={styles.group}>
           <div className={styles.groupTitle}>{t("search.scope.sessions")}</div>

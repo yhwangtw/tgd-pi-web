@@ -35,6 +35,20 @@ function isWorkspace(value: unknown): boolean {
     && typeof workspace.isMain === "boolean";
 }
 
+function isReport(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!value || typeof value !== "object") return false;
+  const report = value as Record<string, unknown>;
+  return typeof report.summary === "string"
+    && Array.isArray(report.changedFiles)
+    && report.changedFiles.every((item) => typeof item === "string")
+    && Array.isArray(report.tests)
+    && Array.isArray(report.tools)
+    && report.tools.every((item) => typeof item === "string")
+    && typeof report.usage === "object"
+    && (report.durationMs === null || typeof report.durationMs === "number");
+}
+
 function isAgentRun(value: unknown): value is AgentRun {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<AgentRun>;
@@ -56,6 +70,7 @@ function isAgentRun(value: unknown): value is AgentRun {
     && isOptionalString(item.sessionId)
     && isOptionalString(item.parentRunId)
     && isOptionalString(item.error)
+    && isReport(item.report)
     && isWorkspace(item.workspace);
 }
 

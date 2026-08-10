@@ -23,6 +23,7 @@ import { QueuedFollowUps } from "./QueuedFollowUps";
 import { isProviderAuthError } from "./AssistantMessageView";
 import { buildConversationLayout } from "./conversation-turns";
 import { assistantModelKey, shouldShowAssistantModelLabel } from "./message-chrome";
+import { ProviderRecoveryBanner } from "./ProviderRecoveryBanner";
 
 interface Props {
   session: SessionInfo | null;
@@ -230,7 +231,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const {
     loading, error, runtimeFailure, messages, entryIds, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
-    retryInfo, contextUsage, forkingEntryId,
+    retryInfo, providerRecovery, autoProviderFallback, contextUsage, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, stalledSecs, extensionUIState,
     isNew,
@@ -239,7 +240,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,
     handleUpdateQueued, handleMoveQueued,
-    handleToolPresetChange, handleThinkingLevelChange, handleClearQueue, handleRemoveQueued, handleRetry, handleEditRerun, handleAbortBash, handleExtensionUIResponse, handleAgentEventRef,
+    handleToolPresetChange, handleThinkingLevelChange, handleClearQueue, handleRemoveQueued, handleRetry,
+    handleRetryWithModel, handleAutoProviderFallbackChange, setProviderRecovery,
+    handleEditRerun, handleAbortBash, handleExtensionUIResponse, handleAgentEventRef,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionNamed,
@@ -1423,6 +1426,15 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           onMove={handleMoveQueued}
           onClear={handleClearQueue}
         />
+        {providerRecovery && (
+          <ProviderRecoveryBanner
+            recovery={{ ...providerRecovery, automatic: autoProviderFallback }}
+            busy={agentRunning}
+            onRetryWithModel={handleRetryWithModel}
+            onAutomaticChange={handleAutoProviderFallbackChange}
+            onDismiss={() => setProviderRecovery(null)}
+          />
+        )}
         {runtimeFailure ? (
           <div className={styles.runtimeRecovery} role="alert">
             <div className={styles.runtimeRecoveryText}>

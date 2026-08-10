@@ -26,6 +26,15 @@ export interface AgentRunInput {
   workspace?: AgentRunWorkspace;
 }
 
+export interface AgentRunReport {
+  summary: string;
+  changedFiles: string[];
+  tests: Array<{ name: string; status: "passed" | "failed" | "run" }>;
+  tools: string[];
+  usage: { inputTokens: number; outputTokens: number; cost: number };
+  durationMs: number | null;
+}
+
 export interface AgentRun extends AgentRunInput {
   id: string;
   trigger: AgentRunTrigger;
@@ -36,6 +45,7 @@ export interface AgentRun extends AgentRunInput {
   sessionId?: string;
   parentRunId?: string;
   error?: string;
+  report?: AgentRunReport;
 }
 
 export interface AgentRunStore {

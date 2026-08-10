@@ -16,6 +16,7 @@
     "dev": "next dev -p 30141",
     "build": "next build --webpack",
     "start": "next start -p 30141",
+    "scheduler:watch": "node scripts/schedule-watchdog.mjs",
     "lint": "eslint .",
     "postinstall": "node scripts/patch-pi-brace-expansion.mjs",
     "test": "vitest run",

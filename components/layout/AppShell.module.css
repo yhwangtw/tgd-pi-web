@@ -47,6 +47,7 @@
   z-index: 300;
 }
 .railButton {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -59,6 +60,23 @@
   color: var(--text-dim);
   cursor: pointer;
   transition: color 0.12s, background 0.12s;
+}
+.railBadge {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  display: grid;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  place-items: center;
+  border: 2px solid var(--bg-panel);
+  border-radius: var(--radius-pill);
+  background: var(--color-error);
+  color: var(--color-error-fg);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-none);
 }
 .railButton:hover:not(:disabled) {
   background: var(--bg-hover);
@@ -1177,6 +1195,7 @@
   }
 
   .mobileMoreAction {
+    position: relative;
     display: flex;
     min-width: 0;
     min-height: 68px;
@@ -1192,6 +1211,21 @@
     font-size: var(--text-xs);
     line-height: var(--leading-tight);
     text-align: center;
+  }
+  .mobileActionBadge {
+    position: absolute;
+    top: 6px;
+    right: 9px;
+    display: grid;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    place-items: center;
+    border-radius: var(--radius-pill);
+    background: var(--color-error);
+    color: var(--color-error-fg);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
   }
 
   .mobileMoreAction:disabled {
