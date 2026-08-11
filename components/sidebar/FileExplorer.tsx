@@ -98,6 +98,7 @@ function TreeNode({
   onContextMenu: (t: MenuTarget) => void;
   activePath?: string | null;
 }) {
+  const { t } = useI18n();
   const open = expandedPaths.has(node.fullPath);
   const [children, setChildren] = useState<FileNode[]>(node.children ?? []);
   const [loaded, setLoaded] = useState(node.loaded ?? false);
@@ -195,14 +196,16 @@ function TreeNode({
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4" />
           </svg>
         )}
-        {onAtMention && (
+        {onAtMention && !node.isDir && (
           <button
+            type="button"
             className={`hover-reveal ${styles.mentionButton}`}
             onClick={(e) => {
               e.stopPropagation();
               onAtMention(relative);
             }}
-            title="Insert path into chat"
+            aria-label={`${t("explorer.mention")}: ${node.name}`}
+            title={t("explorer.mention")}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="4" />

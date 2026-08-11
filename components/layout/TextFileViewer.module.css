@@ -402,7 +402,7 @@
   .fileActions { order: 2; }
   .askPi { min-height: var(--control-touch); padding-inline: 14px; }
   .moreButton { min-width: var(--control-touch); min-height: var(--control-touch); }
-  .moreMenu { position: fixed; left: 8px; right: 8px; top: auto; bottom: calc(var(--bottom-nav-h, 0px) + env(safe-area-inset-bottom) + 8px); width: auto; max-height: min(70dvh, 560px); overflow-y: auto; border-radius: var(--radius-sheet); padding: 8px; }
+  .moreMenu { position: fixed; left: 8px; right: 8px; top: auto; bottom: calc(var(--mobile-nav-height, 54px) + var(--safe-area-bottom) + 8px); width: auto; max-height: min(70dvh, 560px); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: 8px; border-radius: var(--radius-sheet); padding: 8px; }
   .moreMenu button, .moreMenu a { min-height: var(--control-touch); }
   .sourceTools { min-height: var(--control-touch); overflow-x: auto; scrollbar-width: none; }
   .sourceTools::-webkit-scrollbar { display: none; }

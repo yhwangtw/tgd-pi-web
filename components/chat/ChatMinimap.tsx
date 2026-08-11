@@ -170,6 +170,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!visible) return;
+    if ((e.target as HTMLElement).closest("button")) return;
 
     draggingRef.current = true;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -270,10 +271,16 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
         const dotTop = node.topRatio * 100;
 
         return (
-          <div
+          <button
             key={node.index}
+            type="button"
             className={styles.node}
             style={{ top: `${dotTop}%` }}
+            aria-label={`Jump to ${isUser ? "user" : "assistant"} message ${node.visIdx + 1}${getMessagePreview(node.msg) ? `: ${getMessagePreview(node.msg).replace(/\s+/g, " ").slice(0, 64)}` : ""}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              messageRefs.current?.[node.visIdx]?.scrollIntoView({ block: "start", behavior: "auto" });
+            }}
           >
             {/* Dot */}
             <div
@@ -289,7 +296,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
             />
 
 
-          </div>
+          </button>
         );
       })}
 

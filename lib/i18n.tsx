@@ -429,6 +429,7 @@ const MESSAGES = {
   "attention.openSource": { en: "Open source", zh: "開啟來源" },
   "attention.pushEnable": { en: "Enable background push notifications", zh: "啟用背景推播通知" },
   "attention.pushDisable": { en: "Disable background push notifications", zh: "停用背景推播通知" },
+  "attention.push": { en: "Push", zh: "推播" },
 
   // ── Chat transcript ──
   "common.close": { en: "Close", zh: "關閉" },

@@ -375,10 +375,15 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
   const [selection, setSelection] = useState<Selection | null>({ type: "health" });
+  const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const savedConfigRef = useRef(JSON.stringify({ providers: {} }));
+  const selectDetail = useCallback((next: Selection) => {
+    setSelection(next);
+    setMobilePane("detail");
+  }, []);
 
   // Esc closes the modal — consistent with AnalyticsModal and the palette.
   useEffect(() => {
@@ -424,6 +429,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     while (config.providers?.[finalName]) finalName = `new-provider-${n++}`;
     setConfig((prev) => ({ ...prev, providers: { ...(prev.providers ?? {}), [finalName]: { api: "openai-completions" } } }));
     setSelection({ type: "provider", name: finalName });
+    setMobilePane("detail");
   }, [config.providers]);
 
   const updateProvider = useCallback((name: string, p: ProviderEntry) => {
@@ -470,6 +476,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       setSelection({ type: "model", providerName, index: idx });
       return prev;
     });
+    setMobilePane("detail");
   }, []);
 
   const updateModel = useCallback((providerName: string, index: number, m: ModelEntry) => {
@@ -489,6 +496,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models: models.length ? models : undefined } } };
     });
     setSelection({ type: "provider", name: providerName });
+    setMobilePane("detail");
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -565,8 +573,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-    <div className={styles.overlay}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className={styles.overlay}>
+      <button type="button" tabIndex={-1} className={styles.overlayBackdrop} onClick={onClose} aria-label="Dismiss Models" />
       <div
         className={styles.modal}
         data-testid="models-config-dialog"
@@ -585,16 +593,17 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Body */}
-        <div className={styles.body}>
+        <div className={`${styles.body} ${mobilePane === "detail" ? styles.mobileDetail : styles.mobileList}`}>
 
           {/* Left: tree */}
           <div className={styles.sidebar} data-testid="models-config-nav">
             <div className={styles.sidebarScroll}>
               <button
                 type="button"
-                onClick={() => setSelection({ type: "health" })}
+                onClick={() => selectDetail({ type: "health" })}
                 className={`${styles.healthRow} ${selection?.type === "health" ? styles.treeItemSelected : "hover-bg"}`}
                 data-testid="provider-health-nav"
+                aria-pressed={selection?.type === "health"}
               >
                 <span className={styles.healthIcon} aria-hidden>✓</span>
                 <span className={styles.treeItemText}>{t("providerHealth.title")}</span>
@@ -604,14 +613,16 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
               {activeOAuth.map((p) => {
                 const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={p.id}
-                    onClick={() => setSelection({ type: "oauth", providerId: p.id })}
+                    onClick={() => selectDetail({ type: "oauth", providerId: p.id })}
                     className={`${styles.treeItem} ${isSelected ? styles.treeItemSelected : ""} ${!isSelected ? "hover-bg" : ""}`}
+                    aria-pressed={isSelected}
                   >
                     <ProviderIcon id={p.id} size={16} />
                     <span className={styles.treeItemText}>{p.name}</span>
-                  </div>
+                  </button>
                 );
               })}
 
@@ -619,14 +630,16 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
               {activeApiKey.map((p) => {
                 const isSelected = selection?.type === "apikey" && selection.providerId === p.id;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={p.id}
-                    onClick={() => setSelection({ type: "apikey", providerId: p.id })}
+                    onClick={() => selectDetail({ type: "apikey", providerId: p.id })}
                     className={`${styles.treeItem} ${isSelected ? styles.treeItemSelected : ""} ${!isSelected ? "hover-bg" : ""}`}
+                    aria-pressed={isSelected}
                   >
                     <ProviderIcon id={p.id} size={16} />
                     <span className={styles.treeItemText}>{p.displayName}</span>
-                  </div>
+                  </button>
                 );
               })}
 
@@ -644,9 +657,11 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                 return (
                   <div key={pName} className={styles.providerGroup}>
                     {/* Provider row */}
-                    <div
-                      onClick={() => setSelection({ type: "provider", name: pName })}
+                    <button
+                      type="button"
+                      onClick={() => selectDetail({ type: "provider", name: pName })}
                       className={`${styles.providerRow} ${isProviderSelected ? styles.providerRowSelected : ""} ${!isProviderSelected ? "hover-bg" : ""}`}
+                      aria-pressed={isProviderSelected}
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.providerIcon}>
                         <rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" />
@@ -658,16 +673,18 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                       <span className={`${styles.providerName} ${isProviderSelected ? styles.providerNameSelected : ""}`}>
                         {pName}
                       </span>
-                    </div>
+                    </button>
 
                     {/* Model rows */}
                     {models.map((m, i) => {
                       const isModelSelected = selection?.type === "model" && selection.providerName === pName && selection.index === i;
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={i}
-                          onClick={() => setSelection({ type: "model", providerName: pName, index: i })}
+                          onClick={() => selectDetail({ type: "model", providerName: pName, index: i })}
                           className={`${styles.modelRow} ${isModelSelected ? styles.modelRowSelected : ""} ${!isModelSelected ? "hover-bg" : ""}`}
+                          aria-pressed={isModelSelected}
                         >
                           <span className={`${styles.modelName} ${!m.id ? styles.modelNameEmpty : ""}`}>
                             {m.id || "new model"}
@@ -675,17 +692,18 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                           {m.reasoning && (
                             <span className={styles.reasoningBadge}>T</span>
                           )}
-                        </div>
+                        </button>
                       );
                     })}
 
                     {/* Add model button */}
-                    <div
+                    <button
+                      type="button"
                       onClick={(e) => { e.stopPropagation(); addModel(pName); }}
                       className={`${styles.addModelButton} hover-bg-text`}
                     >
                       <span className={styles.addModelText}>+ model</span>
-                    </div>
+                    </button>
                   </div>
                 );
               })}
@@ -703,6 +721,9 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
           {/* Right: detail */}
           <div className={styles.rightPanel} data-testid="models-config-detail">
+            <button type="button" className={styles.mobileBack} onClick={() => setMobilePane("list")}>
+              Back to models
+            </button>
             {loading ? null : detailContent ?? (
               <div className={styles.emptyState}>
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -739,8 +760,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       <AddProviderPicker
         oauthProviders={oauthProviders}
         apiKeyProviders={apiKeyProviders}
-        onSelectOAuth={(id: string) => setSelection({ type: "oauth", providerId: id })}
-        onSelectApiKey={(id: string) => setSelection({ type: "apikey", providerId: id })}
+        onSelectOAuth={(id: string) => selectDetail({ type: "oauth", providerId: id })}
+        onSelectApiKey={(id: string) => selectDetail({ type: "apikey", providerId: id })}
         onAddCustom={addCustomProvider}
         onClose={() => setPickerOpen(false)}
       />

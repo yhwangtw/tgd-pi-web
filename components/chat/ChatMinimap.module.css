@@ -30,6 +30,15 @@
   justify-content: center;
   cursor: pointer;
   z-index: 2;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.node:focus-visible {
+  outline: 2px solid var(--color-accent-border-focus);
+  outline-offset: 1px;
 }
 
 .dot {

@@ -699,11 +699,24 @@ export function AppShell() {
         };
       })()
     : null;
+  const blockingDialogOpen = modelsConfigOpen
+    || skillsConfigOpen
+    || extensionsConfigOpen
+    || promptsConfigOpen
+    || analyticsOpen
+    || sessionImportOpen
+    || appearanceOpen
+    || shortcutsOpen;
 
   return (
     <>
     <title>{tabTitle}</title>
-    <div className={s.container} data-testid="app-shell">
+    <div
+      className={s.container}
+      data-testid="app-shell"
+      inert={blockingDialogOpen}
+      aria-hidden={blockingDialogOpen || undefined}
+    >
       {/* Icon rail — global navigation, always visible */}
       <IconRail
         panelView={panelView}

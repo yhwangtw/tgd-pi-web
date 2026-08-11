@@ -1,3 +1,10 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 949;
+  background: transparent;
+}
+
 .panel {
   position: fixed;
   left: 52px;
@@ -258,6 +265,11 @@
 .resetRow:hover { border-color: var(--border); background: var(--bg-hover); color: var(--text); }
 
 @media (max-width: 700px) {
+  .backdrop {
+    background: var(--color-overlay);
+    backdrop-filter: blur(4px);
+  }
+
   .panel {
     left: calc(var(--safe-area-left) + 8px);
     right: calc(var(--safe-area-right) + 8px);

@@ -30,6 +30,7 @@ export function AppearancePanel({ onClose }: Props) {
   const { uiStyle, setUiStyle } = useUiStyle();
   const { locale, setLocale, t } = useI18n();
   const ref = useRef<HTMLDivElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
 
   // Show a log-out row only when the access gate is switched on.
   const [gateEnabled, setGateEnabled] = useState(false);
@@ -55,31 +56,49 @@ export function AppearancePanel({ onClose }: Props) {
   };
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const previous = document.activeElement as HTMLElement | null;
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => closeRef.current?.focus());
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...(ref.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ) ?? [])].filter((element) => element.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    // Defer the outside-click listener so the opening click doesn't
-    // immediately close the panel.
-    const id = setTimeout(() => window.addEventListener("mousedown", onDown), 0);
+    document.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("keydown", onKey);
-      clearTimeout(id);
-      window.removeEventListener("mousedown", onDown);
+      document.body.style.overflow = oldOverflow;
+      document.removeEventListener("keydown", onKey);
+      previous?.focus();
     };
   }, [onClose]);
 
   return (
-    <div ref={ref} className={`glass ${styles.panel}`} role="dialog" aria-label={t("appearance.title")}>
+    <>
+    <div className={styles.backdrop} aria-hidden onMouseDown={onClose} />
+    <div ref={ref} className={`glass ${styles.panel}`} role="dialog" aria-modal="true" aria-label={t("appearance.title")}>
       <div className={styles.panelHeader}>
         <div>
           <strong>{t("appearance.title")}</strong>
           <span>{t("appearance.subtitle")}</span>
         </div>
-        <button type="button" className={styles.closeButton} onClick={onClose} aria-label={t("appearance.close")} title={t("appearance.close")}>
+        <button ref={closeRef} type="button" className={styles.closeButton} onClick={onClose} aria-label={t("appearance.close")} title={t("appearance.close")}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
       </div>
@@ -236,5 +255,6 @@ export function AppearancePanel({ onClose }: Props) {
         </button>
       )}
     </div>
+    </>
   );
 }

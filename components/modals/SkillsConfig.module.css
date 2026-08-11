@@ -10,7 +10,17 @@
     max(16px, var(--safe-area-bottom)) max(16px, var(--safe-area-left));
 }
 
+.overlayBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
 .modal {
+  position: relative;
+  z-index: 1;
   width: 820px;
   height: min(760px, 82vh);
   max-width: 100%;
@@ -146,6 +156,11 @@
   border-radius: var(--radius-control-compact);
   cursor: pointer;
   background: none;
+  width: 100%;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
 }
 
 .skillItemSelected {
@@ -202,6 +217,9 @@
   background: none;
   color: var(--text-dim);
   font-size: var(--text-sm);
+  width: 100%;
+  border: 0;
+  text-align: left;
 }
 
 .addSkillButtonActive {
@@ -215,6 +233,10 @@
   padding: 20px;
   min-width: 0;
   min-height: 0;
+}
+
+.mobileBack {
+  display: none;
 }
 
 .emptyState {
@@ -260,15 +282,16 @@
   }
 
   .body {
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .sidebar {
     width: 100%;
-    min-height: 132px;
-    max-height: min(34dvh, 240px);
+    min-height: 0;
+    max-height: none;
+    flex: 1;
     border-right: none;
-    border-bottom: 1px solid var(--border);
+    border-bottom: none;
   }
 
   .searchBox { min-height: var(--control-touch); }
@@ -276,6 +299,25 @@
   .rightPanel {
     width: 100%;
     padding: 14px;
+  }
+
+  .mobileList .rightPanel,
+  .mobileDetail .sidebar {
+    display: none;
+  }
+
+  .mobileBack {
+    display: inline-flex;
+    min-height: var(--control-touch);
+    align-items: center;
+    margin: -4px 0 12px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--bg-elev-1);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    cursor: pointer;
   }
 
 }
@@ -296,10 +338,10 @@
   :global(html[data-ui-style="trae"]) .modal { border: 0; border-radius: 0; }
   :global(html[data-ui-style="trae"]) .sidebar {
     width: 100%;
-    min-height: 132px;
-    max-height: min(34dvh, 240px);
+    min-height: 0;
+    max-height: none;
     border-right: 0;
-    border-bottom: 1px solid var(--trae-hairline);
+    border-bottom: 0;
     background: var(--trae-surface);
   }
   :global(html[data-ui-style="trae"]) .rightPanel { padding: 18px 14px 28px; }

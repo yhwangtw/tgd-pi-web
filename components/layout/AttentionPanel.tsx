@@ -104,7 +104,17 @@ export function AttentionPanel({
           <span>{unreadCount > 0 ? `${unreadCount} ${t("attention.unread")}` : t("attention.caughtUp")}</span>
         </div>
         <div className={s.headerActions}>
-          <button type="button" className={s.pushButton} onClick={() => void togglePush()} disabled={pushBusy || pushState === "loading" || pushState === "unavailable"} aria-pressed={pushState === "enabled"} title={pushState === "enabled" ? t("attention.pushDisable") : t("attention.pushEnable")}>♧</button>
+          <button
+            type="button"
+            className={s.pushButton}
+            onClick={() => void togglePush()}
+            disabled={pushBusy || pushState === "loading" || pushState === "unavailable"}
+            aria-pressed={pushState === "enabled"}
+            aria-label={pushState === "enabled" ? t("attention.pushDisable") : t("attention.pushEnable")}
+            title={pushState === "enabled" ? t("attention.pushDisable") : t("attention.pushEnable")}
+          >
+            {t("attention.push")}
+          </button>
           <button type="button" onClick={onRefresh} disabled={loading} aria-label={t("attention.refresh")}>↻</button>
           <button type="button" onClick={onMarkAllRead} disabled={unreadCount === 0}>{t("attention.markAllRead")}</button>
         </div>

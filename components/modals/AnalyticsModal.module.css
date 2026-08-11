@@ -10,7 +10,17 @@
   backdrop-filter: blur(4px);
 }
 
+.overlayBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
 .modal {
+  position: relative;
+  z-index: 1;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-dialog);
@@ -137,6 +147,7 @@
 .barLabel {
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .barTrack {
@@ -284,12 +295,47 @@
   }
 
   .table {
-    overflow-x: auto;
+    gap: 8px;
+    overflow: visible;
+    border: 0;
+    background: transparent;
   }
 
-  .tableHeader,
+  .tableHeader {
+    display: none;
+  }
+
   .tableRow {
-    min-width: 540px;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 10px 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--bg-elev-1);
+  }
+
+  .tableRow > .modelName {
+    grid-column: 1 / -1;
+    padding-bottom: 2px;
+  }
+
+  .tableRow > span:not(:first-child) {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .tableRow > span:not(:first-child)::before {
+    content: attr(data-label);
+    color: var(--text-dim);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
   }
 }
 
@@ -319,8 +365,6 @@
 @media (max-width: 700px) {
   :global(html[data-ui-style="trae"]) .modal { border: 0; border-radius: 0; }
   :global(html[data-ui-style="trae"]) .body { padding: 12px 12px 28px; }
-  /* The desktop TRAE table clips its rounded surface. On phones the data
-     columns intentionally remain wider than the viewport, so restore the
-     horizontal scroller after that desktop override in the cascade. */
-  :global(html[data-ui-style="trae"]) .table { overflow-x: auto; }
+  :global(html[data-ui-style="trae"]) .table { overflow: visible; background: transparent; }
+  :global(html[data-ui-style="trae"]) .tableRow { border-color: var(--trae-hairline); background: var(--trae-control); }
 }

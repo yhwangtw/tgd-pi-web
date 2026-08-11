@@ -22,6 +22,7 @@ export function SkillsConfig({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [addMode, setAddMode] = useState(false);
   const [query, setQuery] = useState("");
+  const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
 
   // Esc closes the modal — consistent with AnalyticsModal and the palette.
   useEffect(() => {
@@ -97,12 +98,8 @@ export function SkillsConfig({
     : skills;
 
   return (
-    <div
-      className={styles.overlay}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+    <div className={styles.overlay}>
+      <button type="button" tabIndex={-1} className={styles.overlayBackdrop} onClick={onClose} aria-label="Dismiss Skills" />
       <div
         className={styles.modal}
         data-testid="skills-config-dialog"
@@ -130,7 +127,7 @@ export function SkillsConfig({
         </div>
 
         {/* Body */}
-        <div className={styles.body}>
+        <div className={`${styles.body} ${mobilePane === "detail" ? styles.mobileDetail : styles.mobileList}`}>
           {/* Left: skill list */}
           <div className={styles.sidebar} data-testid="skills-config-nav">
             <label className={styles.searchBox}>
@@ -178,13 +175,16 @@ export function SkillsConfig({
                             !addMode && selected === skill.filePath;
                           const disabled = skill.disableModelInvocation;
                           return (
-                            <div
+                            <button
+                              type="button"
                               key={skill.filePath}
                               onClick={() => {
                                 setSelected(skill.filePath);
                                 setAddMode(false);
+                                setMobilePane("detail");
                               }}
                               className={`${styles.skillItem} ${isSelected ? styles.skillItemSelected : ""} ${!isSelected ? "hover-bg" : ""}`}
+                              aria-pressed={isSelected}
                             >
                               <span
                                 className={`${styles.statusDot} ${disabled ? styles.statusDotDisabled : ""}`}
@@ -194,7 +194,7 @@ export function SkillsConfig({
                               >
                                 {skill.name}
                               </span>
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -205,9 +205,11 @@ export function SkillsConfig({
             </div>
             {/* Add skill button */}
             <div className={styles.addButtonWrapper}>
-              <div
-                onClick={() => setAddMode(true)}
+              <button
+                type="button"
+                onClick={() => { setAddMode(true); setMobilePane("detail"); }}
                 className={`${styles.addSkillButton} ${addMode ? styles.addSkillButtonActive : ""} ${!addMode ? "hover-bg" : ""}`}
+                aria-pressed={addMode}
               >
                 <svg
                   width="13"
@@ -223,12 +225,15 @@ export function SkillsConfig({
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 Add skill
-              </div>
+              </button>
             </div>
           </div>
 
           {/* Right: detail or add panel */}
           <div className={styles.rightPanel} data-testid="skills-config-detail">
+            <button type="button" className={styles.mobileBack} onClick={() => setMobilePane("list")}>
+              Back to skills
+            </button>
             {addMode ? (
               <AddSkillPanel
                 cwd={cwd}

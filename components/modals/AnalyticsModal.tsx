@@ -85,8 +85,9 @@ export function AnalyticsModal({ open, onClose }: Props) {
     .slice(0, 10);
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="analytics-title">
+    <div className={styles.overlay}>
+      <button type="button" tabIndex={-1} className={styles.overlayBackdrop} onClick={onClose} aria-label="Dismiss analytics" />
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="analytics-title">
         <div className={styles.header}>
           <div>
             <h2 id="analytics-title">Session Analytics</h2>
@@ -159,11 +160,11 @@ export function AnalyticsModal({ open, onClose }: Props) {
                       <span className={styles.modelName} title={m.model}>
                         {m.model.split("/").pop()}
                       </span>
-                      <span>{fmtMoney(m.cost)}</span>
-                      <span className={styles.tokenCol}>
+                      <span data-label="Cost">{fmtMoney(m.cost)}</span>
+                      <span className={styles.tokenCol} data-label="In / Out">
                         {fmtTokens(m.input)} / {fmtTokens(m.output)}
                       </span>
-                      <span>{m.sessions}</span>
+                      <span data-label="Sessions">{m.sessions}</span>
                     </div>
                   ))}
                 </div>
@@ -200,11 +201,11 @@ export function AnalyticsModal({ open, onClose }: Props) {
                       <span className={styles.modelName} title={s.id}>
                         {s.name || basename(s.cwd) || s.id.slice(0, 8)}
                       </span>
-                      <span>{fmtMoney(s.usage.total.cost.total)}</span>
-                      <span className={styles.tokenCol}>
+                      <span data-label="Cost">{fmtMoney(s.usage.total.cost.total)}</span>
+                      <span className={styles.tokenCol} data-label="Tokens">
                         {fmtTokens(s.usage.total.input + s.usage.total.output)}
                       </span>
-                      <span>{s.messageCount}</span>
+                      <span data-label="Messages">{s.messageCount}</span>
                     </div>
                   ))}
                 </div>

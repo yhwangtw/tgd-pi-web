@@ -108,3 +108,63 @@ Verification:
 | P2 | Traditional Chinese export strings mixed `session`, English punctuation, and technical shorthand. | Replaced them with task-oriented Taiwanese Traditional Chinese: `匯出對話`, `保留排版，用瀏覽器閱讀`, and `適合編輯或貼到其他工具`. |
 
 Verified through i18n unit coverage and the desktop/mobile session-action E2E flow.
+
+## Cross-surface accessibility and responsive repair — 2026-08-11
+
+### Source evidence
+
+- Audit report: `/tmp/tgd-pi-web-audit-20260811.W4UKnH/report.md`
+- Reference captures: `/tmp/tgd-pi-web-audit-20260811.W4UKnH/screenshots/`
+- Compared states: desktop chat/minimap, Attention, Explorer, Models, Skills;
+  mobile Explorer, Models, Skills, Appearance, Analytics, and file actions.
+- Post-fix captures: `/tmp/tgd-pi-web-qa-20260811.RxlVPj/`
+
+The reference captures are defect evidence rather than a replacement visual
+direction. Original/TRAE geometry, the active palette, typography tokens, and
+existing product hierarchy were preserved.
+
+### Implementation paths
+
+- `components/chat/ChatMinimap.tsx` and `.module.css`
+- `components/layout/AttentionPanel.tsx`
+- `components/sidebar/FileExplorer.tsx` and `.module.css`
+- `components/modals/ModelsConfig.tsx` and `.module.css`
+- `components/modals/SkillsConfig.tsx` and `.module.css`
+- `components/layout/AppearancePanel.tsx` and `.module.css`
+- `components/layout/AppShell.tsx`
+- `components/modals/AnalyticsModal.tsx` and `.module.css`
+- `components/layout/TextFileViewer.module.css`
+- `lib/i18n.tsx`
+
+### Iteration history
+
+| Iteration | Finding | Resolution and visual check |
+| --- | --- | --- |
+| 1 | Minimap dots and Models/Skills rows were unnamed or generic clickable elements. | Converted them to native, named buttons. `agent-browser` exposed unique minimap labels and button roles for every navigation row. |
+| 1 | The Attention push action used the cryptic `♧` glyph. | Replaced it with localized `Push` / `推播` text and a complete accessible state label. |
+| 1 | Explorer repeated the same @ action on files and directories; mobile showed a distracting @ column. | Limited inline mention to files, added the filename to every label, removed it from directory rows, and hid the redundant inline shortcut on mobile while retaining the context-menu action. |
+| 1 | Models and Skills stacked independently scrolling list/detail panes on phones. | Replaced the stack with a list → detail drill-in and an explicit Back control, leaving one active scroll surface. |
+| 1 | Appearance looked modal but left the workspace interactive. | Added a backdrop, focus entry/restore and Tab containment, `aria-modal`, body scroll lock, plus `inert`/`aria-hidden` on the app shell. |
+| 1 | Analytics clipped columns on phones. | Reflowed table rows into labeled metric cards; all measured table containers now have equal client and scroll widths at 320 px. |
+| 1 | File actions overlapped the mobile navigation. | Anchored the sheet above `--mobile-nav-height` and the safe-area token. Download now ends at y=773 in an 844 px viewport, above the navigation. |
+| 2 | The monthly date label wrapped after the table repair. | Added no-wrap numeric labels and rechecked the 320 px analytics layout. |
+
+### Final verification
+
+- Browser: `agent-browser`, local development build at port 30142.
+- Viewports: 1440 × 900, 840 × 900, 390 × 844, and 320 × 700 CSS px.
+- Width checks: document scroll width equals viewport width at 840 and 320;
+  Analytics data cards measure 288–290 px client/scroll width at 320.
+- Modal checks: Appearance reports `inert: true`, `aria-hidden: true` on the app
+  shell, initial focus on Close, and only modal controls in the accessibility tree.
+- Explorer checks: zero directory mention controls; file controls have unique
+  `Insert @ mention: <filename>` labels; no inline mention control is visible on mobile.
+- Models/Skills checks: one pane at a time on mobile; list and detail states were
+  clicked, scrolled, and captured; 840 px retains the desktop split layout.
+- Minimap check: named turn buttons were clicked and navigated the transcript.
+- File action check: Download is visible and fully above the bottom navigation.
+- Console: no page errors; only React development and Fast Refresh messages.
+- Static/test evidence: TypeScript passed with `--noEmit --incremental false`,
+  targeted ESLint passed, `git diff --check` passed, and Vitest passed 93 files / 413 tests.
+
+final result: passed
