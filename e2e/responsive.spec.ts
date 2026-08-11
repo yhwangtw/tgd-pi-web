@@ -111,20 +111,34 @@ test.describe("responsive shell", () => {
       const detail = page.getByTestId(modal.detail);
       await expect(dialog).toHaveAttribute("role", "dialog");
       await expect(dialog).toHaveAttribute("aria-modal", "true");
+      await expect(nav).toBeVisible();
+      await expect(detail).toBeHidden();
 
-      const [dialogBox, navBox, detailBox] = await Promise.all([
+      const [dialogBox, navBox] = await Promise.all([
         dialog.boundingBox(),
         nav.boundingBox(),
-        detail.boundingBox(),
       ]);
       expect(dialogBox).not.toBeNull();
       expect(navBox).not.toBeNull();
-      expect(detailBox).not.toBeNull();
       expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
       expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(320);
       expect(navBox!.width).toBeGreaterThanOrEqual(300);
+
+      if (modal.name === "Models") {
+        await nav.getByRole("button").first().click();
+      } else {
+        await nav.getByRole("button", { name: "Add skill" }).click();
+      }
+      await expect(nav).toBeHidden();
+      await expect(detail).toBeVisible();
+      const detailBox = await detail.boundingBox();
+      expect(detailBox).not.toBeNull();
       expect(detailBox!.width).toBeGreaterThanOrEqual(300);
-      expect(detailBox!.y).toBeGreaterThanOrEqual(navBox!.y + navBox!.height - 1);
+      expect(detailBox!.x).toBeGreaterThanOrEqual(0);
+      expect(detailBox!.x + detailBox!.width).toBeLessThanOrEqual(320);
+      await detail.getByRole("button", { name: /Back to/ }).click();
+      await expect(nav).toBeVisible();
+      await expect(detail).toBeHidden();
       await expectNoPageOverflow(page);
     });
   }
@@ -360,7 +374,7 @@ test.describe("responsive shell", () => {
     await expectNoPageOverflow(page);
   });
 
-  test("AC-RWD-9a: mobile TRAE analytics tables remain horizontally scrollable", async ({ page }) => {
+  test("AC-RWD-9a: mobile TRAE analytics tables reflow into cards", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.addInitScript(() => {
       localStorage.setItem("pi-ui-style", "trae");
@@ -375,8 +389,11 @@ test.describe("responsive shell", () => {
 
     const table = dialog.locator("[class*='table']").first();
     await expect(table).toBeVisible();
-    await expect.poll(() => table.evaluate((element) => getComputedStyle(element).overflowX)).toBe("auto");
-    await expect.poll(() => table.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    await expect.poll(() => table.evaluate((element) => getComputedStyle(element).overflowX)).toBe("visible");
+    await expect.poll(() => table.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const firstRow = table.locator("[class*='tableRow']").first();
+    await expect(firstRow).toBeVisible();
+    await expect(firstRow).toHaveCSS("display", "grid");
     await expectNoPageOverflow(page);
   });
 

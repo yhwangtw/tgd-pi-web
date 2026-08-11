@@ -345,6 +345,8 @@
     background: var(--trae-surface);
   }
   :global(html[data-ui-style="trae"]) .rightPanel { padding: 18px 14px 28px; }
+  :global(html[data-ui-style="trae"]) .skillItem,
+  :global(html[data-ui-style="trae"]) .addSkillButton { min-height: var(--control-touch); }
 }
 
 @media (pointer: coarse) {
