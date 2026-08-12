@@ -174,17 +174,25 @@ test.describe("chat transcript", () => {
     expect(width).toBeLessThanOrEqual(781);
   });
 
-  test("always-follow toggle persists via the palette", async ({ page }) => {
+  test("response scroll mode exposes all three persisted states via the palette", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem("pi-scroll-follow-mode");
+      localStorage.removeItem("pi-follow-stream");
+    });
     await openMain(page);
-    for (const round of ["on", "off"] as const) {
+    for (const [query, expected] of [
+      ["response scroll always", "always"],
+      ["response scroll preserve", "preserve"],
+      ["response scroll smart", "smart"],
+    ] as const) {
       await page.keyboard.press("Control+k");
       await page.waitForTimeout(300);
-      await page.keyboard.type("always-follow");
+      await page.keyboard.type(query);
       await page.waitForTimeout(300);
       await page.keyboard.press("Enter");
       await page.waitForTimeout(400);
-      const stored = await page.evaluate(() => localStorage.getItem("pi-follow-stream"));
-      expect(stored).toBe(round === "on" ? "1" : null);
+      const stored = await page.evaluate(() => localStorage.getItem("pi-scroll-follow-mode"));
+      expect(stored).toBe(expected);
     }
   });
 });

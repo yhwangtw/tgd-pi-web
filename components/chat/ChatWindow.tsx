@@ -11,7 +11,7 @@ import { CollapsibleMessage } from "./CollapsibleMessage";
 import { TgdPipeline, type PhaseStatus } from "./TgdPipeline";
 import { CompactionSummary, getCompactionSummary } from "./CompactionSummary";
 import { pickTurnTarget } from "./turn-nav";
-import { getAlwaysFollow } from "@/lib/prefs";
+import { useScrollFollowMode } from "@/lib/prefs";
 import { useAgentSession, type AgentPhase } from "@/hooks/useAgentSession";
 import { preservedRunSpacerHeight } from "@/hooks/use-transcript-scroll";
 import { getRunError } from "@/hooks/use-agent-session-types";
@@ -249,6 +249,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   });
 
   const { t } = useI18n();
+  const scrollFollowMode = useScrollFollowMode();
 
   // ── tGD pipeline: detect which phases have run in this session ──
   const [pipelineHidden, setPipelineHidden] = useState(false);
@@ -592,7 +593,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       return;
     }
     if (spacerHeight === null) return;
-    if (getAlwaysFollow()) {
+    if (scrollFollowMode === "always") {
       setSpacerHeight(null);
       return;
     }
@@ -606,7 +607,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       if (next <= 1) return null;
       return current === next ? current : next;
     });
-  }, [agentRunning, scrollContainerRef, spacerHeight]);
+  }, [agentRunning, scrollContainerRef, scrollFollowMode, spacerHeight]);
 
   // ── Scroll-to-bottom affordance + streaming follow mode ─────────────────
   // followStreamRef: whether the reader is "at the tail" and wants the view
@@ -619,9 +620,30 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   // viewport while the reader is NOT following a running stream.
   const [newLines, setNewLines] = useState(0);
   const newBaselineRef = useRef(0);
+  const userPausedSmartFollowRef = useRef(false);
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
+    let lastTouchY: number | null = null;
+    const pauseFollow = () => {
+      if (scrollFollowMode === "always") return;
+      if (scrollFollowMode === "smart") userPausedSmartFollowRef.current = true;
+      followStreamRef.current = false;
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY < -1) pauseFollow();
+    };
+    const onTouchStart = (event: TouchEvent) => {
+      lastTouchY = event.touches[0]?.clientY ?? null;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const nextY = event.touches[0]?.clientY ?? null;
+      if (lastTouchY !== null && nextY !== null && nextY > lastTouchY + 2) pauseFollow();
+      lastTouchY = nextY;
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (["ArrowUp", "PageUp", "Home"].includes(event.key)) pauseFollow();
+    };
     const onScroll = () => {
       const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
       setShowJumpToBottom(dist > 300);
@@ -631,7 +653,17 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         const markerTop = end.getBoundingClientRect().top;
         // At the tail = end marker sits in the bottom zone of the viewport.
         // Scrolling up pushes it below the fold → disengage.
-        followStreamRef.current = markerTop <= containerBottom + 80 && markerTop >= containerBottom - 250;
+        const atTail = markerTop <= containerBottom + 80 && markerTop >= containerBottom - 250;
+        if (scrollFollowMode === "always") {
+          followStreamRef.current = true;
+        } else if (scrollFollowMode === "smart") {
+          if (atTail) {
+            userPausedSmartFollowRef.current = false;
+            followStreamRef.current = true;
+          } else if (userPausedSmartFollowRef.current) {
+            followStreamRef.current = false;
+          }
+        }
         if (followStreamRef.current) {
           newBaselineRef.current = el.scrollHeight;
           setNewLines((v) => (v === 0 ? v : 0));
@@ -640,13 +672,26 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     };
     onScroll();
     el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [scrollContainerRef, messagesEndRef, messages.length]);
+    el.addEventListener("wheel", onWheel, { passive: true });
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: true });
+    el.addEventListener("keydown", onKeyDown);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("keydown", onKeyDown);
+    };
+  }, [scrollContainerRef, messagesEndRef, messages.length, scrollFollowMode]);
 
-  // Terminal-style preference: engage follow as soon as a run starts.
+  // Follow policy at run start. Smart mode starts engaged so the reply is
+  // visible without manual work, but the user's upward scroll disengages it.
   useEffect(() => {
-    if (agentRunning && getAlwaysFollow()) followStreamRef.current = true;
-  }, [agentRunning]);
+    if (!agentRunning) return;
+    userPausedSmartFollowRef.current = false;
+    followStreamRef.current = scrollFollowMode !== "preserve";
+  }, [agentRunning, scrollFollowMode]);
 
   // Re-baseline the "+N" counter whenever layout shifts for non-content
   // reasons: run start/end, the run spacer mounting/resizing, or a historical
@@ -684,6 +729,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       });
     }
     followStreamRef.current = true;
+    userPausedSmartFollowRef.current = false;
   }, [agentRunning, messagesEndRef]);
 
   // Streaming follow: while engaged, keep the tail pinned to the viewport
@@ -1132,14 +1178,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           <button
             onClick={jumpToBottom}
             aria-label={t("chat.jumpBottom")}
-            className={`${styles.jumpButton} glass absolute bottom-4 left-1/2 z-10 flex h-8 -translate-x-1/2 items-center justify-center rounded-full border text-[var(--text-muted)] shadow-[var(--color-shadow-dropdown)] transition hover:text-[var(--text)] ${agentRunning && newLines > 0 ? "gap-1 px-3" : "w-8"} ${agentRunning ? "!border-[var(--color-accent-border)] text-[var(--accent)]" : ""}`}
+            className={`${styles.jumpButton} glass absolute bottom-4 left-1/2 z-10 flex h-8 -translate-x-1/2 items-center justify-center gap-1.5 rounded-full border px-3 text-[var(--text-muted)] shadow-[var(--color-shadow-dropdown)] transition hover:text-[var(--text)] ${agentRunning ? "!border-[var(--color-accent-border)] text-[var(--accent)]" : ""}`}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg>
-            {agentRunning && newLines > 0 && (
-              <span className="text-[11.5px] font-medium tabular-nums">
-                +{newLines} {t("chat.lines")}
-              </span>
-            )}
+            <span className="text-[11.5px] font-medium whitespace-nowrap">
+              {agentRunning && newLines > 0 ? `+${newLines} ${t("chat.lines")}` : t("chat.latest")}
+            </span>
           </button>
         )}
         <div ref={scrollContainerRef} data-transcript-scroll className={`${styles.transcriptScroll} flex-1 overflow-y-auto pt-4 [scrollbar-width:none]`}>

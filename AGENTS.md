@@ -261,9 +261,11 @@ otherwise manufacture a phantom session.
 - "+N lines" counter on the jump button: baseline = scrollHeight, re-anchored
   on run start/end, spacer resize, expand/collapse, and whenever the reader is
   at the tail. Only counts while running and not following.
-- Always-follow preference (`lib/prefs.ts`, `pi-follow-stream`): read by
-  ChatWindow (engage follow at run start) AND useAgentSession (end-of-run
-  scroll gate). Toggled from the ⌘K palette, default off.
+- Response scroll preference (`lib/prefs.ts`, `pi-scroll-follow-mode`) has
+  three states: smart (default; follows until the user scrolls up), always
+  (terminal-style sticky tail), and preserve (moves only after Jump to latest).
+  The legacy `pi-follow-stream=1` migrates to always. It is exposed in the
+  composer controls and as three direct actions in the ⌘K palette.
 
 ### Run outcome signals
 `agent_end` events carry `messages`; `getRunError()`

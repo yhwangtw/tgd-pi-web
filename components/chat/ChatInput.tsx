@@ -12,6 +12,7 @@ import { usePrompts } from "@/hooks/usePrompts";
 import { ModelSelector } from "./ModelSelector";
 import { ThinkingSelector } from "./ThinkingSelector";
 import { ToolPresetSelector } from "./ToolPresetSelector";
+import { ScrollFollowSelector } from "./ScrollFollowSelector";
 import { useChatInputControls } from "@/hooks/useChatInputControls";
 import styles from "./ChatInput.module.css";
 import { useI18n } from "@/lib/i18n";
@@ -1070,6 +1071,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 isStreaming={isStreaming}
                 onToolPresetChange={onToolPresetChange}
               />
+            </div>
+            <div className={`${styles.mobileLabeledControl} ${styles.scrollModeControl}`}>
+              <span className={styles.mobileControlLabel}>{t("input.scrollMode")}</span>
+              <ScrollFollowSelector />
             </div>
 
             {!isStreaming && onEphemeralChange && (

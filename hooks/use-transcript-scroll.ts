@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useCallback, useEffect } from "react";
-import { getAlwaysFollow } from "@/lib/prefs";
+import { getScrollFollowMode } from "@/lib/prefs";
 import { AT_BOTTOM, loadScrollPosition, saveScrollPosition } from "@/lib/scroll-memory";
 
 /**
@@ -80,7 +80,7 @@ export function useTranscriptScroll(
         } else {
           scrollToBottom("instant");
         }
-      } else if (!agentRunningRef.current && getAlwaysFollow()) {
+      } else if (!agentRunningRef.current && getScrollFollowMode() === "always") {
         // Do not infer follow intent from distance after a run. The temporary
         // run spacer has already unmounted by this point, so the browser may
         // clamp scrollTop to the new maximum and make `dist` look like zero

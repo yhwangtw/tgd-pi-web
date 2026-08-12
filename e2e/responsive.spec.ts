@@ -168,6 +168,7 @@ test.describe("responsive shell", () => {
 
   test("AC-RWD-4: AppShell consumes safe-area inset variables", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
+    await page.addInitScript(() => localStorage.removeItem("pi-scroll-follow-mode"));
     await openSession(page);
     await page.evaluate(() => {
       document.documentElement.style.setProperty("--safe-area-top", "11px");
@@ -507,6 +508,13 @@ test.describe("responsive shell", () => {
     await expect(panel.getByText("Composer", { exact: true })).toBeVisible();
     await expect(panel.getByText("Reasoning", { exact: true })).toBeVisible();
     await expect(panel.getByText("Tools", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Response scroll", { exact: true })).toBeVisible();
+    const scrollModes = panel.getByRole("radiogroup", { name: "Change response scroll mode" });
+    await expect(scrollModes).toBeVisible();
+    await expect(scrollModes.getByRole("radio", { name: "Smart follow" })).toHaveAttribute("aria-checked", "true");
+    await scrollModes.getByRole("radio", { name: "Preserve position" }).click();
+    await expect(scrollModes.getByRole("radio", { name: "Preserve position" })).toHaveAttribute("aria-checked", "true");
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("pi-scroll-follow-mode"))).toBe("preserve");
     await expect(panel.getByText("Sound", { exact: true })).toBeVisible();
 
     const panelBox = await panel.boundingBox();

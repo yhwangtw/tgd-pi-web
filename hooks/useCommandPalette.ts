@@ -5,6 +5,7 @@ import type { SessionInfo } from "@/lib/types";
 import type { SessionTags } from "./useTags";
 import type { Skin } from "@/lib/skin";
 import type { UiStyle } from "@/lib/ui-style";
+import type { ScrollFollowMode } from "@/lib/prefs";
 
 // ── Result types ───────────────────────────────────────────────────────────
 
@@ -34,7 +35,9 @@ export type PaletteActionId =
   | "view:toggle-sidebar"
   | "view:toggle-file-panel"
   | "view:toggle-chat-width"
-  | "view:toggle-follow"
+  | "view:scroll-smart"
+  | "view:scroll-always"
+  | "view:scroll-preserve"
   | "ui-style:original"
   | "ui-style:trae"
   | "skin:trae"
@@ -71,7 +74,7 @@ export interface PaletteCallbacks {
   toggleSidebar: () => void;
   toggleFilePanel: () => void;
   toggleChatWidth: () => void;
-  toggleFollowStream: () => void;
+  setScrollFollowMode: (mode: ScrollFollowMode) => void;
   setSkin: (skin: Skin) => void;
   setUiStyle: (style: UiStyle) => void;
   newSession: () => void;
@@ -230,12 +233,28 @@ const ACTIONS: PaletteResult[] = [
     data: { action: "view:toggle-chat-width" } as { action: PaletteActionId },
   },
   {
-    id: "action:toggle-follow",
+    id: "action:scroll-smart",
     kind: "action",
-    title: "Toggle Always-Follow Output",
-    subtitle: "Keep the view pinned to streaming output, terminal-style (default off)",
-    keywords: "follow scroll stream pin tail terminal auto 跟隨 捲動 黏底 自動",
-    data: { action: "view:toggle-follow" } as { action: PaletteActionId },
+    title: "Response Scroll: Smart Follow",
+    subtitle: "Follow new output until you scroll up to read",
+    keywords: "follow scroll stream smart auto 跟隨 捲動 智慧 自動",
+    data: { action: "view:scroll-smart" } as { action: PaletteActionId },
+  },
+  {
+    id: "action:scroll-always",
+    kind: "action",
+    title: "Response Scroll: Always Follow",
+    subtitle: "Keep the latest streaming output visible, terminal-style",
+    keywords: "follow scroll stream pin tail always terminal 跟隨 捲動 黏底 永遠",
+    data: { action: "view:scroll-always" } as { action: PaletteActionId },
+  },
+  {
+    id: "action:scroll-preserve",
+    kind: "action",
+    title: "Response Scroll: Preserve Position",
+    subtitle: "Move only when you choose Jump to latest",
+    keywords: "follow scroll preserve reading position manual 保留位置 閱讀 手動",
+    data: { action: "view:scroll-preserve" } as { action: PaletteActionId },
   },
   {
     id: "action:new-session",
@@ -430,7 +449,9 @@ export function useCommandPalette({
       case "view:toggle-sidebar": cbs.toggleSidebar(); break;
       case "view:toggle-file-panel": cbs.toggleFilePanel(); break;
       case "view:toggle-chat-width": cbs.toggleChatWidth(); break;
-      case "view:toggle-follow": cbs.toggleFollowStream(); break;
+      case "view:scroll-smart": cbs.setScrollFollowMode("smart"); break;
+      case "view:scroll-always": cbs.setScrollFollowMode("always"); break;
+      case "view:scroll-preserve": cbs.setScrollFollowMode("preserve"); break;
       case "ui-style:original": cbs.setUiStyle("original"); break;
       case "ui-style:trae": cbs.setUiStyle("trae"); break;
       case "skin:trae": cbs.setSkin("trae"); break;

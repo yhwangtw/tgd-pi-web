@@ -34,7 +34,7 @@ import { useAttentionCenter } from "@/hooks/useAttentionCenter";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { onOpenFileRequest } from "@/lib/file-links";
 import { useI18n, translate } from "@/lib/i18n";
-import { toggleAlwaysFollow } from "@/lib/prefs";
+import { setScrollFollowMode } from "@/lib/prefs";
 import { useTabTitle } from "@/lib/attention";
 import { setSkin } from "@/lib/skin";
 import { setUiStyle } from "@/lib/ui-style";
@@ -320,9 +320,9 @@ export function AppShell() {
       toggleSidebar: () => setSidebarOpen((v) => !v),
       toggleFilePanel: () => setRightPanelOpen((v) => !v),
       toggleChatWidth,
-      toggleFollowStream: () => {
-        const on = toggleAlwaysFollow();
-        showToast(translate(on ? "toast.followOn" : "toast.followOff"));
+      setScrollFollowMode: (mode) => {
+        setScrollFollowMode(mode);
+        showToast(translate(`toast.scrollMode.${mode}`));
       },
       setSkin,
       setUiStyle,

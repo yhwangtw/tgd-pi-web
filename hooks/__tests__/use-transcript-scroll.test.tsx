@@ -4,6 +4,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { preservedRunSpacerHeight, useTranscriptScroll } from "../use-transcript-scroll";
+import { resetScrollFollowModeCache } from "@/lib/prefs";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -33,6 +34,7 @@ describe("useTranscriptScroll", () => {
 
   beforeEach(() => {
     localStorage.clear();
+    resetScrollFollowModeCache();
     scrollIntoView = vi.fn();
     scrollTo = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -54,8 +56,9 @@ describe("useTranscriptScroll", () => {
     vi.restoreAllMocks();
   });
 
-  async function renderRun(alwaysFollow: boolean) {
-    if (alwaysFollow) localStorage.setItem("pi-follow-stream", "1");
+  async function renderRun(mode: "smart" | "always" | "preserve") {
+    localStorage.setItem("pi-scroll-follow-mode", mode);
+    resetScrollFollowModeCache();
     const runningRef = { current: true } as React.RefObject<boolean>;
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -73,12 +76,17 @@ describe("useTranscriptScroll", () => {
   }
 
   it("does not pull an anchored reader to the bottom when a run ends", async () => {
-    await renderRun(false);
+    await renderRun("smart");
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("preserves the completed response position in preserve mode", async () => {
+    await renderRun("preserve");
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it("still follows the completed response when always-follow is enabled", async () => {
-    await renderRun(true);
+    await renderRun("always");
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "end" });
   });
 

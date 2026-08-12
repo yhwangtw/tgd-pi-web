@@ -1058,6 +1058,10 @@
     background: var(--bg-elev-1);
   }
 
+  .bottomBarRightMobileOpen .scrollModeControl {
+    grid-column: 1 / -1;
+  }
+
   .bottomBarRightMobileOpen .mobileControlLabel {
     position: absolute;
     top: 8px;
@@ -1095,6 +1099,14 @@
     max-width: none !important;
   }
 
+  .bottomBarRightMobileOpen .scrollModeControl > div {
+    display: grid;
+    min-height: 56px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+    padding: 6px;
+  }
+
   .bottomBarRightMobileOpen .mobileLabeledControl > div {
     min-height: 56px;
   }
@@ -1109,6 +1121,15 @@
     gap: 6px;
     padding: 20px 10px 4px !important;
     border-radius: var(--radius-control);
+  }
+
+  .bottomBarRightMobileOpen .scrollModeControl > div > button {
+    width: auto !important;
+    height: 44px !important;
+    min-height: 44px;
+    justify-content: center;
+    padding: 14px 5px 2px !important;
+    font-size: var(--text-xs);
   }
 
   .bottomBarRightMobileOpen .compactWrapper {

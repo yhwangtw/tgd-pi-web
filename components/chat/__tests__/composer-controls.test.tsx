@@ -227,6 +227,9 @@ describe("composer controls", () => {
     expect(panel.textContent).toContain("Composer");
     expect(panel.textContent).toContain("Reasoning");
     expect(panel.textContent).toContain("Tools");
+    expect(panel.textContent).toContain("Response scroll");
+    expect(panel.textContent).toContain("Smart follow");
+    expect(panel.querySelector('[role="radiogroup"][aria-label="Change response scroll mode"]')).not.toBeNull();
     expect(panel.textContent).toContain("Done");
 
     const done = [...panel.querySelectorAll<HTMLButtonElement>("button")]
