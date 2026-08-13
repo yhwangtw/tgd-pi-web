@@ -6,8 +6,15 @@ import {
   initializeWebTheme,
   trackExtensionProviders,
 } from "../pi-runtime";
+import { PI_WEB_OUTPUT_GUIDANCE, appendPiWebOutputGuidance } from "../output-design";
 
 describe("Pi Web runtime integration", () => {
+  it("adds Pi Web's optional structured-output guidance without replacing user instructions", () => {
+    expect(appendPiWebOutputGuidance(["Project instructions"])).toEqual([
+      "Project instructions",
+      PI_WEB_OUTPUT_GUIDANCE,
+    ]);
+  });
   it("refreshes the model runtime only after models.json changes", async () => {
     const calls: string[] = [];
     let modelsVersion = "v1";

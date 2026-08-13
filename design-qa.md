@@ -1,3 +1,4 @@
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
 # Mobile workspace context — design QA
 
 ## Reference and prototype
@@ -166,5 +167,43 @@ existing product hierarchy were preserved.
 - Console: no page errors; only React development and Fast Refresh messages.
 - Static/test evidence: TypeScript passed with `--noEmit --incremental false`,
   targeted ESLint passed, `git diff --check` passed, and Vitest passed 93 files / 413 tests.
+
+final result: passed
+---
+
+# Output Design System — Design QA
+
+## Reference and implementation evidence
+
+- Source visual: `/Users/elon/.codex/generated_images/019fa46f-03fa-7143-b0f8-2fbd31e67ba9/exec-e50dfdd4-83a0-4738-93d7-da6bf06e0330.png`
+  - Native size: 1487 × 1058
+- Desktop implementation: `design-qa-desktop.jpg`
+  - Browser viewport: 1440 × 1024
+- Mobile implementation: `design-qa-mobile.jpg`
+  - Browser viewport: 390 × 844
+- Tested state: assistant response with explanatory prose, collapsed Work log, semantic result block, and collapsed technical details.
+
+## Full-view comparison
+
+The implementation preserves the reference hierarchy: normal conversational prose remains primary, execution evidence is summarized in a compact Work log, the verified outcome uses one semantic result block, and raw commands/logs stay behind progressive disclosure. The result block is intentionally part of the reading flow rather than a floating dashboard card.
+
+The surrounding Pi Web shell remains the real application shell. No raster assets were introduced for the output surface; status and disclosure affordances use the existing Lucide icon library.
+
+## Focused-region comparison and iteration history
+
+1. First comparison found a repeated bold outcome sentence inside the result block and insufficient emphasis on the opening summary paragraph (P2 visual hierarchy).
+2. The grammar and fixture were revised so the semantic block has one outcome title only. The opening summary now uses weight 600.
+3. Post-fix desktop evidence shows the intended sequence without repetition: summary → explanation → Work log → result → technical details.
+
+## Detailed checks
+
+- Typography: bundled Inter/Noto Sans TC stack retained; output title and summary use 600 weight; code values remain on the mono stack.
+- Spacing: the Work log sits between explanation and result; result content uses a consistent 12/16 px rhythm and a semantic left rule.
+- Color: all result/info/warning/error treatments use semantic CSS tokens, so Original/TRAE geometry and every palette remain compatible.
+- Responsive layout: at 390 px, the result block measures x=14 to x=376 and the document scroll width equals the 390 px viewport.
+- Interactions: Work log expands and collapses; technical details expands and collapses; both preserve layout position.
+- Accessibility: the result is a labelled region; disclosures are native buttons/details with keyboard semantics; icons are decorative where the text already conveys meaning.
+- Console: no browser warnings or errors in the verified desktop/mobile state.
+- Automated coverage: Output Design System Playwright E2E 2/2; Vitest 434/434; TypeScript and ESLint clean.
 
 final result: passed

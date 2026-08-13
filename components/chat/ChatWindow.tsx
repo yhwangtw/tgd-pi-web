@@ -12,7 +12,7 @@ import { TgdPipeline, type PhaseStatus } from "./TgdPipeline";
 import { CompactionSummary, getCompactionSummary } from "./CompactionSummary";
 import { pickTurnTarget } from "./turn-nav";
 import { useScrollFollowMode } from "@/lib/prefs";
-import { useAgentSession, type AgentPhase } from "@/hooks/useAgentSession";
+import { useAgentSession } from "@/hooks/useAgentSession";
 import { preservedRunSpacerHeight } from "@/hooks/use-transcript-scroll";
 import { getRunError } from "@/hooks/use-agent-session-types";
 import { useAudio } from "@/hooks/useAudio";
@@ -24,6 +24,7 @@ import { isProviderAuthError } from "./AssistantMessageView";
 import { buildConversationLayout } from "./conversation-turns";
 import { assistantModelKey, shouldShowAssistantModelLabel } from "./message-chrome";
 import { ProviderRecoveryBanner } from "./ProviderRecoveryBanner";
+import { RunStatus } from "./RunStatus";
 
 interface Props {
   session: SessionInfo | null;
@@ -46,30 +47,6 @@ interface Props {
   /** Wide-layout preference (⌘K → Toggle Wide Chat). */
   wideChat?: boolean;
   onOpenModels?: () => void;
-}
-
-export function phaseLabel(phase: AgentPhase, translate?: (key: MsgKey) => string): string {
-  if (!translate) {
-    if (phase?.kind === "running_tools") {
-      const names = phase.tools.map((tool) => tool.name);
-      if (names.length === 0) return "Running tool...";
-      if (names.length === 1) return `Running ${names[0]}...`;
-      if (names.length <= 3) return `Running ${names.join(", ")}...`;
-      return `Running ${names.slice(0, 2).join(", ")} (+${names.length - 2})...`;
-    }
-    if (phase?.kind === "waiting_model") return "Waiting for model...";
-    return "Thinking...";
-  }
-  if (phase?.kind === "running_tools") {
-    const names = phase.tools.map((t) => t.name);
-    const running = translate?.("chat.runningStatus") ?? "Running";
-    if (names.length === 0) return `${running} tool…`;
-    if (names.length === 1) return `${running} ${names[0]}…`;
-    if (names.length <= 3) return `${running} ${names.join(", ")}…`;
-    return `${running} ${names.slice(0, 2).join(", ")} (+${names.length - 2})…`;
-  }
-  if (phase?.kind === "waiting_model") return translate?.("chat.waitingModel") ?? "Waiting for model...";
-  return translate?.("chat.thinkingStatus") ?? "Thinking...";
 }
 
 const phaseSvg = (paths: React.ReactNode) => (
@@ -188,17 +165,6 @@ function Typewriter({ phrases }: { phrases: string[] }) {
   );
 }
 
-function Elapsed({ since }: { since: number }) {
-  const [now, setNow] = useState(since);
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const secs = Math.max(0, Math.floor((now - since) / 1000));
-  const label = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
-  return <span className="tabular-nums text-[var(--text-dim)]">· {label}</span>;
-}
-
 /** Plain-text view of a message for in-conversation search. */
 function messageText(msg: AgentMessage): string {
   const content = (msg as { content?: unknown }).content;
@@ -233,7 +199,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
-    agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, stalledSecs, extensionUIState,
+    agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,
     isNew,
     messagesEndRef, scrollContainerRef,
     lastUserMsgRef,
@@ -1388,25 +1354,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               />
             )}
 
-            {agentRunning && !streamState.streamingMessage && (
-              <div className={`${styles.runStatus} flex items-center gap-2 py-2 text-[13px] ${stalledSecs > 0 ? "text-[var(--color-warning-text-strong)]" : "text-text-muted"}`}>
-                {stalledSecs > 0 ? (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                    <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-                  </svg>
-                ) : (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="animate-spin text-[var(--accent)]" aria-hidden>
-                    <path d="M21 12a9 9 0 1 1-6.2-8.56" />
-                  </svg>
-                )}
-                <span>
-                  {stalledSecs > 0
-                    ? `${stalledSecs}s · ${t("chat.stalled")}`
-                    : phaseLabel(agentPhase, t)}
-                </span>
-                {agentStartedAt && <Elapsed since={agentStartedAt} />}
-              </div>
+            {agentRunning && (
+              !streamState.streamingMessage
+              || runProgress.attention !== "normal"
+              || runProgress.connection === "reconnecting"
+            ) && (
+              <RunStatus phase={agentPhase} progress={runProgress} startedAt={agentStartedAt} />
             )}
 
             {/* End marker sits BEFORE the run spacer: follow mode and the jump

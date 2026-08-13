@@ -13,6 +13,7 @@ import {
   type ProviderConfig,
 } from "@earendil-works/pi-coding-agent";
 import type { ExtensionProviderInfo } from "./extensions-info";
+import { appendPiWebOutputGuidance } from "./output-design";
 import { createPiModelRuntime } from "./pi-model-runtime";
 
 interface ProviderModelLike {
@@ -214,6 +215,9 @@ export async function createTrackedAgentServices(cwd: string): Promise<{
     agentDir,
     modelRuntime,
     resourceLoaderOptions: {
+      // Pi Web keeps Markdown as the default output and exposes one readable
+      // blockquote syntax for the few outcomes worth progressive enhancement.
+      appendSystemPromptOverride: appendPiWebOutputGuidance,
       extensionsOverride(base: LoadExtensionsResult) {
         for (const registration of base.runtime.pendingProviderRegistrations) {
           providerTracker.discover(registration.name, registration.extensionPath);

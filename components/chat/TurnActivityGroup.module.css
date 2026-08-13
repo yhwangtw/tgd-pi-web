@@ -6,7 +6,7 @@
 }
 
 .rootError {
-  box-shadow: inset 2px 0 var(--color-error);
+  border-color: var(--color-warning-border);
 }
 
 .summary {
@@ -35,7 +35,7 @@
   color: var(--color-success-text, var(--accent));
 }
 
-.rootError .stateIcon { color: var(--color-error-text); }
+.rootError .stateIcon { color: var(--color-warning-text); }
 
 .title {
   flex: 0 0 auto;
@@ -59,8 +59,8 @@
 }
 
 .outcomeError {
-  background: var(--color-error-bg);
-  color: var(--color-error-text);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
 }
 
 .meta {
@@ -113,6 +113,6 @@
 }
 
 :global(html[data-ui-style="trae"]) .root { border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
-:global(html[data-ui-style="trae"]) .rootError { box-shadow: inset 3px 0 var(--color-error), var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .rootError { border-color: var(--color-warning-border); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .summary { min-height: 38px; padding: 7px 11px; }
 :global(html[data-ui-style="trae"]) .body { gap: 8px; padding: 9px; border-top-color: var(--trae-hairline); background: var(--trae-canvas); }

@@ -271,9 +271,12 @@ otherwise manufacture a phantom session.
 `agent_end` events carry `messages`; `getRunError()`
 (hooks/use-agent-session-types.ts) reads the last assistant message's
 `stopReason`. Failures: red error card (AssistantMessageView), error toast,
-⚠ title, failure notification, **no** completion sound. Stall watchdog: 60s
-without an SSE event (120s during tool runs) shows a warning — SSE heartbeats
-are comments and don't reset the clock.
+⚠ title, failure notification, **no** completion sound. Quiet progress and
+connection health are separate states: model waits stay neutral through 90s,
+become a quiet delayed status until 180s, then show only a small caution icon
+and calm copy; tool thresholds are 180s/300s. Only an SSE reconnect that lasts
+at least three attempts or ten seconds uses warning emphasis. SSE heartbeat
+comments do not reset the meaningful-progress clock.
 
 ### Appearance skins and interface styles
 Color palettes and component geometry are independent. `lib/skin.ts` persists

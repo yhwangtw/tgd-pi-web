@@ -6,6 +6,27 @@
   font-size: 0.9em;
 }
 
+.outputStack {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.outputSegment {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.structuredStack > .outputSegment:first-child :global(.markdown-body > p:first-child) {
+  font-weight: var(--weight-semibold);
+}
+
+@media (max-width: 700px) {
+  .outputStack,
+  .outputSegment { gap: 10px; }
+}
+
 /* Inline code that looks like a file path — clickable, opens in the viewer.
    Quiet by default (dotted underline), accent on hover. */
 .fileLink {

@@ -73,6 +73,12 @@ export type AgentPhase =
   | { kind: "running_tools"; tools: { id: string; name: string }[] }
   | null;
 
+export interface RunProgressState {
+  idleSeconds: number;
+  attention: "normal" | "delayed" | "stalled";
+  connection: "connected" | "reconnecting";
+}
+
 export interface SessionStats {
   tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
   cost: number;

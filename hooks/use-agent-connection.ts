@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import type { AgentEvent, AgentPhase } from "./use-agent-session-types";
+import type { AgentEvent, AgentPhase, RunProgressState } from "./use-agent-session-types";
+
+const HEALTHY_PROGRESS: RunProgressState = {
+  idleSeconds: 0,
+  attention: "normal",
+  connection: "connected",
+};
 
 /**
  * SSE wiring for a live agent run: owns the EventSource, the
@@ -17,6 +23,8 @@ export function useAgentEvents(
   const [mountedAt] = useState(() => Date.now());
   const lastEventAtRef = useRef(mountedAt);
   const reconnectAttemptRef = useRef(0);
+  const reconnectStartedAtRef = useRef<number | null>(null);
+  const [connectionState, setConnectionState] = useState<RunProgressState["connection"]>("connected");
 
   // Resolves `true` once the stream to `sid` is open, `false` when it isn't
   // yet (failsafe timeout / connect error) — a broken stream never blocks the
@@ -54,11 +62,16 @@ export function useAgentEvents(
       const failSafe = setTimeout(() => settle(false), 1_500);
       es.onopen = () => {
         reconnectAttemptRef.current = 0;
+        reconnectStartedAtRef.current = null;
+        setConnectionState("connected");
         clearTimeout(failSafe);
         settle(true);
       };
       es.onmessage = (e) => {
         lastEventAtRef.current = Date.now();
+        // Promote/demote immediately on real progress instead of waiting up to
+        // five seconds for the polling interval to clear delayed UI.
+        setConnectionState("connected");
         try {
           const event = JSON.parse(e.data) as AgentEvent;
           handleAgentEventRef.current?.(event);
@@ -69,6 +82,14 @@ export function useAgentEvents(
       es.onerror = () => {
         settle(false); // no-op after open — only fails a still-pending await
         if (eventSourceRef.current === es && agentRunningRef.current) {
+          if (reconnectStartedAtRef.current === null) reconnectStartedAtRef.current = Date.now();
+          const reconnectingFor = Date.now() - reconnectStartedAtRef.current;
+          // Mobile radios and browsers routinely blip during network changes.
+          // Keep the first two attempts visually quiet; promote only a
+          // sustained transport problem, separate from model latency.
+          if (reconnectAttemptRef.current >= 2 || reconnectingFor >= 10_000) {
+            setConnectionState("reconnecting");
+          }
           es.close();
           eventSourceRef.current = null;
           // Exponential backoff: 1s, 2s, 4s, ... capped at 15s, so a downed
@@ -83,35 +104,58 @@ export function useAgentEvents(
     });
   }, [agentRunningRef, handleAgentEventRef]);
 
-  return { eventSourceRef, lastEventAtRef, connectEvents };
+  return { eventSourceRef, lastEventAtRef, connectionState, connectEvents };
 }
 
 /**
- * Stall watchdog: while a run is active, warn when no SSE event has
- * arrived for a while. Heartbeat comments don't fire onmessage, so this
- * measures real progress. Tool runs are legitimately quiet for longer,
- * hence the higher threshold there.
+ * Classify quiet periods separately from transport failures. A slow model is
+ * normal product state, not an error: only a disconnected EventSource should
+ * receive warning emphasis. Heartbeat comments don't fire onmessage, so idle
+ * time continues to measure meaningful progress rather than connection noise.
  */
-export function useStallWatchdog(
+export function classifyRunProgress(
+  idleSeconds: number,
+  phase: AgentPhase,
+  connection: RunProgressState["connection"],
+): RunProgressState {
+  const toolRun = phase?.kind === "running_tools";
+  const delayedAfter = toolRun ? 180 : 90;
+  const stalledAfter = toolRun ? 300 : 180;
+  const attention = idleSeconds >= stalledAfter
+    ? "stalled"
+    : idleSeconds >= delayedAfter
+      ? "delayed"
+      : "normal";
+  return { idleSeconds, attention, connection };
+}
+
+export function useRunProgress(
   agentRunning: boolean,
   agentPhaseRef: React.RefObject<AgentPhase>,
   lastEventAtRef: React.RefObject<number>,
+  connectionState: RunProgressState["connection"],
 ) {
-  // Seconds since the last SSE event while a run is active; 0 = healthy.
-  const [stalledSecs, setStalledSecs] = useState(0);
+  const [runProgress, setRunProgress] = useState<RunProgressState>(HEALTHY_PROGRESS);
 
   useEffect(() => {
     if (!agentRunning) {
-      setStalledSecs(0);
+      setRunProgress(HEALTHY_PROGRESS);
       return;
     }
+    const update = () => {
+      const idle = Math.max(0, Math.floor((Date.now() - lastEventAtRef.current) / 1000));
+      setRunProgress(classifyRunProgress(idle, agentPhaseRef.current, connectionState));
+    };
+    update();
     const id = setInterval(() => {
-      const idle = Math.floor((Date.now() - lastEventAtRef.current) / 1000);
-      const threshold = agentPhaseRef.current?.kind === "running_tools" ? 120 : 60;
-      setStalledSecs(idle >= threshold ? idle : 0);
+      update();
     }, 5000);
     return () => clearInterval(id);
-  }, [agentRunning, agentPhaseRef, lastEventAtRef]);
+  }, [agentRunning, agentPhaseRef, connectionState, lastEventAtRef]);
 
-  return { stalledSecs, setStalledSecs };
+  const resetRunProgress = useCallback(() => {
+    setRunProgress(HEALTHY_PROGRESS);
+  }, []);
+
+  return { runProgress, resetRunProgress };
 }

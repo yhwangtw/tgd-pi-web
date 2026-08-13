@@ -332,9 +332,6 @@ export function AssistantMessageView({
       </div>}
 
       <div className={styles.blocksContainer}>
-        {turnActivityMessages && turnActivityMessages.length > 0 && (
-          <TurnWorkLog messages={turnActivityMessages} toolResults={toolResults} turnStartedAt={turnStartedAt} />
-        )}
         {renderBlocks({
           blocks: displayBlocks,
           toolResults,
@@ -343,6 +340,9 @@ export function AssistantMessageView({
           thinkingDurationFromFile,
           toolCallDurations,
           activeToolCallId,
+          outputAccessory: turnActivityMessages && turnActivityMessages.length > 0 ? (
+            <TurnWorkLog messages={turnActivityMessages} toolResults={toolResults} turnStartedAt={turnStartedAt} />
+          ) : undefined,
         })}
       </div>
 
@@ -556,6 +556,7 @@ function renderBlocks({
   thinkingDurationFromFile,
   toolCallDurations,
   activeToolCallId,
+  outputAccessory,
 }: {
   blocks: AssistantContentBlock[];
   toolResults?: Map<string, ToolResultMessage>;
@@ -564,8 +565,10 @@ function renderBlocks({
   thinkingDurationFromFile?: number;
   toolCallDurations: Map<string, number>;
   activeToolCallId?: string;
+  outputAccessory?: React.ReactNode;
 }) {
   const rendered: React.ReactNode[] = [];
+  let accessoryPending = outputAccessory;
   for (let i = 0; i < blocks.length;) {
     const block = blocks[i];
     if (block.type !== "toolCall") {
@@ -575,8 +578,10 @@ function renderBlocks({
           block={block}
           isStreaming={isStreaming}
           streamingDuration={streamingDurations.get(i) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)}
+          outputAccessory={block.type === "text" ? accessoryPending : undefined}
         />,
       );
+      if (block.type === "text") accessoryPending = undefined;
       i += 1;
       continue;
     }
@@ -618,12 +623,13 @@ function renderBlocks({
     }
     i = end;
   }
+  if (accessoryPending) rendered.push(<div key="output-accessory">{accessoryPending}</div>);
   return rendered;
 }
 
-function BlockView({ block, isStreaming, streamingDuration }: { block: AssistantContentBlock; isStreaming?: boolean; streamingDuration?: number }) {
+function BlockView({ block, isStreaming, streamingDuration, outputAccessory }: { block: AssistantContentBlock; isStreaming?: boolean; streamingDuration?: number; outputAccessory?: React.ReactNode }) {
   if (block.type === "text") {
-    return <TextBlock block={block as TextContent} isStreaming={isStreaming} />;
+    return <TextBlock block={block as TextContent} isStreaming={isStreaming} outputAccessory={outputAccessory} />;
   }
   if (block.type === "thinking") {
     return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} />;
@@ -631,8 +637,8 @@ function BlockView({ block, isStreaming, streamingDuration }: { block: Assistant
   return null;
 }
 
-function TextBlock({ block, isStreaming }: { block: TextContent; isStreaming?: boolean }) {
-  return <MarkdownBody isStreaming={isStreaming}>{block.text}</MarkdownBody>;
+function TextBlock({ block, isStreaming, outputAccessory }: { block: TextContent; isStreaming?: boolean; outputAccessory?: React.ReactNode }) {
+  return <MarkdownBody isStreaming={isStreaming} structuredOutput outputAccessory={outputAccessory}>{block.text}</MarkdownBody>;
 }
 
 function ThinkingBlock({ block, duration }: { block: ThinkingContent; duration?: number }) {

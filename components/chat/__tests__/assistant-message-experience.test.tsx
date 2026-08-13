@@ -119,7 +119,7 @@ describe("AssistantMessageView conversation chrome", () => {
     );
 
     expect(container!.textContent).toContain("Work log");
-    expect(container!.textContent).toContain("Completed");
+    expect(container!.textContent).not.toContain("Completed");
     expect(container!.textContent).toContain("2 tools");
     expect(container!.textContent).toContain("1 file");
     expect(container!.textContent).not.toContain("src/a.ts");
@@ -127,6 +127,56 @@ describe("AssistantMessageView conversation chrome", () => {
     await act(async () => summary.click());
     expect(container!.textContent).toContain("src/a.ts");
     expect(container!.textContent).toContain("Reasoning steps");
+  });
+
+  it("keeps prose as Markdown and progressively enhances one verified result", async () => {
+    await render({
+      ...baseMessage,
+      content: [{
+        type: "text",
+        text: [
+          "The server was restarted and verified.",
+          "",
+          "> [!RESULT] Development server running",
+          "> - URL: `http://localhost:30141`",
+          "> - Port: 30141",
+          "> [!DETAILS] Technical details",
+          "> `npm run dev` completed successfully.",
+        ].join("\n"),
+      }],
+    });
+
+    expect(container!.textContent).toContain("The server was restarted and verified.");
+    const card = container!.querySelector<HTMLElement>('[data-testid="structured-output-card"]')!;
+    expect(card.dataset.outputKind).toBe("result");
+    expect(card.textContent).toContain("Development server running");
+    expect(card.textContent).toContain("http://localhost:30141");
+    const details = card.querySelector("details")!;
+    expect(details.hasAttribute("open")).toBe(false);
+    expect(details.querySelector("summary")?.textContent).toContain("Technical details");
+  });
+
+  it("places the work log between prose and a structured result", async () => {
+    const activity: AssistantMessage[] = [{
+      ...baseMessage,
+      timestamp: 2_000,
+      content: [{ type: "toolCall", toolCallId: "bash-1", toolName: "bash", input: { command: "npm run dev" } }],
+    }];
+    await render(
+      {
+        ...baseMessage,
+        content: [{ type: "text", text: "Restarted.\n\n> [!RESULT] Server running\n> - Port: 30141" }],
+      },
+      {
+        turnActivityMessages: activity,
+        suppressActivityBlocks: true,
+        toolResults: new Map([["bash-1", { role: "toolResult", toolCallId: "bash-1", content: [{ type: "text", text: "ok" }] }]]),
+      },
+    );
+
+    const workLog = container!.querySelector('[aria-label="Work log"]')!;
+    const card = container!.querySelector('[data-testid="structured-output-card"]')!;
+    expect(workLog.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("opens a navigable focus surface for fenced code", async () => {

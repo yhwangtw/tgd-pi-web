@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { phaseLabel } from "../ChatWindow";
+import { phaseLabel } from "../RunStatus";
 
 describe("phaseLabel", () => {
   it("null phase falls back to thinking", () => {

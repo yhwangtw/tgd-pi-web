@@ -13,7 +13,9 @@ import { useTheme } from "@/hooks/useTheme";
 import { looksLikeFilePath, requestOpenFile } from "@/lib/file-links";
 import { encodeFilePathForApi, normalizeFilePathSlashes } from "@/lib/file-paths";
 import { useI18n } from "@/lib/i18n";
+import { parseOutputSegments } from "@/lib/output-design";
 import { FocusDialog } from "./FocusDialog";
+import { StructuredOutputCard } from "./StructuredOutputCard";
 import styles from "./MarkdownBody.module.css";
 
 interface MarkdownBodyProps {
@@ -24,6 +26,10 @@ interface MarkdownBodyProps {
   allowSafeHtml?: boolean;
   /** Absolute Markdown path used to resolve local relative image sources. */
   sourceFilePath?: string;
+  /** Enhance Pi Web's small semantic blockquote subset into output cards. */
+  structuredOutput?: boolean;
+  /** Place turn evidence between explanatory prose and the first output card. */
+  outputAccessory?: ReactNode;
 }
 
 type HastNode = {
@@ -117,9 +123,13 @@ function copyText(text: string): Promise<void> {
   }
 }
 
-export function MarkdownBody({ children, className, isStreaming, allowSafeHtml = false, sourceFilePath }: MarkdownBodyProps) {
+export function MarkdownBody({ children, className, isStreaming, allowSafeHtml = false, sourceFilePath, structuredOutput = false, outputAccessory }: MarkdownBodyProps) {
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
   const needsMath = useMemo(() => containsMath(normalizedMarkdown), [normalizedMarkdown]);
+  const outputSegments = useMemo(
+    () => structuredOutput ? parseOutputSegments(normalizedMarkdown) : null,
+    [normalizedMarkdown, structuredOutput],
+  );
   const [mathPlugins, setMathPlugins] = useState<MathPlugins | null>(null);
 
   useEffect(() => {
@@ -163,6 +173,78 @@ export function MarkdownBody({ children, className, isStreaming, allowSafeHtml =
     [allowSafeHtml, mathPlugins],
   );
 
+  if (outputSegments?.some((segment) => segment.type === "card")) {
+    const firstCardIndex = outputSegments.findIndex((segment) => segment.type === "card");
+    return (
+      <div className={[styles.outputStack, styles.structuredStack, className].filter(Boolean).join(" ")}>
+        {outputSegments.map((segment, index) => <div key={`output-${index}`} className={styles.outputSegment}>
+          {outputAccessory && index === firstCardIndex && outputAccessory}
+          {segment.type === "markdown" ? (
+          <MarkdownRenderer
+            markdown={segment.content}
+            isStreaming={isStreaming}
+            sourceFilePath={sourceFilePath}
+            remarkPlugins={remarkPlugins}
+            rehypePlugins={rehypePlugins}
+          />
+        ) : (
+          <StructuredOutputCard
+            kind={segment.kind}
+            title={segment.title}
+            detailsTitle={segment.detailsTitle}
+            details={segment.details ? (
+              <MarkdownRenderer
+                markdown={segment.details}
+                isStreaming={isStreaming}
+                sourceFilePath={sourceFilePath}
+                remarkPlugins={remarkPlugins}
+                rehypePlugins={rehypePlugins}
+              />
+            ) : undefined}
+          >
+            <MarkdownRenderer
+              markdown={segment.content}
+              isStreaming={isStreaming}
+              sourceFilePath={sourceFilePath}
+              remarkPlugins={remarkPlugins}
+              rehypePlugins={rehypePlugins}
+            />
+          </StructuredOutputCard>
+          )}
+        </div>)}
+      </div>
+    );
+  }
+
+  return (
+    <div className={[styles.outputStack, className].filter(Boolean).join(" ")}>
+      <MarkdownRenderer
+        markdown={normalizedMarkdown}
+        isStreaming={isStreaming}
+        sourceFilePath={sourceFilePath}
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
+      />
+      {outputAccessory}
+    </div>
+  );
+}
+
+function MarkdownRenderer({
+  markdown,
+  className,
+  isStreaming,
+  sourceFilePath,
+  remarkPlugins,
+  rehypePlugins,
+}: {
+  markdown: string;
+  className?: string;
+  isStreaming?: boolean;
+  sourceFilePath?: string;
+  remarkPlugins: PluggableList;
+  rehypePlugins: PluggableList;
+}) {
   return (
     <div className={["markdown-body", className].filter(Boolean).join(" ")}>
       <ReactMarkdown
@@ -238,7 +320,7 @@ export function MarkdownBody({ children, className, isStreaming, allowSafeHtml =
           },
         }}
       >
-        {normalizedMarkdown}
+        {markdown}
       </ReactMarkdown>
     </div>
   );

@@ -10,7 +10,7 @@ import { setIdleTitle, setRunningTitle, setDoneTitle, setErrorTitle, setExtensio
 import type { ToolEntry } from "@/components/modals/ToolPanel";
 import type { SessionData, AgentEvent, AgentPhase, UseAgentSessionOptions, ThinkingLevelOption, ChatInputHandle, AttachedImage, CompactResult } from "./use-agent-session-types";
 import { streamReducer, getRunError, computeSessionStats, isCompactionCancellation, shouldApplySessionLoad } from "./use-agent-session-types";
-import { useAgentEvents, useStallWatchdog } from "./use-agent-connection";
+import { useAgentEvents, useRunProgress } from "./use-agent-connection";
 import { useTranscriptScroll } from "./use-transcript-scroll";
 import { shouldResyncOnVisible } from "@/lib/wake-resync";
 import { useModelCatalog } from "./use-model-catalog";
@@ -116,11 +116,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const autoFallbackInFlightRef = useRef(false);
   const autoFallbackRetryRef = useRef<((model: ProviderRecoveryModel) => void) | null>(null);
 
-  const { eventSourceRef, lastEventAtRef, connectEvents } = useAgentEvents(agentRunningRef, handleAgentEventRef);
-  const { stalledSecs, setStalledSecs } = useStallWatchdog(
+  const { eventSourceRef, lastEventAtRef, connectionState, connectEvents } = useAgentEvents(agentRunningRef, handleAgentEventRef);
+  const { runProgress, resetRunProgress } = useRunProgress(
     agentRunning && extensionUIState.dialogs.length === 0,
     agentPhaseRef,
     lastEventAtRef,
+    connectionState,
   );
   const {
     initialScrollDoneRef, lastUserMsgRef, pendingScrollToUserRef,
@@ -240,7 +241,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
     if (isWebExtensionUIEvent(event)) {
       dispatchExtensionUI({ type: "event", event });
-      setStalledSecs(0);
+      resetRunProgress();
       if (event.type === "extension_ui_request") {
         if (event.method === "notify") {
           showToast(event.message, {
@@ -340,7 +341,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setAgentPhase({ kind: "waiting_model" });
         setAgentStartedAt(Date.now());
         lastEventAtRef.current = Date.now();
-        setStalledSecs(0);
+        resetRunProgress();
         setRunningTitle(sessionNameRef.current);
         dispatch({ type: "start" });
         // Reload so user messages injected mid-stream (steer, queued
@@ -362,7 +363,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // Queued follow-ups are consumed right after this event; the next
         // agent_start reload will surface them as real messages.
         setQueuedFollowUps([]);
-        setStalledSecs(0);
+        resetRunProgress();
         {
           const runError = getRunError(event);
           if (runError) {
@@ -532,7 +533,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         break;
     }
-  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionForked, onSessionNamed, lastEventAtRef, setStalledSecs, opts.chatInputRef]);
+  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef]);
   handleAgentEventRef.current = handleAgentEvent;
 
   useEffect(() => {
@@ -671,9 +672,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         : message,
       timestamp: Date.now(),
     };
+    // A page can sit idle for hours before the next prompt. Reset the progress
+    // clock at the user action, not only when agent_start eventually arrives,
+    // or a slow connection can inherit the previous run's stale idle time.
+    lastEventAtRef.current = Date.now();
+    resetRunProgress();
     setMessages((prev) => [...prev, userMsg]);
     setAgentRunning(true);
     setAgentPhase({ kind: "waiting_model" });
+    setAgentStartedAt(Date.now());
     dispatch({ type: "start" });
     pendingScrollToUserRef.current = true;
 
@@ -709,7 +716,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       dispatch({ type: "end" });
       return false;
     }
-  }, [isNew, newSessionCwd, session, agentRunning, connectEvents, createNewSession, loadSession, pendingScrollToUserRef]);
+  }, [isNew, newSessionCwd, session, agentRunning, connectEvents, createNewSession, loadSession, lastEventAtRef, pendingScrollToUserRef, resetRunProgress]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -1085,6 +1092,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (agentState.state?.isStreaming) {
             setAgentRunning(true);
             setAgentPhase({ kind: "waiting_model" });
+            setAgentStartedAt(Date.now());
+            lastEventAtRef.current = Date.now();
+            resetRunProgress();
             connectEvents(session.id);
           }
         }
@@ -1121,6 +1131,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       if (agentState?.running && agentState.state?.isStreaming) {
         setAgentRunning(true);
+        if (!agentStartedAt) setAgentStartedAt(Date.now());
+        lastEventAtRef.current = Date.now();
+        resetRunProgress();
         void connectEvents(sid);
       } else if (agentRunningRef.current && !agentState?.running) {
         // The run finished while we were away — the "end" event was lost, so
@@ -1130,7 +1143,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         dispatch({ type: "end" });
       }
     });
-  }, [loadSession, connectEvents]);
+  }, [agentStartedAt, connectEvents, lastEventAtRef, loadSession, resetRunProgress]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -1172,7 +1185,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, currentModel, displayModel, sessionStats,
-    agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, stalledSecs, extensionUIState,
+    agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,
     isNew,
     // Refs
     sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,

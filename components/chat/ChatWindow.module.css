@@ -309,6 +309,50 @@
 
 .runStatus {
   min-height: var(--control-md);
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-ui);
+}
+
+.runStatusVisual {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+}
+
+.runStatusIcon {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+}
+
+.runStatus[data-progress-state="normal"] .runStatusIcon { color: var(--accent); }
+.runStatus[data-progress-state="stalled"] .runStatusIcon,
+.runStatus[data-progress-state="reconnecting"] .runStatusIcon { color: var(--color-warning-text); }
+
+.runStatusMessage {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.runStatusElapsed {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.runStatusSpin { animation: run-status-spin 1.1s linear infinite; }
+
+@keyframes run-status-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runStatusSpin { animation: none; }
 }
 
 /* A blocking extension dialog hides the normal composer without unmounting

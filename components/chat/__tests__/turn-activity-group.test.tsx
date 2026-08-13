@@ -53,4 +53,21 @@ describe("TurnActivityGroup", () => {
     expect(host.style.overflowAnchor).toBe("");
     expect(host.textContent).toContain("Long activity");
   });
+
+  it("keeps successful work quiet and reserves outcome emphasis for attention", async () => {
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+
+    await act(async () => root?.render(
+      <TurnActivityGroup steps={2} tools={1} filesChanged={0} failed={0} elapsed={3}>
+        <div>Successful activity</div>
+      </TurnActivityGroup>,
+    ));
+
+    expect(host.textContent).toContain("Work log");
+    expect(host.textContent).toContain("1 tool");
+    expect(host.textContent).not.toContain("Completed");
+    expect(host.querySelector("button")?.getAttribute("aria-label")).toContain("Completed");
+  });
 });

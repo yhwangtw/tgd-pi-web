@@ -226,6 +226,14 @@ const MESSAGES = {
   "input.sound": { en: "Sound", zh: "提示音" },
   "input.contextControl": { en: "Context", zh: "Context" },
 
+  // ── Structured output ──
+  "output.result": { en: "Result", zh: "結果" },
+  "output.info": { en: "Info", zh: "資訊" },
+  "output.warning": { en: "Attention", zh: "注意" },
+  "output.error": { en: "Failed", zh: "失敗" },
+  "output.technicalDetails": { en: "Technical details", zh: "技術細節" },
+  "output.detailsHint": { en: "Collapsed · open for commands and logs", zh: "已折疊，展開查看指令與日誌" },
+
   // ── Extensions panel ──
   "extensions.title": { en: "Extensions", zh: "擴充功能" },
   "extensions.loaded": { en: "Loaded", zh: "已載入" },
@@ -499,7 +507,10 @@ const MESSAGES = {
   "chat.waitingModel": { en: "Waiting for model…", zh: "等待模型回應…" },
   "chat.thinkingStatus": { en: "Thinking…", zh: "思考中…" },
   "chat.runningStatus": { en: "Running", zh: "正在執行" },
-  "chat.stalled": { en: "No response — the model or a tool may be stalled. Stop and retry if this persists.", zh: "暫時沒有回應，模型或工具可能停滯；若持續發生，請停止後重試。" },
+  "chat.modelStillWorking": { en: "The model is still working…", zh: "模型仍在處理…" },
+  "chat.toolStillWorking": { en: "The tool is still running…", zh: "工具仍在執行…" },
+  "chat.takingLonger": { en: "Taking longer than usual — you can keep waiting or stop the run.", zh: "回應時間比平常久；可以繼續等待或停止執行。" },
+  "chat.reconnecting": { en: "Connection interrupted — reconnecting…", zh: "連線暫時中斷，正在重新連線…" },
   "chat.copyMessage": { en: "Copy message", zh: "複製訊息" },
   "chat.modelFailed": { en: "Model call failed", zh: "模型呼叫失敗" },
   "chat.estimatedTokens": { en: "Estimated tokens while streaming", zh: "串流中的預估 Token 數" },

@@ -213,5 +213,36 @@ export function createFixtures(root: string): { cwd: string } {
     tgdLines.map((l) => JSON.stringify(l)).join("\n") + "\n",
   );
 
+  // Structured-output session — verifies Markdown-first output, work-log
+  // placement, semantic result styling, and collapsed technical evidence.
+  const outputLines = [
+    { type: "session", version: 3, id: "bbbb1111-2222-3333-4444-555566667777", timestamp: "2026-07-07T09:00:00.000Z", cwd },
+    { type: "model_change", id: "o1000001", parentId: null, provider: "anthropic", modelId: "claude-sonnet-5", timestamp: "2026-07-07T09:00:01.000Z" },
+    { type: "message", id: "o1000002", parentId: "o1000001", timestamp: "2026-07-07T09:00:05.000Z", message: { role: "user", content: "重新啟動開發伺服器並確認狀態", timestamp: 1751878805000 } },
+    { type: "message", id: "o1000003", parentId: "o1000002", timestamp: "2026-07-07T09:00:10.000Z", message: { role: "assistant", content: [
+      { type: "thinking", thinking: "Stop the stale process, start the development server, and verify its endpoint." },
+      { type: "toolCall", id: "tc_output_bash", name: "bash", arguments: { command: "npm run dev" } },
+    ], timestamp: 1751878810000 } },
+    { type: "message", id: "o1000004", parentId: "o1000003", timestamp: "2026-07-07T09:00:28.000Z", message: { role: "toolResult", toolCallId: "tc_output_bash", content: [{ type: "text", text: "Ready on http://localhost:30141" }], timestamp: 1751878828000 } },
+    { type: "message", id: "o1000005", parentId: "o1000004", timestamp: "2026-07-07T09:00:30.000Z", message: { role: "assistant", content: [{ type: "text", text: [
+      "已重新啟動開發伺服器，並確認運行正常。",
+      "",
+      "先停止並清理先前行程，釋放 30141 port，接著重新啟動開發伺服器。",
+      "目前可在 `http://localhost:30141` 正常訪問。",
+      "",
+      "> [!RESULT] 開發伺服器運行中",
+      "> - URL：`http://localhost:30141`",
+      "> - 狀態：正常運行",
+      "> - Port：30141",
+      "> [!DETAILS] 技術細節",
+      "> 執行 `npm run dev`，並確認服務回傳 HTTP 200。",
+    ].join("\n") }], usage: { input: 980, output: 160, cacheRead: 420, cacheWrite: 0, cost: { total: 0.006 } }, timestamp: 1751878830000 } },
+    { type: "session_info", id: "o1000006", parentId: "o1000005", name: "結構化輸出設計" },
+  ];
+  writeFileSync(
+    path.join(sessionsDir, "2026-07-07T09-00-00_bbbb1111-2222-3333-4444-555566667777.jsonl"),
+    outputLines.map((l) => JSON.stringify(l)).join("\n") + "\n",
+  );
+
   return { cwd };
 }

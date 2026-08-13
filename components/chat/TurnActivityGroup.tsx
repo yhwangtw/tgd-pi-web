@@ -90,9 +90,11 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
           )}
         </span>
         <span className={styles.title}>{t("chat.workLog")}</span>
-        <span className={`${styles.outcome} ${failed ? styles.outcomeError : styles.outcomeSuccess}`}>
-          {statusText}
-        </span>
+        {failed > 0 && (
+          <span className={`${styles.outcome} ${styles.outcomeError}`}>
+            {statusText}
+          </span>
+        )}
         <span className={styles.meta}>
           {tools > 0 ? <span>{tools} {toolLabel}</span> : <span>{steps} {stepLabel}</span>}
           {filesChanged > 0 && <span>{filesChanged} {fileLabel}</span>}
