@@ -106,7 +106,7 @@ test.describe("tool-call diff view", () => {
     // Tool calls are summarized per turn; expand the work log before opening
     // the individual edit/write disclosures.
     const workLog = page.locator('section[aria-label="Work log"] > button').first();
-    await expect(workLog).toContainText("Completed");
+    await expect(workLog).toHaveAttribute("aria-label", /Completed/);
     await workLog.click();
     await expect(page.getByText("Reasoning steps", { exact: true })).toBeVisible();
 
