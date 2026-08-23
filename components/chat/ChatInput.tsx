@@ -12,6 +12,7 @@ import { usePrompts } from "@/hooks/usePrompts";
 import { ModelSelector } from "./ModelSelector";
 import { ThinkingSelector } from "./ThinkingSelector";
 import { ToolPresetSelector } from "./ToolPresetSelector";
+import type { ToolCatalogEntry, ToolSelectionMode } from "@/lib/tool-selection";
 import { ScrollFollowSelector } from "./ScrollFollowSelector";
 import { useChatInputControls } from "@/hooks/useChatInputControls";
 import styles from "./ChatInput.module.css";
@@ -49,8 +50,10 @@ interface Props {
   autoCompactionEnabled?: boolean | null;
   autoCompactionUpdating?: boolean;
   onAutoCompactionChange?: (enabled: boolean) => void;
-  toolPreset?: "none" | "default" | "full";
-  onToolPresetChange?: (preset: "none" | "default" | "full") => void;
+  toolPreset?: ToolSelectionMode;
+  availableTools?: ToolCatalogEntry[];
+  customToolNames?: string[];
+  onToolPresetChange?: (preset: ToolSelectionMode, customNames?: string[]) => void;
   thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
   onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
   availableThinkingLevels?: string[] | null;
@@ -108,7 +111,7 @@ function resizeTextarea(textarea: HTMLTextAreaElement, expanded: boolean): void 
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
-  onCompact, onAbortCompaction, isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, onToolPresetChange,
+  onCompact, onAbortCompaction, isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, availableTools, customToolNames, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   ephemeral = false, onEphemeralChange,
@@ -1068,6 +1071,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <span className={styles.mobileControlLabel}>{t("input.tools")}</span>
               <ToolPresetSelector
                 toolPreset={toolPreset}
+                availableTools={availableTools}
+                customToolNames={customToolNames}
                 isStreaming={isStreaming}
                 onToolPresetChange={onToolPresetChange}
               />

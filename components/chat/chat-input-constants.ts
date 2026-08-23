@@ -1,5 +1,11 @@
-export const TOOL_PRESETS = ["off", "default", "full"] as const;
-export const TOOL_PRESET_MAP: Record<"off" | "default" | "full", "none" | "default" | "full"> = { off: "none", default: "default", full: "full" };
+export const TOOL_PRESETS = ["inherit", "off", "default", "full", "custom"] as const;
+export const TOOL_PRESET_MAP = {
+  inherit: "inherit",
+  off: "none",
+  default: "default",
+  full: "full",
+  custom: "custom",
+} as const;
 export const COMPOSITION_END_ENTER_GRACE_MS = 100;
 
 export const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"] as const;

@@ -15,6 +15,7 @@ import {
 import type { ExtensionProviderInfo } from "./extensions-info";
 import { appendPiWebOutputGuidance } from "./output-design";
 import { createPiModelRuntime } from "./pi-model-runtime";
+import { createMcpExtension } from "./mcp";
 
 interface ProviderModelLike {
   id: string;
@@ -215,6 +216,7 @@ export async function createTrackedAgentServices(cwd: string): Promise<{
     agentDir,
     modelRuntime,
     resourceLoaderOptions: {
+      extensionFactories: [createMcpExtension(cwd)],
       // Pi Web keeps Markdown as the default output and exposes one readable
       // blockquote syntax for the few outcomes worth progressive enhancement.
       appendSystemPromptOverride: appendPiWebOutputGuidance,

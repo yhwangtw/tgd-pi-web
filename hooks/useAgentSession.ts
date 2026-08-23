@@ -7,7 +7,13 @@ import { sendAgentCommand } from "@/lib/agent-client";
 import { showToast } from "@/hooks/useToast";
 import { translate } from "@/lib/i18n";
 import { setIdleTitle, setRunningTitle, setDoneTitle, setErrorTitle, setExtensionTitle, notifyDone, requestNotifyPermission } from "@/lib/attention";
-import type { ToolEntry } from "@/components/modals/ToolPanel";
+import {
+  DEFAULT_TOOL_CATALOG,
+  namesForToolSelection,
+  type ToolCatalogEntry,
+  type ToolSelectionMode,
+  type ToolSelectionState,
+} from "@/lib/tool-selection";
 import type { SessionData, AgentEvent, AgentPhase, UseAgentSessionOptions, ThinkingLevelOption, ChatInputHandle, AttachedImage, CompactResult } from "./use-agent-session-types";
 import { streamReducer, getRunError, computeSessionStats, isCompactionCancellation, shouldApplySessionLoad } from "./use-agent-session-types";
 import { useAgentEvents, useRunProgress } from "./use-agent-connection";
@@ -68,7 +74,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [entryIds, setEntryIds] = useState<string[]>([]);
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
   const [agentRunning, setAgentRunning] = useState(false);
-  const [toolPreset, setToolPreset] = useState<"none" | "default" | "full">("default");
+  const [toolPreset, setToolPreset] = useState<ToolSelectionMode>("inherit");
+  const [availableTools, setAvailableTools] = useState<ToolCatalogEntry[]>(DEFAULT_TOOL_CATALOG);
+  const [customToolNames, setCustomToolNames] = useState<string[]>([]);
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [ephemeralNewSession, setEphemeralNewSession] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
@@ -216,10 +224,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const loadTools = useCallback(async (sid: string) => {
     try {
-      const tools = await sendAgentCommand<ToolEntry[]>(sid, { type: "get_tools" });
-      if (tools) {
+      const result = await sendAgentCommand<ToolSelectionState | ToolCatalogEntry[]>(sid, { type: "get_tools" });
+      if (Array.isArray(result)) {
         const { getPresetFromTools } = await import("@/components/modals/ToolPanel");
-        setToolPresetState(getPresetFromTools(tools));
+        const inferred = getPresetFromTools(result);
+        setAvailableTools(result);
+        setToolPresetState(inferred);
+        if (inferred === "custom") setCustomToolNames(result.filter((tool) => tool.active).map((tool) => tool.name));
+      } else if (result) {
+        setAvailableTools(result.tools);
+        setToolPresetState(result.mode);
+        setCustomToolNames(result.mode === "custom" ? result.selectedNames : []);
       }
     } catch (e) {
       console.error("Failed to load tools:", e);
@@ -467,9 +482,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "tool_execution_start": {
         const id = event.toolCallId as string;
         const name = event.toolName as string;
+        const label = typeof event.toolLabel === "string"
+          ? event.toolLabel
+          : typeof (event.tool as { label?: unknown } | undefined)?.label === "string"
+            ? (event.tool as { label: string }).label
+            : undefined;
         setAgentPhase((prev) => {
           const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
-          if (!tools.some((t) => t.id === id)) tools.push({ id, name });
+          if (!tools.some((t) => t.id === id)) tools.push({ id, name, ...(label ? { label } : {}) });
           return { kind: "running_tools", tools };
         });
         break;
@@ -532,6 +552,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           }
         }
         break;
+      case "session_compact_failed": {
+        const message = typeof event.errorMessage === "string"
+          ? event.errorMessage
+          : typeof event.error === "string"
+            ? event.error
+            : translate("toast.compactFailed");
+        setIsCompacting(false);
+        setCompactError(message);
+        showToast(`${translate("toast.compactFailed")}: ${message}`, { type: "error", duration: 8000 });
+        break;
+      }
     }
   }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef]);
   handleAgentEventRef.current = handleAgentEvent;
@@ -583,8 +614,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!newSessionCwd) throw new Error("No cwd for new session");
     const selectedModel = newSessionModel;
     if (selectedModel) setPendingModel(selectedModel);
-    const { PRESET_NONE, PRESET_DEFAULT, PRESET_FULL } = await import("@/components/modals/ToolPanel");
-    const toolNames = toolPreset === "none" ? PRESET_NONE : toolPreset === "default" ? PRESET_DEFAULT : PRESET_FULL;
+    const toolNames = namesForToolSelection(toolPreset, customToolNames);
     const res = await fetch("/api/agent/new", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -592,7 +622,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         cwd: newSessionCwd,
         type: "prompt",
         message,
-        toolNames,
+        toolMode: toolPreset,
+        ...(toolNames === undefined ? {} : { toolNames }),
         ephemeral: ephemeralNewSession,
         ...(piImages?.length ? { images: piImages } : {}),
         ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.modelId } : {}),
@@ -615,7 +646,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       ephemeral: ephemeralNewSession,
     });
     return result.sessionId;
-  }, [newSessionCwd, newSessionModel, toolPreset, thinkingLevel, ephemeralNewSession, connectEvents, onSessionCreated]);
+  }, [newSessionCwd, newSessionModel, toolPreset, customToolNames, thinkingLevel, ephemeralNewSession, connectEvents, onSessionCreated]);
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]): Promise<boolean> => {
     if (!message.trim() && !images?.length) return false;
@@ -1063,18 +1094,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, []);
 
-  const handleToolPresetChange = useCallback(async (preset: "none" | "default" | "full") => {
-    const { PRESET_NONE, PRESET_DEFAULT, PRESET_FULL } = await import("@/components/modals/ToolPanel");
-    const toolNames = preset === "none" ? PRESET_NONE : preset === "default" ? PRESET_DEFAULT : PRESET_FULL;
+  const handleToolPresetChange = useCallback(async (preset: ToolSelectionMode, selectedNames: string[] = []) => {
+    const toolNames = namesForToolSelection(preset, selectedNames);
     setToolPresetState(preset);
+    if (preset === "custom") setCustomToolNames(selectedNames);
     const sid = sessionIdRef.current;
     if (!sid) return;
     try {
-      await sendAgentCommand(sid, { type: "set_tools", toolNames });
+      await sendAgentCommand(sid, { type: "set_tools", mode: preset, toolNames: toolNames ?? [] });
+      await loadTools(sid);
     } catch (e) {
       console.error("Failed to set tools:", e);
     }
-  }, [setToolPresetState]);
+  }, [loadTools, setToolPresetState]);
 
   // Load session on mount
   useEffect(() => {
@@ -1182,7 +1214,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     data, loading, error, runtimeFailure, activeLeafId, messages, entryIds, streamState,
-    agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
+    agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, availableTools, customToolNames, thinkingLevel,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, currentModel, displayModel, sessionStats,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,

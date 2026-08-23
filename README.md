@@ -35,7 +35,7 @@ Pi's terminal experience is fast and focused. This project adds the visual conte
 - Track tGD artifacts and the seven delivery phases in the same workspace.
 - Navigate long conversations with search, bookmarks, a minimap, and branches.
 - Work comfortably on phones and desktops with safe-area-aware navigation, a compact pipeline, and touch-friendly message actions.
-- Keep everything local: the app makes no external runtime requests beyond the model endpoint you configure.
+- Keep execution local-first: external traffic is limited to configured model/MCP endpoints and the optional latest-version check shown in Runtime settings.
 
 ## Who is this for?
 
@@ -170,6 +170,7 @@ The mobile layout keeps the active phase, transcript, composer, model controls, 
 - Prompt, steer, follow-up queue, retry, bash, and context compaction.
 - Direct shell mode with `!command`; use `!!command` to omit the result from model context.
 - Model and thinking-level switching during a session.
+- Tool access can inherit Pi/project defaults, use a preset, or select individual built-in, extension, and MCP tools.
 - A built-in `ask_user` tool plus Pi extension dialogs (`select`, `confirm`, `input`, and `editor`), notifications, status indicators, and text widgets; pending decisions survive reconnects.
 - Pi extension session commands (`newSession`, `fork`, and `switchSession`) use the native `AgentSessionRuntime`; the Web UI follows the replacement session and reconnects SSE to it.
 - Replacement failures restore the previous runtime, active-session conflicts are rejected before switching, and every open tab follows the same replacement. Extensions settings expose live runtime diagnostics.
@@ -179,6 +180,7 @@ The mobile layout keeps the active phase, transcript, composer, model controls, 
 - Clone the active branch into a separate session, or start an ephemeral session that intentionally leaves no JSONL after a server restart.
 - Provider errors are classified (rate limit, billing, auth, outage, network, or context) with one-click fallback and an opt-in single automatic cross-provider retry.
 - Project trust can be reviewed and changed from the Context inspector. Extension shortcuts can be invoked from the Extensions panel, while TUI-only custom messages receive a safe generic Web rendering.
+- Extensions settings include a Runtime status center and an MCP manager for trusted stdio or Streamable HTTP servers; MCP tools are bridged through Pi's supported Extension API rather than patching Pi core.
 
 ### Attention and recovery
 
@@ -310,7 +312,7 @@ See [`AGENTS.md`](./AGENTS.md) for the detailed architecture, invariants, and de
 
 ## Offline and Air-Gapped Use
 
-The browser app itself makes no external runtime requests. Fonts and UI assets are bundled. Only the configured LLM endpoint must be reachable.
+Fonts and UI assets are bundled. In an air-gapped environment, model endpoints must be reachable internally, the Runtime panel reports the public version check as unavailable, and only MCP servers you explicitly configure are contacted.
 
 - **Internal npm registry:** clone this repository or extract a GitHub Release source archive into a clean directory, configure npm for the internal registry, then run `bash setup.sh`. Use `npm ci && npm run build` only when an immutable CI-style install is required.
 - **Portable directory:** on a networked machine with the same OS and architecture, run `npm ci && npm run build`, copy the complete directory, then run `npm run start`.

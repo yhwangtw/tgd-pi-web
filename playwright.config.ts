@@ -5,6 +5,7 @@ import os from "os";
 // One deterministic fixture root shared by global-setup, the web server, and
 // the specs (via env). Regenerated on every run.
 const E2E_ROOT = process.env.E2E_ROOT ?? path.join(os.tmpdir(), "pi-web-e2e");
+const E2E_PORT = Number(process.env.E2E_PORT ?? 30177);
 process.env.E2E_ROOT = E2E_ROOT;
 process.env.E2E_PROJECT_CWD = path.join(E2E_ROOT, "demo-project");
 
@@ -20,7 +21,7 @@ export default defineConfig({
   workers: 1, // specs share one server + one session store
   reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
   use: {
-    baseURL: "http://localhost:30177",
+    baseURL: `http://localhost:${E2E_PORT}`,
     // Local containers with preinstalled browsers can point this at the
     // binary (e.g. /opt/pw-browsers/chromium); CI uses the managed download.
     launchOptions: {
@@ -28,8 +29,8 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: "npm run build && npx next start -p 30177",
-    port: 30177,
+    command: `npm run build && npx next start -p ${E2E_PORT}`,
+    port: E2E_PORT,
     timeout: 300_000,
     reuseExistingServer: false,
     env: {

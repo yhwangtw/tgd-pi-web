@@ -118,8 +118,9 @@ test("AC-4.1: dashboard groups parallel worktree runs under their repository", a
   ]);
 
   await expect(page.getByText("/tmp/repo", { exact: true })).toHaveCount(2);
-  await expect(page.getByText("main", { exact: true })).toBeVisible();
-  await expect(page.getByText("feature/dashboard", { exact: true })).toBeVisible();
+  const dashboard = page.getByTestId("agent-dashboard");
+  await expect(dashboard.getByText("main", { exact: true })).toBeVisible();
+  await expect(dashboard.getByText("feature/dashboard", { exact: true })).toBeVisible();
   await expect(page.getByText("Waiting for input", { exact: true })).toBeVisible();
   await expect(page.getByTestId("agent-run-card")).toHaveCount(2);
 });

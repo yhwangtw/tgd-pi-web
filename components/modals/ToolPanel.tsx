@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import {
+  TOOL_PRESET_DEFAULT,
+  TOOL_PRESET_FULL,
+  TOOL_PRESET_NONE,
+  inferToolSelectionMode,
+  type ToolSelectionMode,
+} from "@/lib/tool-selection";
 import styles from "./ToolPanel.module.css";
 
 export interface ToolEntry {
@@ -9,17 +16,13 @@ export interface ToolEntry {
   active: boolean;
 }
 
-export type ToolPreset = "none" | "default" | "full";
-export const PRESET_NONE: string[] = [];
-export const PRESET_DEFAULT: string[] = ["read", "bash", "edit", "write", "ask_user"];
-export const PRESET_FULL: string[] = ["bash", "read", "edit", "write", "grep", "find", "ls", "ask_user"];
+export type ToolPreset = ToolSelectionMode;
+export const PRESET_NONE: string[] = TOOL_PRESET_NONE;
+export const PRESET_DEFAULT: string[] = [...TOOL_PRESET_DEFAULT];
+export const PRESET_FULL: string[] = [...TOOL_PRESET_FULL];
 
 export function getPresetFromTools(tools: ToolEntry[]): ToolPreset {
-  const active = tools.filter(t => t.active).map(t => t.name).sort().join(",");
-  if (active === "") return "none";
-  if (active === [...PRESET_DEFAULT].sort().join(",")) return "default";
-  if (active === [...PRESET_FULL].sort().join(",")) return "full";
-  return "default"; // closest match
+  return inferToolSelectionMode(tools.filter((tool) => tool.active).map((tool) => tool.name));
 }
 
 interface Props {
@@ -28,7 +31,7 @@ interface Props {
   onClose: () => void;
 }
 
-const PRESETS: { id: ToolPreset; label: string; desc: string; tools: string[] }[] = [
+const PRESETS: { id: Exclude<ToolPreset, "inherit" | "custom">; label: string; desc: string; tools: string[] }[] = [
   { id: "none",    label: "Off",  desc: "No tools",                                tools: PRESET_NONE },
   { id: "default", label: "Low",  desc: "read · bash · edit · write · ask",              tools: PRESET_DEFAULT },
   { id: "full",    label: "High", desc: "read · bash · edit · write · grep · find · ls · ask", tools: PRESET_FULL },

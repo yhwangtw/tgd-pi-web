@@ -6,11 +6,15 @@ All notable changes to tGD-pi-web are documented here.
 
 ### Changed
 - **Assistant message actions stay attached to message metadata.** The desktop quote, copy, and bookmark toolbar now opens beside Usage/time instead of floating at the far-right edge of the transcript; the compact mobile actions menu is unchanged.
-- **Pi runtime upgraded from 0.80.6 to 0.83.0.** Model discovery, API-key login, OAuth, logout, and active-session model selection now use Pi's canonical `ModelRuntime`; persisted credential changes restart idle sessions immediately and defer running sessions until the current run finishes.
+- **Pi runtime upgraded to the official 0.84.2 release.** Model discovery, API-key login, OAuth, logout, tool registration, usage accounting, and active-session model selection use Pi's canonical runtime; dependencies stay exactly pinned so production does not drift during install.
 - **Setup makes the Web/CLI version boundary explicit.** It reports the pinned Web runtime and installed global `pi` versions; an interactive mismatch offers an opt-in global CLI synchronization, while unattended installs only print the command and never mutate the global CLI.
 - **Next.js request interception migrated from Middleware to Proxy.** The access gate now uses the Next.js 16 `proxy.ts` convention without the production-build deprecation warning.
 
 ### Added
+- **Runtime status center.** Extensions settings now separate the Pi Web release, embedded Pi runtime, global `pi` CLI, and latest stable Pi version, with clear drift states and copyable update commands. Offline registry checks degrade to an explicit unknown state instead of blocking the app.
+- **MCP management through Pi Extensions.** Add, test, enable, edit, scope, and remove trusted local stdio or remote Streamable HTTP MCP servers. Discovered tools are namespaced, registered as normal Pi extension tools, surfaced in the tool picker, and reloaded without modifying Pi core. Sensitive HTTP headers must reference environment variables.
+- **Tool policy follows Pi by default.** New sessions inherit Pi/project `defaultTools` and extension tools. Users can still choose chat-only, standard, full, or a per-tool custom selection that includes MCP tools.
+- **Forward-compatible runtime signals.** The Web understands compaction-failure events, tool display labels/metadata, diagnostic paths, and assistant `endTurn` fields while remaining pinned to a stable Pi release.
 - **Conversation alignment is user-selectable.** Appearance settings now switch between the familiar assistant-left/user-right layout and an all-left transcript, with the choice persisted across sessions and reloads on desktop and mobile.
 - **OAuth flows have a tested browser bridge.** Browser login, device code, manual callback input, provider selection, cancellation, and prompt aborts share one typed token broker with regression tests.
 - **Remote-access protection is layered.** Access cookies are expiring HMAC tokens, an optional independent `PIWEB_SESSION_SECRET` separates cookie signing from the password, failed logins are throttled, and explicit cross-origin browser mutations are blocked.

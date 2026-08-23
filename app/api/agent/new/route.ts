@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "fs";
 import { startRpcSession } from "@/lib/rpc-manager";
+import type { ToolSelectionMode } from "@/lib/tool-selection";
 
 // POST /api/agent/new  body: { cwd: string; type: string; message: string; ... }
 // Spawns a brand-new pi session and immediately sends the first command.
@@ -18,10 +19,10 @@ export async function POST(req: Request) {
     }
 
     // Use a one-time key so startRpcSession's lock doesn't conflict with real session ids
-    const { provider, modelId, toolNames, thinkingLevel, ephemeral, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; thinkingLevel?: string; ephemeral?: boolean; [key: string]: unknown };
+    const { provider, modelId, toolNames, toolMode, thinkingLevel, ephemeral, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; toolMode?: ToolSelectionMode; thinkingLevel?: string; ephemeral?: boolean; [key: string]: unknown };
 
     const tempKey = `__new__${Date.now()}`;
-    const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames, { ephemeral: ephemeral === true });
+    const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames, { ephemeral: ephemeral === true, toolMode });
 
     // Keep the files-route allowed-roots cache (see app/api/files/[...path]/route.ts)
     // in sync so the new cwd is immediately readable via /api/files. Without this,

@@ -1,5 +1,7 @@
 "use client";
 
+import type { ToolSelectionMode } from "@/lib/tool-selection";
+
 export interface ModelOption {
   provider: string;
   modelId: string;
@@ -20,7 +22,7 @@ export type ThinkingLevel =
   | "high"
   | "xhigh";
 
-export type ToolPreset = "none" | "default" | "full";
+export type ToolPreset = ToolSelectionMode;
 
 export interface UseChatInputControlsOptions {
   model?: { provider: string; modelId: string } | null;
@@ -32,7 +34,7 @@ export interface UseChatInputControlsOptions {
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
   toolPreset?: ToolPreset;
-  onToolPresetChange?: (preset: ToolPreset) => void;
+  onToolPresetChange?: (preset: ToolPreset, customNames?: string[]) => void;
 }
 
 export interface UseChatInputControlsResult {
