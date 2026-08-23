@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/openclawyhwang-hub/tGD-pi-web.git"
+    "url": "git+https://github.com/yhwangtw/tgd-pi-web.git"
   },
-  "homepage": "https://github.com/openclawyhwang-hub/tGD-pi-web#readme",
+  "homepage": "https://github.com/yhwangtw/tgd-pi-web#readme",
   "bugs": {
-    "url": "https://github.com/openclawyhwang-hub/tGD-pi-web/issues"
+    "url": "https://github.com/yhwangtw/tgd-pi-web/issues"
   },
   "scripts": {
     "dev": "next dev -p 30141",
@@ -26,9 +26,9 @@
     "analyze": "ANALYZE=true next build --webpack"
   },
   "overrides": {
-    "nanoid": "3.3.17",
+    "nanoid": "3.3.18",
     "mermaid": {
-      "dompurify": "3.4.12"
+      "dompurify": "3.4.14"
     },
     "jsdom": {
       "undici": "7.29.0"
@@ -39,9 +39,10 @@
     }
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "0.84.1",
-    "@earendil-works/pi-coding-agent": "0.84.1",
+    "@earendil-works/pi-ai": "0.84.2",
+    "@earendil-works/pi-coding-agent": "0.84.2",
     "@lobehub/icons": "^5.6.0",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "brace-expansion": "5.0.9",
     "katex": "^0.17.0",
     "lucide-react": "^0.562.0",

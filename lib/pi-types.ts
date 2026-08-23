@@ -23,6 +23,8 @@ export interface ModelLike {
 export interface ToolInfo {
   name: string;
   description: string;
+  label?: string;
+  sourceInfo?: { kind?: string; path?: string };
 }
 
 export interface NavigateTreeResult {

@@ -6,11 +6,14 @@ import { showToast } from "@/hooks/useToast";
 import { useI18n } from "@/lib/i18n";
 import { ExtensionInventoryDetails } from "./ExtensionInventoryDetails";
 import { PackageCenter } from "./PackageCenter";
+import { RuntimeCenter } from "./RuntimeCenter";
+import { McpCenter } from "./McpCenter";
 import styles from "./ExtensionsConfig.module.css";
 
 interface Props {
   /** Session whose runner we're inspecting (extensions are per-session). */
   sessionId: string | null;
+  cwd: string | null;
   onClose: () => void;
   onReload?: () => void;
 }
@@ -23,13 +26,13 @@ const tail = (p?: string) => (p ? p.split("/").slice(-2).join("/") : "");
  * previously invisible in the web UI, live flag toggles, and a reload button
  * that uses Pi's native lifecycle to re-discover everything from disk.
  */
-export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
+export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
   const { t } = useI18n();
   const [report, setReport] = useState<ExtensionsReport | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [reloading, setReloading] = useState(false);
-  const [view, setView] = useState<"loaded" | "packages">("loaded");
+  const [view, setView] = useState<"loaded" | "packages" | "runtime" | "mcp">("loaded");
   const [shortcutBusy, setShortcutBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -142,6 +145,12 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
               <button type="button" role="tab" aria-selected={view === "packages"}
                 className={view === "packages" ? styles.viewTabActive : styles.viewTab}
                 onClick={() => setView("packages")}>{t("packages.title")}</button>
+              <button type="button" role="tab" aria-selected={view === "runtime"}
+                className={view === "runtime" ? styles.viewTabActive : styles.viewTab}
+                onClick={() => setView("runtime")}>{t("extensions.runtimeCenter")}</button>
+              <button type="button" role="tab" aria-selected={view === "mcp"}
+                className={view === "mcp" ? styles.viewTabActive : styles.viewTab}
+                onClick={() => setView("mcp")}>{t("extensions.mcp")}</button>
             </div>
           </div>
           {sessionId && <code className={styles.sessionCode}>{sessionId.slice(0, 8)}</code>}
@@ -160,6 +169,10 @@ export function ExtensionsConfig({ sessionId, onClose, onReload }: Props) {
         <div className={styles.body}>
           {view === "packages" ? (
             <PackageCenter sessionId={sessionId} />
+          ) : view === "runtime" ? (
+            <RuntimeCenter />
+          ) : view === "mcp" ? (
+            <McpCenter cwd={cwd} sessionId={sessionId} />
           ) : !sessionId ? (
             <div className={styles.stateText}>{t("extensions.noSession")}</div>
           ) : state === "loading" ? (

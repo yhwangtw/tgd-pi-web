@@ -3,30 +3,39 @@
 import React, { useState, useRef, useEffect } from "react";
 import { TOOL_PRESETS, TOOL_PRESET_MAP } from "./chat-input-constants";
 import { useI18n, type MsgKey } from "@/lib/i18n";
+import type { ToolCatalogEntry, ToolSelectionMode } from "@/lib/tool-selection";
 import styles from "./ComposerSelector.module.css";
 
 type ToolPresetLabel = typeof TOOL_PRESETS[number];
 
 const TOOL_LABEL_KEYS: Record<ToolPresetLabel, MsgKey> = {
+  inherit: "input.tools.inherit",
   off: "input.tools.off",
   default: "input.tools.default",
   full: "input.tools.full",
+  custom: "input.tools.custom",
 };
 
 const TOOL_DESC_KEYS: Record<ToolPresetLabel, MsgKey> = {
+  inherit: "input.toolsDesc.inherit",
   off: "input.toolsDesc.off",
   default: "input.toolsDesc.default",
   full: "input.toolsDesc.full",
+  custom: "input.toolsDesc.custom",
 };
 
 interface ToolPresetSelectorProps {
-  toolPreset?: "none" | "default" | "full";
+  toolPreset?: ToolSelectionMode;
+  availableTools?: ToolCatalogEntry[];
+  customToolNames?: string[];
   isStreaming: boolean;
-  onToolPresetChange?: (preset: "none" | "default" | "full") => void;
+  onToolPresetChange?: (preset: ToolSelectionMode, customNames?: string[]) => void;
 }
 
 export function ToolPresetSelector({
   toolPreset,
+  availableTools = [],
+  customToolNames = [],
   isStreaming,
   onToolPresetChange,
 }: ToolPresetSelectorProps) {
@@ -35,8 +44,8 @@ export function ToolPresetSelector({
   const ref = useRef<HTMLDivElement>(null);
   const selectedLabel = (
     Object.entries(TOOL_PRESET_MAP)
-      .find(([, value]) => value === (toolPreset ?? "default"))?.[0]
-    ?? "default"
+      .find(([, value]) => value === (toolPreset ?? "inherit"))?.[0]
+    ?? "inherit"
   ) as ToolPresetLabel;
 
   // Close on outside click
@@ -76,10 +85,10 @@ export function ToolPresetSelector({
         <span>{t(TOOL_LABEL_KEYS[selectedLabel])}</span>
       </button>
       {open && (
-        <div className={`${styles.panel} ${styles.panelAbsolute}`} role="listbox" aria-label={t("input.toolsTitle")}>
+        <div className={`${styles.panel} ${styles.panelAbsolute} ${styles.toolPanel}`} role="listbox" aria-label={t("input.toolsTitle")}>
           {TOOL_PRESETS.map((lvl) => {
             const preset = TOOL_PRESET_MAP[lvl];
-            const isActive = (toolPreset ?? "default") === preset;
+            const isActive = (toolPreset ?? "inherit") === preset;
             const desc = t(TOOL_DESC_KEYS[lvl]);
             return (
               <button
@@ -87,7 +96,14 @@ export function ToolPresetSelector({
                 type="button"
                 role="option"
                 aria-selected={isActive}
-                onClick={() => { setOpen(false); if (!isActive) onToolPresetChange(preset); }}
+                onClick={() => {
+                  if (preset === "custom") {
+                    if (!isActive) onToolPresetChange("custom", customToolNames);
+                    return;
+                  }
+                  setOpen(false);
+                  if (!isActive) onToolPresetChange(preset);
+                }}
                 className={`${styles.option} ${isActive ? styles.optionActive : ""}`}
               >
                 {isActive
@@ -98,6 +114,31 @@ export function ToolPresetSelector({
               </button>
             );
           })}
+          {(toolPreset ?? "inherit") === "custom" && availableTools.length > 0 && (
+            <div className={styles.toolChecklist} aria-label={t("input.tools.customList")}>
+              {availableTools.map((tool) => {
+                const checked = customToolNames.includes(tool.name);
+                return (
+                  <label key={tool.name} className={styles.toolCheckRow}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = checked
+                          ? customToolNames.filter((name) => name !== tool.name)
+                          : [...customToolNames, tool.name];
+                        onToolPresetChange("custom", next);
+                      }}
+                    />
+                    <span className={styles.toolCheckCopy}>
+                      <span className={styles.optionLabel}>{tool.label ?? tool.name}</span>
+                      <span className={styles.description}>{tool.description}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

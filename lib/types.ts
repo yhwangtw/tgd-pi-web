@@ -58,6 +58,8 @@ export interface AssistantMessage {
   provider: string;
   stopReason?: string;
   errorMessage?: string;
+  /** Some providers mark a response as the terminal turn without a separate stop reason. */
+  endTurn?: boolean;
   timestamp?: number;
   usage?: {
     input: number;

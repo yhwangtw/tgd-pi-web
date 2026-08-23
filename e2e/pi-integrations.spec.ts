@@ -46,4 +46,26 @@ test.describe("Pi integration centers", () => {
     await inspector.getByRole("tab", { name: /Instructions/ }).click();
     await expect(inspector.getByText("Effective system prompt", { exact: true })).toBeVisible();
   });
+
+  test("runtime and MCP centers separate versions and expose a responsive connection form", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openMain(page);
+    await page.getByRole("button", { name: "More", exact: true }).click();
+    await page.getByRole("button", { name: "Extensions", exact: true }).click();
+    const dialog = page.getByTestId("extensions-config");
+
+    await dialog.getByRole("tab", { name: "Runtime", exact: true }).click();
+    await expect(dialog.getByRole("heading", { name: "Pi versions in one place" })).toBeVisible({ timeout: 20_000 });
+    await expect(dialog.getByText("Pi Web", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Embedded Pi runtime", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Global Pi CLI", { exact: true })).toBeVisible();
+
+    await dialog.getByRole("tab", { name: "MCP", exact: true }).click();
+    await expect(dialog.getByRole("heading", { name: "MCP connections" })).toBeVisible();
+    await dialog.getByRole("button", { name: "Add server" }).click();
+    await expect(dialog.getByText("New MCP server", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Command", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Arguments (one per line)", { exact: true })).toBeVisible();
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  });
 });

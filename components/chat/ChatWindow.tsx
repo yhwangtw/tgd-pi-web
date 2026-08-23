@@ -196,7 +196,7 @@ function activityText(messages: import("@/lib/types").AssistantMessage[], toolRe
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange, onSessionNamed, isParallel, paneLabel, onClosePane, wideChat, onOpenModels }: Props) {
   const {
     loading, error, runtimeFailure, messages, entryIds, streamState,
-    agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
+    agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, availableTools, customToolNames, thinkingLevel,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,
@@ -937,6 +937,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       autoCompactionUpdating={autoCompactionUpdating}
       onAutoCompactionChange={session ? handleAutoCompactionChange : undefined}
       toolPreset={toolPreset}
+      availableTools={availableTools}
+      customToolNames={customToolNames}
       onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
       thinkingLevel={thinkingLevel}
       onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}

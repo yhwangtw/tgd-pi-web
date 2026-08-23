@@ -35,7 +35,7 @@ Die Terminal-Oberfläche von Pi ist schnell und fokussiert. Dieses Projekt ergä
 - tGD-Artefakte und alle sieben Auslieferungsphasen im selben Arbeitsbereich verfolgen.
 - Lange Gespräche mit Suche, Lesezeichen, Minimap und Branches navigieren.
 - Auf Smartphone und Desktop komfortabel arbeiten – mit Safe-Area-Navigation, kompakter Pipeline und touch-freundlichen Nachrichtenaktionen.
-- Local-first: Zur Laufzeit sendet die Anwendung keine externen Anfragen außer an den von dir konfigurierten Modell-Endpunkt.
+- Local-first: Externer Datenverkehr ist auf konfigurierte Modell-/MCP-Endpunkte und die optionale Versionsprüfung in den Runtime-Einstellungen begrenzt.
 
 ## Für wen ist das gedacht?
 
@@ -289,7 +289,7 @@ Ausführliche Architektur, Invarianten und Entwicklungsfallen stehen in [`AGENTS
 
 ## Offline- und Air-Gapped-Betrieb
 
-Die Browser-Anwendung stellt zur Laufzeit keine externen Anfragen. Schriften und UI-Assets sind enthalten. Nur der konfigurierte LLM-Endpunkt muss erreichbar sein.
+Schriften und UI-Assets sind enthalten. In einer Air-Gap-Umgebung wird die öffentliche Versionsprüfung als nicht verfügbar angezeigt; kontaktiert werden nur ausdrücklich konfigurierte interne Modell-/MCP-Endpunkte.
 
 - **Interne npm registry:** Repository klonen oder ein Quellarchiv aus einem GitHub Release verwenden, npm für die interne Registry konfigurieren und `npm ci && npm run build` ausführen.
 - **Portables Verzeichnis:** auf einem vernetzten System mit gleichem Betriebssystem und gleicher Architektur `npm ci && npm run build` ausführen, das gesamte Verzeichnis kopieren und anschließend `npm run start` starten.

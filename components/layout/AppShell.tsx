@@ -1332,6 +1332,7 @@ export function AppShell() {
     {extensionsConfigOpen && (
       <Suspense fallback={null}><ExtensionsConfig
         sessionId={state.selectedSession?.id ?? null}
+        cwd={panelCwd}
         onClose={() => setExtensionsConfigOpen(false)}
         onReload={() => setModelsRefreshKey((key) => key + 1)}
       /></Suspense>

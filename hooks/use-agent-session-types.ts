@@ -1,6 +1,7 @@
 "use client";
 
 import type { AgentMessage, SessionInfo, SessionTreeNode } from "@/lib/types";
+import type { ToolSelectionMode } from "@/lib/tool-selection";
 
 export interface SessionData {
   sessionId: string;
@@ -70,7 +71,7 @@ export function getRunError(event: AgentEvent): string | null {
 
 export type AgentPhase =
   | { kind: "waiting_model"; tools?: undefined }
-  | { kind: "running_tools"; tools: { id: string; name: string }[] }
+  | { kind: "running_tools"; tools: { id: string; name: string; label?: string }[] }
   | null;
 
 export interface RunProgressState {
@@ -130,7 +131,7 @@ export interface UseAgentSessionOptions {
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
   onSystemPromptChange?: (prompt: string | null) => void;
   setNewSessionModel?: (model: { provider: string; modelId: string } | null) => void;
-  setToolPreset?: (preset: "none" | "default" | "full") => void;
+  setToolPreset?: (preset: ToolSelectionMode) => void;
   onSessionNamed?: () => void;
 }
 

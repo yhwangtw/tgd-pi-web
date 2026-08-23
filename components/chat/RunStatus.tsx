@@ -9,7 +9,7 @@ import styles from "./ChatWindow.module.css";
 export function phaseLabel(phase: AgentPhase, translate?: (key: MsgKey) => string): string {
   if (!translate) {
     if (phase?.kind === "running_tools") {
-      const names = phase.tools.map((tool) => tool.name);
+      const names = phase.tools.map((tool) => tool.label ?? tool.name);
       if (names.length === 0) return "Running tool...";
       if (names.length === 1) return `Running ${names[0]}...`;
       if (names.length <= 3) return `Running ${names.join(", ")}...`;
@@ -19,7 +19,7 @@ export function phaseLabel(phase: AgentPhase, translate?: (key: MsgKey) => strin
     return "Thinking...";
   }
   if (phase?.kind === "running_tools") {
-    const names = phase.tools.map((tool) => tool.name);
+    const names = phase.tools.map((tool) => tool.label ?? tool.name);
     const running = translate("chat.runningStatus");
     if (names.length === 0) return `${running} tool…`;
     if (names.length === 1) return `${running} ${names[0]}…`;

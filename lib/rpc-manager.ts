@@ -14,7 +14,12 @@ import type { AgentSessionLike, ToolInfo } from "./pi-types";
 import { bindWebExtensions, createTrackedAgentServices, emitWebBeforeFork, type ExtensionProviderTracker } from "./pi-runtime";
 import type { ExtensionDiagnosticInfo, ExtensionProviderInfo } from "./extensions-info";
 import {
-  ASK_USER_TOOL_NAME,
+  inferToolSelectionMode,
+  namesForToolSelection,
+  type ToolSelectionMode,
+  type ToolSelectionState,
+} from "./tool-selection";
+import {
   WebExtensionUIBridge,
   createAskUserTool,
   withAskUserTool,
@@ -38,7 +43,7 @@ interface RuntimeSessionMetadata {
   providerTracker: ExtensionProviderTracker;
   modelRegistry: ModelRegistry;
   refreshModelCatalog: () => Promise<void>;
-  diagnostics: Array<{ type: string; message: string }>;
+  diagnostics: Array<{ type: string; message: string; path?: string }>;
 }
 
 type RuntimeSessionMetadataResolver = (session: AgentSessionLike) => RuntimeSessionMetadata | undefined;
@@ -132,11 +137,12 @@ export class AgentSessionWrapper {
     inner: AgentSessionLike,
     cwd: string = "",
     providerTracker?: ExtensionProviderTracker,
-    initialDiagnostics: Array<{ type: string; message: string }> = [],
+    initialDiagnostics: Array<{ type: string; message: string; path?: string }> = [],
     refreshModelCatalog?: () => Promise<void>,
     private readonly webExtensionUI?: WebExtensionUIBridge,
     modelRegistry?: ModelRegistry,
-    private readonly onActiveToolsChanged?: (toolNames: string[]) => void,
+    private readonly getToolSelection?: () => { mode: ToolSelectionMode; selectedNames: string[] },
+    private readonly onActiveToolsChanged?: (mode: ToolSelectionMode, toolNames: string[] | undefined) => void,
   ) {
     this.currentInner = inner;
     this.currentCwd = cwd;
@@ -154,12 +160,12 @@ export class AgentSessionWrapper {
   }
 
   private normalizeDiagnostics(
-    diagnostics: Array<{ type: string; message: string }>,
+    diagnostics: Array<{ type: string; message: string; path?: string }>,
   ): ExtensionDiagnosticInfo[] {
     return diagnostics.map((diagnostic) => ({
       type: diagnostic.type === "info" || diagnostic.type === "warning" ? diagnostic.type : "error",
       message: diagnostic.message,
-      path: diagnostic.message.match(/Extension "([^"]+)"/)?.[1],
+      path: diagnostic.path ?? diagnostic.message.match(/Extension "([^"]+)"/)?.[1],
     }));
   }
 
@@ -682,18 +688,42 @@ export class AgentSessionWrapper {
       case "get_tools": {
         const all: ToolInfo[] = this.inner.getAllTools();
         const active = new Set<string>(this.inner.getActiveToolNames());
-        return all.map((t) => ({
-          name: t.name,
-          description: t.description,
-          active: active.has(t.name),
-        }));
+        const selection = this.getToolSelection?.() ?? {
+          mode: inferToolSelectionMode([...active]),
+          selectedNames: [...active],
+        };
+        return {
+          mode: selection.mode,
+          selectedNames: selection.selectedNames,
+          tools: all.map((t) => ({
+            name: t.name,
+            label: t.label,
+            description: t.description,
+            active: active.has(t.name),
+            source: t.name.startsWith("mcp_") ? "mcp" : t.sourceInfo ? "extension" : undefined,
+          })),
+        } satisfies ToolSelectionState;
       }
 
       case "set_tools": {
-        const toolNames = withAskUserTool(command.toolNames as string[]);
+        const requestedMode = command.mode as ToolSelectionMode | undefined;
+        const mode = requestedMode ?? inferToolSelectionMode(command.toolNames as string[] | undefined);
+        const requestedNames = namesForToolSelection(mode, command.toolNames as string[] | undefined);
+        let toolNames: string[];
+        if (mode === "inherit") {
+          const configured = this.inner.settingsManager.getDefaultTools?.();
+          const configuredNames = Array.isArray(configured) ? configured : ["read", "bash", "edit", "write"];
+          const builtins = new Set(["read", "bash", "edit", "write", "grep", "find", "ls"]);
+          const extensionNames = this.inner.getAllTools().map((tool) => tool.name).filter((name) => !builtins.has(name));
+          toolNames = [...new Set([...configuredNames, ...extensionNames])];
+        } else {
+          toolNames = mode === "custom" && requestedMode === "custom"
+            ? [...new Set(requestedNames ?? [])]
+            : withAskUserTool(requestedNames ?? []);
+        }
         this.inner.setActiveToolsByName(toolNames);
-        this.onActiveToolsChanged?.(toolNames);
-        return null;
+        this.onActiveToolsChanged?.(mode, mode === "inherit" ? undefined : toolNames);
+        return { mode, selectedNames: mode === "inherit" ? [] : toolNames };
       }
 
       case "set_project_trust": {
@@ -875,7 +905,7 @@ export async function startRpcSession(
   sessionFile: string,
   cwd: string,
   toolNames?: string[],
-  options: { ephemeral?: boolean } = {},
+  options: { ephemeral?: boolean; toolMode?: ToolSelectionMode } = {},
 ): Promise<{ session: AgentSessionWrapper; realSessionId: string }> {
   const registry = getRegistry();
   const locks = getLocks();
@@ -893,11 +923,12 @@ export async function startRpcSession(
       ? SessionManager.open(sessionFile, undefined)
       : SessionManager.create(cwd, undefined);
 
-    // Determine which tools to pass based on requested toolNames.
-    // Since v0.68.0, createAgentSession expects string[] tool names instead of Tool[] instances.
-    // Pass all built-in coding tool names by default; for "all off", pass empty array.
-    const allCodingToolNames = ["read", "bash", "edit", "write", "grep", "find", "ls"];
-    let selectedToolNames = toolNames === undefined ? undefined : withAskUserTool(toolNames);
+    let toolSelectionMode = options.toolMode ?? inferToolSelectionMode(toolNames);
+    let selectedToolNames = toolNames === undefined
+      ? undefined
+      : toolSelectionMode === "custom" && options.toolMode === "custom"
+        ? [...new Set(toolNames)]
+        : withAskUserTool(toolNames);
     const webExtensionUI = new WebExtensionUIBridge({ acceptDialogs: false });
     const metadataBySession = new WeakMap<object, RuntimeSessionMetadata>();
     const createRuntime: CreateAgentSessionRuntimeFactory = async ({
@@ -906,28 +937,18 @@ export async function startRpcSession(
       sessionStartEvent,
     }) => {
       const tracked = await createTrackedAgentServices(runtimeCwd);
-      let toolsOption: string[] | undefined;
-      if (selectedToolNames !== undefined) {
-        toolsOption = selectedToolNames.length === 0 ? [] : [...allCodingToolNames, ASK_USER_TOOL_NAME];
-      }
       const result = await createAgentSessionFromServices({
         services: tracked.services,
         sessionManager: runtimeSessionManager,
         sessionStartEvent,
         customTools: [createAskUserTool(webExtensionUI)],
-        ...(toolsOption !== undefined ? { tools: toolsOption } : {}),
       });
 
-      // If specific tool names were requested (non-empty), narrow active tools now.
-      if (selectedToolNames && selectedToolNames.length > 0) {
+      // Explicit selections narrow the active set after all built-in and extension
+      // tools have registered. Undefined preserves Pi's official defaultTools plus
+      // extension-provided tools.
+      if (selectedToolNames !== undefined) {
         result.session.setActiveToolsByName(selectedToolNames);
-      }
-
-      // When all tools are disabled, clear the system prompt entirely.
-      // pi's buildSystemPrompt always produces a non-empty prompt even with no tools;
-      // the only way to truly clear it is to call agent.setSystemPrompt directly.
-      if (selectedToolNames?.length === 0) {
-        result.session.agent.state.systemPrompt = "";
       }
 
       metadataBySession.set(result.session, {
@@ -959,7 +980,11 @@ export async function startRpcSession(
       initialMetadata.refreshModelCatalog,
       webExtensionUI,
       initialMetadata.modelRegistry,
-      (nextToolNames) => { selectedToolNames = [...nextToolNames]; },
+      () => ({ mode: toolSelectionMode, selectedNames: selectedToolNames ? [...selectedToolNames] : [] }),
+      (nextMode, nextToolNames) => {
+        toolSelectionMode = nextMode;
+        selectedToolNames = nextToolNames ? [...nextToolNames] : undefined;
+      },
     );
     const runtimeMetadata = (session: AgentSessionLike) => metadataBySession.get(session as unknown as object);
     const onSessionReplaced: SessionReplacementListener = (activeWrapper, previousSessionId, nextSessionId) => {

@@ -68,6 +68,50 @@
   bottom: calc(100% + var(--space-1-5));
 }
 
+.toolPanel {
+  width: min(360px, calc(100vw - var(--space-4)));
+  max-height: min(520px, 70vh);
+}
+
+.toolChecklist {
+  padding: var(--space-1-5);
+  border-top: 1px solid var(--border);
+}
+
+.toolCheckRow {
+  display: flex;
+  min-height: var(--control-lg);
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-row);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.toolCheckRow:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.toolCheckRow input {
+  margin-top: var(--space-1);
+  accent-color: var(--accent);
+}
+
+.toolCheckCopy {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-0-5);
+}
+
+.toolCheckCopy .description {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .panelFixed {
   position: fixed;
 }
