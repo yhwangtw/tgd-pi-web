@@ -1,7 +1,7 @@
 {
   "name": "tgd-pi-web",
   "private": true,
-  "version": "2026.08.13",
+  "version": "2026.08.23",
   "description": "Web interface for Pi Coding Agent with tGD workflow integration",
   "license": "MIT",
   "repository": {
