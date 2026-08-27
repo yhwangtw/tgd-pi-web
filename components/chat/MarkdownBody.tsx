@@ -510,6 +510,10 @@ function CodeBlock({ code, lang, headerAction, plain }: { code: string; lang: st
           padding: "10px 12px",
           fontSize: "var(--text-md)",
           lineHeight: "var(--leading-relaxed)",
+          // Syntax themes ship their own platform font stacks on the outer
+          // <pre>. Pin the semantic token here as well as on <code> so theme
+          // changes cannot replace the bundled JetBrains Mono face.
+          fontFamily: "var(--font-mono)",
           borderRadius: 0,
           // Both forms: the highlighter themes mix `background` (vscDarkPlus)
           // and `backgroundColor` (vs); pinning both keeps the merged style

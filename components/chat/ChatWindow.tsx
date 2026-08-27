@@ -13,7 +13,7 @@ import { CompactionSummary, getCompactionSummary } from "./CompactionSummary";
 import { pickTurnTarget } from "./turn-nav";
 import { useScrollFollowMode } from "@/lib/prefs";
 import { useAgentSession } from "@/hooks/useAgentSession";
-import { preservedRunSpacerHeight } from "@/hooks/use-transcript-scroll";
+import { isTranscriptTailOutOfView, preservedRunSpacerHeight } from "@/hooks/use-transcript-scroll";
 import { getRunError } from "@/hooks/use-agent-session-types";
 import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
@@ -587,6 +587,15 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const [newLines, setNewLines] = useState(0);
   const newBaselineRef = useRef(0);
   const userPausedSmartFollowRef = useRef(false);
+  const updateJumpVisibility = useCallback(() => {
+    const container = scrollContainerRef.current;
+    const end = messagesEndRef.current;
+    if (!container || !end) return;
+    setShowJumpToBottom(isTranscriptTailOutOfView(
+      end.getBoundingClientRect().top,
+      container.getBoundingClientRect().bottom,
+    ));
+  }, [messagesEndRef, scrollContainerRef]);
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -611,8 +620,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       if (["ArrowUp", "PageUp", "Home"].includes(event.key)) pauseFollow();
     };
     const onScroll = () => {
-      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-      setShowJumpToBottom(dist > 300);
+      updateJumpVisibility();
       const end = messagesEndRef.current;
       if (end) {
         const containerBottom = el.getBoundingClientRect().bottom;
@@ -649,7 +657,14 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("keydown", onKeyDown);
     };
-  }, [scrollContainerRef, messagesEndRef, messages.length, scrollFollowMode]);
+  }, [scrollContainerRef, messagesEndRef, messages.length, scrollFollowMode, updateJumpVisibility]);
+
+  // A paused stream grows without firing a scroll event. Re-evaluate the real
+  // tail after content/spacer layout changes so Latest appears only when it is
+  // useful, and never merely because the run spacer mounted.
+  useLayoutEffect(() => {
+    updateJumpVisibility();
+  }, [agentRunning, messages, spacerHeight, streamState.streamingMessage, updateJumpVisibility]);
 
   // Follow policy at run start. Smart mode starts engaged so the reply is
   // visible without manual work, but the user's upward scroll disengages it.
@@ -1370,7 +1385,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 the spacer's blank space instead of on the streaming text. */}
             <div ref={messagesEndRef} />
 
-            {spacerHeight !== null && (
+            {(agentRunning || spacerHeight !== null) && (
               <div style={{ height: spacerHeight ?? "80vh" }} />
             )}
           </div>

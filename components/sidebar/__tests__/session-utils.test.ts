@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSessionTree, getSessionDisplayTitle } from "../session-utils";
+import { buildSessionTree, getSessionDisplayTitle, getSessionProjectName } from "../session-utils";
 import type { SessionInfo } from "@/lib/types";
 
 const s = (id: string, over: Partial<SessionInfo> = {}): SessionInfo => ({
@@ -63,5 +63,12 @@ describe("getSessionDisplayTitle", () => {
 
   it("truncates long titles with an ellipsis", () => {
     expect(getSessionDisplayTitle(s("x", { firstMessage: "123456789" }), 6)).toBe("12345…");
+  });
+});
+
+describe("getSessionProjectName", () => {
+  it("uses the final directory for Unix and Windows session paths", () => {
+    expect(getSessionProjectName("/Users/elon/dev/tGD-pi-web")).toBe("tGD-pi-web");
+    expect(getSessionProjectName("C:\\Users\\elon\\demo-project")).toBe("demo-project");
   });
 });
