@@ -434,6 +434,7 @@ const MESSAGES = {
 
   // ── Attention center ──
   "attention.title": { en: "Attention", zh: "待處理" },
+  "attention.actions": { en: "Attention actions", zh: "待處理操作" },
   "attention.unread": { en: "unread", zh: "則未讀" },
   "attention.unreadItem": { en: "Unread", zh: "未讀" },
   "attention.caughtUp": { en: "You're caught up", zh: "已全部處理" },
