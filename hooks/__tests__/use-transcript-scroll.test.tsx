@@ -3,7 +3,11 @@
 import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { preservedRunSpacerHeight, useTranscriptScroll } from "../use-transcript-scroll";
+import {
+  isTranscriptTailOutOfView,
+  preservedRunSpacerHeight,
+  useTranscriptScroll,
+} from "../use-transcript-scroll";
 import { resetScrollFollowModeCache } from "@/lib/prefs";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -93,6 +97,12 @@ describe("useTranscriptScroll", () => {
   it("keeps only the filler required to prevent end-of-run scroll clamping", () => {
     expect(preservedRunSpacerHeight(1_000, 800, 2_080, 800)).toBe(520);
     expect(preservedRunSpacerHeight(400, 800, 2_080, 800)).toBe(0);
+  });
+
+  it("shows Latest from the real message tail instead of the run spacer", () => {
+    expect(isTranscriptTailOutOfView(480, 500)).toBe(false);
+    expect(isTranscriptTailOutOfView(596, 500)).toBe(false);
+    expect(isTranscriptTailOutOfView(597, 500)).toBe(true);
   });
 
   it("anchors a sent message immediately so a fast reply cannot outrun it", async () => {

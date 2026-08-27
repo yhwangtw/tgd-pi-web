@@ -44,6 +44,13 @@ export function shortenCwd(cwd: string, homeDir?: string): string {
   return "…/" + parts.slice(-2).join(sep);
 }
 
+/** Human-readable project identity for a session row in the cross-project list. */
+export function getSessionProjectName(cwd: string): string {
+  if (!cwd) return "Unknown project";
+  const parts = cwd.split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) ?? cwd;
+}
+
 export function getSessionDateGroup(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();

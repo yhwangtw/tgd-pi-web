@@ -244,5 +244,22 @@ export function createFixtures(root: string): { cwd: string } {
     outputLines.map((l) => JSON.stringify(l)).join("\n") + "\n",
   );
 
+  // A second project proves the Sessions panel is conversation-first: its
+  // history is discoverable without switching the active cwd first.
+  const archiveCwd = path.join(root, "archive-project");
+  mkdirSync(archiveCwd, { recursive: true });
+  const archiveSessionsDir = path.join(root, "agent", "sessions", "-archive");
+  mkdirSync(archiveSessionsDir, { recursive: true });
+  const archiveLines = [
+    { type: "session", version: 3, id: "cccc2222-3333-4444-5555-666677778888", timestamp: "2026-06-01T09:00:00.000Z", cwd: archiveCwd },
+    { type: "message", id: "h1000001", parentId: null, timestamp: "2026-06-01T09:00:05.000Z", message: { role: "user", content: "整理舊版 billing migration 的決策與風險", timestamp: 1748768405000 } },
+    { type: "message", id: "h1000002", parentId: "h1000001", timestamp: "2026-06-01T09:00:20.000Z", message: { role: "assistant", content: [{ type: "text", text: "已整理帳務遷移的相容性風險與 rollback 步驟。" }], timestamp: 1748768420000 } },
+    { type: "session_info", id: "h1000003", parentId: "h1000002", name: "跨專案歷史對話" },
+  ];
+  writeFileSync(
+    path.join(archiveSessionsDir, "2026-06-01T09-00-00_cccc2222-3333-4444-5555-666677778888.jsonl"),
+    archiveLines.map((line) => JSON.stringify(line)).join("\n") + "\n",
+  );
+
   return { cwd };
 }

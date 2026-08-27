@@ -18,6 +18,58 @@ async function openFiles(page: Page) {
 }
 
 test.describe("left rail", () => {
+  test("finds conversations across projects without switching folders first", async ({ page }) => {
+    await openMain(page);
+
+    const sessionList = page.getByRole("listbox", { name: "Sessions" });
+    const scope = page.getByRole("group", { name: "Conversation scope" });
+    const search = page.getByRole("textbox", { name: "Search conversations" });
+
+    await expect(scope.getByRole("button", { name: "All", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(sessionList.getByText("跨專案歷史對話", { exact: true })).toBeVisible();
+    await expect(sessionList.getByText("archive-project", { exact: true })).toBeVisible();
+
+    await search.fill("billing migration");
+    await expect(sessionList.getByText("跨專案歷史對話", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    await scope.getByRole("button", { name: "This project", exact: true }).click();
+    await expect(scope.getByRole("button", { name: "This project", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(sessionList.getByText("跨專案歷史對話", { exact: true })).toHaveCount(0);
+  });
+
+  test("keeps conversation discovery usable on a phone viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openMain(page);
+    await page.locator("nav[class*='mobileNav']").getByRole("button", { name: "Sessions", exact: true }).click();
+
+    const search = page.getByRole("textbox", { name: "Search conversations" });
+    const allScope = page.getByRole("button", { name: "All", exact: true });
+    const projectScope = page.getByRole("button", { name: "This project", exact: true });
+    await expect(search).toBeVisible();
+    await expect(allScope).toBeVisible();
+    await expect(projectScope).toBeVisible();
+
+    const [searchBox, allBox, projectBox] = await Promise.all([
+      search.boundingBox(),
+      allScope.boundingBox(),
+      projectScope.boundingBox(),
+    ]);
+    expect(searchBox?.height).toBeGreaterThanOrEqual(44);
+    expect(allBox?.height).toBeGreaterThanOrEqual(44);
+    expect(projectBox?.height).toBeGreaterThanOrEqual(44);
+
+    await search.fill("billing migration");
+    await expect(page.getByRole("listbox", { name: "Sessions" }).getByText("跨專案歷史對話", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    const width = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      document: document.documentElement.scrollWidth,
+      body: document.body.scrollWidth,
+    }));
+    expect(width.document).toBeLessThanOrEqual(width.viewport);
+    expect(width.body).toBeLessThanOrEqual(width.viewport);
+  });
+
   test("uses one Search entry and opens the same panel with Command-K", async ({ page }) => {
     await openMain(page);
 

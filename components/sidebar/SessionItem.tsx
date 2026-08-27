@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import type { SessionInfo } from "@/lib/types";
-import { formatRelativeTime, getSessionDisplayTitle } from "./session-utils";
+import { formatRelativeTime, getSessionDisplayTitle, getSessionProjectName } from "./session-utils";
 import { getTagStyle } from "@/lib/tag-colors";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/lib/i18n";
@@ -28,6 +28,7 @@ interface SessionItemProps {
   onOpenParallel?: (session: SessionInfo) => void;
   isArchived?: boolean;
   onArchiveToggle?: (id: string) => void;
+  showProject?: boolean;
 }
 
 export function SessionItem({
@@ -49,6 +50,7 @@ export function SessionItem({
   onOpenParallel,
   isArchived = false,
   onArchiveToggle,
+  showProject = false,
 }: SessionItemProps) {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -242,6 +244,14 @@ export function SessionItem({
 
             {/* Row 2: meta — time + msg count + first 3 tag chips */}
             <div className={styles.metaRow}>
+              {showProject && (
+                <>
+                  <span className={styles.projectChip} title={session.cwd}>
+                    {getSessionProjectName(session.cwd)}
+                  </span>
+                  <span className={styles.metaDivider}>·</span>
+                </>
+              )}
               <span className={styles.metaItem} title={session.modified}>
                 {formatRelativeTime(session.modified, locale)}
               </span>

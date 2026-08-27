@@ -170,6 +170,16 @@
   opacity: 0.5;
 }
 
+.projectChip {
+  max-width: 104px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+
 .tagChip {
   display: inline-flex;
   align-items: center;

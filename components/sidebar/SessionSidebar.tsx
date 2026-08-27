@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { SessionInfo } from "@/lib/types";
 import { FileExplorer } from "./FileExplorer";
-import { getRecentCwds, getSessionDateGroup, buildSessionTree, type SessionSortMode } from "./session-utils";
+import { getRecentCwds, getSessionDateGroup, getSessionProjectName, buildSessionTree, type SessionSortMode } from "./session-utils";
 import { PiAgentTitle } from "./PiAgentTitle";
 import { SessionTreeItem } from "./SessionTreeItem";
 import { CwdPicker } from "./CwdPicker";
@@ -16,9 +16,13 @@ import { useI18n, translate, type MsgKey } from "@/lib/i18n";
 import { TagFilter } from "./TagFilter";
 import { resolveSessionForRestore } from "./session-restore";
 import { SessionItemSkeleton } from "@/components/ui/Skeleton";
+import { useUnifiedSearchResults } from "@/hooks/useUnifiedSearchResults";
+import { Search, X } from "lucide-react";
 import styles from "./SessionSidebar.module.css";
 
 const SORT_MODE_KEY = "pi-session-sort";
+const SESSION_SCOPE_KEY = "pi-session-scope";
+type SessionScope = "all" | "project";
 
 interface Props {
   selectedSessionId: string | null;
@@ -55,6 +59,26 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [localActiveTagFilter, setLocalActiveTagFilter] = useState<string | null>(null);
   const activeTagFilter = activeTagFilterProp ?? localActiveTagFilter;
   const setActiveTagFilter = onSelectTagFilter ?? setLocalActiveTagFilter;
+  const [sessionScope, setSessionScope] = useState<SessionScope>("all");
+  const [sessionQuery, setSessionQuery] = useState("");
+  const normalizedSessionQuery = sessionQuery.trim();
+  const {
+    sessionHits,
+    loading: sessionSearchLoading,
+    error: sessionSearchError,
+  } = useUnifiedSearchResults(null, normalizedSessionQuery, "sessions", false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SESSION_SCOPE_KEY);
+      if (saved === "all" || saved === "project") setSessionScope(saved);
+    } catch { /* private mode */ }
+  }, []);
+
+  const selectSessionScope = useCallback((scope: SessionScope) => {
+    setSessionScope(scope);
+    try { localStorage.setItem(SESSION_SCOPE_KEY, scope); } catch { /* private mode */ }
+  }, []);
 
   const restoredSessionIdRef = useRef<string | null>(null);
   const restoreFallbackCwdRef = useRef<string | null>(null);
@@ -174,12 +198,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [showArchived, setShowArchived] = useState(false);
   const archivedSet = useMemo(() => new Set(archivedIds), [archivedIds]);
   const archivedCount = useMemo(
-    () => allSessions.filter((s) => archivedSet.has(s.id) && (!selectedCwd || s.cwd === selectedCwd)).length,
-    [allSessions, archivedSet, selectedCwd],
+    () => allSessions.filter((s) => archivedSet.has(s.id) && (sessionScope === "all" || !selectedCwd || s.cwd === selectedCwd)).length,
+    [allSessions, archivedSet, selectedCwd, sessionScope],
   );
 
   const filteredSessions = useMemo(() => {
-    let list = selectedCwd
+    let list = sessionScope === "project" && selectedCwd
       ? allSessions.filter((s) => s.cwd === selectedCwd)
       : allSessions;
     if (!showArchived) {
@@ -189,8 +213,22 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       const tagged = tags[activeTagFilter] ?? [];
       list = list.filter((s) => tagged.includes(s.id));
     }
+
+    if (normalizedSessionQuery) {
+      if (normalizedSessionQuery.length === 1 || sessionSearchError) {
+        const query = normalizedSessionQuery.toLocaleLowerCase();
+        list = list.filter((session) =>
+          `${session.name ?? ""}\n${session.firstMessage}`.toLocaleLowerCase().includes(query),
+        );
+      } else if (sessionSearchLoading) {
+        list = [];
+      } else {
+        const matchingIds = new Set(sessionHits.map((hit) => hit.id));
+        list = list.filter((session) => matchingIds.has(session.id));
+      }
+    }
     return list;
-  }, [allSessions, selectedCwd, activeTagFilter, tags, showArchived, archivedSet]);
+  }, [allSessions, selectedCwd, sessionScope, activeTagFilter, tags, showArchived, archivedSet, normalizedSessionQuery, sessionSearchError, sessionSearchLoading, sessionHits]);
 
   // Build parent-child tree within the filtered set
   const sessionTree = buildSessionTree(filteredSessions, sortMode);
@@ -279,10 +317,57 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         />
       </div>
 
-      {/* Session-list controls; search lives in the global Search rail view. */}
+      {/* Conversation-first controls: search spans every project by default;
+          the cwd remains the working location for new sessions and files. */}
       <div className={styles.sessionToolbar}>
+        <div className={styles.sessionSearch}>
+          <span className={styles.sessionSearchIcon} aria-hidden>
+            <Search size={14} strokeWidth={2} />
+          </span>
+          <input
+            value={sessionQuery}
+            onChange={(event) => setSessionQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setSessionQuery("");
+                event.currentTarget.blur();
+              }
+            }}
+            className={styles.sessionSearchInput}
+            placeholder={t(sessionScope === "all" ? "sidebar.searchAllSessions" : "sidebar.searchProjectSessions")}
+            aria-label={t("sidebar.searchSessions")}
+            spellCheck={false}
+            autoComplete="off"
+          />
+          {sessionQuery && (
+            <button
+              className={styles.sessionSearchClear}
+              onClick={() => setSessionQuery("")}
+              aria-label={t("search.clear")}
+            >
+              <X size={14} strokeWidth={2} />
+            </button>
+          )}
+        </div>
         <div className={styles.sessionToolbarRow}>
-          <span className={`${styles.sessionListLabel} chrome-mono`}>{t("search.scope.sessions")}</span>
+          <div className={styles.sessionScope} role="group" aria-label={t("sidebar.sessionScope")}>
+            <button
+              className={`${styles.sessionScopeButton} ${sessionScope === "all" ? styles.sessionScopeButtonActive : ""}`}
+              onClick={() => selectSessionScope("all")}
+              aria-pressed={sessionScope === "all"}
+            >
+              {t("sidebar.allSessions")}
+            </button>
+            <button
+              className={`${styles.sessionScopeButton} ${sessionScope === "project" ? styles.sessionScopeButtonActive : ""}`}
+              onClick={() => selectSessionScope("project")}
+              aria-pressed={sessionScope === "project"}
+              disabled={!selectedCwd}
+              title={selectedCwd ?? t("sidebar.selectProjectFirst")}
+            >
+              {t("sidebar.thisProject")}
+            </button>
+          </div>
           <button
             onClick={cycleSortMode}
             className={`${styles.sortButton} ${sortMode !== "recent" ? styles.sortButtonActive : ""} hover-bg-selected-accent`}
@@ -330,10 +415,19 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         style={{ flex: showExplorer && explorerOpen && (selectedCwdProp || selectedCwd) ? "1 1 0" : "1 1 auto", outline: "none" }}
       >
         {/* Which project this list is scoped to — makes the picker's filtering visible */}
-        {selectedCwd && !loading && !error && (
+        {!loading && !error && (
           <div className={styles.projectScopeLabel}>
-            <span className={styles.projectScopeName}>{selectedCwd.split(/[\\/]/).filter(Boolean).pop()}</span>
+            <span className={styles.projectScopeName}>
+              {sessionScope === "all"
+                ? t("sidebar.allProjects")
+                : selectedCwd
+                  ? getSessionProjectName(selectedCwd)
+                  : t("sidebar.noProject")}
+            </span>
             <span> · {filteredSessions.length} {t("sidebar.sessionsFound")}</span>
+            {normalizedSessionQuery && sessionSearchError && (
+              <span className={styles.searchFallback}> · {t("sidebar.searchLimited")}</span>
+            )}
           </div>
         )}
         {loading && (
@@ -346,9 +440,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             {error}
           </div>
         )}
-        {!loading && !error && filteredSessions.length === 0 && (
+        {!loading && !error && sessionSearchLoading && normalizedSessionQuery.length >= 2 && (
+          <div className={styles.emptyMessage} role="status">
+            {t("sidebar.searchingSessions")}
+          </div>
+        )}
+        {!loading && !error && !sessionSearchLoading && filteredSessions.length === 0 && (
           <div className={styles.emptyMessage}>
-            {t("sidebar.noSessions")}
+            {normalizedSessionQuery ? t("sidebar.noMatchingSessions") : t("sidebar.noSessions")}
           </div>
         )}
         {pinnedNodes.length > 0 && (
@@ -383,6 +482,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   onOpenParallel={onOpenParallel}
                   isArchived={archivedSet.has(node.session.id)}
                   onArchiveToggle={handleArchiveToggle}
+                  showProject={sessionScope === "all"}
                 />
               </div>
             ))}
@@ -425,6 +525,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 onOpenParallel={onOpenParallel}
                 isArchived={archivedSet.has(node.session.id)}
                 onArchiveToggle={handleArchiveToggle}
+                showProject={sessionScope === "all"}
               />
             </div>
           );

@@ -20,6 +20,22 @@ export function preservedRunSpacerHeight(
 }
 
 /**
+ * Whether the real transcript tail is meaningfully below the viewport.
+ *
+ * This deliberately uses marker geometry instead of scrollHeight: an active
+ * run adds a viewport-sized spacer after the marker so a sent message can be
+ * anchored near the top. Counting that spacer makes the "Latest" affordance
+ * appear even while the newest real content is still visible.
+ */
+export function isTranscriptTailOutOfView(
+  markerTop: number,
+  containerBottom: number,
+  revealDistance = 96,
+): boolean {
+  return markerTop > containerBottom + revealDistance;
+}
+
+/**
  * Transcript scroll management: owns the anchor refs and decides when the
  * view follows new content — initial jump to bottom, scroll-sent-message-
  * to-top, and conditional follow at end of a run.

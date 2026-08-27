@@ -21,6 +21,7 @@ interface SessionTreeItemProps {
   onArchiveToggle?: (id: string) => void;
   isParallelOpen?: boolean;
   onOpenParallel?: (session: SessionInfo) => void;
+  showProject?: boolean;
 }
 
 export function SessionTreeItem({
@@ -39,6 +40,7 @@ export function SessionTreeItem({
   onArchiveToggle,
   isParallelOpen = false,
   onOpenParallel,
+  showProject = false,
 }: SessionTreeItemProps) {
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = node.children.length > 0;
@@ -76,6 +78,7 @@ export function SessionTreeItem({
           onArchiveToggle={onArchiveToggle}
           isParallelOpen={isParallelOpen}
           onOpenParallel={onOpenParallel}
+          showProject={showProject}
         />
       </div>
       {hasChildren && !collapsed && (
@@ -91,6 +94,7 @@ export function SessionTreeItem({
               depth={depth + 1}
               isPinned={isPinned}
               onPinToggle={onPinToggle}
+              showProject={showProject}
             />
           ))}
         </div>
