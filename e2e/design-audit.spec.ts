@@ -449,6 +449,7 @@ async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: bool
 
   const panels = [
     { button: "Sessions", testId: undefined },
+    { button: "Attention", testId: undefined },
     { button: "Agents", testId: "agent-dashboard" },
     { button: "Schedules", testId: "schedule-panel" },
     { button: mobile ? "Files" : "Explorer", testId: undefined },

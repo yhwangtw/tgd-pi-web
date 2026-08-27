@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ArrowUpRight, Bell, BellRing, Check, CheckCheck, CircleCheckBig, RefreshCw } from "lucide-react";
 import type { AttentionItem } from "@/lib/attention-center";
 import { useI18n } from "@/lib/i18n";
 import s from "./AttentionPanel.module.css";
@@ -99,24 +100,41 @@ export function AttentionPanel({
   return (
     <section className={s.root} aria-label={t("attention.title")}>
       <header className={s.header}>
-        <div>
-          <strong>{t("attention.title")}</strong>
-          <span>{unreadCount > 0 ? `${unreadCount} ${t("attention.unread")}` : t("attention.caughtUp")}</span>
+        <div className={s.heading}>
+          <span className={s.headingIcon} aria-hidden><Bell size={17} strokeWidth={1.8} /></span>
+          <div className={s.headingCopy}>
+            <h2>{t("attention.title")}</h2>
+            <p>{unreadCount > 0 ? `${unreadCount} ${t("attention.unread")}` : t("attention.caughtUp")}</p>
+          </div>
+          {unreadCount > 0 && <span className={s.unreadCount} aria-hidden>{Math.min(unreadCount, 99)}</span>}
         </div>
-        <div className={s.headerActions}>
+        <div className={s.toolbar} role="group" aria-label={t("attention.actions")}>
           <button
             type="button"
-            className={s.pushButton}
+            className={`${s.toolbarButton} ${s.pushButton}`}
             onClick={() => void togglePush()}
             disabled={pushBusy || pushState === "loading" || pushState === "unavailable"}
             aria-pressed={pushState === "enabled"}
             aria-label={pushState === "enabled" ? t("attention.pushDisable") : t("attention.pushEnable")}
             title={pushState === "enabled" ? t("attention.pushDisable") : t("attention.pushEnable")}
           >
-            {t("attention.push")}
+            {pushState === "enabled" ? <BellRing size={15} aria-hidden /> : <Bell size={15} aria-hidden />}
+            <span>{t("attention.push")}</span>
           </button>
-          <button type="button" onClick={onRefresh} disabled={loading} aria-label={t("attention.refresh")}>↻</button>
-          <button type="button" onClick={onMarkAllRead} disabled={unreadCount === 0}>{t("attention.markAllRead")}</button>
+          <button
+            type="button"
+            className={`${s.toolbarButton} ${s.iconButton} ${loading ? s.refreshing : ""}`}
+            onClick={onRefresh}
+            disabled={loading}
+            aria-label={t("attention.refresh")}
+            title={t("attention.refresh")}
+          >
+            <RefreshCw size={16} aria-hidden />
+          </button>
+          <button type="button" className={`${s.toolbarButton} ${s.markAllButton}`} onClick={onMarkAllRead} disabled={unreadCount === 0}>
+            <CheckCheck size={16} aria-hidden />
+            <span>{t("attention.markAllRead")}</span>
+          </button>
         </div>
       </header>
       <div className={s.filters} aria-label={t("attention.filters")}>
@@ -132,7 +150,7 @@ export function AttentionPanel({
           <div className={s.empty}>{t("common.loading")}</div>
         ) : visibleItems.length === 0 ? (
           <div className={s.empty}>
-            <span aria-hidden>✓</span>
+            <span aria-hidden><CircleCheckBig size={20} strokeWidth={1.8} /></span>
             <strong>{t("attention.empty")}</strong>
             <p>{t("attention.emptyHint")}</p>
           </div>
@@ -157,10 +175,16 @@ export function AttentionPanel({
               <p className={s.summary}>{item.summary}</p>
               {item.cwd && <div className={`${s.path} chrome-mono`} title={item.cwd}>{item.cwd}</div>}
               <div className={s.actions}>
-                <button type="button" onClick={() => void open(item)}>
+                <button type="button" className={s.primaryAction} onClick={() => void open(item)}>
+                  <ArrowUpRight size={15} aria-hidden />
                   {item.sessionId ? t("attention.openSession") : t("attention.openSource")}
                 </button>
-                {!read && <button type="button" className={s.secondary} onClick={() => onMarkRead(item.id)}>{t("attention.markRead")}</button>}
+                {!read && (
+                  <button type="button" className={s.secondary} onClick={() => onMarkRead(item.id)}>
+                    <Check size={15} aria-hidden />
+                    {t("attention.markRead")}
+                  </button>
+                )}
               </div>
             </article>
           );
