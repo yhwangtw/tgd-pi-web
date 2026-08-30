@@ -1,6 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
+import { Plus, Search, X } from "lucide-react";
+import { DialogShell } from "@/components/ui/DialogShell";
+import { IconButton } from "@/components/ui/IconButton";
+import { useI18n } from "@/lib/i18n";
 import type { OAuthProvider, ApiKeyProvider } from "./models-config-types";
 import { ProviderIcon } from "./ProviderIcon";
 import styles from "./AddProviderPicker.module.css";
@@ -18,10 +22,9 @@ export function AddProviderPicker({
   oauthProviders, apiKeyProviders,
   onSelectOAuth, onSelectApiKey, onAddCustom, onClose,
 }: AddProviderPickerProps) {
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 30); }, []);
 
   const q = search.trim().toLowerCase();
 
@@ -32,57 +35,67 @@ export function AddProviderPicker({
   const totalCount = availableOAuth.length + availableApiKey.length + (showCustom ? 1 : 0);
 
   return (
-    <div
-      className={styles.overlay}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <DialogShell
+      open
+      title={t("providers.add")}
+      description={t("providers.addHint")}
+      onClose={onClose}
+      size="wide"
+      mobileMode="sheet"
+      initialFocusRef={inputRef}
+      bodyClassName={styles.body}
     >
-      <div className={styles.modal}>
         {/* Search */}
         <div className={styles.searchBar}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.searchIcon}>
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
+          <Search size={16} strokeWidth={1.8} aria-hidden="true" className={styles.searchIcon} />
           <input
             ref={inputRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
-            placeholder="Search providers…"
+            placeholder={t("providers.searchPlaceholder")}
+            aria-label={t("providers.search")}
             className={styles.searchInput}
           />
+          {search && (
+            <IconButton
+              label={t("providers.clearSearch")}
+              icon={<X strokeWidth={1.8} />}
+              size="compact"
+              onClick={() => setSearch("")}
+            />
+          )}
         </div>
 
         {/* Card grid */}
         <div className={styles.cardGridArea}>
           {totalCount === 0 ? (
-            <div className={styles.emptyMessage}>No providers match</div>
+            <div className={styles.emptyMessage}>{t("providers.none")}</div>
           ) : (
             <div className={styles.cardGrid}>
               {showCustom && (
-                <div className={styles.sectionHeader}>Custom</div>
+                <div className={styles.sectionHeader}>{t("providers.custom")}</div>
               )}
               {showCustom && (
                 <button
+                  type="button"
                   onClick={() => { onAddCustom(); onClose(); }}
                   className={`hover-border-accent-bg ${styles.card}`}
                 >
                   <div className={styles.cardInfo}>
-                    <div className={styles.cardTitle}>OpenAI / Anthropic compatible</div>
-                    <div className={styles.cardSubtitle}>Custom endpoint format</div>
+                    <div className={styles.cardTitle}>{t("providers.compatible")}</div>
+                    <div className={styles.cardSubtitle}>{t("providers.customEndpoint")}</div>
                   </div>
                   <span className={styles.plusIconBox}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.plusIcon}>
-                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
+                    <Plus size={15} strokeWidth={1.8} aria-hidden="true" className={styles.plusIcon} />
                   </span>
                 </button>
               )}
 
               {availableOAuth.length > 0 && (
-                <div className={`${styles.sectionHeader} ${showCustom ? styles.sectionHeaderPadding : ""}`}>Subscriptions</div>
+                <div className={`${styles.sectionHeader} ${showCustom ? styles.sectionHeaderPadding : ""}`}>{t("providers.subscriptions")}</div>
               )}
               {availableOAuth.map((p) => (
-                <button key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
+                <button type="button" key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
                   className={`hover-border-accent-bg ${styles.card}`}
                 >
                   <div className={styles.cardInfo}>
@@ -94,15 +107,15 @@ export function AddProviderPicker({
               ))}
 
               {availableApiKey.length > 0 && (
-                <div className={`${styles.sectionHeader} ${availableOAuth.length > 0 ? styles.sectionHeaderPadding : ""}`}>API Key</div>
+                <div className={`${styles.sectionHeader} ${availableOAuth.length > 0 ? styles.sectionHeaderPadding : ""}`}>{t("apiKey.title")}</div>
               )}
               {availableApiKey.map((p) => (
-                <button key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
+                <button type="button" key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
                   className={`hover-border-accent-bg ${styles.card}`}
                 >
                   <div className={styles.cardInfo}>
                     <div className={styles.cardTitle}>{p.displayName}</div>
-                    <div className={styles.cardSubtitle}>{p.modelCount} models</div>
+                    <div className={styles.cardSubtitle}>{t("providers.modelCount").replace("{count}", String(p.modelCount))}</div>
                   </div>
                   <ProviderIcon id={p.id} size={28} />
                 </button>
@@ -111,7 +124,6 @@ export function AddProviderPicker({
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </DialogShell>
   );
 }

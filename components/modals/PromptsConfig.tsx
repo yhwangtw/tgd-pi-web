@@ -1,21 +1,18 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import { DialogShell } from "@/components/ui/DialogShell";
 import { usePrompts } from "@/hooks/usePrompts";
+import { useI18n } from "@/lib/i18n";
 import styles from "./PromptsConfig.module.css";
 
 export function PromptsConfig({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
   const { prompts, savePrompt, deletePrompt } = usePrompts();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const resetForm = useCallback(() => { setEditingId(null); setName(""); setBody(""); }, []);
 
@@ -36,14 +33,14 @@ export function PromptsConfig({ onClose }: { onClose: () => void }) {
   }, [name, body, editingId, savePrompt, resetForm]);
 
   return (
-    <div className={styles.overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="prompt-templates-title">
-        <div className={styles.header}>
-          <span className={styles.title} id="prompt-templates-title">Prompt templates</span>
-          <button onClick={onClose} className={styles.closeButton} aria-label="Close">×</button>
-        </div>
-
-        <div className={styles.body}>
+    <DialogShell
+      open
+      title={t("prompts.title")}
+      onClose={onClose}
+      size="default"
+      mobileMode="fullscreen"
+      bodyClassName={styles.body}
+    >
           {/* Editor */}
           <div className={styles.editor}>
             <div className={styles.nameRow}>
@@ -51,28 +48,30 @@ export function PromptsConfig({ onClose }: { onClose: () => void }) {
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="name"
-                aria-label="Template name"
+                placeholder={t("prompts.namePlaceholder")}
+                aria-label={t("prompts.nameLabel")}
                 className={styles.nameInput}
                 spellCheck={false}
               />
-              <span className={styles.nameHint}>type <code>/{name.trim() ? name.trim().toLowerCase().replace(/\s+/g, "-") : "name"}</code> in the composer to insert</span>
+              <span className={styles.nameHint}>
+                {t("prompts.nameHintBefore")} <code>/{name.trim() ? name.trim().toLowerCase().replace(/\s+/g, "-") : "name"}</code> {t("prompts.nameHintAfter")}
+              </span>
             </div>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Template body — inserted into the composer when you pick it"
-              aria-label="Template body"
+              placeholder={t("prompts.bodyPlaceholder")}
+              aria-label={t("prompts.bodyLabel")}
               className={styles.bodyInput}
               rows={5}
               spellCheck={false}
             />
             <div className={styles.editorActions}>
               {editingId && (
-                <button onClick={resetForm} className={styles.cancelBtn}>Cancel edit</button>
+                <button onClick={resetForm} className={styles.cancelBtn}>{t("prompts.cancelEdit")}</button>
               )}
               <button onClick={save} disabled={saving || !name.trim() || !body.trim()} className={styles.saveBtn}>
-                {editingId ? "Save changes" : "Add template"}
+                {editingId ? t("prompts.saveChanges") : t("prompts.addTemplate")}
               </button>
             </div>
           </div>
@@ -80,7 +79,7 @@ export function PromptsConfig({ onClose }: { onClose: () => void }) {
           {/* List */}
           <div className={styles.list}>
             {prompts.length === 0 ? (
-              <div className={styles.empty}>No templates yet. Add one above, then type <code>/name</code> in the chat composer.</div>
+              <div className={styles.empty}>{t("prompts.emptyBefore")} <code>{t("prompts.slashName")}</code> {t("prompts.emptyAfter")}</div>
             ) : (
               prompts.map((p) => (
                 <div key={p.id} className={`${styles.item} ${editingId === p.id ? styles.itemEditing : ""}`}>
@@ -89,15 +88,13 @@ export function PromptsConfig({ onClose }: { onClose: () => void }) {
                     <span className={styles.itemBody}>{p.body.split("\n")[0]}</span>
                   </div>
                   <div className={styles.itemActions}>
-                    <button onClick={() => startEdit(p.id)} className={styles.itemBtn} title="Edit">Edit</button>
-                    <button onClick={() => { if (editingId === p.id) resetForm(); void deletePrompt(p.id); }} className={`${styles.itemBtn} ${styles.itemBtnDanger}`} title="Delete">Delete</button>
+                    <button onClick={() => startEdit(p.id)} className={styles.itemBtn} title={t("prompts.edit")}>{t("prompts.edit")}</button>
+                    <button onClick={() => { if (editingId === p.id) resetForm(); void deletePrompt(p.id); }} className={`${styles.itemBtn} ${styles.itemBtnDanger}`} title={t("prompts.delete")}>{t("prompts.delete")}</button>
                   </div>
                 </div>
               ))
             )}
           </div>
-        </div>
-      </div>
-    </div>
+    </DialogShell>
   );
 }

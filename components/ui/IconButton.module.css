@@ -1,0 +1,87 @@
+.root {
+  --icon-button-size: var(--component-icon-button-default);
+  --icon-button-glyph: var(--component-icon-button-glyph-default);
+  --icon-button-bg: transparent;
+  --icon-button-bg-hover: var(--bg-hover);
+  --icon-button-border: transparent;
+  --icon-button-fg: var(--text-muted);
+  --icon-button-fg-hover: var(--text);
+
+  display: inline-grid;
+  width: var(--icon-button-size);
+  height: var(--icon-button-size);
+  min-width: var(--icon-button-size);
+  min-height: var(--icon-button-size);
+  flex: 0 0 var(--icon-button-size);
+  padding: 0;
+  border: 1px solid var(--icon-button-border);
+  border-radius: var(--radius-control);
+  background: var(--icon-button-bg);
+  color: var(--icon-button-fg);
+  cursor: pointer;
+  place-items: center;
+  transition: color var(--motion-fast), background-color var(--motion-fast), border-color var(--motion-fast);
+}
+
+.root[data-size="compact"] {
+  --icon-button-size: var(--component-icon-button-compact);
+  --icon-button-glyph: var(--component-icon-button-glyph-compact);
+}
+
+.root[data-size="touch"] {
+  --icon-button-size: var(--component-icon-button-touch);
+  --icon-button-glyph: var(--component-icon-button-glyph-touch);
+}
+
+.root[data-variant="surface"] {
+  --icon-button-bg: var(--bg-elev-1);
+  --icon-button-border: var(--border);
+}
+
+.root[data-variant="danger"] {
+  --icon-button-border: var(--color-error-border);
+  --icon-button-fg: var(--color-error-text);
+  --icon-button-bg-hover: var(--color-error-bg);
+  --icon-button-fg-hover: var(--color-error-text);
+}
+
+.root:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--icon-button-bg-hover);
+  color: var(--icon-button-fg-hover);
+}
+
+.root:active:not(:disabled) { transform: translateY(1px); }
+.root:disabled { pointer-events: none; }
+
+.icon {
+  display: inline-grid;
+  width: var(--icon-button-glyph);
+  height: var(--icon-button-glyph);
+  place-items: center;
+}
+
+.icon > :global(svg) {
+  width: 100%;
+  height: 100%;
+  flex: none;
+}
+
+:global(html[data-ui-style="trae"]) .root[data-variant="ghost"] {
+  --icon-button-bg: var(--trae-control);
+}
+
+@media (pointer: coarse) {
+  .root:not([data-size="touch"]) {
+    width: var(--component-icon-button-touch);
+    height: var(--component-icon-button-touch);
+    min-width: var(--component-icon-button-touch);
+    min-height: var(--component-icon-button-touch);
+    flex-basis: var(--component-icon-button-touch);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root { transition: none; }
+  .root:active:not(:disabled) { transform: none; }
+}

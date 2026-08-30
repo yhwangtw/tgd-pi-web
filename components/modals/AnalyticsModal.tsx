@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DialogShell } from "@/components/ui/DialogShell";
+import { useI18n } from "@/lib/i18n";
 import styles from "./AnalyticsModal.module.css";
 
 interface SessionAnalytics {
@@ -48,6 +50,7 @@ function basename(p: string): string {
 }
 
 export function AnalyticsModal({ open, onClose }: Props) {
+  const { t } = useI18n();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [perSession, setPerSession] = useState<SessionAnalytics[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,13 +73,6 @@ export function AnalyticsModal({ open, onClose }: Props) {
       .finally(() => setLoading(false));
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  }, [open, onClose]);
-
   if (!open) return null;
 
   const maxMonthlyCost = Math.max(1, ...(summary?.monthly.map((m) => m.cost) ?? [0]));
@@ -85,48 +81,42 @@ export function AnalyticsModal({ open, onClose }: Props) {
     .slice(0, 10);
 
   return (
-    <div className={styles.overlay}>
-      <button type="button" tabIndex={-1} className={styles.overlayBackdrop} onClick={onClose} aria-label="Dismiss analytics" />
-      <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="analytics-title">
-        <div className={styles.header}>
-          <div>
-            <h2 id="analytics-title">Session Analytics</h2>
-            <p>Usage and cost across your recent work</p>
-          </div>
-          <button onClick={onClose} className={styles.closeButton} aria-label="Close">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        {loading && <div className={styles.loading}>Loading…</div>}
+    <DialogShell
+      open
+      title={t("analytics.title")}
+      description={t("analytics.subtitle")}
+      onClose={onClose}
+      size="wide"
+      mobileMode="fullscreen"
+      bodyClassName={styles.shellBody}
+    >
+        {loading && <div className={styles.loading}>{t("common.loading")}</div>}
         {error && <div className={styles.error}>{error}</div>}
 
         {!loading && !error && summary && (
           <div className={styles.body}>
             <div className={styles.statRow}>
               <div className={styles.stat}>
-                <div className={styles.statLabel}>Total cost</div>
+                <div className={styles.statLabel}>{t("analytics.totalCost")}</div>
                 <div className={styles.statValue}>{fmtMoney(summary.totalCost)}</div>
               </div>
               <div className={styles.stat}>
-                <div className={styles.statLabel}>Total tokens</div>
+                <div className={styles.statLabel}>{t("analytics.totalTokens")}</div>
                 <div className={styles.statValue}>{fmtTokens(summary.totalTokens)}</div>
               </div>
               <div className={styles.stat}>
-                <div className={styles.statLabel}>Sessions</div>
+                <div className={styles.statLabel}>{t("analytics.sessions")}</div>
                 <div className={styles.statValue}>{summary.sessionCount}</div>
               </div>
               <div className={styles.stat}>
-                <div className={styles.statLabel}>Messages</div>
+                <div className={styles.statLabel}>{t("analytics.messages")}</div>
                 <div className={styles.statValue}>{summary.totalMessages}</div>
               </div>
             </div>
 
             {summary.monthly.length > 0 && (
               <section className={styles.section}>
-                <h3>Monthly cost</h3>
+                <h3>{t("analytics.monthlyCost")}</h3>
                 <div className={styles.bars}>
                   {summary.monthly.map((m) => (
                     <div key={m.month} className={styles.barRow}>
@@ -138,7 +128,7 @@ export function AnalyticsModal({ open, onClose }: Props) {
                         />
                       </div>
                       <div className={styles.barValue}>{fmtMoney(m.cost)}</div>
-                      <div className={styles.barMeta}>{m.sessions} sessions · {fmtTokens(m.tokens)}</div>
+                      <div className={styles.barMeta}>{t("analytics.sessionCount").replace("{count}", String(m.sessions))} · {fmtTokens(m.tokens)}</div>
                     </div>
                   ))}
                 </div>
@@ -147,24 +137,24 @@ export function AnalyticsModal({ open, onClose }: Props) {
 
             {summary.byModel.length > 0 && (
               <section className={styles.section}>
-                <h3>By model</h3>
+                <h3>{t("analytics.byModel")}</h3>
                 <div className={styles.table}>
                   <div className={styles.tableHeader}>
-                    <span>Model</span>
-                    <span>Cost</span>
-                    <span>In / Out</span>
-                    <span>Sessions</span>
+                    <span>{t("analytics.model")}</span>
+                    <span>{t("analytics.cost")}</span>
+                    <span>{t("analytics.inOut")}</span>
+                    <span>{t("analytics.sessions")}</span>
                   </div>
                   {summary.byModel.map((m) => (
                     <div key={m.model} className={styles.tableRow}>
                       <span className={styles.modelName} title={m.model}>
                         {m.model.split("/").pop()}
                       </span>
-                      <span data-label="Cost">{fmtMoney(m.cost)}</span>
-                      <span className={styles.tokenCol} data-label="In / Out">
+                      <span data-label={t("analytics.cost")}>{fmtMoney(m.cost)}</span>
+                      <span className={styles.tokenCol} data-label={t("analytics.inOut")}>
                         {fmtTokens(m.input)} / {fmtTokens(m.output)}
                       </span>
-                      <span data-label="Sessions">{m.sessions}</span>
+                      <span data-label={t("analytics.sessions")}>{m.sessions}</span>
                     </div>
                   ))}
                 </div>
@@ -173,13 +163,13 @@ export function AnalyticsModal({ open, onClose }: Props) {
 
             {summary.byProvider.length > 0 && (
               <section className={styles.section}>
-                <h3>By provider</h3>
+                <h3>{t("analytics.byProvider")}</h3>
                 <div className={styles.providerRow}>
                   {summary.byProvider.map((p) => (
                     <div key={p.provider} className={styles.providerChip}>
                       <strong>{p.provider}</strong>
                       <span>{fmtMoney(p.cost)}</span>
-                      <span className={styles.dim}>{p.sessions} sessions</span>
+                      <span className={styles.dim}>{t("analytics.sessionCount").replace("{count}", String(p.sessions))}</span>
                     </div>
                   ))}
                 </div>
@@ -188,24 +178,24 @@ export function AnalyticsModal({ open, onClose }: Props) {
 
             {topSessions.length > 0 && (
               <section className={styles.section}>
-                <h3>Top 10 sessions by cost</h3>
+                <h3>{t("analytics.topSessions")}</h3>
                 <div className={styles.table}>
                   <div className={styles.tableHeader}>
-                    <span>Session</span>
-                    <span>Cost</span>
-                    <span>Tokens</span>
-                    <span>Msgs</span>
+                    <span>{t("analytics.session")}</span>
+                    <span>{t("analytics.cost")}</span>
+                    <span>{t("analytics.tokens")}</span>
+                    <span>{t("analytics.msgs")}</span>
                   </div>
                   {topSessions.map((s) => (
                     <div key={s.id} className={styles.tableRow}>
                       <span className={styles.modelName} title={s.id}>
                         {s.name || basename(s.cwd) || s.id.slice(0, 8)}
                       </span>
-                      <span data-label="Cost">{fmtMoney(s.usage.total.cost.total)}</span>
-                      <span className={styles.tokenCol} data-label="Tokens">
+                      <span data-label={t("analytics.cost")}>{fmtMoney(s.usage.total.cost.total)}</span>
+                      <span className={styles.tokenCol} data-label={t("analytics.tokens")}>
                         {fmtTokens(s.usage.total.input + s.usage.total.output)}
                       </span>
-                      <span data-label="Messages">{s.messageCount}</span>
+                      <span data-label={t("analytics.messages")}>{s.messageCount}</span>
                     </div>
                   ))}
                 </div>
@@ -213,7 +203,6 @@ export function AnalyticsModal({ open, onClose }: Props) {
             )}
           </div>
         )}
-      </div>
-    </div>
+    </DialogShell>
   );
 }

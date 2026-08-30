@@ -7,7 +7,16 @@ export type AgentRunStatus =
   | "cancelled"
   | "interrupted";
 
-export type AgentRunTrigger = "manual" | "retry";
+export type AgentRunTrigger = "manual" | "retry" | "subagent";
+
+export interface AgentRunLimits {
+  /** Stop a delegated run after this many completed assistant turns. */
+  maxTurns?: number;
+  /** Stop a delegated run after reported model cost exceeds this amount. */
+  maxCostUsd?: number;
+  /** Hard wall-clock limit for this run. */
+  timeoutMs?: number;
+}
 
 export interface AgentRunWorkspace {
   repoRoot: string;
@@ -24,6 +33,7 @@ export interface AgentRunInput {
   thinkingLevel?: string;
   toolNames: string[];
   workspace?: AgentRunWorkspace;
+  limits?: AgentRunLimits;
 }
 
 export interface AgentRunReport {
@@ -52,6 +62,11 @@ export interface AgentRunStore {
   version: 1;
   runs: AgentRun[];
   maxConcurrency?: number;
+}
+
+export interface AgentRunCompletion {
+  run: AgentRun;
+  messages?: import("./types").AgentMessage[];
 }
 
 export interface AgentRunsResponse {

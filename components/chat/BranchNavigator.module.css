@@ -89,7 +89,7 @@
   font-size: var(--text-2xs);
   font-family: var(--font-mono);
   border-radius: var(--radius-pill);
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   margin-right: 5px;
   flex-shrink: 0;
   line-height: 16px;
@@ -176,9 +176,9 @@
 .inlineButton {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   height: 28px;
-  padding: 0 10px;
+  padding: 0 var(--space-2);
   border: none;
   border-radius: var(--radius-control);
   cursor: pointer;
@@ -211,13 +211,13 @@
 
 /* Shared dropdown content */
 .dropdownContent {
-  padding: 4px 12px 8px 12px;
+  padding: var(--space-1) var(--space-3) var(--space-2) var(--space-3);
   max-height: 260px;
   overflow-y: auto;
 }
 
 .dropdownEmpty {
-  padding: 10px 16px;
+  padding: var(--space-2) var(--space-4);
   font-size: var(--text-sm);
   color: var(--text-muted);
   font-style: italic;
@@ -234,9 +234,9 @@
 .standaloneHeaderButton {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 5px 12px;
+  padding: var(--space-1) var(--space-3);
   background: none;
   border: none;
   cursor: pointer;

@@ -50,13 +50,15 @@ Pi's terminal experience is fast and focused. This project adds the visual conte
 
 - Node.js 22 or newer
 - npm
-- A working Pi setup with `~/.pi/agent/`
+- Model credentials/configuration in `~/.pi/agent/` or supported provider environment variables; a global `pi` CLI is not required
 - Git
 
 This project is distributed from GitHub source and is **not published to npm**.
 
 > [!IMPORTANT]
 > tGD Pi Web can read and edit files, inspect git repositories, and run shell commands in allowed workspaces. Keep it on localhost by default. For remote access, set `PIWEB_ACCESS_PASSWORD` and `PIWEB_SESSION_SECRET`, then place the service behind an authenticated private network or access proxy. See the [deployment guide](./deploy/README.md).
+
+The embedded Safety Guard asks before high-impact commands, protected-file access, dependency installation, and external mutations. Approval is either one use or the exact same operation in the same workspace for five minutes, and every decision is written to Security Activity. This is an application authorization layer, **not** an operating-system sandbox: tools and extensions still run with the server account's permissions. Use a dedicated OS account, container, or VM when stronger isolation is required.
 
 Use a dedicated checkout for the supported one-step installation:
 
@@ -164,6 +166,27 @@ The mobile layout keeps the active phase, transcript, composer, model controls, 
 
 ## Key Features
 
+<!-- capability-table:start -->
+This table is generated from `lib/capabilities.json`; it is the product contract for Web support and runtime dependencies.
+
+| Capability | Foundation | Web delivery | Global Pi CLI | Always-on server | Trust boundary |
+| --- | --- | --- | --- | --- | --- |
+| **Agent chat** | Official Pi SDK | Native | Not required | Normal Web runtime | Single-user host |
+| **Sessions and cross-project search** | Official Pi SDK | Web adapter | Not required | Normal Web runtime | Single-user host |
+| **Ask User and extension dialogs** | Official Extension API | Web adapter | Not required | Normal Web runtime | Explicit confirmation |
+| **Plan Mode** | Official Extension API | Web adapter | Not required | Normal Web runtime | Trusted workspace |
+| **Structured Output** | Official Extension API | Web adapter | Not required | Normal Web runtime | None |
+| **Embedded subagents** | Official Pi SDK | Web adapter | Not required | Normal Web runtime | Trusted workspace |
+| **Permission Gate** | Official Extension API | Web adapter | Not required | Normal Web runtime | Explicit confirmation |
+| **Protected Paths** | Official Extension API | Web adapter | Not required | Normal Web runtime | Explicit confirmation |
+| **MCP connections** | Official Extension API | Web adapter | Not required | Normal Web runtime | Trusted endpoint/command |
+| **Scheduled agents** | Official Pi SDK | Web adapter | Not required | Required | Operator configuration |
+| **Files, Git, and restore points** | Pi Web | Native | Not required | Normal Web runtime | Trusted workspace |
+| **Extensions and packages** | Official package format | Web adapter | Not required | Normal Web runtime | Explicit confirmation |
+| **Runtime and security diagnostics** | Pi Web | Native | Not required | Normal Web runtime | Operator configuration |
+| **Safe Update Center** | Pi Web | Native | Not required | Required | Operator configuration |
+<!-- capability-table:end -->
+
 ### Agent chat
 
 - Live SSE streaming with connect-before-prompt delivery.
@@ -171,6 +194,7 @@ The mobile layout keeps the active phase, transcript, composer, model controls, 
 - Direct shell mode with `!command`; use `!!command` to omit the result from model context.
 - Model and thinking-level switching during a session.
 - Tool access can inherit Pi/project defaults, use a preset, or select individual built-in, extension, and MCP tools.
+- A first-party `subagent` tool is installed with the Web runtime: delegate isolated work to the built-in scout, planner, worker, and reviewer, run up to eight tasks through the existing Agent queue, and inspect or cancel every child session from the Agent dashboard. No global `pi` CLI is required.
 - A built-in `ask_user` tool plus Pi extension dialogs (`select`, `confirm`, `input`, and `editor`), notifications, status indicators, and text widgets; pending decisions survive reconnects.
 - Pi extension session commands (`newSession`, `fork`, and `switchSession`) use the native `AgentSessionRuntime`; the Web UI follows the replacement session and reconnects SSE to it.
 - Replacement failures restore the previous runtime, active-session conflicts are rejected before switching, and every open tab follows the same replacement. Extensions settings expose live runtime diagnostics.
@@ -270,6 +294,11 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 | `PI_CODING_AGENT_DIR` | Overrides the default `~/.pi/agent` directory |
 | `PIWEB_ACCESS_PASSWORD` | Enables the built-in shared-password gate for every route |
 | `PIWEB_SESSION_SECRET` | Signs access cookies independently from the password; use a random 32-byte-or-longer value for remote deployments |
+| `PIWEB_RELEASE_REPOSITORY` | GitHub `owner/repo` used by the Update Center; defaults to `yhwangtw/tgd-pi-web` |
+| `PIWEB_UPDATE_BACKUP_DIR` | Private source-backup directory outside the application checkout; defaults under the Pi agent data directory |
+| `PIWEB_UPDATE_COMMAND_JSON` | Absolute JSON argv array for an operator-managed update helper; no shell parsing |
+| `PIWEB_RESTART_COMMAND_JSON` | Absolute JSON argv array for an operator-managed restart helper |
+| `PIWEB_ROLLBACK_COMMAND_JSON` | Absolute JSON argv array for an operator-managed rollback helper |
 | `TGD_DIR` | Overrides the sibling `<project>-tGD/` artifact directory |
 | `models.json` | Model/provider catalog, including custom `baseUrl` values |
 | `auth.json` | Per-provider API credentials managed by Pi |

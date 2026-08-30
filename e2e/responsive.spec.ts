@@ -40,44 +40,50 @@ test.describe("responsive shell", () => {
     });
   }
 
-  test("AC-RWD-1b: tablet sidebar is an opaque modal layer over the transcript", async ({ page }) => {
+  test("AC-RWD-1b: tablet sidebar is a persistent second pane beside the transcript", async ({ page }) => {
     await page.setViewportSize({ width: 840, height: 889 });
     await openSession(page);
 
     const sidebar = page.locator(".sidebar-container");
     const backdrop = page.locator(".sidebar-overlay-backdrop");
-    await expect(sidebar).toHaveClass(/sidebar-closed/);
-
-    await page.getByRole("button", { name: "Sessions", exact: true }).click();
     await expect(sidebar).toHaveClass(/sidebar-open/);
-    await expect(backdrop).toBeVisible();
+    await expect(backdrop).toBeHidden();
 
-    const overlayStyles = await page.evaluate(() => {
+    const splitStyles = await page.evaluate(() => {
       const panel = document.querySelector<HTMLElement>(".sidebar-container")!;
       const shade = document.querySelector<HTMLElement>(".sidebar-overlay-backdrop")!;
       return {
         panelBackground: getComputedStyle(panel).backgroundColor,
         panelOverflow: getComputedStyle(panel).overflow,
-        shadeBackground: getComputedStyle(shade).backgroundColor,
-        shadePosition: getComputedStyle(shade).position,
-        shadePointerEvents: getComputedStyle(shade).pointerEvents,
+        panelPosition: getComputedStyle(panel).position,
+        shadeDisplay: getComputedStyle(shade).display,
       };
     });
 
-    expect(overlayStyles.panelBackground).not.toBe("rgba(0, 0, 0, 0)");
-    expect(overlayStyles.panelBackground).not.toBe("transparent");
-    expect(overlayStyles.panelOverflow).toBe("hidden");
-    expect(overlayStyles.shadeBackground).not.toBe("rgba(0, 0, 0, 0)");
-    expect(overlayStyles.shadePosition).toBe("fixed");
-    expect(overlayStyles.shadePointerEvents).toBe("auto");
+    expect(splitStyles.panelBackground).not.toBe("rgba(0, 0, 0, 0)");
+    expect(splitStyles.panelBackground).not.toBe("transparent");
+    expect(["clip", "hidden"]).toContain(splitStyles.panelOverflow);
+    expect(splitStyles.panelPosition).toBe("relative");
+    expect(splitStyles.shadeDisplay).toBe("none");
 
-    const [railBox, backdropBox] = await Promise.all([
+    const center = page.getByTestId("top-bar").locator("..");
+    const [railBox, sidebarBox, centerBox] = await Promise.all([
       page.getByRole("navigation", { name: "Primary" }).boundingBox(),
-      backdrop.boundingBox(),
+      sidebar.boundingBox(),
+      center.boundingBox(),
     ]);
     expect(railBox).not.toBeNull();
-    expect(backdropBox).not.toBeNull();
-    expect(backdropBox!.x).toBeCloseTo(railBox!.x + railBox!.width, 0);
+    expect(sidebarBox).not.toBeNull();
+    expect(centerBox).not.toBeNull();
+    expect(sidebarBox!.x).toBeCloseTo(railBox!.x + railBox!.width, 0);
+    expect(sidebarBox!.x + sidebarBox!.width).toBeLessThanOrEqual(centerBox!.x + 1);
+    expect(centerBox!.width).toBeGreaterThanOrEqual(400);
+
+    await page.getByRole("button", { name: "Sessions", exact: true }).click();
+    await expect(sidebar).toHaveClass(/sidebar-closed/);
+    await expect(backdrop).toBeHidden();
+    await page.getByRole("button", { name: "Sessions", exact: true }).click();
+    await expect(sidebar).toHaveClass(/sidebar-open/);
     await expectNoPageOverflow(page);
   });
 
@@ -250,22 +256,20 @@ test.describe("responsive shell", () => {
 
     const controlsTrigger = page.getByRole("button", { name: "More composer controls" });
     await controlsTrigger.click();
-    const controls = page.locator("#composer-secondary-tools");
+    const controlsDialog = page.getByRole("dialog", { name: "Composer controls" });
+    const controls = controlsDialog.locator("#composer-secondary-tools");
+    await expect(controlsDialog).toBeVisible();
     await expect(controls).toBeVisible();
-    await expect(controls.getByRole("button", { name: "Done", exact: true })).toBeVisible();
-    const [controlsBox, openTextareaBox] = await Promise.all([
-      controls.boundingBox(),
-      textarea.boundingBox(),
-    ]);
+    await expect(controlsDialog.getByRole("button", { name: "Done", exact: true })).toBeVisible();
+    const controlsBox = await controlsDialog.boundingBox();
     expect(controlsBox).not.toBeNull();
-    expect(openTextareaBox).not.toBeNull();
     expect(controlsBox!.x).toBeGreaterThanOrEqual(0);
     expect(controlsBox!.x + controlsBox!.width).toBeLessThanOrEqual(320);
-    expect(controlsBox!.y).toBeGreaterThanOrEqual(openTextareaBox!.y + openTextareaBox!.height - 1);
+    expect(controlsBox!.y + controlsBox!.height).toBeLessThanOrEqual(800);
     await expectNoPageOverflow(page);
 
-    await controls.getByRole("button", { name: "Done", exact: true }).click();
-    await expect(controls).toBeHidden();
+    await controlsDialog.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(controlsDialog).toBeHidden();
   });
 
   test("AC-RWD-7: reasoning controls use Traditional Chinese without simplified Chinese", async ({ page }) => {
@@ -289,17 +293,19 @@ test.describe("responsive shell", () => {
     await openSession(page);
 
     const topBar = page.getByTestId("top-bar");
-    const showPanel = topBar.getByRole("button", { name: "Show file panel", exact: true });
+    await topBar.getByRole("button", { name: "Session actions", exact: true }).click();
+    const actions = page.locator("[class*='chatActionsMobileOpen']");
+    const showPanel = actions.getByRole("button", { name: "Show file panel", exact: true });
     await expect(showPanel).toBeVisible();
 
-    const [topBarBox, showBox] = await Promise.all([
-      topBar.boundingBox(),
+    const [actionsBox, showBox] = await Promise.all([
+      actions.boundingBox(),
       showPanel.boundingBox(),
     ]);
-    expect(topBarBox).not.toBeNull();
+    expect(actionsBox).not.toBeNull();
     expect(showBox).not.toBeNull();
-    expect(showBox!.x).toBeGreaterThanOrEqual(topBarBox!.x);
-    expect(showBox!.x + showBox!.width).toBeLessThanOrEqual(topBarBox!.x + topBarBox!.width);
+    expect(showBox!.x).toBeGreaterThanOrEqual(actionsBox!.x);
+    expect(showBox!.x + showBox!.width).toBeLessThanOrEqual(actionsBox!.x + actionsBox!.width);
 
     await showPanel.click();
     const viewer = page.locator(".right-panel-container.right-panel-open");
@@ -444,7 +450,7 @@ test.describe("responsive shell", () => {
     await expectNoPageOverflow(page);
   });
 
-  test("AC-RWD-11: mobile session actions stay in one compact row", async ({ page }) => {
+  test("AC-RWD-11: mobile session actions use a balanced two-column grid", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     await openSession(page);
     const activation = await page.request.post(`/api/agent/${MAIN_ID}`, {
@@ -458,23 +464,27 @@ test.describe("responsive shell", () => {
     const panel = page.locator("[class*='chatActionsMobileOpen']");
     const exportAction = panel.getByRole("button", { name: "Choose export format" });
     const analyticsAction = panel.getByRole("button", { name: "Token usage and cost report" });
+    const filesAction = panel.getByRole("button", { name: "Show file panel" });
     const systemAction = panel.getByRole("button", { name: "System", exact: true });
     await expect(panel).toBeVisible();
 
-    const [panelBox, exportBox, analyticsBox, systemBox] = await Promise.all([
+    const [panelBox, exportBox, analyticsBox, filesBox, systemBox] = await Promise.all([
       panel.boundingBox(),
       exportAction.boundingBox(),
       analyticsAction.boundingBox(),
+      filesAction.boundingBox(),
       systemAction.boundingBox(),
     ]);
     expect(panelBox).not.toBeNull();
     expect(exportBox).not.toBeNull();
     expect(analyticsBox).not.toBeNull();
+    expect(filesBox).not.toBeNull();
     expect(systemBox).not.toBeNull();
     expect(panelBox!.width).toBeLessThanOrEqual(320);
-    expect(panelBox!.height).toBeLessThanOrEqual(64);
+    expect(panelBox!.height).toBeLessThanOrEqual(120);
     expect(Math.abs(exportBox!.y - analyticsBox!.y)).toBeLessThanOrEqual(1);
-    expect(Math.abs(analyticsBox!.y - systemBox!.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(filesBox!.y - systemBox!.y)).toBeLessThanOrEqual(1);
+    expect(filesBox!.y).toBeGreaterThan(exportBox!.y);
 
     await exportAction.click();
     const exportMenu = page.getByRole("menu");

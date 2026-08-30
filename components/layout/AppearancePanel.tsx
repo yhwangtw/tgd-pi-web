@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Check, LogOut, Moon, RotateCcw, Sun, X } from "lucide-react";
 import { DEFAULT_SKIN, SKINS, SKIN_PREVIEWS, useSkin } from "@/lib/skin";
 import { useTheme, toggleOriginFromEvent } from "@/hooks/useTheme";
 import { useI18n } from "@/lib/i18n";
@@ -99,7 +100,7 @@ export function AppearancePanel({ onClose }: Props) {
           <span>{t("appearance.subtitle")}</span>
         </div>
         <button ref={closeRef} type="button" className={styles.closeButton} onClick={onClose} aria-label={t("appearance.close")} title={t("appearance.close")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          <X size={14} aria-hidden />
         </button>
       </div>
 
@@ -110,13 +111,7 @@ export function AppearancePanel({ onClose }: Props) {
           aria-pressed={!isDark}
           onClick={(e) => { if (isDark) toggleTheme(toggleOriginFromEvent(e)); }}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-            <circle cx="12" cy="12" r="5" />
-            <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-            <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-          </svg>
+          <Sun size={12} aria-hidden />
           {t("appearance.light")}
         </button>
         <button
@@ -125,9 +120,7 @@ export function AppearancePanel({ onClose }: Props) {
           aria-pressed={isDark}
           onClick={(e) => { if (!isDark) toggleTheme(toggleOriginFromEvent(e)); }}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-          </svg>
+          <Moon size={12} aria-hidden />
           {t("appearance.dark")}
         </button>
       </div>
@@ -231,26 +224,20 @@ export function AppearancePanel({ onClose }: Props) {
             </span>
             <span className={styles.skinLabel}>{t(`appearance.skin.${sk}`)}</span>
             {sk === skin && (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={styles.check} aria-hidden>
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+              <Check size={13} strokeWidth={2.5} className={styles.check} aria-hidden />
             )}
           </button>
         ))}
       </div>
 
       <button type="button" className={styles.resetRow} onClick={resetAppearance}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
+        <RotateCcw size={13} aria-hidden />
         {t("appearance.reset")}
       </button>
 
       {gateEnabled && (
         <button type="button" className={styles.logoutRow} onClick={logout}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
+          <LogOut size={13} aria-hidden />
           {t("appearance.logout")}
         </button>
       )}

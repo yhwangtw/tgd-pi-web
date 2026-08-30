@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { ArrowLeft, Plus, Search, X } from "lucide-react";
+import { DialogShell } from "@/components/ui/DialogShell";
+import { IconButton } from "@/components/ui/IconButton";
+import { useI18n } from "@/lib/i18n";
 import type { Skill } from "./skills-config-types";
 import { shortenPath, sourceLabel } from "./skills-config-types";
 import { SkillDetail } from "./SkillDetail";
@@ -14,6 +18,7 @@ export function SkillsConfig({
   cwd: string;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,15 +28,6 @@ export function SkillsConfig({
   const [addMode, setAddMode] = useState(false);
   const [query, setQuery] = useState("");
   const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
-
-  // Esc closes the modal — consistent with AnalyticsModal and the palette.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const loadSkills = useCallback(() => {
     setLoading(true);
@@ -96,51 +92,48 @@ export function SkillsConfig({
   const visibleSkills = normalizedQuery
     ? skills.filter((skill) => `${skill.name} ${skill.description ?? ""} ${skill.filePath}`.toLowerCase().includes(normalizedQuery))
     : skills;
+  const groupLabels: Record<string, string> = {
+    project: t("skills.source.project"),
+    global: t("skills.source.global"),
+    path: t("skills.source.path"),
+  };
 
   return (
-    <div className={styles.overlay}>
-      <button type="button" tabIndex={-1} className={styles.overlayBackdrop} onClick={onClose} aria-label="Dismiss Skills" />
-      <div
-        className={styles.modal}
-        data-testid="skills-config-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="skills-config-title"
-      >
-        {/* Header */}
-        <div className={styles.header}>
-          <div className={styles.headerLeft}>
-            <span id="skills-config-title" className={styles.title}>
-              Skills
-            </span>
-            <code className={styles.cwdCode}>
-              {shortenPath(cwd)}
-            </code>
-          </div>
-          <button
-            onClick={onClose}
-            className={styles.closeButton}
-            aria-label="Close Skills"
-          >
-            ×
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className={`${styles.body} ${mobilePane === "detail" ? styles.mobileDetail : styles.mobileList}`}>
+    <DialogShell
+      open
+      title={t("skills.title")}
+      description={shortenPath(cwd)}
+      onClose={onClose}
+      size="wide"
+      mobileMode="fullscreen"
+      bodyClassName={styles.shellBody}
+      testId="skills-config-dialog"
+    >
+        <div className={`${styles.layout} ${mobilePane === "detail" ? styles.mobileDetail : styles.mobileList}`}>
           {/* Left: skill list */}
           <div className={styles.sidebar} data-testid="skills-config-nav">
             <label className={styles.searchBox}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-              </svg>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter skills…" aria-label="Filter skills" />
-              {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear skill filter">×</button>}
+              <Search size={15} strokeWidth={1.8} aria-hidden="true" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t("skills.filterPlaceholder")}
+                aria-label={t("skills.filter")}
+              />
+              {query && (
+                <IconButton
+                  label={t("skills.clearFilter")}
+                  icon={<X strokeWidth={1.8} />}
+                  size="compact"
+                  onClick={() => setQuery("")}
+                  className={styles.clearSearch}
+                />
+              )}
             </label>
             <div className={styles.sidebarScroll}>
               {loading ? (
                 <div className={styles.loadingText}>
-                  Loading…
+                  {t("common.loading")}
                 </div>
               ) : error ? (
                 <div className={styles.errorText}>
@@ -148,11 +141,11 @@ export function SkillsConfig({
                 </div>
               ) : skills.length === 0 ? (
                 <div className={styles.emptyText}>
-                  No skills found
+                  {t("skills.noneFound")}
                 </div>
               ) : visibleSkills.length === 0 ? (
                 <div className={styles.emptyText}>
-                  No matching skills
+                  {t("skills.noMatches")}
                 </div>
               ) : (
                 (() => {
@@ -168,7 +161,7 @@ export function SkillsConfig({
                     ({ label: grpLabel, skills: grpSkills }) => (
                       <div key={grpLabel} className={styles.groupContainer}>
                         <div className={styles.groupLabel}>
-                          {grpLabel}
+                          {groupLabels[grpLabel] ?? grpLabel}
                         </div>
                         {grpSkills.map((skill) => {
                           const isSelected =
@@ -188,6 +181,7 @@ export function SkillsConfig({
                             >
                               <span
                                 className={`${styles.statusDot} ${disabled ? styles.statusDotDisabled : ""}`}
+                                aria-hidden="true"
                               />
                               <span
                                 className={`${styles.skillName} ${isSelected ? styles.skillNameSelected : ""} ${disabled ? styles.skillNameDisabled : ""}`}
@@ -211,20 +205,8 @@ export function SkillsConfig({
                 className={`${styles.addSkillButton} ${addMode ? styles.addSkillButtonActive : ""} ${!addMode ? "hover-bg" : ""}`}
                 aria-pressed={addMode}
               >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                Add skill
+                <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
+                {t("skills.add")}
               </button>
             </div>
           </div>
@@ -232,7 +214,8 @@ export function SkillsConfig({
           {/* Right: detail or add panel */}
           <div className={styles.rightPanel} data-testid="skills-config-detail">
             <button type="button" className={styles.mobileBack} onClick={() => setMobilePane("list")}>
-              Back to skills
+              <ArrowLeft size={16} strokeWidth={1.8} aria-hidden="true" />
+              {t("skills.back")}
             </button>
             {addMode ? (
               <AddSkillPanel
@@ -252,13 +235,11 @@ export function SkillsConfig({
               />
             ) : (
               <div className={styles.emptyState}>
-                Select a skill
+                {t("skills.select")}
               </div>
             )}
           </div>
         </div>
-
-      </div>
-    </div>
+    </DialogShell>
   );
 }

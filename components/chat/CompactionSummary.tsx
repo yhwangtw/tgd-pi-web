@@ -1,6 +1,7 @@
 "use client";
 
 import type { AgentMessage } from "@/lib/types";
+import { ChevronDown, ListCollapse } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { MarkdownBody } from "./MarkdownBody";
 import styles from "./CompactionSummary.module.css";
@@ -20,15 +21,11 @@ export function CompactionSummary({ summary }: { summary: string }) {
     <details className={styles.card}>
       <summary className={styles.header}>
         <span className={styles.icon} aria-hidden>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 5h16M7 12h10M9 19h6" />
-          </svg>
+          <ListCollapse size={14} strokeWidth={1.8} />
         </span>
         <span className={styles.title}>{t("chat.compactionSummary")}</span>
         <span className={styles.hint}>{t("chat.compactionSummaryHint")}</span>
-        <svg className={styles.chevron} width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <polyline points="2 3.5 5 6.5 8 3.5" />
-        </svg>
+        <ChevronDown className={styles.chevron} size={12} strokeWidth={1.6} aria-hidden />
       </summary>
       <div className={styles.body}><MarkdownBody>{summary}</MarkdownBody></div>
     </details>

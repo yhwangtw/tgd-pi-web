@@ -1,7 +1,7 @@
 .root {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .header {
@@ -13,7 +13,7 @@
 .statusDotContainer {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .statusDot {
@@ -52,7 +52,8 @@
 
 .inputRow {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
+  align-items: center;
 }
 
 .inputField {
@@ -60,7 +61,8 @@
 }
 
 .saveBtn {
-  padding: 6px 12px;
+  min-height: var(--control-default);
+  padding: 0 var(--space-3);
   border: none;
   border-radius: var(--radius-control-compact);
   font-size: var(--text-sm);
@@ -68,7 +70,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   background: var(--bg-panel);
   color: var(--text-dim);
   cursor: not-allowed;
@@ -94,7 +96,8 @@
 
 .disconnectBtn {
   align-self: flex-start;
-  padding: 5px 12px;
+  min-height: var(--control-default);
+  padding: 0 var(--space-3);
   background: none;
   border: 1px solid var(--color-error-border);
   border-radius: var(--radius-control-compact);
@@ -107,7 +110,15 @@
   cursor: not-allowed;
 }
 
-:global(html[data-ui-style="trae"]) .root { gap: 18px; }
+:global(html[data-ui-style="trae"]) .root { gap: var(--space-4); }
 :global(html[data-ui-style="trae"]) .inputField { min-height: 42px; border-color: transparent; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .saveBtn,
 :global(html[data-ui-style="trae"]) .disconnectBtn { min-height: 38px; border-radius: var(--radius-control); }
+
+@media (max-width: 520px) {
+  .header { align-items: flex-start; gap: var(--space-2); }
+  .inputRow { align-items: stretch; flex-direction: column; }
+  .saveBtn,
+  .disconnectBtn { min-height: var(--component-button-touch); justify-content: center; }
+  .disconnectBtn { width: 100%; }
+}

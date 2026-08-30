@@ -3,12 +3,27 @@ import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import {
   WebExtensionUIBridge,
   createAskUserTool,
+  toEnumerableExtensionUIContext,
   type WebExtensionUIEvent,
 } from "../web-extension-ui";
 
 const theme = {} as ExtensionUIContext["theme"];
 
 describe("WebExtensionUIBridge", () => {
+  it("exposes bound own methods for Pi's shallow UI prompt wrapper", () => {
+    const events: WebExtensionUIEvent[] = [];
+    const bridge = new WebExtensionUIBridge({ theme, emit: (event) => events.push(event) });
+    const context = toEnumerableExtensionUIContext(bridge);
+    const shallowCopy = { ...context };
+
+    expect(Object.prototype.hasOwnProperty.call(context, "setTitle")).toBe(true);
+    expect(typeof shallowCopy.setTitle).toBe("function");
+    expect(shallowCopy.theme).toBe(theme);
+
+    shallowCopy.setTitle("Compatible title");
+    expect(events.at(-1)).toMatchObject({ method: "setTitle", title: "Compatible title" });
+  });
+
   it("emits a select request, validates the answer, and records the decision", async () => {
     const events: WebExtensionUIEvent[] = [];
     const record = vi.fn();
@@ -96,6 +111,20 @@ describe("WebExtensionUIBridge", () => {
     expect(bridge.snapshot()).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ method: "set_editor_text" }),
     ]));
+  });
+
+  it("redacts extension notifications and persistent display text", () => {
+    const events: WebExtensionUIEvent[] = [];
+    const bridge = new WebExtensionUIBridge({ theme, emit: (event) => events.push(event) });
+
+    bridge.notify("Authorization: Bearer live-token-123456789", "error");
+    bridge.setStatus("sync", "GITHUB_TOKEN=live-token-123456789");
+    bridge.setWidget("sync", ["apiKey: sk-1234567890ABCDEFGHIJ"]);
+    bridge.setTitle("token=live-token-123456789");
+
+    expect(JSON.stringify(events)).toContain("[REDACTED]");
+    expect(JSON.stringify(events)).not.toContain("live-token-123456789");
+    expect(JSON.stringify(events)).not.toContain("sk-1234567890ABCDEFGHIJ");
   });
 
   it("clears session-scoped UI when the runtime replaces its session", async () => {

@@ -1,9 +1,22 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { ExternalLink } from "lucide-react";
 import type { SkillSearchResult } from "@/app/api/skills/search/route";
+import { useI18n } from "@/lib/i18n";
 import { shortenPath } from "./skills-config-types";
 import styles from "./AddSkillPanel.module.css";
+
+type PendingInstall = {
+  token: string;
+  expiresAt: number;
+  review: {
+    source: string;
+    scope: "global" | "project";
+    cwd: string | null;
+    installPath: string;
+  };
+};
 
 export function AddSkillPanel({
   cwd,
@@ -12,6 +25,7 @@ export function AddSkillPanel({
   cwd: string;
   onInstalled: () => void;
 }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SkillSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -20,6 +34,7 @@ export function AddSkillPanel({
   const [installError, setInstallError] = useState<string | null>(null);
   const [installedPkgs, setInstalledPkgs] = useState<Set<string>>(new Set());
   const [scope, setScope] = useState<"global" | "project">("global");
+  const [pendingInstall, setPendingInstall] = useState<PendingInstall | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -46,15 +61,15 @@ export function AddSkillPanel({
         return;
       }
       setResults(d.results ?? []);
-      if ((d.results ?? []).length === 0) setSearchError("No skills found");
+      if ((d.results ?? []).length === 0) setSearchError(t("skills.add.noneFound"));
     } catch (e) {
       setSearchError(String(e));
     } finally {
       setSearching(false);
     }
-  }, []);
+  }, [t]);
 
-  const install = useCallback(
+  const prepareInstall = useCallback(
     async (pkg: string) => {
       setInstalling(pkg);
       setInstallError(null);
@@ -62,23 +77,64 @@ export function AddSkillPanel({
         const res = await fetch("/api/skills/install", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ package: pkg, scope, cwd }),
+          body: JSON.stringify({ phase: "prepare", package: pkg, scope, cwd }),
         });
-        const d = (await res.json()) as { success?: boolean; error?: string };
+        const d = (await res.json()) as {
+          error?: string;
+          confirmation?: { token: string; expiresAt: number };
+          review?: PendingInstall["review"];
+        };
         if (!res.ok || d.error) {
           setInstallError(d.error ?? `HTTP ${res.status}`);
           return;
         }
-        setInstalledPkgs((prev) => new Set(prev).add(pkg));
-        onInstalled();
+        if (!d.confirmation || !d.review) {
+          setInstallError(t("skills.add.reviewUnavailable"));
+          return;
+        }
+        setPendingInstall({ ...d.confirmation, review: d.review });
       } catch (e) {
         setInstallError(String(e));
       } finally {
         setInstalling(null);
       }
     },
-    [onInstalled, scope, cwd],
+    [scope, cwd, t],
   );
+
+  const executeInstall = useCallback(async () => {
+    if (!pendingInstall) return;
+    const pkg = pendingInstall.review.source;
+    setInstalling(pkg);
+    setInstallError(null);
+    try {
+      const res = await fetch("/api/skills/install", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phase: "execute",
+          package: pkg,
+          scope: pendingInstall.review.scope,
+          cwd: pendingInstall.review.cwd,
+          confirmationToken: pendingInstall.token,
+        }),
+      });
+      const d = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || d.error) {
+        setInstallError(d.error ?? `HTTP ${res.status}`);
+        setPendingInstall(null);
+        return;
+      }
+      setInstalledPkgs((prev) => new Set(prev).add(pkg));
+      setPendingInstall(null);
+      onInstalled();
+    } catch (e) {
+      setInstallError(String(e));
+      setPendingInstall(null);
+    } finally {
+      setInstalling(null);
+    }
+  }, [onInstalled, pendingInstall]);
 
   const installPath =
     scope === "global"
@@ -92,7 +148,7 @@ export function AddSkillPanel({
       {/* ── Header area ── */}
       <div className={styles.headerArea}>
         <div className={styles.title}>
-          Add Skill
+          {t("skills.add.title")}
         </div>
 
         {/* Search row */}
@@ -104,7 +160,7 @@ export function AddSkillPanel({
             onKeyDown={(e) => {
               if (e.key === "Enter") search(query);
             }}
-            placeholder="e.g. react, testing, deploy"
+            placeholder={t("skills.add.placeholder")}
             className={styles.searchInput}
           />
           <button
@@ -112,7 +168,7 @@ export function AddSkillPanel({
             disabled={searchDisabled}
             className={`${styles.searchBtn} ${searchDisabled ? styles.searchBtnDisabled : styles.searchBtnEnabled}`}
           >
-            {searching ? "Searching…" : "Search"}
+            {t(searching ? "skills.add.searching" : "skills.add.search")}
           </button>
         </div>
 
@@ -129,10 +185,13 @@ export function AddSkillPanel({
               return (
                 <button
                   key={s}
-                  onClick={() => setScope(s)}
+                  onClick={() => {
+                    setScope(s);
+                    setPendingInstall(null);
+                  }}
                   className={`${styles.scopeBtn} ${scopeBtnClass}`}
                 >
-                  {s}
+                  {t(s === "global" ? "skills.add.global" : "skills.add.project")}
                 </button>
               );
             })}
@@ -151,6 +210,31 @@ export function AddSkillPanel({
             {installError}
           </div>
         )}
+        {pendingInstall && (
+          <section className={styles.confirmation} role="alert">
+            <div className={styles.confirmationCopy}>
+              <strong>{t("skills.add.reviewTitle")}</strong>
+              <code>{pendingInstall.review.source}</code>
+              <span>
+                {pendingInstall.review.scope === "global"
+                  ? t("skills.add.allProjects")
+                  : `${t("skills.add.onlyProject")}: ${shortenPath(pendingInstall.review.cwd ?? cwd)}`}
+              </span>
+              <span>{t("skills.add.installTo")} {shortenPath(pendingInstall.review.installPath)}</span>
+            </div>
+            <div className={styles.confirmationActions}>
+              <button
+                type="button"
+                className={styles.confirmInstallBtn}
+                disabled={installing !== null || Date.now() >= pendingInstall.expiresAt}
+                onClick={() => void executeInstall()}
+              >
+                {t("skills.add.confirm")}
+              </button>
+              <button type="button" disabled={installing !== null} onClick={() => setPendingInstall(null)}>{t("common.cancel")}</button>
+            </div>
+          </section>
+        )}
       </div>
 
       {/* ── Results list ── */}
@@ -159,6 +243,7 @@ export function AddSkillPanel({
           {results.map((r) => {
             const isInstalled = installedPkgs.has(r.package);
             const isInstalling = installing === r.package;
+            const isPending = pendingInstall?.review.source === r.package;
             // split "owner/repo@skill" for cleaner display
             const atIdx = r.package.indexOf("@");
             const repopart = atIdx > -1 ? r.package.slice(0, atIdx) : r.package;
@@ -169,7 +254,7 @@ export function AddSkillPanel({
               installBtnClass += ` ${styles.installBtnInstalled}`;
             } else if (isInstalling) {
               installBtnClass += ` ${styles.installBtnInstalling}`;
-            } else if (installing !== null) {
+            } else if (installing !== null || pendingInstall !== null) {
               installBtnClass += ` ${styles.installBtnDisabled}`;
             } else {
               installBtnClass += ` ${styles.installBtnDefault}`;
@@ -200,23 +285,25 @@ export function AddSkillPanel({
                         rel="noreferrer"
                         className={styles.skillsLink}
                       >
-                        skills.sh ↗
+                        {t("skills.add.directoryName")} <ExternalLink size={12} strokeWidth={1.8} aria-hidden="true" />
                       </a>
                     )}
                   </div>
                 </div>
                 <button
                   onClick={() =>
-                    !isInstalled && !isInstalling && install(r.package)
+                    !isInstalled && !isInstalling && !pendingInstall && prepareInstall(r.package)
                   }
-                  disabled={isInstalled || isInstalling || installing !== null}
+                  disabled={isInstalled || isInstalling || installing !== null || pendingInstall !== null}
                   className={installBtnClass}
                 >
                   {isInstalled
-                    ? "✓ Installed"
+                    ? `✓ ${t("skills.add.installed")}`
+                    : isPending
+                      ? t("skills.add.reviewing")
                     : isInstalling
-                      ? "Installing…"
-                      : "Install"}
+                      ? t("skills.add.installing")
+                      : t("skills.add.install")}
                 </button>
               </div>
             );
@@ -226,16 +313,16 @@ export function AddSkillPanel({
         !searchError &&
         !searching && (
           <div className={styles.emptyState}>
-            Search{" "}
+            {t("skills.add.searchPrefix")}{" "}
             <a
               href="https://skills.sh"
               target="_blank"
               rel="noreferrer"
               className={styles.emptyStateLink}
             >
-              skills.sh
+              {t("skills.add.directoryName")}
             </a>{" "}
-            to discover and install skills for your agent.
+            {t("skills.add.searchSuffix")}
           </div>
         )
       )}

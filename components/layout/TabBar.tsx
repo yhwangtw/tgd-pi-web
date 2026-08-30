@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { Columns2, Pin, X } from "lucide-react";
+import { IconButton } from "@/components/ui/IconButton";
 import { getFileIcon } from "../sidebar/FileIcons";
 import { useI18n } from "@/lib/i18n";
+import type { FileOpenIntent, FileViewState } from "@/lib/file-open";
 import styles from "./TabBar.module.css";
 
 export interface Tab {
@@ -13,6 +16,10 @@ export interface Tab {
   gotoLine?: number;
   /** Bumped each time the file is (re)opened at a line, to re-trigger the jump. */
   gotoNonce?: number;
+  /** Canonical source/path/line/mode context for this open action. */
+  intent?: FileOpenIntent;
+  /** Per-tab reading state restored when switching between files. */
+  viewState?: FileViewState;
   pinned?: boolean;
 }
 
@@ -59,6 +66,15 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
             onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onCloseTab(tab.id); } }}
             onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, tab }); }}
             className={`${styles.tab} ${isActive ? styles.tabActive : styles.tabInactive}`}
+            role="tab"
+            aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectTab(tab.id);
+              }
+            }}
           >
             <span className={`${styles.tabIcon} ${isActive ? styles.tabIconActive : styles.tabIconInactive}`}>
               {getFileIcon(tab.label, 13)}
@@ -69,18 +85,15 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
             >
               {tab.label}
             </span>
-            {tab.pinned && <span className={styles.pinned} aria-label="Pinned" title="Pinned">●</span>}
-            {splitTabId === tab.id && <span className={styles.splitMark} aria-label="Open in split" title="Open in split">Ⅱ</span>}
-            <button
+            {tab.pinned && <span className={styles.pinned} aria-label={t("tabs.pinned")} title={t("tabs.pinned")}><Pin aria-hidden="true" /></span>}
+            {splitTabId === tab.id && <span className={styles.splitMark} aria-label={t("tabs.openSplit")} title={t("tabs.openSplit")}><Columns2 aria-hidden="true" /></span>}
+            <IconButton
+              label={t("tabs.close")}
+              icon={<X strokeWidth={1.8} />}
+              size="compact"
               onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
-              className={`bg-none text-dim hover-bg-text ${styles.closeBtn}`}
-              title="Close"
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <line x1="2" y1="2" x2="8" y2="8" />
-                <line x1="8" y1="2" x2="2" y2="8" />
-              </svg>
-            </button>
+              className={styles.closeBtn}
+            />
           </div>
         );
       })}
@@ -90,30 +103,30 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
           <div className={styles.menuBackdrop} onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
           <div className={`glass ${styles.tabMenu}`} style={{ left: menu.x, top: menu.y }} role="menu">
             {onReveal && (
-              <button className={styles.tabMenuItem} onClick={() => { onReveal(menu.tab.filePath); setMenu(null); }}>
+              <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onReveal(menu.tab.filePath); setMenu(null); }}>
                 {t("explorer.revealInTree")}
               </button>
             )}
             {onTogglePin && (
-              <button className={styles.tabMenuItem} onClick={() => { onTogglePin(menu.tab.id); setMenu(null); }}>
-                {menu.tab.pinned ? "Unpin tab" : "Pin tab"}
+              <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onTogglePin(menu.tab.id); setMenu(null); }}>
+                {menu.tab.pinned ? t("tabs.unpin") : t("tabs.pin")}
               </button>
             )}
             {onOpenSplit && tabs.length > 1 && (
-              <button className={styles.tabMenuItem} onClick={() => { onOpenSplit(menu.tab.id); setMenu(null); }}>
-                {splitTabId === menu.tab.id ? "Close split" : "Open in split"}
+              <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onOpenSplit(menu.tab.id); setMenu(null); }}>
+                {splitTabId === menu.tab.id ? t("tabs.closeSplit") : t("tabs.openSplit")}
               </button>
             )}
-            <button className={styles.tabMenuItem} onClick={() => { onCloseTab(menu.tab.id); setMenu(null); }}>
+            <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onCloseTab(menu.tab.id); setMenu(null); }}>
               {t("tabs.close")}
             </button>
             {onCloseOthers && tabs.length > 1 && (
-              <button className={styles.tabMenuItem} onClick={() => { onCloseOthers(menu.tab.id); setMenu(null); }}>
+              <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onCloseOthers(menu.tab.id); setMenu(null); }}>
                 {t("tabs.closeOthers")}
               </button>
             )}
             {onCloseAll && (
-              <button className={styles.tabMenuItem} onClick={() => { onCloseAll(); setMenu(null); }}>
+              <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onCloseAll(); setMenu(null); }}>
                 {t("tabs.closeAll")}
               </button>
             )}

@@ -1,9 +1,11 @@
 .row {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--bg-subtle);
   /* No own background — --bg-elev-1 is pure white in the light skins and
      showed up as a stark band against the sidebar's tinted background. */
 }
@@ -14,10 +16,10 @@
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-optical);
   font-size: var(--text-xs);
   line-height: var(--leading-tight);
-  padding: 2px 7px;
+  padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-pill);
   border: 1px solid transparent;
   font-weight: var(--weight-medium);
@@ -33,7 +35,7 @@
 .count {
   margin-left: 2px;
   font-size: var(--text-2xs);
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border-radius: var(--radius-pill);
 }
 
@@ -44,12 +46,12 @@
   cursor: pointer;
   font-size: var(--text-base);
   line-height: var(--leading-none);
-  padding: 0 4px;
+  padding: 0 var(--space-1);
 }
 
 .clear:hover {
   color: var(--text);
 }
 
-:global(html[data-ui-style="trae"]) .row { padding: 7px 10px; border-bottom-color: var(--trae-hairline); }
-:global(html[data-ui-style="trae"]) .chip { min-height: 26px; padding: 3px 9px; border-radius: var(--radius-pill); }
+:global(html[data-ui-style="trae"]) .row { padding: var(--space-2) var(--space-2); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .chip { min-height: 26px; padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); }

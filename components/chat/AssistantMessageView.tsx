@@ -1,6 +1,17 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import {
+  ArrowDown,
+  Check,
+  ChevronDown,
+  Copy,
+  Ellipsis,
+  Info,
+  Maximize2,
+  Reply,
+  TriangleAlert,
+} from "lucide-react";
 import { MarkdownBody } from "./MarkdownBody";
 import type {
   AssistantMessage,
@@ -15,12 +26,15 @@ import { getLanguage } from "@/lib/file-mime";
 import { useI18n } from "@/lib/i18n";
 import { ToolRunGroup, type ToolRunItem } from "./ToolRunGroup";
 import { TurnActivityGroup } from "./TurnActivityGroup";
+import { StructuredOutputCard } from "./StructuredOutputCard";
 import { FocusDialog } from "./FocusDialog";
 import type { AssistantUsage } from "@/lib/usage-aggregation";
 import { requestOpenFile } from "@/lib/file-links";
 import styles from "./AssistantMessageView.module.css";
 import { MessageBookmarkAction, MessageBookmarkIndicator } from "./MessageBookmarkAction";
 import { useMobileActionPlacement } from "@/hooks/use-mobile-action-placement";
+import { redactSensitiveText } from "@/lib/redaction";
+import type { OutputCardKind } from "@/lib/output-design";
 
 export function isProviderAuthError(errorMessage?: string): boolean {
   return !!errorMessage && /(?:no api key|unauthori[sz]ed|authentication|credential|sign[ -]?in|log[ -]?in|openai-codex)/i.test(errorMessage);
@@ -31,7 +45,7 @@ export function presentProviderError(errorMessage: string | undefined, fallback:
   actionUrl: string | null;
   details: string | null;
 } {
-  const raw = errorMessage?.trim();
+  const raw = errorMessage ? redactSensitiveText(errorMessage).trim() : undefined;
   if (!raw) return { summary: fallback, actionUrl: null, details: null };
   const url = raw.match(/https?:\/\/[^\s<>]+/i)?.[0]?.replace(/[),.;]+$/, "") ?? null;
   const withoutUrl = url ? raw.replace(url, "") : raw;
@@ -172,7 +186,11 @@ export function AssistantMessageView({
   const textContent = blocks
     .filter((b): b is TextContent => b.type === "text")
     .map((b) => b.text)
-    .join("\n");
+    .concat(blocks
+      .filter((block): block is ToolCallContent => block.type === "toolCall" && block.toolName === "structured_output")
+      .map((block) => structuredOutputPlainText(block.input)))
+    .filter(Boolean)
+    .join("\n\n");
   const canBookmark = showActions && !!bookmarkEntryId && !!onToggleBookmark && !!textContent && !isStreaming;
   const resolvedModelName = message.provider
     ? modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model
@@ -311,9 +329,7 @@ export function AssistantMessageView({
               {est > 0 && (
                 <span className={styles.tokenCount} title={t("chat.estimatedTokens")}>
                   <span className={styles.tokenCountInner}>
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="1.5" x2="5" y2="8.5" /><polyline points="2 6 5 8.5 8 6" />
-                    </svg>
+                    <ArrowDown size={10} strokeWidth={1.6} aria-hidden="true" />
                     {est}
                   </span>
                   {tps !== null && (() => {
@@ -350,21 +366,16 @@ export function AssistantMessageView({
         authRecovered && isProviderAuthError(message.errorMessage) ? (
           <details className={styles.recoveredError}>
             <summary className={styles.recoveredErrorSummary}>
-              <span className={styles.recoveredIcon} aria-hidden>✓</span>
+              <Check className={styles.recoveredIcon} size={12} strokeWidth={2.2} aria-hidden="true" />
               <span>{t("chat.authRecovered")}</span>
               <span className={styles.recoveredContext}>{t("chat.earlierConnectionIssue")}</span>
-              <svg className={styles.recoveredChevron} width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <polyline points="2 3.5 5 6.5 8 3.5" />
-              </svg>
+              <ChevronDown className={styles.recoveredChevron} size={11} strokeWidth={1.8} aria-hidden="true" />
             </summary>
-            <div className={styles.recoveredErrorDetail}>{message.errorMessage}</div>
+            <div className={styles.recoveredErrorDetail}>{redactSensitiveText(message.errorMessage ?? "")}</div>
           </details>
         ) : (
         <div className={styles.errorCard} role="alert">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
+          <TriangleAlert size={13} strokeWidth={2} aria-hidden="true" />
           <div className={styles.errorBody}>
             <div className={styles.errorContent}>
               <span className={styles.errorSummary}>{errorPresentation.summary}</span>
@@ -402,10 +413,10 @@ export function AssistantMessageView({
         {showUsage && footerUsage && (
           <UsageDetails usage={footerUsage} />
         )}
-        {showActions && textContent && !isStreaming && <div data-testid="assistant-message-actions" className={styles.actionToolbar} aria-hidden="true">
+        {showActions && textContent && !isStreaming && <div data-testid="assistant-message-actions" className={styles.actionToolbar}>
         {textContent && !isStreaming && onQuote && (
           <button type="button" onClick={quoteContent} title={t("chat.quote")} className={`${styles.copyButton} text-dim hover-accent`}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 21c3-6 7-9 14-9" /><path d="M13 7l5 5-5 5" /></svg>
+            <Reply size={11} strokeWidth={1.8} aria-hidden="true" />
             <span className={styles.copyLabel}>{t("chat.quote")}</span>
           </button>
         )}
@@ -416,14 +427,9 @@ export function AssistantMessageView({
             className={`${styles.copyButton} ${copied ? "text-accent" : "text-dim hover-accent"}`}
           >
             {copied ? (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+              <Check size={11} strokeWidth={1.8} aria-hidden="true" />
             ) : (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
+              <Copy size={11} strokeWidth={1.8} aria-hidden="true" />
             )}
             <span className={styles.copyLabel}>{copied ? t("common.copied") : t("common.copy")}</span>
           </button>
@@ -439,9 +445,7 @@ export function AssistantMessageView({
         {textContent && !isStreaming && (
           <details ref={actionsRef} className={styles.mobileActionMenu}>
             <summary role="button" title={t("chat.moreActions")} aria-label={t("chat.moreActions")} onClick={() => setActionsOpen(!(actionsRef.current?.open ?? false))}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" />
-              </svg>
+              <Ellipsis size={16} strokeWidth={2} aria-hidden="true" />
             </summary>
             <div
               data-mobile-action-panel
@@ -449,15 +453,15 @@ export function AssistantMessageView({
             >
               <button type="button" onClick={() => { closeActions(); copyContent(); }} className={`${styles.copyButton} ${copied ? "text-accent" : "text-dim hover-accent"}`}>
                 {copied ? (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  <Check size={13} strokeWidth={1.8} aria-hidden="true" />
                 ) : (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                  <Copy size={13} strokeWidth={1.8} aria-hidden="true" />
                 )}
                 <span>{copied ? t("common.copied") : t("common.copy")}</span>
               </button>
               {onQuote && (
                 <button type="button" onClick={() => { closeActions(); quoteContent(); }} className={`${styles.copyButton} text-dim hover-accent`}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 21c3-6 7-9 14-9" /><path d="M13 7l5 5-5 5" /></svg>
+                  <Reply size={13} strokeWidth={1.8} aria-hidden="true" />
                   <span>{t("chat.quote")}</span>
                 </button>
               )}
@@ -586,8 +590,22 @@ function renderBlocks({
       continue;
     }
 
+    if (block.toolName === "structured_output") {
+      if (accessoryPending) {
+        rendered.push(<div key={`output-accessory-${i}`}>{accessoryPending}</div>);
+        accessoryPending = undefined;
+      }
+      rendered.push(<StructuredToolOutput key={block.toolCallId || i} block={block} />);
+      i += 1;
+      continue;
+    }
+
     let end = i + 1;
-    while (end < blocks.length && blocks[end].type === "toolCall") end += 1;
+    while (
+      end < blocks.length
+      && blocks[end].type === "toolCall"
+      && (blocks[end] as ToolCallContent).toolName !== "structured_output"
+    ) end += 1;
     const run = blocks.slice(i, end) as ToolCallContent[];
     const items: ToolRunItem[] = run.map((tool) => ({
       block: tool,
@@ -625,6 +643,58 @@ function renderBlocks({
   }
   if (accessoryPending) rendered.push(<div key="output-accessory">{accessoryPending}</div>);
   return rendered;
+}
+
+interface StructuredToolOutputValue {
+  headline: string;
+  summary: string;
+  actionItems: string[];
+  kind: OutputCardKind;
+  details?: string;
+}
+
+function parseStructuredToolOutput(input: Record<string, unknown>): StructuredToolOutputValue {
+  const rawKind = typeof input.kind === "string" ? input.kind : "result";
+  const kind: OutputCardKind = ["result", "info", "warning", "error"].includes(rawKind)
+    ? rawKind as OutputCardKind
+    : "result";
+  return {
+    headline: typeof input.headline === "string" ? input.headline.trim() : "",
+    summary: typeof input.summary === "string" ? input.summary.trim() : "",
+    actionItems: Array.isArray(input.actionItems)
+      ? input.actionItems.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
+      : [],
+    kind,
+    ...(typeof input.details === "string" && input.details.trim() ? { details: input.details.trim() } : {}),
+  };
+}
+
+function structuredOutputMarkdown(value: StructuredToolOutputValue): string {
+  return [
+    value.summary,
+    value.actionItems.length > 0
+      ? value.actionItems.map((item, index) => `${index + 1}. ${item}`).join("\n")
+      : "",
+  ].filter(Boolean).join("\n\n");
+}
+
+function structuredOutputPlainText(input: Record<string, unknown>): string {
+  const value = parseStructuredToolOutput(input);
+  return [value.headline, structuredOutputMarkdown(value), value.details ?? ""].filter(Boolean).join("\n\n");
+}
+
+function StructuredToolOutput({ block }: { block: ToolCallContent }) {
+  const value = parseStructuredToolOutput(block.input);
+  const markdown = structuredOutputMarkdown(value);
+  return (
+    <StructuredOutputCard
+      kind={value.kind}
+      title={value.headline || undefined}
+      details={value.details ? <MarkdownBody>{value.details}</MarkdownBody> : undefined}
+    >
+      <MarkdownBody>{markdown || value.headline}</MarkdownBody>
+    </StructuredOutputCard>
+  );
 }
 
 function BlockView({ block, isStreaming, streamingDuration, outputAccessory }: { block: AssistantContentBlock; isStreaming?: boolean; streamingDuration?: number; outputAccessory?: React.ReactNode }) {
@@ -708,9 +778,7 @@ function ToolCallBlock({ block, result, duration, active = false }: { block: Too
         {duration !== undefined && (
           <span className={styles.toolDuration}>{duration}s</span>
         )}
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={styles.toolChevron} style={{ transform: expanded ? "rotate(180deg)" : "none" }}>
-          <polyline points="2 3.5 5 6.5 8 3.5" />
-        </svg>
+        <ChevronDown size={10} strokeWidth={1.8} className={styles.toolChevron} style={{ transform: expanded ? "rotate(180deg)" : "none" }} aria-hidden="true" />
       </button>
 
       {/* ── Expanded: structured view for file tools, JSON otherwise ── */}
@@ -771,7 +839,7 @@ function ToolDiffHeader({ path, onFocus }: { path: string; onFocus: () => void }
     <div className={`${styles.toolDiffPath} chrome-mono`}>
       <button type="button" className={styles.toolDiffOpen} onClick={() => requestOpenFile({ path })} title={path}>{path}</button>
       <button type="button" onClick={onFocus} title={t("code.focus")} aria-label={t("code.focus")}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M8 3H3v5M16 21h5v-5M3 8l5-5M21 16l-5 5" /></svg>
+        <Maximize2 size={12} strokeWidth={1.8} aria-hidden="true" />
       </button>
     </div>
   );
@@ -782,6 +850,7 @@ function PairedResult({ text, isEmpty, isError }: {
   isEmpty: boolean;
   isError: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div
       className={`${styles.pairedResult} ${isError ? styles.pairedResultError : ""}`}
@@ -789,7 +858,7 @@ function PairedResult({ text, isEmpty, isError }: {
       <pre
         className={`${styles.pairedResultPre} ${isEmpty ? styles.pairedResultPreEmpty : ""} ${isError ? styles.pairedResultPreError : ""}`}
       >
-        {isEmpty ? "(no output)" : text}
+        {isEmpty ? t("chat.noOutput") : text}
       </pre>
     </div>
   );
@@ -798,13 +867,15 @@ function PairedResult({ text, isEmpty, isError }: {
 function UsageDetails({ usage }: { usage: NonNullable<AssistantMessage["usage"]> }) {
   const { locale, t } = useI18n();
   const details = formatUsage(usage, locale);
+  const totalCost = usage.cost?.total;
+  const visibleCost = Number.isFinite(totalCost) && totalCost > 0
+    ? `$${totalCost.toFixed(totalCost < 0.01 ? 4 : totalCost < 1 ? 3 : 2)}`
+    : null;
   return (
     <details className={styles.usageDetails}>
       <summary title={details}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <circle cx="12" cy="12" r="9" /><line x1="12" y1="11" x2="12" y2="16" /><line x1="12" y1="8" x2="12.01" y2="8" />
-        </svg>
-        <span>{t("chat.usage")}</span>
+        <Info size={12} strokeWidth={1.9} aria-hidden="true" />
+        <span>{visibleCost ? `${t("chat.usage")} · ${visibleCost}` : t("chat.usage")}</span>
       </summary>
       <span className={styles.usagePopover}>{details}</span>
     </details>

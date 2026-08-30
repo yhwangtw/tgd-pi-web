@@ -2,6 +2,7 @@
 
 import { useCallback, useSyncExternalStore, type ReactElement } from "react";
 import { ToastContainer } from "@/components/ui/Toast";
+import { redactSensitiveText } from "@/lib/redaction";
 
 export type ToastType = "success" | "error" | "warning" | "info";
 
@@ -73,7 +74,7 @@ export function showToast(message: string, opts: ToastOptions = {}): number {
   const type: ToastType = opts.type ?? "info";
   const duration = opts.duration ?? 3000;
   // Cap at 6 visible toasts — drop oldest.
-  toasts = [...toasts, { id, message, type, duration }];
+  toasts = [...toasts, { id, message: redactSensitiveText(message), type, duration }];
   if (toasts.length > 6) toasts = toasts.slice(1);
   if (duration > 0) {
     timers.set(id, setTimeout(() => dismissToast(id), duration));

@@ -1,7 +1,8 @@
-export const TOOL_PRESETS = ["inherit", "off", "default", "full", "custom"] as const;
+export const TOOL_PRESETS = ["inherit", "off", "plan", "default", "full", "custom"] as const;
 export const TOOL_PRESET_MAP = {
   inherit: "inherit",
   off: "none",
+  plan: "plan",
   default: "default",
   full: "full",
   custom: "custom",

@@ -1,8 +1,8 @@
 .group {
   display: inline-grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2px;
-  padding: 2px;
+  gap: var(--space-optical);
+  padding: var(--space-optical);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--bg-subtle);
@@ -14,8 +14,8 @@
   min-height: 28px;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 0 8px;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-row);
   background: transparent;

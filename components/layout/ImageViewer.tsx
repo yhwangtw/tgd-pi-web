@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { encodeFilePathForApi, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { useFileWatch } from "@/hooks/useFileWatch";
+import { useI18n } from "@/lib/i18n";
+import { RotateCcw } from "lucide-react";
 import { formatSize } from "./file-viewer-utils";
 import styles from "./ImageViewer.module.css";
 
 export function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
+  const { t } = useI18n();
   const { watching, refreshTrigger } = useFileWatch(filePath);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -69,22 +72,22 @@ export function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string 
         <span className={styles.filePath} title={filePath}>
           {getRelativeFilePath(filePath, cwd)}
         </span>
-        <span className={styles.extension}>{ext || "image"}</span>
+        <span className={styles.extension}>{ext || t("files.imageType")}</span>
         {naturalSize && <span>{naturalSize.w} × {naturalSize.h}</span>}
         {formatSizeStr && <span>{formatSizeStr}</span>}
         {zoom !== 1 && (
-          <button className={styles.zoomReset} onClick={resetView} title="Reset zoom">
-            {Math.round(zoom * 100)}% ⟲
+          <button type="button" className={styles.zoomReset} onClick={resetView} title={t("files.resetZoom")} aria-label={t("files.resetZoom")}>
+            {Math.round(zoom * 100)}% <RotateCcw size={12} strokeWidth={1.8} aria-hidden="true" />
           </button>
         )}
         <span
-          title={watching ? "Live sync active" : "Not watching"}
+          title={t(watching ? "files.liveSyncActive" : "files.notWatching")}
           className={`${styles.watchStatus} ${watching ? styles.watchStatusLive : styles.watchStatusStatic}`}
         >
           <span
             className={`${styles.watchDot} ${watching ? styles.watchDotLive : styles.watchDotStatic}`}
           />
-          {watching ? "live" : "static"}
+          {t(watching ? "files.live" : "files.static")}
         </span>
       </div>
       <div

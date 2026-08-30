@@ -30,15 +30,15 @@
   min-height: var(--control-lg);
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-2-5);
-  margin-bottom: var(--space-2-5);
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .panelHeader > div {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--space-0-5);
+  gap: var(--space-optical);
 }
 
 .panelHeader strong {
@@ -71,7 +71,7 @@
   display: flex;
   gap: var(--space-1);
   padding: var(--radius-xs);
-  margin-bottom: var(--space-2-5);
+  margin-bottom: var(--space-3);
   border-radius: var(--radius-row);
   background: var(--bg-subtle);
 }
@@ -81,7 +81,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-1-5);
+  gap: var(--space-2);
   min-height: var(--control-md);
   padding: var(--space-1) 0;
   font-size: var(--text-sm);
@@ -103,7 +103,7 @@
 }
 
 .sectionLabel {
-  margin: var(--space-0-5) var(--space-0-5) var(--space-1-5);
+  margin: var(--space-optical) var(--space-optical) var(--space-2);
   color: var(--text-dim);
   font-size: var(--text-2xs);
   font-weight: var(--weight-semibold);
@@ -116,7 +116,7 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--radius-xs);
   padding: var(--radius-xs);
-  margin-bottom: var(--space-2-5);
+  margin-bottom: var(--space-3);
   border-radius: var(--radius-row);
   background: var(--bg-subtle);
 }
@@ -126,7 +126,7 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--radius-xs);
   padding: var(--radius-xs);
-  margin-bottom: var(--space-2-5);
+  margin-bottom: var(--space-3);
   border-radius: var(--radius-row);
   background: var(--bg-subtle);
 }
@@ -136,7 +136,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--radius-xs);
   padding: var(--radius-xs);
-  margin-bottom: var(--space-2-5);
+  margin-bottom: var(--space-3);
   border-radius: var(--radius-row);
   background: var(--bg-subtle);
 }
@@ -148,7 +148,7 @@
 .fontSizeBtn {
   min-width: 0;
   min-height: var(--control-md);
-  padding: var(--space-1-5) var(--space-0-5);
+  padding: var(--space-2) var(--space-optical);
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
@@ -171,7 +171,7 @@
 .skinList {
   display: flex;
   flex-direction: column;
-  gap: var(--space-0-5);
+  gap: var(--space-optical);
 }
 
 .skinRow {
@@ -180,7 +180,7 @@
   gap: var(--space-2);
   width: 100%;
   min-height: var(--control-lg);
-  padding: var(--space-1-5) var(--space-2);
+  padding: var(--space-2) var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-row);
   background: transparent;
@@ -253,7 +253,7 @@
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-2);
-  padding: var(--space-1-5) var(--space-2);
+  padding: var(--space-2) var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-row);
   background: transparent;
@@ -276,7 +276,7 @@
     bottom: calc(var(--safe-area-bottom) + 72px);
     width: auto;
     max-height: min(76dvh, 640px);
-    padding: 12px 14px 14px;
+    padding: var(--space-3) var(--space-3) var(--space-3);
     overscroll-behavior: contain;
   }
 
@@ -285,7 +285,7 @@
     top: -12px;
     z-index: 2;
     margin: -2px -4px 10px;
-    padding: 8px 4px 6px;
+    padding: var(--space-2) var(--space-1) var(--space-2);
     background: var(--glass-bg);
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
     backdrop-filter: blur(18px) saturate(1.4);
@@ -312,7 +312,7 @@
 :global(html[data-ui-style="trae"]) .themeRow,
 :global(html[data-ui-style="trae"]) .fontSizeRow,
 :global(html[data-ui-style="trae"]) .messageLayoutRow {
-  padding: 4px;
+  padding: var(--space-1);
   border-radius: var(--radius-control);
   background: var(--trae-control);
 }
@@ -327,7 +327,7 @@
   background: var(--trae-surface-solid);
   box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 9%, transparent);
 }
-:global(html[data-ui-style="trae"]) .skinList { gap: 5px; }
+:global(html[data-ui-style="trae"]) .skinList { gap: var(--space-1); }
 :global(html[data-ui-style="trae"]) .skinRow { min-height: 42px; border: 0; border-radius: var(--radius-control-prominent); }
 :global(html[data-ui-style="trae"]) .skinRowActive { background: var(--bg-selected); }
 :global(html[data-ui-style="trae"]) .resetRow,

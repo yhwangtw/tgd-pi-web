@@ -21,3 +21,23 @@ export function pickTurnTarget(tops: number[], dir: "prev" | "next"): number | n
   }
   return null;
 }
+
+export type MessageFocusDirection = "prev" | "next" | "first" | "last";
+
+/**
+ * Pick the next tab stop for keyboard navigation inside the transcript.
+ * Only one message is tabbable at a time; arrow keys move that tab stop
+ * without putting every historical message into the page's normal tab order.
+ */
+export function pickRovingMessageTarget(
+  currentIndex: number,
+  messageCount: number,
+  direction: MessageFocusDirection,
+): number | null {
+  if (messageCount <= 0) return null;
+  if (direction === "first") return 0;
+  if (direction === "last") return messageCount - 1;
+
+  const target = currentIndex + (direction === "next" ? 1 : -1);
+  return target >= 0 && target < messageCount ? target : null;
+}

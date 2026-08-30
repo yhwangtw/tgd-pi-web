@@ -17,9 +17,9 @@
 .item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border: none;
   cursor: pointer;
   font-size: var(--text-sm);
@@ -49,13 +49,13 @@
   margin-left: 6px;
   font-size: var(--text-2xs);
   font-weight: var(--weight-medium);
-  padding: 1px 5px;
+  padding: var(--space-optical) var(--space-1);
   border-radius: var(--radius-pill);
   background: var(--color-accent-bg);
   color: var(--color-accent);
   vertical-align: middle;
 }
 
-:global(html[data-ui-style="trae"]) .menu { padding: 6px; border-color: var(--trae-hairline); border-radius: var(--radius-menu); background: var(--glass-bg); }
-:global(html[data-ui-style="trae"]) .item { min-height: 42px; padding: 8px 10px; border-radius: var(--radius-control); }
+:global(html[data-ui-style="trae"]) .menu { padding: var(--space-2); border-color: var(--trae-hairline); border-radius: var(--radius-menu); background: var(--glass-bg); }
+:global(html[data-ui-style="trae"]) .item { min-height: 42px; padding: var(--space-2) var(--space-2); border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .itemSelected { background: var(--bg-selected); }

@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { AlertTriangle } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 import styles from "./ErrorBoundary.module.css";
 
 interface Props {
@@ -11,6 +13,25 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+}
+
+function DefaultErrorFallback({ error, onRetry }: { error: Error | null; onRetry: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className={styles.container} role="alert">
+      <AlertTriangle className={styles.icon} size={32} strokeWidth={1.6} aria-hidden="true" />
+      <div className={styles.title}>{t("errorBoundary.title")}</div>
+      <div className={styles.message}>{error?.message ?? t("errorBoundary.unexpected")}</div>
+      <div className={styles.actions}>
+        <button type="button" onClick={onRetry} className={styles.retryBtn}>
+          {t("errorBoundary.retry")}
+        </button>
+        <button type="button" onClick={() => window.location.reload()} className={styles.reloadBtn}>
+          {t("errorBoundary.reload")}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -41,44 +62,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
 
-      return (
-        <div className={styles.container}>
-          <svg
-            width="32"
-            height="32"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--color-error)"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <div className={styles.title}>
-            Something went wrong
-          </div>
-          <div className={styles.message}>
-            {this.state.error?.message ?? "An unexpected error occurred."}
-          </div>
-          <div className={styles.actions}>
-            <button
-              onClick={this.handleRetry}
-              className={styles.retryBtn}
-            >
-              Try again
-            </button>
-            <button
-              onClick={() => window.location.reload()}
-              className={styles.reloadBtn}
-            >
-              Reload page
-            </button>
-          </div>
-        </div>
-      );
+      return <DefaultErrorFallback error={this.state.error} onRetry={this.handleRetry} />;
     }
 
     return this.props.children;

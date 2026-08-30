@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef } from "react";
+import { LoaderCircle } from "lucide-react";
 import styles from "./BashBlock.module.css";
 import { useI18n } from "@/lib/i18n";
 
@@ -46,9 +47,7 @@ export const BashBlock = memo(function BashBlock({ command, output, running, exi
         <span className={styles.command} title={command}>{command}</span>
         {running ? (
           <>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={styles.spinner} aria-label={t("bash.running")}>
-              <path d="M21 12a9 9 0 1 1-6.2-8.56" />
-            </svg>
+            <LoaderCircle size={12} strokeWidth={2.5} className={styles.spinner} aria-label={t("bash.running")} />
             {onAbort && (
               <button onClick={onAbort} className={styles.abortButton}>
                 {t("bash.cancel")}

@@ -1,33 +1,18 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1100;
-  background: var(--color-overlay-heavy);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal {
-  width: 820px;
-  max-width: calc(100vw - 32px);
-  max-height: min(72vh, calc(100vh - 32px));
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-dialog);
+.body {
+  padding: 0;
   display: flex;
   flex-direction: column;
-  box-shadow: var(--color-shadow-modal);
   overflow: hidden;
 }
 
 .searchBar {
-  padding: 10px 14px;
+  min-height: var(--control-prominent);
+  padding: 0 var(--space-3);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .searchIcon {
@@ -48,11 +33,11 @@
 .cardGridArea {
   flex: 1;
   overflow-y: auto;
-  padding: 14px;
+  padding: var(--space-3);
 }
 
 .emptyMessage {
-  padding: 20px 0;
+  padding: var(--space-4) 0;
   font-size: var(--text-sm);
   color: var(--text-dim);
   text-align: center;
@@ -61,7 +46,7 @@
 .cardGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .sectionHeader {
@@ -74,15 +59,16 @@
 }
 
 .sectionHeaderPadding {
-  padding-top: 6px;
+  padding-top: var(--space-2);
 }
 
 .card {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--space-2);
+  min-height: var(--component-option-min-height);
+  padding: var(--space-2) var(--space-3);
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
@@ -131,11 +117,15 @@
   color: var(--text-dim);
 }
 
-:global(html[data-ui-style="trae"]) .overlay { background: var(--trae-overlay); backdrop-filter: blur(8px); }
-:global(html[data-ui-style="trae"]) .modal { border-color: var(--trae-hairline); border-radius: var(--radius-dialog); background: var(--trae-canvas); }
-:global(html[data-ui-style="trae"]) .searchBar { min-height: 58px; margin: 10px; padding: 0 14px; border: 0; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
-:global(html[data-ui-style="trae"]) .cardGridArea { padding: 8px 14px 18px; }
+:global(html[data-ui-style="trae"]) .searchBar { min-height: 58px; margin: 10px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .cardGridArea { padding: var(--space-2) var(--space-3) var(--space-4); }
 :global(html[data-ui-style="trae"]) .sectionHeader { letter-spacing: var(--tracking-label); text-transform: none; }
 :global(html[data-ui-style="trae"]) .card { min-height: 64px; border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .card:hover { box-shadow: var(--trae-hover-shadow); }
 :global(html[data-ui-style="trae"]) .plusIconBox { border: 0; border-radius: var(--radius-control); background: var(--trae-control); }
+
+@media (max-width: 520px) {
+  .cardGridArea { padding: var(--space-2) var(--space-3) var(--space-4); }
+  .cardGrid { grid-template-columns: 1fr; }
+  .card { min-height: var(--component-option-min-height); }
+}

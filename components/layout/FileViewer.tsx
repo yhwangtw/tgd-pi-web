@@ -8,6 +8,7 @@ import { TextFileViewer } from "./TextFileViewer";
 import { VideoViewer } from "./VideoViewer";
 import { BinaryViewer } from "./BinaryViewer";
 import styles from "./FileViewer.module.css";
+import type { FileOpenMode, FileViewState } from "@/lib/file-open";
 
 interface Props {
   filePath: string;
@@ -18,6 +19,10 @@ interface Props {
   gotoNonce?: number;
   onSendToAgent?: (prompt: string) => void;
   sessionId?: string | null;
+  initialMode?: FileOpenMode;
+  initialViewState?: FileViewState;
+  onViewStateChange?: (viewState: FileViewState) => void;
+  onNavigationConsumed?: () => void;
 }
 
 export interface FileData {
@@ -78,7 +83,7 @@ export function formatDuration(seconds: number): string {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
-export function FileViewer({ filePath, cwd, gotoLine, gotoNonce, onSendToAgent, sessionId }: Props) {
+export function FileViewer({ filePath, cwd, gotoLine, gotoNonce, onSendToAgent, sessionId, initialMode, initialViewState, onViewStateChange, onNavigationConsumed }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} />;
   }
@@ -94,5 +99,5 @@ export function FileViewer({ filePath, cwd, gotoLine, gotoNonce, onSendToAgent, 
   if (isBinaryPath(filePath)) {
     return <BinaryViewer filePath={filePath} cwd={cwd} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} gotoLine={gotoLine} gotoNonce={gotoNonce} onSendToAgent={onSendToAgent} sessionId={sessionId} />;
+  return <TextFileViewer filePath={filePath} cwd={cwd} gotoLine={gotoLine} gotoNonce={gotoNonce} onSendToAgent={onSendToAgent} sessionId={sessionId} initialMode={initialMode} initialViewState={initialViewState} onViewStateChange={onViewStateChange} onNavigationConsumed={onNavigationConsumed} />;
 }

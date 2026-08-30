@@ -25,6 +25,9 @@ function runSetupFixture(
     gitCheckout?: boolean;
     legacyFiles?: boolean;
     offline?: boolean;
+    dirty?: boolean;
+    localCommits?: number;
+    forceSync?: boolean;
     piVersion?: string;
     tscExit?: number;
   } = {},
@@ -88,6 +91,26 @@ exit 0
   const fakeGit = join(fakeBin, "git");
   writeFileSync(fakeGit, `#!/usr/bin/env bash
 printf '%s\n' "$*" >> "$FAKE_GIT_LOG"
+case "$1 $2" in
+  "status --porcelain")
+    if [ "${options.dirty ? "1" : "0"}" = "1" ]; then
+      echo " M README.md"
+    fi
+    ;;
+  "rev-list --count")
+    echo "${options.localCommits ?? 0}"
+    ;;
+  "status --short")
+    if [ "${options.dirty ? "1" : "0"}" = "1" ]; then
+      echo " M README.md"
+    fi
+    ;;
+  "rev-parse HEAD") echo "0123456789abcdef" ;;
+  "diff --binary") echo "working tree patch" ;;
+  "diff --cached") echo "staged patch" ;;
+  "log --oneline") echo "local commit" ;;
+  "bundle create") : > "$3" ;;
+esac
 exit 0
 `);
   chmodSync(fakeGit, 0o755);
@@ -112,6 +135,7 @@ exit ${options.tscExit ?? 0}
       PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
       TGD_SETUP_BACKUP_DIR: backupRoot,
       TGD_SETUP_OFFLINE: options.offline ? "1" : "0",
+      TGD_SETUP_FORCE_SYNC: options.forceSync ? "1" : "0",
       TGD_SETUP_SOURCE_SYNCED: "0",
     },
   });
@@ -178,6 +202,8 @@ describe("workspace root setup", () => {
     expect(result.status).toBe(0);
     expect(gitCalls.trim().split("\n")).toEqual([
       "fetch --prune origin main",
+      "status --porcelain",
+      "rev-list --count origin/main..HEAD",
       "reset --hard origin/main",
       "clean -fd",
     ]);
@@ -192,6 +218,36 @@ describe("workspace root setup", () => {
     expect(gitCalls).toBe("");
     expect(npmCalls).toContain("run build");
     expect(result.stdout).toContain("離線模式：跳過 origin/main 同步");
+  });
+
+  it("backs up a dirty checkout and stops instead of overwriting it non-interactively", () => {
+    const { backupRoot, gitCalls, npmCalls, result } = runSetupFixture({ gitCheckout: true, dirty: true });
+
+    expect(result.status).toBe(2);
+    expect(gitCalls).not.toContain("reset --hard");
+    expect(gitCalls).not.toContain("clean -fd");
+    expect(npmCalls).toBe("");
+    expect(result.stdout).toContain("已建立本地修改復原備份");
+    expect(result.stdout).toContain("非互動模式不會自動覆蓋");
+    const entries = readdirSync(backupRoot, { recursive: true }).map(String);
+    expect(entries.some((entry) => entry.endsWith("working-tree.patch"))).toBe(true);
+    expect(entries.some((entry) => entry.endsWith("status.txt"))).toBe(true);
+  });
+
+  it("syncs only after an explicit force flag and preserves local commits in a bundle", () => {
+    const { backupRoot, gitCalls, npmCalls, result } = runSetupFixture({
+      gitCheckout: true,
+      localCommits: 2,
+      forceSync: true,
+    });
+
+    expect(result.status).toBe(0);
+    expect(gitCalls).toContain("bundle create");
+    expect(gitCalls).toContain("reset --hard origin/main");
+    expect(gitCalls).toContain("clean -fd");
+    expect(npmCalls).toContain("run build");
+    const entries = readdirSync(backupRoot, { recursive: true }).map(String);
+    expect(entries.some((entry) => entry.endsWith("local-commits.bundle"))).toBe(true);
   });
 
   it("moves obsolete search files out of the source tree before building", () => {

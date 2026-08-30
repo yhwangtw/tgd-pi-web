@@ -2,11 +2,13 @@
 
 import { useEffect, useState, useRef } from "react";
 import { encodeFilePathForApi, getFileName, getRelativeFilePath } from "@/lib/file-paths";
+import { useI18n } from "@/lib/i18n";
 import { formatSize, getFileExt, DOCX_PREVIEW_MAX_BYTES } from "./file-viewer-utils";
 import { DownloadLink } from "./FileViewer";
 import styles from "./DocumentViewer.module.css";
 
 export function DocumentViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
+  const { t } = useI18n();
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -38,7 +40,7 @@ export function DocumentViewer({ filePath, cwd }: { filePath: string; cwd?: stri
         if (typeof d.size === "number") {
           setSize(d.size);
           if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
-            setError("DOCX too large for preview (>10MB)");
+            setError(t("files.docxTooLarge"));
           }
         }
       })
@@ -54,7 +56,7 @@ export function DocumentViewer({ filePath, cwd }: { filePath: string; cwd?: stri
         if (typeof d.size === "number") {
           setSize(d.size);
           if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
-            setError("DOCX too large for preview (>10MB)");
+            setError(t("files.docxTooLarge"));
             return;
           }
         }
@@ -69,7 +71,7 @@ export function DocumentViewer({ filePath, cwd }: { filePath: string; cwd?: stri
       es.close();
       esRef.current = null;
     };
-  }, [encoded, isPdf]);
+  }, [encoded, isPdf, t]);
 
   const iframeClass = `${styles.iframe} ${isPdf ? styles.iframePdf : styles.iframeDocx}`;
 
@@ -79,17 +81,17 @@ export function DocumentViewer({ filePath, cwd }: { filePath: string; cwd?: stri
         <span className={styles.filePath} title={filePath}>
           {getRelativeFilePath(filePath, cwd)}
         </span>
-        <span className={styles.extension}>{ext === "docx" ? "docx preview" : "pdf"}</span>
+        <span className={styles.extension}>{ext === "docx" ? t("files.docxPreview") : "PDF"}</span>
         {size != null && <span>{formatSize(size)}</span>}
         <DownloadLink filePath={filePath} />
         <span
-          title={watching ? "Live sync active" : "Not watching"}
+          title={t(watching ? "files.liveSyncActive" : "files.notWatching")}
           className={`${styles.watchStatus} ${watching ? styles.watchStatusLive : styles.watchStatusStatic}`}
         >
           <span
             className={`${styles.watchDot} ${watching ? styles.watchDotLive : styles.watchDotStatic}`}
           />
-          {watching ? "live" : "static"}
+          {t(watching ? "files.live" : "files.static")}
         </span>
       </div>
       <div className={styles.content}>

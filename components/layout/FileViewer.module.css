@@ -1,6 +1,6 @@
 .downloadLink {
   flex-shrink: 0;
-  padding: var(--space-0-5) var(--space-2);
+  padding: var(--space-optical) var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-control-compact);
   background: var(--bg-hover);

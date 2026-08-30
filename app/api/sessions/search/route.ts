@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveSessionPath, listAllSessions, getSessionEntries } from "@/lib/session-reader";
-import { searchSessionEntries, type SessionSearchMatch } from "@/lib/session-search";
+import { getSessionSearchMetadata, scoreSessionSearchHit, searchSessionEntries, type SessionSearchMatch, type SessionSearchStatus } from "@/lib/session-search";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +12,13 @@ interface SearchHit {
   created: string;
   modified: string;
   messageCount: number;
+  provider?: string;
+  modelId?: string;
+  status: SessionSearchStatus;
   matchedIn: "name" | "firstMessage" | "messages";
   matches: SessionSearchMatch[];
   totalMatches: number;
+  score: number;
 }
 
 // Search all sessions: name + firstMessage + all message contents.
@@ -24,7 +28,8 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const q = url.searchParams.get("q")?.trim() ?? "";
-    const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "200", 10) || 200, 500);
+    const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "300", 10) || 300, 500);
+    const resultLimit = Math.min(parseInt(url.searchParams.get("resultLimit") ?? "100", 10) || 100, 200);
 
     if (q.length < 1) {
       return NextResponse.json({ hits: [], truncated: false, query: q });
@@ -66,6 +71,7 @@ export async function GET(req: Request) {
       const matches = searchSessionEntries(entries, needle);
 
       if (matches.length > 0 || matchedIn !== "messages") {
+        const metadata = getSessionSearchMetadata(entries);
         hits.push({
           id: s.id,
           cwd: s.cwd,
@@ -74,20 +80,37 @@ export async function GET(req: Request) {
           created: s.created,
           modified: s.modified,
           messageCount: s.messageCount,
+          provider: metadata.provider,
+          modelId: metadata.modelId,
+          status: metadata.status,
           matchedIn,
           matches,
           totalMatches: matches.length,
+          score: scoreSessionSearchHit({
+            name: s.name,
+            firstMessage: s.firstMessage,
+            query: needle,
+            matchCount: matches.length,
+            modified: s.modified,
+          }),
         });
       }
     }
 
-    // Sort by total matches desc, then by recency
+    // Title/opening-prompt relevance wins; match count and recency break ties.
     hits.sort((a, b) => {
-      if (b.totalMatches !== a.totalMatches) return b.totalMatches - a.totalMatches;
+      if (b.score !== a.score) return b.score - a.score;
       return new Date(b.modified).getTime() - new Date(a.modified).getTime();
     });
 
-    return NextResponse.json({ hits, truncated, query: q, scanned: slice.length });
+    return NextResponse.json({
+      hits: hits.slice(0, resultLimit),
+      totalHits: hits.length,
+      resultsLimited: hits.length > resultLimit,
+      truncated,
+      query: q,
+      scanned: slice.length,
+    });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

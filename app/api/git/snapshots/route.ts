@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   if (!(await isGitRepo(cwd))) {
     return NextResponse.json({ git: false, snapshots: [] });
   }
-  return NextResponse.json({ git: true, snapshots: listSnapshots(sessionId) });
+  return NextResponse.json({ git: true, snapshots: await listSnapshots(cwd, sessionId) });
 }
 
 // POST /api/git/snapshots  body: { cwd, sessionId, label? } — create one manually.

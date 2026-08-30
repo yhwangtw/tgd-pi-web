@@ -1,6 +1,6 @@
 .inlineCode {
   background: var(--bg-selected);
-  padding: 1px 4px;
+  padding: var(--space-optical) var(--space-1);
   border-radius: var(--radius-inline);
   font-family: var(--font-mono);
   font-size: 0.9em;
@@ -9,13 +9,13 @@
 .outputStack {
   display: grid;
   min-width: 0;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .outputSegment {
   display: grid;
   min-width: 0;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .structuredStack > .outputSegment:first-child :global(.markdown-body > p:first-child) {
@@ -24,7 +24,7 @@
 
 @media (max-width: 700px) {
   .outputStack,
-  .outputSegment { gap: 10px; }
+  .outputSegment { gap: var(--space-2); }
 }
 
 /* Inline code that looks like a file path — clickable, opens in the viewer.
@@ -56,7 +56,7 @@
 }
 
 .blockHeader {
-  padding: 3px 10px;
+  padding: var(--space-1) var(--space-2);
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-xs);
@@ -69,7 +69,7 @@
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .copyBtn {
@@ -100,8 +100,8 @@
   display: inline-flex;
   min-height: 34px;
   align-items: center;
-  gap: 5px;
-  padding: 0 6px 0 9px;
+  gap: var(--space-1);
+  padding: 0 var(--space-2) 0 var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--bg-panel);
@@ -122,7 +122,7 @@
 .focusCode {
   min-width: max-content;
   min-height: 100%;
-  padding: 14px 0;
+  padding: var(--space-3) 0;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-mono);
@@ -133,9 +133,9 @@
 .focusCodeWrap { min-width: 0; }
 .focusCodeLine { display: grid; grid-template-columns: 58px minmax(0, 1fr); min-height: 1.65em; }
 .focusCodeLineActive { background: var(--color-accent-bg); }
-.focusLineNumber { padding: 0 12px 0 4px; border: 0; background: transparent; color: var(--text-dim); cursor: pointer; font: inherit; text-align: right; user-select: none; }
+.focusLineNumber { padding: 0 var(--space-3) 0 var(--space-1); border: 0; background: transparent; color: var(--text-dim); cursor: pointer; font: inherit; text-align: right; user-select: none; }
 .focusLineNumber:hover { color: var(--accent); }
-.focusCodeLine code { padding-right: 18px; font: inherit; white-space: pre; }
+.focusCodeLine code { padding-right: var(--space-4); font: inherit; white-space: pre; }
 .focusCodeWrap .focusCodeLine code { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .previewBtn {
@@ -143,7 +143,7 @@
   cursor: pointer;
   font-size: var(--text-xs);
   border-radius: var(--radius-control-compact);
-  padding: 1px 6px;
+  padding: var(--space-optical) var(--space-2);
   background: none;
   color: var(--text-muted);
 }
@@ -161,7 +161,7 @@
 /* Streaming code: plain until the message completes (no per-chunk Prism) */
 .plainStreamPre {
   margin: 0;
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
   font-family: var(--font-mono);
   font-size: var(--text-md);
   line-height: var(--leading-relaxed);
@@ -188,7 +188,7 @@
 
   .blockHeader {
     min-height: 36px;
-    padding: 3px 8px;
+    padding: var(--space-1) var(--space-2);
   }
 
   .copyBtn,
@@ -204,7 +204,7 @@
   }
 
   .plainStreamPre {
-    padding: 8px 10px;
+    padding: var(--space-2) var(--space-2);
   }
 }
 

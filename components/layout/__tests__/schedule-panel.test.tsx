@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSchedule, ScheduleRun } from "@/lib/schedule-types";
+import { resetRequestState } from "@/lib/request-state";
 import { SchedulePanel } from "../SchedulePanel";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -48,6 +49,7 @@ describe("SchedulePanel", () => {
     root = null;
     container?.remove();
     container = null;
+    resetRequestState();
     vi.restoreAllMocks();
   });
 
@@ -83,9 +85,9 @@ describe("SchedulePanel", () => {
     await renderPanel(async () => json({ version: 1, schedules: [], runs: [], serverTime: "" }));
     const create = [...container!.querySelectorAll("button")].find((button) => button.textContent === "New schedule")!;
     await act(async () => create.click());
-    expect(container!.querySelector('[data-testid="schedule-editor"]')).not.toBeNull();
-    expect(container!.querySelector<HTMLInputElement>('input[placeholder="/path/to/project"]')?.value).toBe("/tmp/project");
-    expect(container!.textContent).toContain("Read-only");
+    expect(document.body.querySelector('[data-testid="schedule-editor"]')).not.toBeNull();
+    expect(document.body.querySelector<HTMLInputElement>('input[placeholder="/path/to/project"]')?.value).toBe("/tmp/project");
+    expect(document.body.textContent).toContain("Read-only");
   });
 
   it("starts a manual run through the schedule endpoint", async () => {

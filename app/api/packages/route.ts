@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 import { DefaultPackageManager, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getRpcSession } from "@/lib/rpc-manager";
-import { consumePackageMutation, preparePackageMutation, type PackageMutationAction } from "@/lib/package-confirmation";
-import { describeConfiguredPackages, normalizeNpmPackageSource } from "@/lib/package-center";
+import { consumePreparedPackageMutation, preparePackageMutation, type PackageMutationAction } from "@/lib/package-confirmation";
+import {
+  buildPackageMutationPreview,
+  describeConfiguredPackages,
+  inspectNpmPackageSource,
+  isPinnedPackageSource,
+  normalizeNpmPackageSource,
+} from "@/lib/package-center";
+import { redactedErrorMessage } from "@/lib/redaction";
+import { recordSecurityActivity, type SecurityActivityOutcome } from "@/lib/security-activity";
 
 export const dynamic = "force-dynamic";
 
@@ -45,11 +53,12 @@ export async function GET(req: Request) {
     const { manager } = managerForSession(sessionId);
     return NextResponse.json(snapshot(manager));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 409 });
+    return NextResponse.json({ error: redactedErrorMessage(error) }, { status: 409 });
   }
 }
 
 export async function POST(req: Request) {
+  let activity: { action: string; source?: string; sessionId?: string } | null = null;
   try {
     assertSameOrigin(req);
     const body = await req.json() as {
@@ -73,28 +82,78 @@ export async function POST(req: Request) {
     }
     const action = body.action as PackageMutationAction;
     const source = normalizeNpmPackageSource(body.source);
+    activity = { action, source, sessionId };
+    const audit = (outcome: SecurityActivityOutcome, summary: string, details?: Record<string, unknown>) => {
+      recordSecurityActivity({
+        category: "package",
+        action,
+        outcome,
+        summary,
+        target: source,
+        sessionId,
+        details,
+      });
+    };
+    const deny = (message: string, status: number) => {
+      audit("denied", message);
+      return NextResponse.json({ error: message }, { status });
+    };
     const configuredPackages = manager.listConfiguredPackages();
     const configured = configuredPackages.find((item) => item.source === source && item.scope === "user");
     const projectConfigured = configuredPackages.some((item) => item.source === source && item.scope === "project");
     if (action !== "install" && !configured) {
-      return NextResponse.json({ error: "Only configured user-scope npm packages can be changed" }, { status: 403 });
+      return deny("Only configured user-scope npm packages can be changed", 403);
     }
     if (projectConfigured && action !== "remove") {
-      return NextResponse.json({ error: "This package is also configured by the project and is read-only in safe mode" }, { status: 403 });
+      return deny("This package is also configured by the project and is read-only in safe mode", 403);
+    }
+    if (action === "update" && isPinnedPackageSource(source)) {
+      return deny("Pinned package versions cannot be updated; install a reviewed version explicitly", 403);
     }
 
     if (body.phase === "prepare") {
-      const confirmation = preparePackageMutation({ action, source, sessionId });
-      return NextResponse.json({ confirmation, action, source });
+      const current = configured ? describeConfiguredPackages(manager)
+        .find((item) => item.source === source && item.scope === "user")?.inspection : undefined;
+      const target = action === "remove" ? undefined : await inspectNpmPackageSource(source);
+      if (target && (!target.hasPiManifest || target.resources.length === 0)) {
+        return deny("Safe mode requires an explicit Pi package manifest with declared resources", 422);
+      }
+      const preview = buildPackageMutationPreview(action, source, current, target);
+      const confirmation = preparePackageMutation({
+        action,
+        source,
+        sessionId,
+        resolvedSource: target?.resolvedSource,
+        integrity: target?.integrity,
+      });
+      audit("reviewed", `Package ${action} reviewed`, {
+        currentVersion: current?.version,
+        targetVersion: target?.version,
+        addedPermissions: preview.addedPermissions,
+        integrity: target?.integrity,
+      });
+      return NextResponse.json({ confirmation, action, source, preview });
     }
-    if (body.phase !== "execute" || typeof body.confirmationToken !== "string"
-      || !consumePackageMutation(body.confirmationToken, { action, source, sessionId })) {
-      return NextResponse.json({ error: "Package confirmation expired; review the operation again" }, { status: 409 });
+    const prepared = body.phase === "execute" && typeof body.confirmationToken === "string"
+      ? consumePreparedPackageMutation(body.confirmationToken, { action, source, sessionId })
+      : null;
+    if (!prepared) {
+      return deny("Package confirmation expired; review the operation again", 409);
     }
 
-    if (action === "install") await manager.installAndPersist(source);
-    else if (action === "remove") await manager.removeAndPersist(source);
-    else await manager.update(source);
+    if (action === "install" || action === "update") {
+      const verified = await inspectNpmPackageSource(source);
+      if (
+        verified.resolvedSource !== prepared.resolvedSource
+        || (prepared.integrity && verified.integrity !== prepared.integrity)
+      ) {
+        return deny("Package metadata changed after review; review the operation again", 409);
+      }
+      await manager.install(prepared.resolvedSource ?? source);
+      if (action === "install") manager.addSourceToSettings(source);
+    } else {
+      await manager.removeAndPersist(source);
+    }
 
     let reloadError: string | undefined;
     try {
@@ -102,10 +161,23 @@ export async function POST(req: Request) {
     } catch (error) {
       reloadError = error instanceof Error ? error.message : String(error);
     }
+    audit("success", `Package ${action} completed`, {
+      resolvedSource: prepared.resolvedSource,
+      integrity: prepared.integrity,
+      reloadError,
+    });
     return NextResponse.json({ ...snapshot(manager), reloadError });
   } catch (error) {
+    recordSecurityActivity({
+      category: "package",
+      action: activity?.action ?? "request",
+      outcome: "failure",
+      summary: redactedErrorMessage(error),
+      target: activity?.source,
+      sessionId: activity?.sessionId,
+    });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : String(error) },
+      { error: redactedErrorMessage(error) },
       { status: error instanceof PackageRequestError ? error.status : 500 },
     );
   }

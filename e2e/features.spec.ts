@@ -5,6 +5,7 @@ const TOOLS = "/?session=ffff1111-2222-3333-4444-555566667777";
 
 async function openMain(page: Page) {
   await page.goto(MAIN);
+  await expect(page.getByTestId("app-shell")).toHaveAttribute("data-hydrated", "true");
   await expect(page.getByText("專案架構分析").first()).toBeVisible({ timeout: 20_000 });
 }
 
@@ -84,16 +85,18 @@ test.describe("session archive", () => {
     await page.getByRole("menuitem", { name: "Archive" }).click();
     await expect(page.getByText("失敗的執行")).toHaveCount(0);
 
-    // The toggle reports the count and reveals the archived session
-    const toggle = page.locator("button", { hasText: "Show archived" }).first();
-    await expect(toggle).toBeVisible();
+    // Archived conversations live in the shared filter sheet.
+    await page.getByRole("button", { name: "Conversation filters" }).click();
+    const filters = page.getByRole("dialog", { name: "Conversation filters" });
+    const toggle = filters.getByRole("button", { name: /Include archived conversations/ });
+    await expect(toggle).toContainText("1 archived conversation");
     await toggle.click();
+    await filters.getByRole("button", { name: "Done", exact: true }).click();
     await expect(page.getByText("失敗的執行").first()).toBeVisible();
 
     // Unarchive from the context menu — item stays (list shows everything now)
     await page.getByText("失敗的執行").first().click({ button: "right" });
     await page.getByRole("menuitem", { name: "Unarchive" }).click();
-    await expect(page.locator("button", { hasText: "Show archived" })).toHaveCount(0);
     await expect(page.getByText("失敗的執行").first()).toBeVisible();
   });
 });
@@ -101,23 +104,30 @@ test.describe("session archive", () => {
 test.describe("tool-call diff view", () => {
   test("edit tool renders a real diff; write tool renders all-added content", async ({ page }) => {
     await page.goto(TOOLS);
+    await expect(page.getByTestId("app-shell")).toHaveAttribute("data-hydrated", "true");
     await expect(page.getByText("工具呼叫測試").first()).toBeVisible({ timeout: 20_000 });
 
     // Tool calls are summarized per turn; expand the work log before opening
     // the individual edit/write disclosures.
     const workLog = page.locator('section[aria-label="Work log"] > button').first();
     await expect(workLog).toHaveAttribute("aria-label", /Completed/);
+    await workLog.scrollIntoViewIfNeeded();
+    await expect.poll(() => workLog.evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return target?.closest("button") === button;
+    })).toBe(true);
     await workLog.click();
-    await expect(page.getByText("Reasoning steps", { exact: true })).toBeVisible();
+    await expect(workLog).toHaveAttribute("aria-expanded", "true");
 
     // Expand the edit tool call → old/new rendered as removed/added lines
-    await page.locator("button", { has: page.getByText("edit", { exact: true }) }).first().click();
+    await page.getByRole("button", { name: /edit src\/index\.ts/ }).click();
     await expect(page.locator("[class*=diffLineRemoved]", { hasText: "answer = 42" }).first()).toBeVisible();
     await expect(page.locator("[class*=diffLineAdded]", { hasText: "answer = 100" }).first()).toBeVisible();
     await expect(page.getByText("src/index.ts").first()).toBeVisible();
 
     // Expand the write tool call → written content shows as added lines
-    await page.locator("button", { has: page.getByText("write", { exact: true }) }).first().click();
+    await page.getByRole("button", { name: /write src\/utils\.ts/ }).click();
     await expect(page.locator("[class*=diffLineAdded]", { hasText: "function clamp" }).first()).toBeVisible();
   });
 });

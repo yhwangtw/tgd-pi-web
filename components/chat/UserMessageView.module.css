@@ -8,7 +8,7 @@
 
 @media (min-width: 701px) {
   :global(html[data-density="compact"]) .root { margin-bottom: 6px; }
-  :global(html[data-density="compact"]) .bubble { padding: 6px 10px; }
+  :global(html[data-density="compact"]) .bubble { padding: var(--space-2) var(--space-2); }
   :global(html[data-density="compact"]) .bottomRow { margin-top: 1px; }
 }
 
@@ -16,7 +16,7 @@
 .messageRow {
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: var(--space-2);
   max-width: 80%;
 }
 
@@ -27,7 +27,7 @@
   background: var(--user-bg);
   border: 1px solid var(--color-accent-border);
   border-radius: var(--radius-message) var(--radius-message) var(--radius-message-tail) var(--radius-message);
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   font-size: var(--text-base);
   line-height: var(--leading-relaxed);
   color: var(--text);
@@ -80,7 +80,7 @@
 .designContextHeading span,
 .designContextViewport {
   flex: 0 0 auto;
-  padding: var(--space-0-5) var(--space-1-5);
+  padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--bg-hover);
   color: var(--text-muted);
@@ -137,7 +137,7 @@
 /* Image grid */
 .imageGrid {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   margin-bottom: 8px;
 }
@@ -162,7 +162,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: var(--space-2);
   margin-top: 3px;
 }
 
@@ -190,8 +190,8 @@
   z-index: 20;
   display: none;
   align-items: center;
-  gap: 2px;
-  padding: 3px;
+  gap: var(--space-optical);
+  padding: var(--space-1);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   background: var(--bg-elev-1);
@@ -224,7 +224,7 @@
 /* Action buttons */
 .actionButtons {
   display: flex;
-  gap: 3px;
+  gap: var(--space-1);
 }
 
 .mobileActionMenu {
@@ -258,8 +258,8 @@
   display: flex;
   min-width: 190px;
   flex-direction: column;
-  gap: 2px;
-  padding: 5px;
+  gap: var(--space-optical);
+  padding: var(--space-1);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-menu);
   background: var(--bg-elev-1);
@@ -275,7 +275,7 @@
   width: 100%;
   min-height: 36px;
   justify-content: flex-start;
-  padding: 0 10px;
+  padding: 0 var(--space-2);
   color: var(--text-muted);
 }
 
@@ -284,8 +284,8 @@
 .actionButton {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
   height: 28px;
   background: none;
   border: none;
@@ -315,11 +315,11 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
   background: var(--user-bg);
   border: 1px solid var(--color-accent);
   border-radius: var(--radius-control-prominent);
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-2);
 }
 
 .editTextarea {
@@ -339,7 +339,7 @@
 .editActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .editHint {
@@ -350,7 +350,7 @@
 
 .editCancel {
   font-size: var(--text-sm);
-  padding: 3px 10px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-control);
   border: 1px solid var(--border);
   background: var(--bg);
@@ -365,10 +365,10 @@
 .editRerunBtn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
-  padding: 3px 11px;
+  padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-control);
   border: 1px solid transparent;
   background: var(--color-accent);
@@ -393,7 +393,7 @@
   }
 
   .bubble {
-    padding: 9px 11px;
+    padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-message) var(--radius-message) var(--radius-message-tail) var(--radius-message);
     font-size: var(--text-lg);
     line-height: var(--leading-relaxed);
@@ -409,7 +409,7 @@
     max-width: 94%;
     min-height: 40px;
     flex-wrap: nowrap;
-    gap: 2px;
+    gap: var(--space-optical);
     margin-top: 1px;
   }
 
@@ -454,8 +454,8 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: 2px;
-    padding: 5px;
+    gap: var(--space-optical);
+    padding: var(--space-1);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-control);
     background: var(--bg-elev-1);
@@ -484,7 +484,7 @@
   .mobileActionPanel .actionButton {
     min-height: 44px;
     justify-content: flex-start;
-    padding: 0 10px;
+    padding: 0 var(--space-2);
     color: var(--text-muted);
   }
 
@@ -510,7 +510,7 @@
 }
 
 :global(html[data-ui-style="trae"]) .bubble {
-  padding: 10px 14px;
+  padding: var(--space-2) var(--space-3);
   border-color: color-mix(in srgb, var(--text) 9%, transparent);
   border-radius: var(--radius-message) var(--radius-message) var(--radius-message-tail) var(--radius-message);
   background: var(--user-bg);
@@ -549,7 +549,7 @@
   }
 
   :global(html[data-ui-style="trae"]) .bubble {
-    padding: 10px 13px;
+    padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-message) var(--radius-message) var(--radius-message-tail) var(--radius-message);
   }
 

@@ -10,8 +10,8 @@
   display: flex;
   min-height: 38px;
   align-items: center;
-  gap: 7px;
-  padding: 5px 10px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
   list-style: none;
 }
@@ -31,7 +31,7 @@
 .chevron { color: var(--text-dim); transition: transform 0.15s ease; }
 .card[open] .chevron { transform: rotate(180deg); }
 .body {
-  padding: 10px 12px 12px;
+  padding: var(--space-2) var(--space-3) var(--space-3);
   border-top: 1px solid var(--border);
   color: var(--text-muted);
   font-size: var(--text-md);
@@ -43,5 +43,5 @@
 }
 
 :global(html[data-ui-style="trae"]) .card { border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface); box-shadow: var(--trae-card-shadow); }
-:global(html[data-ui-style="trae"]) .header { padding: 8px 11px; }
+:global(html[data-ui-style="trae"]) .header { padding: var(--space-2) var(--space-3); }
 :global(html[data-ui-style="trae"]) .body { border-top-color: var(--trae-hairline); }

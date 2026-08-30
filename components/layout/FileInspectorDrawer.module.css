@@ -1,43 +1,43 @@
 .drawer { width: min(340px, 46%); min-width: 250px; height: 100%; display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--bg-panel); box-shadow: var(--color-shadow-panel); z-index: 3; }
-.header { min-height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 14px; color: var(--text); }
+.header { min-height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-2) 0 var(--space-3); color: var(--text); }
 .header button { width: 30px; height: 30px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font-size: var(--text-xl); cursor: pointer; }
 .header button:hover { background: var(--bg-hover); color: var(--text); }
-.tabs { display: flex; gap: 2px; padding: 0 6px 6px; overflow-x: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+.tabs { display: flex; gap: var(--space-optical); padding: 0 var(--space-2) var(--space-2); overflow-x: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
-.tab, .tabActive { min-height: 30px; padding: 0 8px; border: 0; border-radius: var(--radius-control-compact); background: transparent; color: var(--text-dim); font-size: var(--text-xs); cursor: pointer; }
+.tab, .tabActive { min-height: 30px; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-control-compact); background: transparent; color: var(--text-dim); font-size: var(--text-xs); cursor: pointer; }
 .tabActive { background: var(--bg-selected); color: var(--text); font-weight: var(--weight-semibold); }
 .body { flex: 1; min-height: 0; overflow: auto; }
-.symbolSearch { padding: 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; border-bottom: 1px solid var(--border); }
-.symbolSearch input { min-width: 0; height: 30px; padding: 0 7px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text); font: inherit; font-size: var(--text-2xs); }
-.symbolSearch button { min-height: 30px; padding: 0 7px; border: 1px solid var(--border); border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--text-2xs); cursor: pointer; }
+.symbolSearch { padding: var(--space-2); display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--space-1); border-bottom: 1px solid var(--border); }
+.symbolSearch input { min-width: 0; height: 30px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text); font: inherit; font-size: var(--text-2xs); }
+.symbolSearch button { min-height: 30px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--text-2xs); cursor: pointer; }
 .symbolSearch button:disabled { opacity: .4; cursor: default; }
-.symbolResult { width: 100%; padding: 7px 9px; display: grid; gap: 2px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
+.symbolResult { width: 100%; padding: var(--space-2) var(--space-2); display: grid; gap: var(--space-optical); border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
 .symbolResult:hover { background: var(--bg-hover); }
 .symbolResult span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-2xs); }
-.list { display: flex; flex-direction: column; padding: 6px; }
-.row, .commit { width: 100%; min-height: 34px; display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 0; border-radius: var(--radius-row); background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
+.list { display: flex; flex-direction: column; padding: var(--space-2); }
+.row, .commit { width: 100%; min-height: 34px; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-row); background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
 .row:hover, .commit:hover { background: var(--bg-hover); color: var(--text); }
 .kind, .sha { flex: 0 0 auto; color: var(--color-accent); font: var(--text-2xs) var(--font-mono); text-transform: uppercase; }
 .label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line, .meta { flex: 0 0 auto; color: var(--text-dim); font-size: var(--text-2xs); }
 .commit { display: grid; grid-template-columns: auto 1fr; }
 .commit .meta { grid-column: 2; }
-.groupLabel { padding: 9px 8px 4px; color: var(--text-dim); font: var(--text-2xs) var(--font-mono); letter-spacing: var(--tracking-wide); text-transform: uppercase; }
+.groupLabel { padding: var(--space-2) var(--space-2) var(--space-1); color: var(--text-dim); font: var(--text-2xs) var(--font-mono); letter-spacing: var(--tracking-wide); text-transform: uppercase; }
 .problem { margin: 3px 0; border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; }
 .problemsPane { min-height: 100%; }
-.problemActions { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: var(--text-2xs); }
+.problemActions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-2); border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: var(--text-2xs); }
 .problemActions button { min-height: 30px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-hover); color: var(--text-muted); cursor: pointer; }
-.problemMain { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 7px; padding: 8px; border: 0; background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
+.problemMain { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-2); padding: var(--space-2); border: 0; background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
 .problemError { color: var(--color-error-text); }.problemWarning { color: var(--color-warning-text); }
 .fix { width: 100%; min-height: 30px; border: 0; border-top: 1px solid var(--border); background: var(--bg-hover); color: var(--color-accent); cursor: pointer; }
-.empty, .error { padding: 28px 16px; color: var(--text-dim); text-align: center; }
+.empty, .error { padding: var(--space-6) var(--space-4); color: var(--text-dim); text-align: center; }
 .error { color: var(--color-error-text); }
-.notes { padding: 8px; }
-.noteForm { display: grid; grid-template-columns: 54px 1fr auto; gap: 6px; }
-.noteForm input, .noteForm textarea { min-width: 0; padding: 7px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-input); color: var(--text); }
+.notes { padding: var(--space-2); }
+.noteForm { display: grid; grid-template-columns: 54px 1fr auto; gap: var(--space-2); }
+.noteForm input, .noteForm textarea { min-width: 0; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-input); color: var(--text); }
 .noteForm button, .note > button { border: 0; border-radius: var(--radius-control); background: var(--bg-selected); color: var(--text); cursor: pointer; }
-.note { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: start; margin-top: 8px; padding: 8px; border-radius: var(--radius-card); background: var(--bg-elev-1); color: var(--text-muted); }
-.note > button { padding: 3px 6px; }
+.note { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-2); align-items: start; margin-top: 8px; padding: var(--space-2); border-radius: var(--radius-card); background: var(--bg-elev-1); color: var(--text-muted); }
+.note > button { padding: var(--space-1) var(--space-2); }
 
 :global(html[data-ui-style="trae"]) .drawer { border-color: var(--trae-hairline); background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .tabs, :global(html[data-ui-style="trae"]) .problem, :global(html[data-ui-style="trae"]) .fix { border-color: var(--trae-hairline); }

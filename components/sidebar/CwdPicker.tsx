@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, type RefObject } from "react";
+import { ChevronDown, Folder } from "lucide-react";
 import { shortenCwd } from "./session-utils";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import styles from "./CwdPicker.module.css";
@@ -100,9 +101,7 @@ export function CwdPicker({ state, actions, projects, initialSessionId, isRestor
         data-testid="project-switcher-trigger"
       >
         <span className={styles.triggerIcon} aria-hidden>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-          </svg>
+          <Folder size={13} aria-hidden />
         </span>
         {selectedCwd ? (
           <>
@@ -115,9 +114,7 @@ export function CwdPicker({ state, actions, projects, initialSessionId, isRestor
           </span>
         )}
         <span className={styles.triggerChevron} aria-hidden>
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="2 3.5 5 6.5 8 3.5" />
-          </svg>
+          <ChevronDown size={10} strokeWidth={1.6} aria-hidden />
         </span>
       </button>
 

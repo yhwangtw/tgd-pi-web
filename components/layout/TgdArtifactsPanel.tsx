@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ChevronRight, FileCode2, FileStack, FileText, RefreshCw } from "lucide-react";
+import { IconButton } from "@/components/ui/IconButton";
 import { encodeFilePathForApi, joinFilePath } from "@/lib/file-paths";
+import { useI18n } from "@/lib/i18n";
 import s from "./TgdArtifactsPanel.module.css";
 
 interface ArtifactFile {
@@ -31,19 +34,10 @@ interface Props {
 
 // The 7 phases in order, with which artifact-derived evidence marks them done.
 const PHASES = ["map", "define", "plan", "develop", "verify", "review", "release"] as const;
-const PHASE_LABEL: Record<string, string> = {
-  map: "Map", define: "Define", plan: "Plan", develop: "Develop",
-  verify: "Verify", review: "Review", release: "Release",
-};
-
 function fileIcon(name: string) {
-  const html = name.endsWith(".html");
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-      {html ? <path d="M9 15l-1.5 2 1.5 2M15 15l1.5 2-1.5 2" /> : <><line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="17" x2="13" y2="17" /></>}
-    </svg>
-  );
+  return name.endsWith(".html")
+    ? <FileCode2 size={14} strokeWidth={1.8} aria-hidden="true" />
+    : <FileText size={14} strokeWidth={1.8} aria-hidden="true" />;
 }
 
 // ── Full-tree view: browse the ENTIRE tGD dir (nothing hidden — .scans,
@@ -74,7 +68,7 @@ function TreeNode({
 
   if (!isDir) {
     return (
-      <button onClick={() => onOpenFile(abs, name)} className={s.fileRow} style={{ paddingLeft: pad }} title={abs}>
+      <button type="button" onClick={() => onOpenFile(abs, name)} className={s.fileRow} style={{ paddingLeft: pad }} title={abs}>
         <span className={s.fileIcon}>{fileIcon(name)}</span>
         <span className={s.fileName}>{name}</span>
       </button>
@@ -82,10 +76,8 @@ function TreeNode({
   }
   return (
     <>
-      <button onClick={() => setOpen((o) => !o)} className={s.dirRow} style={{ paddingLeft: pad }} title={abs}>
-        <svg className={s.treeChevron} data-open={open || undefined} width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <polyline points="3 2 7 5 3 8" />
-        </svg>
+      <button type="button" onClick={() => setOpen((o) => !o)} className={s.dirRow} style={{ paddingLeft: pad }} title={abs} aria-expanded={open}>
+        <ChevronRight className={s.treeChevron} data-open={open || undefined} size={14} strokeWidth={1.8} aria-hidden="true" />
         <span className={s.dirName}>{name}</span>
       </button>
       {open && children?.map((c) => (
@@ -96,10 +88,11 @@ function TreeNode({
 }
 
 function FileTree({ root, onOpenFile }: { root: string; onOpenFile: Props["onOpenFile"] }) {
+  const { t } = useI18n();
   const [entries, setEntries] = useState<DirEntry[] | null>(null);
   useEffect(() => { let live = true; listDir(root).then((e) => { if (live) setEntries(e); }); return () => { live = false; }; }, [root]);
-  if (entries === null) return <div className={s.treeLoading}>Loading…</div>;
-  if (entries.length === 0) return <div className={s.noFeatures}>Empty directory.</div>;
+  if (entries === null) return <div className={s.treeLoading}>{t("common.loading")}</div>;
+  if (entries.length === 0) return <div className={s.noFeatures}>{t("tgd.emptyDirectory")}</div>;
   return (
     <div className={s.tree}>
       {entries.map((e) => (
@@ -117,6 +110,7 @@ function FileTree({ root, onOpenFile }: { root: string; onOpenFile: Props["onOpe
  * panel (markdown / HTML preview).
  */
 export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
+  const { t } = useI18n();
   const [data, setData] = useState<Artifacts | null>(null);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"artifacts" | "files">("artifacts");
@@ -139,10 +133,10 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
-  if (!cwd) return <div className={s.empty}>Select a project first</div>;
+  if (!cwd) return <div className={s.empty}>{t("tgd.selectProject")}</div>;
 
   const fileRow = (f: ArtifactFile) => (
-    <button key={f.path} onClick={() => onOpenFile(f.path, f.name)} className={s.fileRow} title={f.path}>
+    <button type="button" key={f.path} onClick={() => onOpenFile(f.path, f.name)} className={s.fileRow} title={f.path}>
       <span className={s.fileIcon}>{fileIcon(f.name)}</span>
       <span className={s.fileName}>{f.name}</span>
     </button>
@@ -153,23 +147,24 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
       <div className={`${s.header} chrome-mono`}>
         <span className={s.brand}>tGD</span>
         <div className={s.viewToggle} role="tablist">
-          <button role="tab" aria-selected={view === "artifacts"} onClick={() => pickView("artifacts")} className={view === "artifacts" ? s.viewTabActive : s.viewTab}>Artifacts</button>
-          <button role="tab" aria-selected={view === "files"} onClick={() => pickView("files")} className={view === "files" ? s.viewTabActive : s.viewTab}>Files</button>
+          <button type="button" role="tab" aria-selected={view === "artifacts"} onClick={() => pickView("artifacts")} className={view === "artifacts" ? s.viewTabActive : s.viewTab}>{t("tgd.viewArtifacts")}</button>
+          <button type="button" role="tab" aria-selected={view === "files"} onClick={() => pickView("files")} className={view === "files" ? s.viewTabActive : s.viewTab}>{t("tgd.viewFiles")}</button>
         </div>
-        <button onClick={load} title="Refresh" className={s.refresh} disabled={loading}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={loading ? s.spinning : undefined}>
-            <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-          </svg>
-        </button>
+        <IconButton
+          label={t("common.refresh")}
+          icon={<RefreshCw strokeWidth={1.8} className={loading ? s.spinning : undefined} />}
+          size="compact"
+          onClick={load}
+          disabled={loading}
+          className={s.refresh}
+        />
       </div>
 
       {!data || !data.exists ? (
         <div className={s.empty}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-          </svg>
-          <span>No tGD artifacts yet</span>
-          <span className={s.emptyHint}>Run <code>/tgd-map</code> then <code>/tgd-define</code> to produce a PRD &amp; spec — they&apos;ll appear here.</span>
+          <FileStack size={24} strokeWidth={1.6} aria-hidden="true" />
+          <span>{t("tgd.emptyArtifacts")}</span>
+          <span className={s.emptyHint}>{t("tgd.run")} <code>/tgd-map</code> {t("tgd.then")} <code>/tgd-define</code> {t("tgd.produceHint")}</span>
         </div>
       ) : view === "files" && data.tgdDir ? (
         <div className={s.body}>
@@ -179,7 +174,7 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
         <div className={s.body}>
           {data.top.length > 0 && (
             <div className={s.section}>
-              <div className={s.sectionTitle}>Project</div>
+              <div className={s.sectionTitle}>{t("tgd.project")}</div>
               {data.top.map(fileRow)}
             </div>
           )}
@@ -193,9 +188,10 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
               <div className={s.phases}>
                 {PHASES.map((p) => {
                   const done = feat.phasesDone.includes(p);
+                  const label = t(`phase.label.${p}` as "phase.label.map" | "phase.label.define" | "phase.label.plan" | "phase.label.develop" | "phase.label.verify" | "phase.label.review" | "phase.label.release");
                   return (
-                    <span key={p} className={`${s.phaseChip} ${done ? s.phaseDone : s.phaseTodo}`} title={`${PHASE_LABEL[p]}${done ? " — has artifacts" : ""}`}>
-                      {PHASE_LABEL[p]}
+                    <span key={p} className={`${s.phaseChip} ${done ? s.phaseDone : s.phaseTodo}`} title={done ? `${label} — ${t("tgd.hasArtifacts")}` : label}>
+                      {label}
                     </span>
                   );
                 })}
@@ -211,7 +207,7 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
           ))}
 
           {data.features.length === 0 && data.top.length > 0 && (
-            <div className={s.noFeatures}>No feature specs yet — run <code>/tgd-define</code>.</div>
+            <div className={s.noFeatures}>{t("tgd.noFeatureSpecs")} <code>/tgd-define</code>.</div>
           )}
         </div>
       )}

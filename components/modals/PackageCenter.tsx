@@ -1,18 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { PackageCenterEntry } from "@/lib/package-center";
+import { useCallback, useMemo, useState } from "react";
+import { fetchJson, useRequestResource } from "@/hooks/useRequestResource";
+import type {
+  PackageCenterEntry,
+  PackageMutationPreview,
+  PackagePermissionId,
+} from "@/lib/package-center";
 import type { PackageMutationAction } from "@/lib/package-confirmation";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type MsgKey } from "@/lib/i18n";
 import { showToast } from "@/hooks/useToast";
 import styles from "./PackageCenter.module.css";
 
 interface UpdateEntry { source: string; displayName: string; type: "npm" | "git"; scope: "user" | "project" }
-interface PendingMutation { action: PackageMutationAction; source: string; token: string; expiresAt: number }
+interface PendingMutation {
+  action: PackageMutationAction;
+  source: string;
+  token: string;
+  expiresAt: number;
+  preview: PackageMutationPreview;
+}
+type PackageResource = { packages?: PackageCenterEntry[]; error?: string };
+const EMPTY_PACKAGES: PackageCenterEntry[] = [];
+
+const PERMISSION_KEYS = {
+  hostCode: "packages.permission.hostCode",
+  filesystem: "packages.permission.filesystem",
+  process: "packages.permission.process",
+  network: "packages.permission.network",
+  credentials: "packages.permission.credentials",
+  modelInstructions: "packages.permission.modelInstructions",
+  appearance: "packages.permission.appearance",
+  installScripts: "packages.permission.installScripts",
+  binaries: "packages.permission.binaries",
+  dependencies: "packages.permission.dependencies",
+} as const satisfies Record<PackagePermissionId, MsgKey>;
 
 export function PackageCenter({ sessionId }: { sessionId: string | null }) {
   const { t } = useI18n();
-  const [packages, setPackages] = useState<PackageCenterEntry[]>([]);
   const [updates, setUpdates] = useState<UpdateEntry[]>([]);
   const [source, setSource] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
@@ -20,23 +45,14 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    if (!sessionId) return;
-    setBusy("load");
-    setError("");
-    try {
-      const response = await fetch(`/api/packages?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
-      const data = await response.json() as { packages?: PackageCenterEntry[]; error?: string };
-      if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
-      setPackages(data.packages ?? []);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setBusy(null);
-    }
-  }, [sessionId]);
-
-  useEffect(() => { void load(); }, [load]);
+  const packageKey = sessionId ? `packages:${sessionId}` : null;
+  const resource = useRequestResource<PackageResource>(
+    packageKey,
+    (signal) => fetchJson(`/api/packages?sessionId=${encodeURIComponent(sessionId ?? "")}`, { cache: "no-store" }, signal),
+    { enabled: Boolean(sessionId), staleTimeMs: 15_000, retries: 1 },
+  );
+  const packages = resource.data?.packages ?? EMPTY_PACKAGES;
+  const { invalidate, refresh } = resource;
 
   const request = useCallback(async (payload: Record<string, unknown>) => {
     const response = await fetch("/api/packages", {
@@ -48,6 +64,7 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
       packages?: PackageCenterEntry[];
       updates?: UpdateEntry[];
       confirmation?: { token: string; expiresAt: number };
+      preview?: PackageMutationPreview;
       action?: PackageMutationAction;
       source?: string;
       reloadError?: string;
@@ -63,8 +80,8 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
     setError("");
     try {
       const data = await request({ phase: "prepare", action, source: packageSource });
-      if (!data.confirmation || !data.action || !data.source) throw new Error("Package confirmation was not created");
-      setPending({ action: data.action, source: data.source, ...data.confirmation });
+      if (!data.confirmation || !data.action || !data.source || !data.preview) throw new Error("Package confirmation was not created");
+      setPending({ action: data.action, source: data.source, preview: data.preview, ...data.confirmation });
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason);
       setError(message);
@@ -85,7 +102,8 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
         source: pending.source,
         confirmationToken: pending.token,
       });
-      setPackages(data.packages ?? []);
+      invalidate();
+      await refresh();
       setSource("");
       setPending(null);
       if (data.reloadError) showToast(`${t("packages.changedReloadFailed")}: ${data.reloadError}`, { type: "error" });
@@ -98,7 +116,7 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
     } finally {
       setBusy(null);
     }
-  }, [busy, pending, request, sessionId, t]);
+  }, [busy, invalidate, pending, refresh, request, sessionId, t]);
 
   const checkUpdates = useCallback(async () => {
     if (!sessionId || busy) return;
@@ -106,7 +124,8 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
     setError("");
     try {
       const data = await request({ action: "check_updates" });
-      setPackages(data.packages ?? []);
+      invalidate();
+      await refresh();
       setUpdates(data.updates ?? []);
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason);
@@ -115,7 +134,7 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
     } finally {
       setBusy(null);
     }
-  }, [busy, request, sessionId]);
+  }, [busy, invalidate, refresh, request, sessionId]);
 
   const updateSources = useMemo(() => new Set(updates.map((update) => update.source)), [updates]);
 
@@ -132,7 +151,7 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
         <div className={styles.sectionTitle}>{t("packages.install")}</div>
         <div className={styles.formRow}>
           <input value={source} onChange={(event) => { setSource(event.target.value); setPending(null); }}
-            placeholder="npm:@scope/package or package@version"
+            placeholder={t("packages.sourcePlaceholder")}
             className={styles.sourceInput} aria-label={t("packages.source")} />
           <span className={styles.userScope}>{t("packages.scope.user")}</span>
           <button type="button" className={styles.primaryButton} disabled={!source.trim() || !acknowledged || !!busy}
@@ -148,11 +167,63 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
       </section>
 
       {pending && (
-        <section className={styles.confirmation} role="alert">
-          <div>
-            <strong>{t(`packages.confirm.${pending.action}`)}</strong>
-            <code>{pending.source}</code>
-            <span>{t("packages.confirmHint")}</span>
+        <section className={styles.confirmation} role="alert" data-testid="package-permission-preview">
+          <div className={styles.previewMain}>
+            <div className={styles.previewHeading}>
+              <strong>{t(`packages.confirm.${pending.action}`)}</strong>
+              <code>{pending.source}</code>
+            </div>
+            {(pending.preview.target ?? pending.preview.current) && (() => {
+              const inspection = pending.preview.target ?? pending.preview.current!;
+              return (
+                <div className={styles.previewDetails}>
+                  <div className={styles.previewPackage}>
+                    <strong>{inspection.name}</strong>
+                    <code>v{inspection.version}</code>
+                    {inspection.publisher && <span>{t("packages.publisher")}: {inspection.publisher}</span>}
+                  </div>
+                  {inspection.description && <p>{inspection.description}</p>}
+                  {pending.action === "update" && pending.preview.current && pending.preview.target && (
+                    <p>{t("packages.versionChange")}: v{pending.preview.current.version} → v{pending.preview.target.version}</p>
+                  )}
+                  <div className={styles.previewFacts}>
+                    {inspection.resources.map((resource) => <span key={resource}>{resource}</span>)}
+                    <span>{inspection.dependencyCount} {t("packages.runtimeDependencies")}</span>
+                    <span>{inspection.peerDependencyCount} {t("packages.peerDependencies")}</span>
+                    {inspection.unpackedSize !== undefined && <span>{Math.ceil(inspection.unpackedSize / 1024)} KB</span>}
+                  </div>
+                  <div className={styles.permissionReview}>
+                    <span className={styles.permissionLabel}>{t("packages.declaredPermissions")}</span>
+                    <div className={styles.permissionChips}>
+                      {inspection.permissions.map((permission) => (
+                        <span key={permission.id} className={styles.permissionChip} data-level={permission.level}>
+                          {t(PERMISSION_KEYS[permission.id])}{permission.count > 1 ? ` ×${permission.count}` : ""}
+                        </span>
+                      ))}
+                      {inspection.permissions.length === 0 && <span className={styles.noChange}>{t("packages.noDeclaredPermissions")}</span>}
+                    </div>
+                  </div>
+                  {pending.preview.addedPermissions.length > 0 ? (
+                    <div className={styles.permissionReview}>
+                      <span className={styles.permissionLabel}>{t("packages.newPermissions")}</span>
+                      <div className={styles.permissionChips}>
+                        {pending.preview.addedPermissions.map((permission) => (
+                          <span key={permission} className={styles.permissionChip} data-level="new">{t(PERMISSION_KEYS[permission])}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : pending.action === "update" && <span className={styles.noChange}>{t("packages.noNewPermissions")}</span>}
+                  {inspection.lifecycleScripts.length > 0 && (
+                    <div className={styles.scriptWarning}>
+                      <strong>{t("packages.installScriptsWarning")}</strong>
+                      <code>{inspection.lifecycleScripts.join(", ")}</code>
+                    </div>
+                  )}
+                  {inspection.integrity && <code className={styles.integrity} title={inspection.integrity}>{t("packages.integrity")}: {inspection.integrity}</code>}
+                </div>
+              );
+            })()}
+            <span className={styles.confirmHint}>{t("packages.confirmHint")}</span>
           </div>
           <div className={styles.actions}>
             <button type="button" className={pending.action === "remove" ? styles.dangerButton : styles.primaryButton}
@@ -171,8 +242,8 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
         </button>
       </div>
 
-      {error && <div className={styles.error}>{error}</div>}
-      {busy === "load" && packages.length === 0 ? <div className={styles.state}>{t("common.loading")}</div> : packages.length === 0 ? (
+      {(error || resource.error) && <div className={styles.error} role="alert"><span>{error || resource.error}</span>{resource.error && <button type="button" onClick={() => void resource.refresh()}>{t("common.retry")}</button>}</div>}
+      {resource.loading && packages.length === 0 ? <div className={styles.state}>{t("common.loading")}</div> : packages.length === 0 ? (
         <div className={styles.empty}>{t("packages.empty")}</div>
       ) : (
         <div className={styles.list}>

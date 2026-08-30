@@ -50,14 +50,21 @@ test.describe("session tags", () => {
   test("tag filter chips filter the session list", async ({ page }) => {
     await openMain(page);
     await addTag(page, "filtertest");
-    // TagFilter row appears; clicking it filters to the tagged session
-    const filterChip = page.locator("button", { hasText: "filtertest" }).first();
+    // Tags live in the explicit conversation-filter dialog so the session
+    // list stays scannable instead of growing another persistent toolbar.
+    await page.getByRole("button", { name: "Conversation filters" }).click();
+    const filters = page.getByRole("dialog", { name: "Conversation filters" });
+    const filterChip = filters.getByRole("button", { name: /filtertest/ });
     await expect(filterChip).toBeVisible();
     await filterChip.click();
+    await filters.getByRole("button", { name: "Done", exact: true }).click();
     await expect(page.getByText("專案架構分析").first()).toBeVisible();
     await expect(page.getByText("失敗的執行")).toHaveCount(0);
     // Clear the filter, clean up via the item chip
-    await filterChip.click();
+    await page.getByRole("button", { name: "Conversation filters" }).click();
+    const reopenedFilters = page.getByRole("dialog", { name: "Conversation filters" });
+    await reopenedFilters.getByRole("button", { name: /filtertest/ }).click();
+    await reopenedFilters.getByRole("button", { name: "Done", exact: true }).click();
     await expect(page.getByText("失敗的執行").first()).toBeVisible();
     const remove = page.locator("[class*=tagChip]", { hasText: "#filtertest" }).first()
       .getByRole("button", { name: "Remove #filtertest" });

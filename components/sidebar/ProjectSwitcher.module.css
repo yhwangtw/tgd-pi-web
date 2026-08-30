@@ -24,8 +24,8 @@
 .inputRow {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 12px 14px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -43,7 +43,7 @@
 
 .body {
   overflow-y: auto;
-  padding: 5px 6px 6px;
+  padding: var(--space-1) var(--space-2) var(--space-2);
   flex: 1;
   min-height: 60px;
 }
@@ -54,27 +54,27 @@
   color: var(--text-dim);
   font-family: var(--font-mono);
   text-transform: uppercase;
-  padding: 8px 10px 3px;
+  padding: var(--space-2) var(--space-2) var(--space-1);
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
   border-radius: var(--radius-control);
   font-size: var(--text-md);
   cursor: pointer;
 }
 .rowActive { background: var(--bg-selected); }
-.rowNested { padding-left: 32px; }
+.rowNested { padding-left: var(--space-8); }
 
 .rowIcon { color: var(--text-dim); display: flex; flex-shrink: 0; width: 15px; justify-content: center; }
 .rowActive .rowIcon { color: var(--color-accent); }
 
 .rowName { font-weight: var(--weight-semibold); white-space: nowrap; flex-shrink: 0; }
 .hl { color: var(--color-accent); font-weight: var(--weight-bold); }
-.pinDot { color: var(--accent); font-size: var(--text-2xs); }
+.pinDot { flex: 0 0 auto; color: var(--accent); }
 
 .rowPath {
   color: var(--text-dim);
@@ -89,7 +89,7 @@
 .countChip, .gitChip, .branchChip {
   flex-shrink: 0;
   font-size: var(--text-2xs);
-  padding: 1px 7px;
+  padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-pill);
   font-family: var(--font-mono);
   white-space: nowrap;
@@ -105,31 +105,24 @@
   white-space: nowrap;
 }
 
-.rowActions { display: none; align-items: center; gap: 2px; flex-shrink: 0; }
-.row:hover .rowActions, .rowActive .rowActions { display: inline-flex; }
+.rowActions { display: none; align-items: center; gap: var(--space-optical); flex-shrink: 0; }
+.row:hover .rowActions, .row:focus-within .rowActions, .rowActive .rowActions { display: inline-flex; }
 .rowActionBtn {
-  display: inline-flex;
-  width: var(--control-xs);
-  height: var(--control-xs);
-  padding: 0;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  border-radius: var(--radius-control-compact);
   color: var(--text-dim);
-  cursor: pointer;
 }
 .rowActionBtn:hover { color: var(--text); background: var(--bg-hover); }
 
-.emptyNote { padding: 16px 12px; font-size: var(--text-sm); color: var(--text-dim); text-align: center; }
-.error { padding: 10px 12px; font-size: var(--text-sm); color: var(--color-error); }
+.emptyNote { display: flex; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-4) var(--space-3); font-size: var(--text-sm); color: var(--text-dim); text-align: center; }
+.emptyNote[data-error="true"] { color: var(--color-error-text); }
+.emptyNote button { min-height: var(--control-compact); padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text-muted); cursor: pointer; }
+.emptyNote button:hover { border-color: var(--color-accent-border); color: var(--text); }
+.error { padding: var(--space-2) var(--space-3); font-size: var(--text-sm); color: var(--color-error); }
 
 .footer {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 8px 14px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--border);
   font-size: var(--text-xs);
   color: var(--text-dim);
@@ -141,7 +134,7 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-control-compact);
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   font-size: var(--text-2xs);
 }
 .footHint { margin-left: auto; }
@@ -153,7 +146,7 @@
   color: var(--text-dim);
   font-size: var(--text-xs);
   cursor: pointer;
-  padding: 2px 4px;
+  padding: var(--space-optical) var(--space-1);
 }
 .footHint + .defaultBtn { margin-left: 12px; }
 .defaultBtn:hover { color: var(--color-accent); }
@@ -173,21 +166,21 @@
 
   .inputRow {
     min-height: 58px;
-    padding: 7px 12px;
+    padding: var(--space-2) var(--space-3);
   }
 
   .input,
   .inputMono {
-    font-size: 16px;
+    font-size: var(--text-lg);
   }
 
   .body {
-    padding: 6px 8px 10px;
+    padding: var(--space-2) var(--space-2) var(--space-2);
   }
 
   .row {
     min-height: 56px;
-    padding: 9px 10px;
+    padding: var(--space-2) var(--space-2);
   }
 
   .rowName {
@@ -210,7 +203,7 @@
 
   .footer {
     min-height: 52px;
-    padding: 6px 12px;
+    padding: var(--space-2) var(--space-3);
   }
 
   .footer > span,
@@ -225,9 +218,9 @@
 
 :global(html[data-ui-style="trae"]) .overlay { background: var(--trae-overlay); backdrop-filter: blur(8px); }
 :global(html[data-ui-style="trae"]) .modal { border-color: var(--trae-hairline); border-radius: var(--radius-dialog); background: var(--glass-bg); }
-:global(html[data-ui-style="trae"]) .inputRow { min-height: 58px; margin: 10px; padding: 0 14px; border: 0; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
-:global(html[data-ui-style="trae"]) .body { padding: 2px 10px 12px; }
-:global(html[data-ui-style="trae"]) .groupLabel { padding: 10px 8px 5px; letter-spacing: var(--tracking-label); text-transform: none; }
+:global(html[data-ui-style="trae"]) .inputRow { min-height: 58px; margin: 10px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .body { padding: var(--space-optical) var(--space-2) var(--space-3); }
+:global(html[data-ui-style="trae"]) .groupLabel { padding: var(--space-2) var(--space-2) var(--space-1); letter-spacing: var(--tracking-label); text-transform: none; }
 :global(html[data-ui-style="trae"]) .row { min-height: 44px; border-radius: var(--radius-control-prominent); }
 :global(html[data-ui-style="trae"]) .rowActive { background: var(--bg-selected); }
 :global(html[data-ui-style="trae"]) .rowActionBtn { border-radius: var(--radius-control); }

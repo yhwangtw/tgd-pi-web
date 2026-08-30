@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 // PrismAsync keeps the full language set but splits refractor + languages into
 // a lazily-loaded chunk, so the highlighter never blocks the initial bundle.
 import { PrismAsync as SyntaxHighlighter } from "react-syntax-highlighter";
+import { Maximize2 } from "lucide-react";
 import { vs, vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useTheme } from "@/hooks/useTheme";
 import { looksLikeFilePath, requestOpenFile } from "@/lib/file-links";
@@ -251,7 +252,8 @@ function MarkdownRenderer({
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}
         components={{
-          code({ className, children, ...props }) {
+          code({ className, children, node: markdownNode, ...props }) {
+            void markdownNode;
             const lang = className?.replace("language-", "").toLowerCase() ?? "";
             const raw = String(children);
             const isBlock = className?.includes("language-") || raw.includes("\n");
@@ -264,15 +266,22 @@ function MarkdownRenderer({
             // File-path-looking inline code opens in the right-panel viewer.
             const link = looksLikeFilePath(raw);
             if (link) {
+              const openFileLink = (element: HTMLElement) => {
+                const entryId = element.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId;
+                requestOpenFile({
+                  ...link,
+                  origin: entryId ? { kind: "message", entryId } : undefined,
+                });
+              };
               return (
                 <code
+                  {...props}
                   className={`${styles.inlineCode} ${styles.fileLink}`}
                   role="link"
                   tabIndex={0}
                   title={`Open ${link.path}`}
-                  onClick={() => requestOpenFile(link)}
-                  onKeyDown={(e) => { if (e.key === "Enter") requestOpenFile(link); }}
-                  {...props}
+                  onClick={(event) => openFileLink(event.currentTarget)}
+                  onKeyDown={(event) => { if (event.key === "Enter") openFileLink(event.currentTarget); }}
                 >
                   {children}
                 </code>
@@ -280,8 +289,8 @@ function MarkdownRenderer({
             }
             return (
               <code
-                className={styles.inlineCode}
                 {...props}
+                className={styles.inlineCode}
               >
                 {children}
               </code>
@@ -481,9 +490,7 @@ function CodeBlock({ code, lang, headerAction, plain }: { code: string; lang: st
             title={t("code.focus")}
             aria-label={t("code.focus")}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M8 3H3v5M16 21h5v-5M3 8l5-5M21 16l-5 5" />
-            </svg>
+            <Maximize2 size={12} strokeWidth={1.8} aria-hidden />
           </button>
           <button
             onClick={copy}

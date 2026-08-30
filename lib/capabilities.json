@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "capabilities": [
+    {
+      "id": "agent-chat",
+      "title": { "en": "Agent chat", "zh": "Agent 對話" },
+      "summary": {
+        "en": "Streaming conversations, tools, models, queues, retries, and compaction run through the embedded Pi runtime.",
+        "zh": "串流對話、工具、模型、訊息佇列、重試與壓縮都由內嵌 Pi 執行環境處理。"
+      },
+      "foundation": "pi-sdk",
+      "webSupport": "native",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "host",
+      "evidence": ["lib/pi-runtime.ts", "hooks/useAgentSession.ts"]
+    },
+    {
+      "id": "session-workspace",
+      "title": { "en": "Sessions and cross-project search", "zh": "Session 與跨專案搜尋" },
+      "summary": {
+        "en": "Local Pi sessions, recent conversations, branches, saved views, tags, pins, and exports are available in the Web interface.",
+        "zh": "Web 介面可使用本機 Pi Session、最近對話、分支、儲存檢視、標籤、釘選與匯出。"
+      },
+      "foundation": "pi-sdk",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "host",
+      "evidence": ["lib/session-reader.ts", "components/sidebar/SessionSidebar.tsx"]
+    },
+    {
+      "id": "ask-user",
+      "title": { "en": "Ask User and extension dialogs", "zh": "Ask User 與 Extension 對話框" },
+      "summary": {
+        "en": "Structured questions and supported Pi extension dialogs pause safely and survive browser reconnects.",
+        "zh": "結構化問題與支援的 Pi Extension 對話框可安全暫停，並在瀏覽器重連後繼續。"
+      },
+      "foundation": "pi-extension-api",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "decision",
+      "evidence": ["lib/web-extension-ui.ts", "components/chat/UserQuestionCard.tsx"]
+    },
+    {
+      "id": "plan-mode",
+      "title": { "en": "Plan Mode", "zh": "規劃模式" },
+      "summary": {
+        "en": "A selectable read-only mode limits tools and shell commands, inspects the workspace, and returns an implementation-ready plan.",
+        "zh": "可選的唯讀模式會限制工具與 Shell 指令、檢查工作區，並輸出可直接執行的實作計畫。"
+      },
+      "foundation": "pi-extension-api",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "workspace",
+      "evidence": ["lib/plan-mode.ts", "components/chat/ToolPresetSelector.tsx"]
+    },
+    {
+      "id": "structured-output",
+      "title": { "en": "Structured Output", "zh": "結構化輸出" },
+      "summary": {
+        "en": "A terminating Pi extension tool renders concise result, information, warning, and failure cards without an extra model turn.",
+        "zh": "可終止回合的 Pi Extension 工具會直接呈現精簡的結果、資訊、警告與失敗卡片，不需要額外模型回合。"
+      },
+      "foundation": "pi-extension-api",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "none",
+      "evidence": ["lib/structured-output-extension.ts", "components/chat/StructuredOutputCard.tsx"]
+    },
+    {
+      "id": "embedded-subagents",
+      "title": { "en": "Embedded subagents", "zh": "內嵌子代理" },
+      "summary": {
+        "en": "Scout, planner, worker, and reviewer run through the Web agent supervisor without spawning a global Pi CLI.",
+        "zh": "Scout、planner、worker 與 reviewer 透過 Web Agent Supervisor 執行，不會啟動全域 Pi CLI。"
+      },
+      "foundation": "pi-sdk",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "workspace",
+      "evidence": ["lib/subagent-extension.ts", "lib/agent-run-supervisor.ts"]
+    },
+    {
+      "id": "permission-gate",
+      "title": { "en": "Permission Gate", "zh": "權限閘門" },
+      "summary": {
+        "en": "High-impact commands, installs, and external changes pause for one-time or exact-operation approval and create audit events.",
+        "zh": "高影響指令、安裝與外部變更會暫停，等待單次或限定同一操作的授權，並留下稽核紀錄。"
+      },
+      "foundation": "pi-extension-api",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "decision",
+      "evidence": ["lib/safety-guard.ts", "lib/security-activity.ts"]
+    },
+    {
+      "id": "protected-paths",
+      "title": { "en": "Protected Paths", "zh": "受保護路徑" },
+      "summary": {
+        "en": "Credential files, automation and deployment configuration, Git internals, and paths outside the active workspace require explicit review.",
+        "zh": "憑證檔、Automation 與部署設定、Git 內部檔案，以及工作區外路徑都需要明確檢查與授權。"
+      },
+      "foundation": "pi-extension-api",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "decision",
+      "evidence": ["lib/safety-guard.ts", "lib/security-activity.ts"]
+    },
+    {
+      "id": "mcp",
+      "title": { "en": "MCP connections", "zh": "MCP 連線" },
+      "summary": {
+        "en": "Trusted stdio and Streamable HTTP servers are configured, reviewed, tested, and exposed as Web agent tools.",
+        "zh": "受信任的 stdio 與 Streamable HTTP Server 可在 Web 中設定、檢查、測試並提供給 Agent 使用。"
+      },
+      "foundation": "pi-extension-api",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "endpoint",
+      "evidence": ["lib/mcp.ts", "components/modals/McpCenter.tsx"]
+    },
+    {
+      "id": "scheduled-agents",
+      "title": { "en": "Scheduled agents", "zh": "Agent 排程" },
+      "summary": {
+        "en": "One-time, daily, weekly, and cron runs create normal Pi sessions and can wait for user decisions.",
+        "zh": "單次、每日、每週與 cron 執行都會建立一般 Pi Session，也能等待使用者決定。"
+      },
+      "foundation": "pi-sdk",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": true,
+      "trust": "operator",
+      "evidence": ["lib/schedule-runner.ts", "components/layout/SchedulePanel.tsx"]
+    },
+    {
+      "id": "files-git",
+      "title": { "en": "Files, Git, and restore points", "zh": "檔案、Git 與還原點" },
+      "summary": {
+        "en": "File previews, edits, diffs, history, and precise restore points stay inside allowed workspaces.",
+        "zh": "檔案預覽、編輯、差異、歷史與精確還原點都限制在允許的工作區內。"
+      },
+      "foundation": "pi-web",
+      "webSupport": "native",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "workspace",
+      "evidence": ["components/layout/FileViewer.tsx", "lib/git-snapshot.ts"]
+    },
+    {
+      "id": "extensions-packages",
+      "title": { "en": "Extensions and packages", "zh": "Extension 與套件" },
+      "summary": {
+        "en": "Compatible resources can be reviewed, pinned to an exact version, installed, enabled, and reloaded from the Web interface.",
+        "zh": "相容資源可在 Web 中檢查權限、鎖定精確版本、安裝、啟用並重新載入。"
+      },
+      "foundation": "pi-package-format",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "decision",
+      "evidence": ["lib/package-center.ts", "components/modals/PackageCenter.tsx"]
+    },
+    {
+      "id": "runtime-diagnostics",
+      "title": { "en": "Runtime and security diagnostics", "zh": "執行環境與安全診斷" },
+      "summary": {
+        "en": "Version health, deployment boundaries, redacted diagnostics, and security activity are visible without terminal access.",
+        "zh": "不需要終端機即可查看版本健康度、部署邊界、已遮蔽診斷資料與安全活動。"
+      },
+      "foundation": "pi-web",
+      "webSupport": "native",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": false,
+      "trust": "operator",
+      "evidence": ["lib/runtime-status.ts", "lib/diagnostics.ts"]
+    },
+    {
+      "id": "update-center",
+      "title": { "en": "Safe Update Center", "zh": "安全更新中心" },
+      "summary": {
+        "en": "Installed and latest releases, preflight checks, private source backups, and operator-managed update, restart, and rollback actions are available without a global Pi CLI.",
+        "zh": "不需要全域 Pi CLI，即可查看目前與最新版本、執行預檢、建立私人程式來源備份，並使用管理者設定的更新、重啟與回復操作。"
+      },
+      "foundation": "pi-web",
+      "webSupport": "native",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": true,
+      "trust": "operator",
+      "evidence": ["lib/update-center.ts", "components/modals/UpdateCenterSection.tsx"]
+    }
+  ]
+}

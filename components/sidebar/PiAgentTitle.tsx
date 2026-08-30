@@ -1,5 +1,6 @@
 "use client";
 
+import { useI18n } from "@/lib/i18n";
 import styles from "./PiAgentTitle.module.css";
 
 /**
@@ -8,6 +9,7 @@ import styles from "./PiAgentTitle.module.css";
  * with every appearance.
  */
 export function PiAgentTitle() {
+  const { t } = useI18n();
   return (
     <span className={styles.lockup}>
       <span className={styles.badge} aria-hidden>
@@ -15,7 +17,7 @@ export function PiAgentTitle() {
       </span>
       <span className={styles.textCol}>
         <span className={styles.name}>with tGD</span>
-        <span className={styles.tagline}>coding agent</span>
+        <span className={styles.tagline}>{t("brand.codingAgent")}</span>
       </span>
     </span>
   );

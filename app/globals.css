@@ -120,25 +120,33 @@
   --border-strong: color-mix(in srgb, var(--border) 78%, var(--text) 22%);
   --color-accent-fg: var(--accent-fg);
 
-  /* Design tokens — spacing, controls, type, shape, and motion. Components
-     should select from this scale instead of inventing nearby values. */
+  /* Layer 1: primitive scale. Product components should normally consume the
+     role and component aliases below, not invent nearby physical values. */
   --space-0: 0;
-  --space-0-5: 2px;
+  --space-optical: 2px;
   --space-1: 4px;
-  --space-1-5: 6px;
   --space-2: 8px;
-  --space-2-5: 10px;
   --space-3: 12px;
   --space-4: 16px;
-  --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
 
   --control-xs: 24px;
-  --control-sm: 30px;
-  --control-md: 34px;
+  --control-sm: 32px;
+  --control-md: 36px;
   --control-lg: 40px;
   --control-touch: 44px;
+
+  /* Layer 2: semantic interaction and layout roles. */
+  --control-icon-min: var(--control-xs);
+  --control-compact: var(--control-sm);
+  --control-default: var(--control-md);
+  --control-prominent: var(--control-lg);
+  --control-mobile: var(--control-touch);
+  --layout-inline-gap: var(--space-2);
+  --layout-control-gap: var(--space-3);
+  --layout-section-gap: var(--space-4);
+  --layout-panel-gap: var(--space-6);
 
   /* Design Tokens - Border Radius */
   --radius-xs: 3px;
@@ -170,9 +178,10 @@
   --radius-pill: var(--radius-full);
   --radius-circle: 50%;
 
-  /* Design Tokens - Font Sizes */
-  --text-2xs: calc(11px * var(--font-scale));
-  --text-xs: calc(12px * var(--font-scale));
+  /* Layer 1 typography primitives. Default UI never renders essential copy
+     below 13px; 12px is reserved for non-essential machine metadata. */
+  --text-2xs: calc(12px * var(--font-scale));
+  --text-xs: calc(13px * var(--font-scale));
   --text-sm: calc(13px * var(--font-scale));
   --text-md: calc(14px * var(--font-scale));
   --text-base: calc(15px * var(--font-scale));
@@ -181,6 +190,15 @@
   --text-title: calc(20px * var(--font-scale));
   --text-2xl: calc(22px * var(--font-scale));
   --text-3xl: calc(28px * var(--font-scale));
+
+  /* Layer 2 typography roles. */
+  --type-display-size: var(--text-title);
+  --type-title-size: var(--text-lg);
+  --type-body-size: var(--text-base);
+  --type-ui-size: var(--text-md);
+  --type-label-size: var(--text-sm);
+  --type-meta-size: var(--text-2xs);
+  --type-code-size: var(--text-sm);
 
   --weight-regular: 400;
   --weight-medium: 500;
@@ -204,6 +222,37 @@
   --leading-relaxed: 1.6;
   --leading-body: 1.7;
   --leading-loose: 1.8;
+
+  --type-display-leading: var(--leading-tight);
+  --type-title-leading: var(--leading-snug);
+  --type-body-leading: var(--leading-body);
+  --type-ui-leading: var(--leading-ui);
+  --type-meta-leading: var(--leading-ui);
+
+  /* Layer 3: shared component contracts. Original and TRAE override only the
+     primitive geometry above, so each remains internally coherent. */
+  --component-dialog-width: 640px;
+  --component-dialog-wide-width: 760px;
+  --component-dialog-xwide-width: 900px;
+  --component-dialog-max-height: min(82dvh, 860px);
+  --component-sheet-max-height: 72dvh;
+  --component-panel-padding: var(--space-4);
+  --component-dialog-padding: var(--space-6);
+  --component-option-min-height: 56px;
+  --component-button-touch: var(--control-mobile);
+  --component-icon-stroke: 1.8;
+  --component-icon-button-compact: var(--control-compact);
+  --component-icon-button-default: var(--control-default);
+  --component-icon-button-touch: var(--control-mobile);
+  --component-icon-button-glyph-compact: 15px;
+  --component-icon-button-glyph-default: 18px;
+  --component-icon-button-glyph-touch: 20px;
+  --component-chat-minimap-gutter: 52px;
+  --component-composer-action-gutter: 60px;
+  --component-empty-state-offset: 42px;
+  --component-panel-footer-clearance: 72px;
+  --component-line-action-gutter: 76px;
+  --component-reading-padding: 48px;
 
   --motion-fast: 120ms;
   --motion-normal: 180ms;
@@ -791,6 +840,11 @@ body {
   border-radius: var(--radius-control);
 }
 
+:where(button[aria-label], button[title], [role="button"][aria-label], a[aria-label]) {
+  min-inline-size: var(--control-icon-min);
+  min-block-size: var(--control-icon-min);
+}
+
 :where(button, input, textarea, select, [role="button"], [role="option"], [role="switch"]):disabled,
 :where([role="button"], [role="option"], [role="switch"])[aria-disabled="true"] {
   cursor: not-allowed;
@@ -863,7 +917,7 @@ pre, code {
 .markdown-body h4, .markdown-body h5, .markdown-body h6 { font-size: 1em; }
 .markdown-body > :first-child { margin-top: 0; }
 .markdown-body ul, .markdown-body ol {
-  padding-left: 20px;
+  padding-left: var(--space-4);
   margin: 4px 0 8px;
   list-style-position: outside;
 }
@@ -875,7 +929,7 @@ pre, code {
 .markdown-body li > ul, .markdown-body li > ol { margin: 2px 0; }
 /* GFM task lists: the checkbox replaces the bullet */
 .markdown-body li.task-list-item { list-style: none; }
-.markdown-body ul:has(> li.task-list-item) { padding-left: 6px; }
+.markdown-body ul:has(> li.task-list-item) { padding-left: var(--space-2); }
 .markdown-body li.task-list-item > input[type="checkbox"] {
   accent-color: var(--accent);
   width: 13px;
@@ -895,7 +949,7 @@ pre, code {
 .markdown-body blockquote {
   border-left: 3px solid var(--color-accent-border);
   margin: 6px 0 10px;
-  padding: 2px 12px;
+  padding: var(--space-optical) var(--space-3);
   color: var(--text-muted);
 }
 /* Wide tables scroll inside their own wrapper instead of squishing */
@@ -912,7 +966,7 @@ pre, code {
 .markdown-body .md-table-wrap > table { margin: 0; }
 .markdown-body th, .markdown-body td {
   border: 1px solid var(--border);
-  padding: 5px 10px;
+  padding: var(--space-1) var(--space-2);
   text-align: left;
   white-space: normal;
   min-width: 60px;
@@ -928,7 +982,7 @@ pre, code {
   margin: 0.6em 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 2px 0;
+  padding: var(--space-optical) 0;
 }
 .markdown-body .katex {
   font-size: 1.05em;
@@ -938,7 +992,7 @@ pre, code {
 }
 
 .mermaid-block {
-  padding: 12px;
+  padding: var(--space-3);
   overflow-x: auto;
   background: var(--bg);
 }
@@ -964,7 +1018,7 @@ pre, code {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   overflow-x: auto;
   font-family: var(--font-mono);
   font-size: calc(13px * var(--font-scale));
@@ -974,7 +1028,7 @@ pre, code {
   font-family: var(--font-mono);
   font-size: 0.9em;
   background: var(--bg-panel);
-  padding: 1px 5px;
+  padding: var(--space-optical) var(--space-1);
   border-radius: var(--radius-inline);
 }
 .markdown-file-preview pre code {
@@ -1111,6 +1165,20 @@ span.linenumber {
     width: 300px;
     min-width: 300px;
   }
+
+  /* TRAE's conversational workspace uses a deliberately wider context rail
+     than the compact Original geometry. Repo/branch/model/status labels must
+     remain readable without stealing the main canvas. */
+  html[data-ui-style="trae"] .sidebar-container.sidebar-open[data-panel-view="sessions"],
+  html[data-ui-style="trae"] .sidebar-container.sidebar-open[data-panel-view="search"] {
+    width: 360px;
+    min-width: 360px;
+  }
+  html[data-ui-style="trae"] .sidebar-container[data-panel-view="sessions"] > *,
+  html[data-ui-style="trae"] .sidebar-container[data-panel-view="search"] > * {
+    width: 360px;
+    min-width: 360px;
+  }
 }
 
 
@@ -1184,36 +1252,12 @@ span.linenumber {
   }
 }
 
-/* Tablet (601-1024px) and mobile (≤600px): sidebar floats over the chat as an overlay */
+/* Tablet and phone layouts share the compact file workspace, but only phones
+   float the contextual sidebar over the conversation. */
 @media (max-width: 1024px) {
   .chat-stats-center {
     display: none !important;
   }
-  .sidebar-container {
-    position: fixed !important;
-    top: var(--safe-area-top);
-    left: calc(var(--safe-area-left) + 44px); /* clear the safe area + icon rail */
-    bottom: var(--safe-area-bottom);
-    width: 280px;
-    max-width: calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 44px);
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-  }
-  .sidebar-container.sidebar-open {
-    transform: translateX(0);
-    box-shadow: 4px 0 20px rgba(0,0,0,0.15);
-  }
-  .sidebar-container.sidebar-closed {
-    transform: translateX(calc(-100% - 44px));
-    box-shadow: none;
-  }
-
-  /* TRAE uses a 50px rail instead of the Original 44px rail. Match the
-     closed transform to that real offset so no 6px drawer sliver remains
-     underneath the rail at tablet widths. */
-  html[data-ui-style="trae"] .sidebar-container.sidebar-closed {
-    transform: translateX(calc(-100% - 50px));
-  }
-
   .right-panel-container {
     overflow: hidden;
     transition: width 0.2s ease, min-width 0.2s ease;
@@ -1234,6 +1278,62 @@ span.linenumber {
   }
 }
 
+/* Tablet: a persistent, collapsible second pane. It never dims or blocks the
+   transcript, and selecting a conversation leaves both panes available. */
+@media (min-width: 701px) and (max-width: 1024px) {
+  .sidebar-overlay-backdrop {
+    display: none !important;
+  }
+  .sidebar-container {
+    --tablet-context-width: clamp(256px, 28vw, 280px);
+    position: relative !important;
+    inset: auto !important;
+    width: 0;
+    min-width: 0;
+    max-width: none;
+    overflow: clip;
+    transform: none !important;
+    box-shadow: none !important;
+    transition: width 0.2s ease, min-width 0.2s ease;
+  }
+  .sidebar-container.sidebar-open {
+    width: var(--tablet-context-width);
+    min-width: var(--tablet-context-width);
+  }
+  .sidebar-container.sidebar-closed {
+    width: 0;
+    min-width: 0;
+    border-right: 0 !important;
+  }
+  .sidebar-container > * {
+    width: var(--tablet-context-width);
+    min-width: var(--tablet-context-width);
+  }
+}
+
+/* Phone: the contextual view replaces the chat canvas and is dismissed after
+   a selection. Bottom navigation remains the persistent primary navigation. */
+@media (max-width: 700px) {
+  .sidebar-container {
+    position: fixed !important;
+    top: var(--safe-area-top);
+    left: var(--safe-area-left);
+    right: var(--safe-area-right);
+    bottom: var(--safe-area-bottom);
+    width: auto;
+    max-width: none;
+    transition: transform 0.25s ease;
+  }
+  .sidebar-container.sidebar-open {
+    transform: translateX(0);
+  }
+  .sidebar-container.sidebar-closed,
+  html[data-ui-style="trae"] .sidebar-container.sidebar-closed {
+    transform: translateX(-100%);
+    box-shadow: none;
+  }
+}
+
 /* Mobile (≤600px): sidebar takes the full width, hide top-bar command palette label */
 @media (max-width: 600px) {
   .sidebar-container {
@@ -1245,7 +1345,7 @@ span.linenumber {
   }
   .commandPaletteTrigger {
     max-width: 44px;
-    padding: 0 8px;
+    padding: 0 var(--space-2);
     justify-content: center;
   }
 }
@@ -1376,16 +1476,16 @@ span.linenumber {
 
   .markdown-body ul,
   .markdown-body ol {
-    padding-left: 18px;
+    padding-left: var(--space-4);
   }
 
   .markdown-body blockquote {
-    padding-left: 10px;
-    padding-right: 4px;
+    padding-left: var(--space-2);
+    padding-right: var(--space-1);
   }
 
   .markdown-body th,
   .markdown-body td {
-    padding: 6px 8px;
+    padding: var(--space-2) var(--space-2);
   }
 }

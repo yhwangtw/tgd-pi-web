@@ -3,7 +3,7 @@ import { promisify } from "util";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, statSync } from "fs";
 import { join, dirname, resolve, sep } from "path";
 import { tmpdir } from "os";
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 const execFileAsync = promisify(execFile);
@@ -34,6 +34,36 @@ export interface SnapshotMeta {
   label: string;
   /** number of files changed vs HEAD at snapshot time (display only) */
   fileCount: number;
+}
+
+export interface SnapshotRestoreChange {
+  path: string;
+  action: "restore" | "remove";
+  status: string;
+}
+
+export interface SnapshotRestoreImpact {
+  total: number;
+  restore: number;
+  remove: number;
+  changes: SnapshotRestoreChange[];
+}
+
+export interface SnapshotListItem {
+  id: string;
+  ts: number;
+  label: string;
+  /** Historical worktree delta when the snapshot was captured. */
+  fileCount: number;
+  /** Current files that would actually change if this snapshot were restored. */
+  impact: SnapshotRestoreImpact;
+}
+
+export interface SnapshotRestoreReview {
+  label: string;
+  impact: SnapshotRestoreImpact;
+  fingerprint: string;
+  currentTree: string;
 }
 
 const MAX_PER_SESSION = 20;
@@ -139,8 +169,81 @@ export async function createSnapshot(cwd: string, sessionId: string, label: stri
   return meta;
 }
 
-export function listSnapshots(sessionId: string): Omit<SnapshotMeta, "ref" | "commit" | "tree">[] {
-  return readMeta(sessionId).map(({ id, ts, label, fileCount }) => ({ id, ts, label, fileCount }));
+/** Parse git's NUL-delimited --name-status output into user-facing restore actions. */
+export function parseSnapshotDiff(diff: string): SnapshotRestoreChange[] {
+  const parts = diff.split("\0").filter((part) => part.length > 0);
+  const changes: SnapshotRestoreChange[] = [];
+
+  for (let index = 0; index < parts.length;) {
+    const status = parts[index] ?? "";
+    const code = status[0] ?? "";
+    const hasTwoPaths = code === "R" || code === "C";
+    const firstPath = parts[index + 1];
+    const secondPath = hasTwoPaths ? parts[index + 2] : undefined;
+    index += hasTwoPaths ? 3 : 2;
+
+    if (!firstPath) continue;
+    if (code === "A") {
+      changes.push({ path: firstPath, action: "remove", status: code });
+      continue;
+    }
+    if (code === "R") {
+      if (secondPath) changes.push({ path: secondPath, action: "remove", status: code });
+      changes.push({ path: firstPath, action: "restore", status: code });
+      continue;
+    }
+    if (code === "C") {
+      if (secondPath) changes.push({ path: secondPath, action: "remove", status: code });
+      continue;
+    }
+    changes.push({ path: firstPath, action: "restore", status: code });
+  }
+
+  return changes;
+}
+
+function restoreImpact(diff: string): SnapshotRestoreImpact {
+  const allChanges = parseSnapshotDiff(diff);
+  const restore = allChanges.filter((change) => change.action === "restore").length;
+  const remove = allChanges.length - restore;
+  return {
+    total: allChanges.length,
+    restore,
+    remove,
+    // Prevent a very large worktree from turning this compact sidebar API into
+    // a multi-megabyte response. Counts remain exact and the preview says when
+    // the visible list is truncated.
+    changes: allChanges.slice(0, 100),
+  };
+}
+
+export async function listSnapshots(cwd: string, sessionId: string): Promise<SnapshotListItem[]> {
+  const snapshots = readMeta(sessionId);
+  if (snapshots.length === 0) return [];
+  const currentTree = await currentWorkingTree(cwd);
+  const items = await Promise.all(snapshots.map(async ({ id, ts, label, fileCount, commit }) => {
+    const diff = await git(cwd, ["diff", "--name-status", "-z", commit, currentTree]);
+    return { id, ts, label, fileCount, impact: restoreImpact(diff) } satisfies SnapshotListItem;
+  }));
+  // A restore point that changes nothing is noise and creates false urgency.
+  return items.filter((item) => item.impact.total > 0);
+}
+
+export async function inspectSnapshotRestore(
+  cwd: string,
+  sessionId: string,
+  id: string,
+): Promise<SnapshotRestoreReview> {
+  if (!(await isGitRepo(cwd))) throw new Error("not a git repository");
+  const meta = readMeta(sessionId).find((snapshot) => snapshot.id === id);
+  if (!meta) throw new Error("snapshot not found");
+  const currentTree = await currentWorkingTree(cwd);
+  const diff = await git(cwd, ["diff", "--name-status", "-z", meta.commit, currentTree]);
+  const impact = restoreImpact(diff);
+  const fingerprint = createHash("sha256")
+    .update(JSON.stringify({ cwd, sessionId, id, commit: meta.commit, currentTree }))
+    .digest("hex");
+  return { label: meta.label, impact, fingerprint, currentTree };
 }
 
 export async function readSnapshotFile(cwd: string, sessionId: string, id: string, relPath: string): Promise<string> {
@@ -169,42 +272,34 @@ function safeJoin(cwd: string, rel: string): string | null {
  * modified/deleted files are restored from the snapshot, files created since
  * the snapshot are removed. Unrelated files are left untouched.
  */
-export async function restoreSnapshot(cwd: string, sessionId: string, id: string): Promise<RestoreResult> {
+export async function restoreSnapshot(
+  cwd: string,
+  sessionId: string,
+  id: string,
+  expectedCurrentTree?: string,
+): Promise<RestoreResult> {
   if (!(await isGitRepo(cwd))) throw new Error("not a git repository");
   const meta = readMeta(sessionId).find((m) => m.id === id);
   if (!meta) throw new Error("snapshot not found");
 
   const curTree = await currentWorkingTree(cwd);
+  if (expectedCurrentTree && curTree !== expectedCurrentTree) {
+    throw new Error("working tree changed after restore review");
+  }
   const diff = await git(cwd, ["diff", "--name-status", "-z", meta.commit, curTree]);
-
-  // -z output: STATUS \0 PATH \0 STATUS \0 PATH \0 …  (rename = STATUS \0 OLD \0 NEW)
-  const parts = diff.split("\0").filter((s) => s.length > 0);
+  const changes = parseSnapshotDiff(diff);
   const result: RestoreResult = { restored: 0, removed: 0, failed: [] };
 
-  for (let i = 0; i < parts.length; ) {
-    const status = parts[i];
-    const code = status[0];
-    // Renames/copies carry two paths; treat the destination as "created after".
-    const isRename = code === "R" || code === "C";
-    const path = isRename ? parts[i + 2] : parts[i + 1];
-    i += isRename ? 3 : 2;
-    if (!path) continue;
-
+  for (const change of changes) {
+    const { path } = change;
     try {
-      if (code === "A" || isRename) {
-        // Present now, absent in the snapshot → remove it.
+      if (change.action === "remove") {
         const full = safeJoin(cwd, path);
         if (full && existsSync(full) && statSync(full).isFile()) {
           rmSync(full, { force: true });
           result.removed++;
         }
-        // A rename also leaves the OLD path missing → restore it below.
-        if (isRename) {
-          await git(cwd, ["checkout", meta.commit, "--", parts[i - 2]]);
-          result.restored++;
-        }
       } else {
-        // Modified (M) or deleted-since (D) → restore from the snapshot.
         await git(cwd, ["checkout", meta.commit, "--", path]);
         result.restored++;
       }

@@ -22,6 +22,7 @@ import {
 import {
   WebExtensionUIBridge,
   createAskUserTool,
+  toEnumerableExtensionUIContext,
   withAskUserTool,
   type WebExtensionUIEvent,
   type WebExtensionUIResponse,
@@ -257,7 +258,7 @@ export class AgentSessionWrapper {
     await bindWebExtensions(
       this.inner,
       (error) => this.recordExtensionError(error),
-      this.webExtensionUI,
+      toEnumerableExtensionUIContext(this.webExtensionUI),
       this.sessionRuntime ? {
         newSession: (options) => this.runRuntimeReplacement(
           "new",

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { fetchJson, useRequestResource } from "@/hooks/useRequestResource";
 import type { ProviderHealthEntry, ProviderHealthReport } from "@/lib/provider-health";
 import { useI18n } from "@/lib/i18n";
 import { ProviderIcon } from "./ProviderIcon";
@@ -19,27 +20,13 @@ function StatusBadge({ status }: { status: ProviderHealthEntry["status"] }) {
 
 export function ProviderHealth() {
   const { t } = useI18n();
-  const [report, setReport] = useState<ProviderHealthReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [filter, setFilter] = useState<"attention" | "configured" | "all">("attention");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch("/api/provider-health", { cache: "no-store" });
-      const data = await response.json() as ProviderHealthReport & { error?: string };
-      if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
-      setReport(data);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void load(); }, [load]);
+  const resource = useRequestResource<ProviderHealthReport>(
+    "provider-health",
+    (signal) => fetchJson("/api/provider-health", { cache: "no-store" }, signal),
+    { staleTimeMs: 30_000, retries: 1 },
+  );
+  const report = resource.data;
 
   const providers = useMemo(() => {
     const all = report?.providers ?? [];
@@ -51,8 +38,8 @@ export function ProviderHealth() {
     return all;
   }, [filter, report]);
 
-  if (loading && !report) return <div className={styles.state}>{t("providerHealth.checking")}</div>;
-  if (error && !report) return <div className={`${styles.state} ${styles.error}`}>{error}</div>;
+  if (resource.loading && !report) return <div className={styles.state}>{t("providerHealth.checking")}</div>;
+  if (resource.error && !report) return <div className={`${styles.state} ${styles.error}`}>{resource.error}<button type="button" onClick={() => void resource.refresh()}>{t("common.refresh")}</button></div>;
 
   return (
     <div className={styles.root} data-testid="provider-health">
@@ -61,8 +48,8 @@ export function ProviderHealth() {
           <h2>{t("providerHealth.title")}</h2>
           <p>{t("providerHealth.description")}</p>
         </div>
-        <button type="button" className={styles.refresh} onClick={() => void load()} disabled={loading}>
-          {loading ? t("providerHealth.checking") : t("providerHealth.recheck")}
+        <button type="button" className={styles.refresh} onClick={() => void resource.refresh()} disabled={resource.refreshing}>
+          {resource.refreshing ? t("providerHealth.checking") : t("providerHealth.recheck")}
         </button>
       </div>
 
@@ -74,6 +61,31 @@ export function ProviderHealth() {
             <div><strong>{report.summary.needsAuth}</strong><span>{t("providerHealth.notConfigured")}</span></div>
             <div><strong>{report.summary.total}</strong><span>{t("providerHealth.total")}</span></div>
           </div>
+
+          <section className={styles.coverage} aria-labelledby="provider-health-coverage-title">
+            <div className={styles.coverageIntro}>
+              <strong id="provider-health-coverage-title">{t("providerHealth.coverageTitle")}</strong>
+              <span>{t("providerHealth.coverageHint")}</span>
+            </div>
+            <div className={styles.coverageGrid}>
+              <div>
+                <span>{t("providerHealth.credentialReadiness")}</span>
+                <strong data-state={report.coverage.credentialReadiness}>{t("providerHealth.checked")}</strong>
+              </div>
+              <div>
+                <span>{t("providerHealth.localCatalog")}</span>
+                <strong data-state={report.coverage.localCatalog}>{t("providerHealth.checked")}</strong>
+              </div>
+              <div>
+                <span>{t("providerHealth.quotaAndBilling")}</span>
+                <strong data-state={report.coverage.quotaAndBilling}>{t("providerHealth.unknown")}</strong>
+              </div>
+              <div>
+                <span>{t("providerHealth.upstreamAvailability")}</span>
+                <strong data-state={report.coverage.upstreamAvailability}>{t("providerHealth.notTested")}</strong>
+              </div>
+            </div>
+          </section>
 
           <div className={styles.toolbar} role="tablist" aria-label={t("providerHealth.filter")}>
             {(["attention", "configured", "all"] as const).map((value) => (
@@ -100,7 +112,7 @@ export function ProviderHealth() {
                   <div className={styles.meta}>
                     <span>{provider.availableModelCount}/{provider.modelCount} {t("providerHealth.models")}</span>
                     {(provider.authSource || provider.configuredSource) && <span>{provider.authSource ?? provider.configuredSource}</span>}
-                    {provider.authType && <span>{provider.authType === "oauth" ? "OAuth" : "API key"}</span>}
+                    {provider.authType && <span>{provider.authType === "oauth" ? "OAuth" : t("apiKey.title")}</span>}
                   </div>
                   {provider.issue && <p className={styles.issue}>{provider.issue}</p>}
                 </div>

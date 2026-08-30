@@ -3,7 +3,7 @@
   z-index: 500;
   inset: 0;
   display: grid;
-  padding: 20px;
+  padding: var(--space-4);
   background: color-mix(in srgb, var(--bg) 72%, transparent);
   backdrop-filter: blur(8px);
   place-items: center;
@@ -28,8 +28,8 @@
   min-height: 48px;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 6px 10px 6px 14px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
   background: var(--bg-elev-1);
 }
@@ -45,11 +45,11 @@
   white-space: nowrap;
 }
 
-.actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.actions { display: flex; flex: 0 0 auto; align-items: center; gap: var(--space-2); }
 
 .actions button {
   min-height: 34px;
-  padding: 0 10px;
+  padding: 0 var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--bg-panel);
@@ -65,14 +65,14 @@
 @media (max-width: 700px) {
   .overlay { padding: 0; }
   .panel { width: 100%; height: 100%; border: 0; border-radius: 0; }
-  .header { min-height: 52px; padding-left: 10px; }
+  .header { min-height: 52px; padding-left: var(--space-2); }
   .actions button { min-height: 40px; }
   .actions .close { width: 40px; }
 }
 
 :global(html[data-ui-style="trae"]) .overlay { background: var(--trae-overlay); }
 :global(html[data-ui-style="trae"]) .panel { border-color: var(--trae-hairline); border-radius: var(--radius-dialog); background: var(--trae-canvas); }
-:global(html[data-ui-style="trae"]) .header { min-height: 56px; padding: 8px 12px 8px 18px; border-bottom-color: var(--trae-hairline); background: var(--trae-surface); }
+:global(html[data-ui-style="trae"]) .header { min-height: 56px; padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4); border-bottom-color: var(--trae-hairline); background: var(--trae-surface); }
 :global(html[data-ui-style="trae"]) .actions button { border-color: transparent; border-radius: var(--radius-control); background: var(--trae-control); }
 
 @media (max-width: 700px) {

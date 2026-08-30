@@ -2,10 +2,12 @@ import { randomBytes } from "node:crypto";
 
 export type PackageMutationAction = "install" | "remove" | "update";
 
-interface PendingPackageMutation {
+export interface PendingPackageMutation {
   action: PackageMutationAction;
   source: string;
   sessionId: string;
+  resolvedSource?: string;
+  integrity?: string;
   expiresAt: number;
 }
 
@@ -29,12 +31,24 @@ export function preparePackageMutation(input: Omit<PendingPackageMutation, "expi
   return { token, expiresAt };
 }
 
-export function consumePackageMutation(token: string, expected: Omit<PendingPackageMutation, "expiresAt">): boolean {
+export function consumePreparedPackageMutation(
+  token: string,
+  expected: Pick<PendingPackageMutation, "action" | "source" | "sessionId">,
+): PendingPackageMutation | null {
   const pending = store().get(token);
   store().delete(token);
-  return !!pending
+  return pending
     && pending.expiresAt > Date.now()
     && pending.action === expected.action
     && pending.source === expected.source
-    && pending.sessionId === expected.sessionId;
+    && pending.sessionId === expected.sessionId
+    ? pending
+    : null;
+}
+
+export function consumePackageMutation(
+  token: string,
+  expected: Pick<PendingPackageMutation, "action" | "source" | "sessionId">,
+): boolean {
+  return consumePreparedPackageMutation(token, expected) !== null;
 }

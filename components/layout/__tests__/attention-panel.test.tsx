@@ -26,6 +26,7 @@ describe("AttentionPanel", () => {
       onRefresh: vi.fn(),
       onMarkRead: vi.fn(),
       onMarkAllRead: vi.fn(),
+      onClearCompleted: vi.fn(),
       onOpenSession: vi.fn(),
       onOpenSource: vi.fn(),
     };
@@ -67,5 +68,30 @@ describe("AttentionPanel", () => {
     expect(handlers.onMarkRead).toHaveBeenCalledWith("attention-1");
     expect(handlers.onOpenSession).toHaveBeenCalledWith("session-1");
     expect(readButton.querySelector("svg")).not.toBeNull();
+  });
+
+  it("groups outcomes and lets the user clear recent completions", async () => {
+    const items: AttentionItem[] = [
+      {
+        id: "waiting", source: "agent", severity: "warning", status: "waiting_for_input",
+        title: "Needs a decision", summary: "Choose an option", occurredAt: "2026-08-28T02:00:00.000Z",
+      },
+      {
+        id: "failed", source: "schedule", severity: "error", status: "failed",
+        title: "Daily review", summary: "Quota exceeded", occurredAt: "2026-08-28T01:00:00.000Z",
+      },
+      {
+        id: "completed", source: "agent", severity: "success", status: "completed",
+        title: "Audit complete", summary: "No blockers", occurredAt: "2026-08-28T00:00:00.000Z",
+      },
+    ];
+    const handlers = await renderPanel(items);
+
+    expect(container!.textContent).toContain("Needs input");
+    expect(container!.textContent).toContain("Failed");
+    expect(container!.textContent).toContain("Recently completed");
+    const clear = [...container!.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Clear"))!;
+    await act(async () => clear.click());
+    expect(handlers.onClearCompleted).toHaveBeenCalledWith(["completed"]);
   });
 });

@@ -7,6 +7,7 @@ const TOOLS = "/?session=ffff1111-2222-3333-4444-555566667777";
 test.describe("file-path links in chat", () => {
   test("clicking a file-path inline code opens it in the viewer", async ({ page }) => {
     await page.goto(TOOLS);
+    await expect(page.getByTestId("app-shell")).toHaveAttribute("data-hydrated", "true");
     await expect(page.getByText("工具呼叫測試").first()).toBeVisible({ timeout: 20_000 });
 
     const link = page.locator('code[role="link"]', { hasText: "src/index.ts" }).first();
@@ -19,6 +20,7 @@ test.describe("file-path links in chat", () => {
 
   test("non-path inline code is not clickable", async ({ page }) => {
     await page.goto(TOOLS);
+    await expect(page.getByTestId("app-shell")).toHaveAttribute("data-hydrated", "true");
     await expect(page.getByText("工具呼叫測試").first()).toBeVisible({ timeout: 20_000 });
 
     // `answer` (final assistant message) is inline code but not a file path

@@ -2,9 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { parseDelimitedText } from "@/lib/file-workbench";
+import { useI18n } from "@/lib/i18n";
 import styles from "./StructuredDataView.module.css";
 
 function JsonNode({ value, name, path, depth = 0 }: { value: unknown; name?: string; path: string; depth?: number }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(depth < 2);
   const compound = value !== null && typeof value === "object";
   const entries = compound ? Object.entries(value as Record<string, unknown>) : [];
@@ -12,7 +14,7 @@ function JsonNode({ value, name, path, depth = 0 }: { value: unknown; name?: str
     <div className={styles.node} style={{ "--depth": depth } as React.CSSProperties}>
       <div className={styles.nodeRow}>
         {compound ? <button className={styles.disclosure} onClick={() => setOpen((current) => !current)} aria-expanded={open}>{open ? "▾" : "▸"}</button> : <span className={styles.disclosureSpacer} />}
-        {name != null && <button className={styles.key} title={`Copy ${path}`} onClick={() => navigator.clipboard?.writeText(path)}>{name}</button>}
+        {name != null && <button className={styles.key} title={`${t("files.copyPath")} ${path}`} onClick={() => navigator.clipboard?.writeText(path)}>{name}</button>}
         {name != null && <span className={styles.colon}>:</span>}
         {compound ? <span className={styles.summary}>{Array.isArray(value) ? `Array(${entries.length})` : `{${entries.length}}`}</span> : <span className={typeof value === "string" ? styles.string : typeof value === "number" ? styles.number : styles.literal}>{JSON.stringify(value)}</span>}
       </div>
@@ -32,6 +34,7 @@ function parseLooseYaml(content: string): Array<{ key: string; value: string; le
 }
 
 export function StructuredDataView({ content, kind, onGotoLine }: { content: string; kind: "json" | "yaml" | "csv" | "tsv"; onGotoLine?: (line: number) => void }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [sortColumn, setSortColumn] = useState<number | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
@@ -45,7 +48,7 @@ export function StructuredDataView({ content, kind, onGotoLine }: { content: str
   const yaml = useMemo(() => kind === "yaml" ? parseLooseYaml(content) : [], [content, kind]);
   const table = useMemo(() => kind === "csv" || kind === "tsv" ? parseDelimitedText(content, kind === "csv" ? "," : "\t") : [], [content, kind]);
 
-  if (kind === "json") return json.error ? <div className={styles.error}>Cannot parse JSON: {json.error}</div> : <div className={styles.tree}><JsonNode value={json.value} path="$" /></div>;
+  if (kind === "json") return json.error ? <div className={styles.error}>{t("files.cannotParseJson")}: {json.error}</div> : <div className={styles.tree}><JsonNode value={json.value} path="$" /></div>;
   if (kind === "yaml") return (
     <div className={styles.yamlList}>{yaml.map((item) => (
       <button key={`${item.line}-${item.key}`} className={styles.yamlRow} style={{ paddingLeft: 14 + item.level * 18 }} onClick={() => onGotoLine?.(item.line)}>
@@ -60,8 +63,8 @@ export function StructuredDataView({ content, kind, onGotoLine }: { content: str
   if (sortColumn != null) body = [...body].sort((a, b) => (a[sortColumn] ?? "").localeCompare(b[sortColumn] ?? "", undefined, { numeric: true }) * (sortAsc ? 1 : -1));
   return (
     <div className={styles.tableRoot}>
-      <div className={styles.tableTools}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter rows…" /><span>{body.length} rows</span></div>
-      <div className={styles.tableScroll}><table><thead><tr>{header.map((cell, column) => <th key={column}><button onClick={() => { if (sortColumn === column) setSortAsc((current) => !current); else { setSortColumn(column); setSortAsc(true); } }}>{cell || `Column ${column + 1}`}{sortColumn === column ? (sortAsc ? " ↑" : " ↓") : ""}</button></th>)}</tr></thead><tbody>{body.slice(0, 2_000).map((row, rowIndex) => <tr key={rowIndex}>{header.map((_, column) => <td key={column}>{row[column] ?? ""}</td>)}</tr>)}</tbody></table></div>
+      <div className={styles.tableTools}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("files.filterRows")} /><span>{body.length} {t("files.rows")}</span></div>
+      <div className={styles.tableScroll}><table><thead><tr>{header.map((cell, column) => <th key={column}><button onClick={() => { if (sortColumn === column) setSortAsc((current) => !current); else { setSortColumn(column); setSortAsc(true); } }}>{cell || `${t("files.column")} ${column + 1}`}{sortColumn === column ? (sortAsc ? " ↑" : " ↓") : ""}</button></th>)}</tr></thead><tbody>{body.slice(0, 2_000).map((row, rowIndex) => <tr key={rowIndex}>{header.map((_, column) => <td key={column}>{row[column] ?? ""}</td>)}</tr>)}</tbody></table></div>
     </div>
   );
 }

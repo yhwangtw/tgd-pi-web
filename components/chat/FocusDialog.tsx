@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import styles from "./FocusDialog.module.css";
 
@@ -70,7 +71,7 @@ export function FocusDialog({ open, title, onClose, children, wrap, onWrapChange
             )}
             {actions}
             <button ref={closeRef} type="button" className={styles.close} onClick={onClose} aria-label={t("common.close")} title={t("common.close")}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              <X size={16} aria-hidden />
             </button>
           </div>
         </header>

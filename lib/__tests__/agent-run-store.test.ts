@@ -102,4 +102,23 @@ describe("agent-run-store", () => {
       runs: [{ id: "run-1" }],
     });
   });
+
+  it("round-trips bounded subagent runs and rejects malformed limits", () => {
+    const path = fixturePath();
+    writeFileSync(path, JSON.stringify({
+      version: 1,
+      runs: [
+        { ...run("queued", "subagent"), trigger: "subagent", limits: { maxTurns: 24, maxCostUsd: 5, timeoutMs: 1_800_000 } },
+        { ...run("queued", "bad-limit"), trigger: "subagent", limits: { maxTurns: 0 } },
+      ],
+    }));
+
+    expect(readAgentRunStore(path).runs).toEqual([
+      expect.objectContaining({
+        id: "subagent",
+        trigger: "subagent",
+        limits: { maxTurns: 24, maxCostUsd: 5, timeoutMs: 1_800_000 },
+      }),
+    ]);
+  });
 });

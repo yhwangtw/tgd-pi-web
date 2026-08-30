@@ -9,15 +9,15 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-sm);
 }
 
 .badge {
   flex-shrink: 0;
-  padding: 0 6px;
+  padding: 0 var(--space-2);
   border-radius: var(--radius-control-compact);
   background: var(--color-accent-bg);
   color: var(--accent);
@@ -36,9 +36,9 @@
   color: var(--text);
 }
 
-.hunkNav { display: flex; align-items: center; gap: 3px; margin-left: auto; }
-.hunkNav button { min-height: 28px; padding: 0 7px; border: 1px solid var(--border); border-radius: var(--radius-control-compact); background: var(--bg-hover); color: var(--text-muted); cursor: pointer; }
-.hunkNav span { padding: 0 3px; color: var(--text-dim); font-size: var(--text-2xs); }
+.hunkNav { display: flex; align-items: center; gap: var(--space-1); margin-left: auto; }
+.hunkNav button { min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control-compact); background: var(--bg-hover); color: var(--text-muted); cursor: pointer; }
+.hunkNav span { padding: 0 var(--space-1); color: var(--text-dim); font-size: var(--text-2xs); }
 .hunkNav .reviewed { color: var(--color-success); border-color: var(--color-success-border); background: var(--color-success-bg); }
 .hunkNav .revertHunk { color: var(--color-error-text); }
 
@@ -46,7 +46,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  padding: 3px;
+  padding: var(--space-1);
   background: none;
   border: none;
   border-radius: var(--radius-control-compact);
@@ -65,7 +65,7 @@
 }
 
 .notice {
-  padding: 20px;
+  padding: var(--space-4);
   color: var(--text-dim);
   font-size: var(--text-sm);
 }
@@ -73,7 +73,7 @@
 :global(html[data-ui-style="trae"]) .container { background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .header {
   min-height: 44px;
-  padding: 7px 12px;
+  padding: var(--space-2) var(--space-3);
   border-bottom-color: var(--trae-hairline);
   background: var(--trae-surface);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { AtSign, ChevronRight, LoaderCircle } from "lucide-react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
 import { encodeFilePathForApi, getRelativeFilePath, joinFilePath } from "@/lib/file-paths";
 import styles from "./FileExplorer.module.css";
@@ -173,14 +174,13 @@ function TreeNode({
         data-open={open ? "1" : "0"}
       >
         {node.isDir && (
-          <svg
-            width="10" height="10" viewBox="0 0 10 10" fill="none"
-            stroke="var(--text-dim)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+          <ChevronRight
+            size={12}
+            strokeWidth={1.8}
+            aria-hidden="true"
             className={styles.treeChevron}
             style={{ transform: open ? "rotate(90deg)" : "none" }}
-          >
-            <polyline points="3 2 7 5 3 8" />
-          </svg>
+          />
         )}
         {!node.isDir && <span className={styles.fileSpacer} />}
         <span className={styles.iconWrapper}>
@@ -192,9 +192,7 @@ function TreeNode({
         {fileStatus && <GitBadge status={fileStatus} />}
         {dirDirty && <span className={styles.dirtyDot} aria-hidden />}
         {loading && (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round">
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4" />
-          </svg>
+          <LoaderCircle className={styles.loadingIcon} size={12} strokeWidth={1.8} aria-hidden="true" />
         )}
         {onAtMention && !node.isDir && (
           <button
@@ -207,11 +205,8 @@ function TreeNode({
             aria-label={`${t("explorer.mention")}: ${node.name}`}
             title={t("explorer.mention")}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="4" />
-              <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
-            </svg>
-            mention
+            <AtSign size={13} strokeWidth={2} aria-hidden="true" />
+            {t("explorer.mentionShort")}
           </button>
         )}
       </div>
@@ -222,7 +217,7 @@ function TreeNode({
           ))}
           {children.length === 0 && loaded && (
             <div className={styles.emptyDirMessage} style={{ paddingLeft: 8 + (depth + 1) * 14 }}>
-              empty
+              {t("explorer.empty")}
             </div>
           )}
         </div>
@@ -471,7 +466,7 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
           />
         ))}
         {roots.length === 0 && (
-          <div className={styles.noResults}>No files found</div>
+          <div className={styles.noResults}>{t("explorer.noFiles")}</div>
         )}
       </div>
 
@@ -486,49 +481,50 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
           onMouseDown={(e) => e.stopPropagation()}
           role="menu"
         >
-          <button className={styles.menuItem} onClick={() => { setDialog({ kind: "new-file", targetPath: parentDir, label: getRelativeFilePath(parentDir, cwd) || "/" }); setMenu(null); }}>
+          <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { setDialog({ kind: "new-file", targetPath: parentDir, label: getRelativeFilePath(parentDir, cwd) || "/" }); setMenu(null); }}>
             {t("explorer.newFile")}
           </button>
-          <button className={styles.menuItem} onClick={() => { setDialog({ kind: "new-folder", targetPath: parentDir, label: getRelativeFilePath(parentDir, cwd) || "/" }); setMenu(null); }}>
+          <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { setDialog({ kind: "new-folder", targetPath: parentDir, label: getRelativeFilePath(parentDir, cwd) || "/" }); setMenu(null); }}>
             {t("explorer.newFolder")}
           </button>
-          <button className={styles.menuItem} onClick={() => { openUpload(parentDir); setMenu(null); }}>
+          <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { openUpload(parentDir); setMenu(null); }}>
             {t("explorer.uploadHere")}
           </button>
           {!menu.rootArea && <div className={styles.menuSep} />}
           {!menu.rootArea && (
-            <button className={styles.menuItem} onClick={() => { setDialog({ kind: "rename", targetPath: menu.fullPath, label: menu.relative, currentName: menu.fullPath.split("/").pop(), isDir: menu.isDir }); setMenu(null); }}>
+            <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { setDialog({ kind: "rename", targetPath: menu.fullPath, label: menu.relative, currentName: menu.fullPath.split("/").pop(), isDir: menu.isDir }); setMenu(null); }}>
               {t("explorer.rename")}
             </button>
           )}
           {!menu.rootArea && (
-            <button className={`${styles.menuItem} ${styles.menuItemDanger}`} onClick={() => { setDialog({ kind: "delete", targetPath: menu.fullPath, label: menu.relative, isDir: menu.isDir }); setMenu(null); }}>
+            <button type="button" role="menuitem" className={`${styles.menuItem} ${styles.menuItemDanger}`} onClick={() => { setDialog({ kind: "delete", targetPath: menu.fullPath, label: menu.relative, isDir: menu.isDir }); setMenu(null); }}>
               {t("explorer.delete")}
             </button>
           )}
           {!menu.rootArea && <div className={styles.menuSep} />}
           {!menu.rootArea && (
-            <button className={styles.menuItem} onClick={() => copyText(menu.fullPath)}>
+            <button type="button" role="menuitem" className={styles.menuItem} onClick={() => copyText(menu.fullPath)}>
               {t("explorer.copyPath")}
             </button>
           )}
           {!menu.rootArea && (
-            <button className={styles.menuItem} onClick={() => copyText(menu.relative)}>
+            <button type="button" role="menuitem" className={styles.menuItem} onClick={() => copyText(menu.relative)}>
               {t("explorer.copyRel")}
             </button>
           )}
           {onAtMention && !menu.rootArea && (
-            <button className={styles.menuItem} onClick={() => { onAtMention(menu.relative); setMenu(null); }}>
+            <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { onAtMention(menu.relative); setMenu(null); }}>
               {t("explorer.mention")}
             </button>
           )}
           {onOpenDiff && !menu.isDir && menu.gitStatus && (
-            <button className={styles.menuItem} onClick={() => { onOpenDiff(menu.relative); setMenu(null); }}>
+            <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { onOpenDiff(menu.relative); setMenu(null); }}>
               {t("explorer.diff")}
             </button>
           )}
           {!menu.isDir && !menu.rootArea && (
             <a
+              role="menuitem"
               className={styles.menuItem}
               href={`/api/files/${encodeFilePathForApi(menu.fullPath)}?type=download`}
               download

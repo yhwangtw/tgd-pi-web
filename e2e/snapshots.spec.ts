@@ -7,6 +7,8 @@ const SESSION = "aaaa1111-2222-3333-4444-555566667777";
 const CWD = process.env.E2E_PROJECT_CWD!;
 const FILE_URL = `/api/files${CWD}/src/index.ts`;
 const READ_URL = `${FILE_URL}?type=read`;
+const ORIGIN = `http://localhost:${process.env.E2E_PORT ?? 30177}`;
+const SAME_ORIGIN_HEADERS = { Origin: ORIGIN, "Sec-Fetch-Site": "same-origin" };
 
 test.describe("file snapshots", () => {
   test("create restore point → mutate a file → restore reverts it", async ({ request }) => {
@@ -22,10 +24,6 @@ test.describe("file snapshots", () => {
     const { snapshot } = await snapRes.json() as { snapshot: { id: string } };
     expect(snapshot?.id).toBeTruthy();
 
-    // It shows up in the list
-    const listed = await (await request.get(`/api/git/snapshots?cwd=${encodeURIComponent(CWD)}&sessionId=${SESSION}`)).json() as { snapshots: { id: string }[] };
-    expect(listed.snapshots.some((s) => s.id === snapshot.id)).toBeTruthy();
-
     // Mutate the file
     const mutated = `${before.content}\n// CORRUPTED BY TEST\n`;
     const putRes = await request.put(FILE_URL, { data: { content: mutated } });
@@ -33,9 +31,20 @@ test.describe("file snapshots", () => {
     const afterMutate = await (await request.get(READ_URL)).json() as { content: string };
     expect(afterMutate.content).toContain("CORRUPTED BY TEST");
 
-    // Restore to the snapshot
+    // Restore points become actionable only when they differ from the current tree.
+    const listed = await (await request.get(`/api/git/snapshots?cwd=${encodeURIComponent(CWD)}&sessionId=${SESSION}`)).json() as { snapshots: { id: string }[] };
+    expect(listed.snapshots.some((s) => s.id === snapshot.id)).toBeTruthy();
+
+    // Sensitive restore is review-first and bound to the same-origin tree state.
+    const prepareRes = await request.post("/api/git/snapshots/restore", {
+      headers: SAME_ORIGIN_HEADERS,
+      data: { phase: "prepare", cwd: CWD, sessionId: SESSION, id: snapshot.id },
+    });
+    expect(prepareRes.ok()).toBeTruthy();
+    const prepared = await prepareRes.json() as { confirmation: { token: string } };
     const restoreRes = await request.post("/api/git/snapshots/restore", {
-      data: { cwd: CWD, sessionId: SESSION, id: snapshot.id },
+      headers: SAME_ORIGIN_HEADERS,
+      data: { phase: "execute", confirmationToken: prepared.confirmation.token, cwd: CWD, sessionId: SESSION, id: snapshot.id },
     });
     expect(restoreRes.ok()).toBeTruthy();
     const restore = await restoreRes.json() as { ok: boolean; restored: number };

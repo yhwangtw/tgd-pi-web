@@ -56,16 +56,21 @@ test.describe("Pi integration centers", () => {
 
     await dialog.getByRole("tab", { name: "Runtime", exact: true }).click();
     await expect(dialog.getByRole("heading", { name: "Pi versions in one place" })).toBeVisible({ timeout: 20_000 });
-    await expect(dialog.getByText("Pi Web", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Pi Web", { exact: true }).first()).toBeVisible();
     await expect(dialog.getByText("Embedded Pi runtime", { exact: true })).toBeVisible();
     await expect(dialog.getByText("Global Pi CLI", { exact: true })).toBeVisible();
 
     await dialog.getByRole("tab", { name: "MCP", exact: true }).click();
     await expect(dialog.getByRole("heading", { name: "MCP connections" })).toBeVisible();
     await dialog.getByRole("button", { name: "Add server" }).click();
-    await expect(dialog.getByText("New MCP server", { exact: true })).toBeVisible();
-    await expect(dialog.getByText("Command", { exact: true })).toBeVisible();
-    await expect(dialog.getByText("Arguments (one per line)", { exact: true })).toBeVisible();
-    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    const gallery = page.getByRole("dialog", { name: "Add an MCP connection" });
+    await expect(gallery).toBeVisible();
+    await expect(gallery.getByText("Filesystem", { exact: true })).toBeVisible();
+    await gallery.getByRole("button", { name: "Configure manually" }).click();
+    const editor = page.getByRole("dialog", { name: "New MCP server" });
+    await expect(editor).toBeVisible();
+    await expect(editor.getByText("Command", { exact: true })).toBeVisible();
+    await expect(editor.getByText("Arguments (one per line)", { exact: true })).toBeVisible();
+    expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   });
 });

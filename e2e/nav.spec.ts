@@ -157,10 +157,10 @@ test.describe("file explorer", () => {
 
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
-    await expect(menu.getByRole("button", { name: "Insert @ mention" })).toBeVisible();
-    await expect(menu.getByRole("button", { name: "View diff" })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Insert @ mention" })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "View diff" })).toBeVisible();
 
-    await menu.getByRole("button", { name: "Copy relative path" }).click();
+    await menu.getByRole("menuitem", { name: "Copy relative path" }).click();
     await expect(menu).toHaveCount(0);
     const clip = await page.evaluate(() => navigator.clipboard.readText().catch(() => ""));
     expect(clip).toBe("src/index.ts");

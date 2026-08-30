@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Bell, BellRing, Check, CheckCheck, CircleCheckBig, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Bell, BellRing, Check, CheckCheck, CircleCheckBig, RefreshCw, Trash2 } from "lucide-react";
+import { IconButton } from "@/components/ui/IconButton";
 import type { AttentionItem } from "@/lib/attention-center";
 import { useI18n } from "@/lib/i18n";
 import s from "./AttentionPanel.module.css";
 
-type Filter = "all" | "unread" | "waiting" | "failed";
+type Filter = "all" | "unread" | "waiting" | "failed" | "completed";
+type GroupKey = "needsInput" | "failed" | "completed";
 
 interface Props {
   items: AttentionItem[];
@@ -16,11 +18,12 @@ interface Props {
   onRefresh: () => void;
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
+  onClearCompleted: (ids: string[]) => void;
   onOpenSession: (sessionId: string) => void | Promise<void>;
   onOpenSource: (source: "agent" | "schedule") => void;
 }
 
-const FILTERS: Filter[] = ["all", "unread", "waiting", "failed"];
+const FILTERS: Filter[] = ["all", "unread", "waiting", "failed", "completed"];
 
 function pushKey(value: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - value.length % 4) % 4);
@@ -38,6 +41,7 @@ export function AttentionPanel({
   onRefresh,
   onMarkRead,
   onMarkAllRead,
+  onClearCompleted,
   onOpenSession,
   onOpenSource,
 }: Props) {
@@ -84,9 +88,18 @@ export function AttentionPanel({
   const visibleItems = useMemo(() => items.filter((item) => {
     if (filter === "unread") return !readIds.has(item.id);
     if (filter === "waiting") return item.status === "waiting_for_input";
-    if (filter === "failed") return item.status !== "waiting_for_input";
+    if (filter === "failed") return item.status === "failed" || item.status === "interrupted";
+    if (filter === "completed") return item.status === "completed";
     return true;
   }), [filter, items, readIds]);
+  const groups = useMemo(() => {
+    const groupItems: Array<{ key: GroupKey; items: AttentionItem[] }> = [
+      { key: "needsInput", items: visibleItems.filter((item) => item.status === "waiting_for_input") },
+      { key: "failed", items: visibleItems.filter((item) => item.status === "failed" || item.status === "interrupted") },
+      { key: "completed", items: visibleItems.filter((item) => item.status === "completed") },
+    ];
+    return groupItems.filter((group) => group.items.length > 0);
+  }, [visibleItems]);
 
   const open = async (item: AttentionItem) => {
     onMarkRead(item.id);
@@ -95,6 +108,42 @@ export function AttentionPanel({
       return;
     }
     if (item.source === "agent" || item.source === "schedule") onOpenSource(item.source);
+  };
+
+  const renderItem = (item: AttentionItem) => {
+    const read = readIds.has(item.id);
+    const sourceLabel = item.source === "agent"
+      ? t("agents.title")
+      : item.source === "schedule"
+        ? t("schedule.title")
+        : t("attention.session");
+    const time = new Intl.DateTimeFormat(locale === "zh" ? "zh-TW" : "en", {
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    }).format(new Date(item.occurredAt));
+    return (
+      <article key={item.id} className={`${s.card} ${read ? s.cardRead : ""}`} data-severity={item.severity} data-status={item.status}>
+        <div className={s.cardTop}>
+          <span className={s.source}>{sourceLabel}</span>
+          <time dateTime={item.occurredAt}>{time}</time>
+          {!read && <i className={s.unreadDot} aria-label={t("attention.unreadItem")} />}
+        </div>
+        <strong className={s.title}>{item.title}</strong>
+        <p className={s.summary}>{item.summary}</p>
+        {item.cwd && <div className={`${s.path} chrome-mono`} title={item.cwd}>{item.cwd}</div>}
+        <div className={s.actions}>
+          <button type="button" className={s.primaryAction} onClick={() => void open(item)}>
+            <ArrowUpRight size={15} aria-hidden />
+            {item.sessionId ? t("attention.openSession") : t("attention.openSource")}
+          </button>
+          {!read && (
+            <button type="button" className={s.secondary} onClick={() => onMarkRead(item.id)}>
+              <Check size={15} aria-hidden />
+              {t("attention.markRead")}
+            </button>
+          )}
+        </div>
+      </article>
+    );
   };
 
   return (
@@ -121,16 +170,14 @@ export function AttentionPanel({
             {pushState === "enabled" ? <BellRing size={15} aria-hidden /> : <Bell size={15} aria-hidden />}
             <span>{t("attention.push")}</span>
           </button>
-          <button
-            type="button"
-            className={`${s.toolbarButton} ${s.iconButton} ${loading ? s.refreshing : ""}`}
+          <IconButton
+            size="compact"
+            className={loading ? s.refreshing : undefined}
+            label={t("attention.refresh")}
+            icon={<RefreshCw />}
             onClick={onRefresh}
             disabled={loading}
-            aria-label={t("attention.refresh")}
-            title={t("attention.refresh")}
-          >
-            <RefreshCw size={16} aria-hidden />
-          </button>
+          />
           <button type="button" className={`${s.toolbarButton} ${s.markAllButton}`} onClick={onMarkAllRead} disabled={unreadCount === 0}>
             <CheckCheck size={16} aria-hidden />
             <span>{t("attention.markAllRead")}</span>
@@ -154,41 +201,21 @@ export function AttentionPanel({
             <strong>{t("attention.empty")}</strong>
             <p>{t("attention.emptyHint")}</p>
           </div>
-        ) : visibleItems.map((item) => {
-          const read = readIds.has(item.id);
-          const sourceLabel = item.source === "agent"
-            ? t("agents.title")
-            : item.source === "schedule"
-              ? t("schedule.title")
-              : t("attention.session");
-          const time = new Intl.DateTimeFormat(locale === "zh" ? "zh-TW" : "en", {
-            month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-          }).format(new Date(item.occurredAt));
-          return (
-            <article key={item.id} className={`${s.card} ${read ? s.cardRead : ""}`} data-severity={item.severity}>
-              <div className={s.cardTop}>
-                <span className={s.source}>{sourceLabel}</span>
-                <time dateTime={item.occurredAt}>{time}</time>
-                {!read && <i className={s.unreadDot} aria-label={t("attention.unreadItem")} />}
-              </div>
-              <strong className={s.title}>{item.title}</strong>
-              <p className={s.summary}>{item.summary}</p>
-              {item.cwd && <div className={`${s.path} chrome-mono`} title={item.cwd}>{item.cwd}</div>}
-              <div className={s.actions}>
-                <button type="button" className={s.primaryAction} onClick={() => void open(item)}>
-                  <ArrowUpRight size={15} aria-hidden />
-                  {item.sessionId ? t("attention.openSession") : t("attention.openSource")}
+        ) : groups.map((group) => (
+          <section key={group.key} className={s.group}>
+            <header className={s.groupHeader}>
+              <h3>{t(`attention.group.${group.key}`)}</h3>
+              <span>{group.items.length}</span>
+              {group.key === "completed" && (
+                <button type="button" className={s.clearGroup} onClick={() => onClearCompleted(group.items.map((item) => item.id))}>
+                  <Trash2 size={14} aria-hidden />
+                  {t("attention.clearCompleted")}
                 </button>
-                {!read && (
-                  <button type="button" className={s.secondary} onClick={() => onMarkRead(item.id)}>
-                    <Check size={15} aria-hidden />
-                    {t("attention.markRead")}
-                  </button>
-                )}
-              </div>
-            </article>
-          );
-        })}
+              )}
+            </header>
+            <div className={s.groupItems}>{group.items.map(renderItem)}</div>
+          </section>
+        ))}
       </div>
     </section>
   );

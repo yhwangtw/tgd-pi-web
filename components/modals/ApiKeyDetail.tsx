@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Check } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 import type { ApiKeyProvider } from "./models-config-types";
 import { Field, SecretTextInput, SectionTitle } from "./models-config-forms";
 import styles from "./ApiKeyDetail.module.css";
 
 export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRefresh: () => void }) {
+  const { t } = useI18n();
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -69,57 +72,60 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
   return (
     <div className={styles.root}>
       <div className={styles.header}>
-        <SectionTitle>API Key</SectionTitle>
+        <SectionTitle>{t("apiKey.title")}</SectionTitle>
         <div className={styles.statusDotContainer}>
-          <span className={`${styles.statusDot} ${provider.configured ? styles.statusDotConfigured : styles.statusDotUnconfigured}`} />
+          <span className={`${styles.statusDot} ${provider.configured ? styles.statusDotConfigured : styles.statusDotUnconfigured}`} aria-hidden="true" />
           <span className={`${styles.statusText} ${provider.configured ? styles.statusTextConfigured : styles.statusTextUnconfigured}`}>
-            {provider.configured ? "configured" : "not configured"}
+            {provider.configured ? t("apiKey.configured") : t("apiKey.notConfigured")}
           </span>
         </div>
       </div>
 
       <p className={styles.description}>
         {provider.configured
-          ? `API key is stored. Enter a new key below to replace it, or disconnect to remove it.`
-          : `Enter your ${provider.displayName} API key to enable ${provider.modelCount} model${provider.modelCount !== 1 ? "s" : ""}.`}
+          ? t("apiKey.stored")
+          : t("apiKey.enableModels")
+              .replace("{provider}", provider.displayName)
+              .replace("{count}", String(provider.modelCount))}
       </p>
 
-      <Field label="API Key">
+      <Field label={t("apiKey.title")}>
         <div className={styles.inputRow}>
           <SecretTextInput
             value={apiKey}
             onChange={setApiKey}
             onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
-            placeholder={provider.configured ? "Enter new key to replace…" : "sk-…"}
+            placeholder={provider.configured ? t("apiKey.replacePlaceholder") : "sk-…"}
             style={{ flex: 1 }}
             autoComplete="off"
             spellCheck={false}
+            ariaLabel={t("apiKey.inputLabel").replace("{provider}", provider.displayName)}
             mono
           />
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving || !apiKey.trim() || savedOk}
             className={saveBtnClass}
           >
             {savedOk && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+              <Check size={14} strokeWidth={2.5} aria-hidden="true" />
             )}
-            {savedOk ? "Saved" : saving ? "Saving…" : "Save"}
+            {savedOk ? t("common.saved") : saving ? t("common.saving") : t("common.save")}
           </button>
         </div>
       </Field>
 
-      {error && <p className={styles.errorText}>{error}</p>}
+      {error && <p className={styles.errorText} role="alert">{error}</p>}
 
       {provider.configured && (
         <button
+          type="button"
           onClick={handleRemove}
           disabled={removing}
           className={styles.disconnectBtn}
         >
-          {removing ? "Removing…" : "Disconnect"}
+          {removing ? t("apiKey.removing") : t("oauth.disconnect")}
         </button>
       )}
     </div>

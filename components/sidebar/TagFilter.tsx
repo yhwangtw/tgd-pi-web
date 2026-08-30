@@ -3,6 +3,8 @@
 import type { SessionTags } from "@/hooks/useTags";
 import { getTagStyle } from "@/lib/tag-colors";
 import { useTheme } from "@/hooks/useTheme";
+import { useI18n } from "@/lib/i18n";
+import { X } from "lucide-react";
 import styles from "./TagFilter.module.css";
 
 interface Props {
@@ -13,6 +15,7 @@ interface Props {
 
 export function TagFilter({ tags, activeTag, onSelectTag }: Props) {
   const { theme } = useTheme();
+  const { t } = useI18n();
   const all = Object.entries(tags)
     .map(([tag, sessions]) => ({ tag, count: sessions.length }))
     .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
@@ -37,7 +40,7 @@ export function TagFilter({ tags, activeTag, onSelectTag }: Props) {
             key={tag}
             onClick={() => onSelectTag(activeTag === tag ? null : tag)}
             className={styles.chip}
-            title={`${count} session${count === 1 ? "" : "s"} tagged #${tag}`}
+            title={t("tags.sessionCount").replace("{count}", String(count)).replace("{tag}", tag)}
             style={{ background: bg, color: fg, borderColor: border }}
           >
             #{tag}
@@ -56,8 +59,8 @@ export function TagFilter({ tags, activeTag, onSelectTag }: Props) {
         );
       })}
       {activeTag && (
-        <button onClick={() => onSelectTag(null)} className={styles.clear} title="Clear tag filter">
-          ×
+        <button type="button" onClick={() => onSelectTag(null)} className={styles.clear} title={t("tags.clearFilter")} aria-label={t("tags.clearFilter")}>
+          <X size={12} strokeWidth={2} aria-hidden="true" />
         </button>
       )}
     </div>

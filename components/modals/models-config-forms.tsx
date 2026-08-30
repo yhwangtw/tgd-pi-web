@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { IconButton } from "@/components/ui/IconButton";
+import { useI18n } from "@/lib/i18n";
 import styles from "./models-config-forms.module.css";
 
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -26,6 +29,7 @@ export function SecretTextInput({
   autoComplete = "off",
   spellCheck = false,
   style,
+  ariaLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -35,7 +39,9 @@ export function SecretTextInput({
   autoComplete?: string;
   spellCheck?: boolean;
   style?: React.CSSProperties;
+  ariaLabel?: string;
 }) {
+  const { t } = useI18n();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -53,28 +59,15 @@ export function SecretTextInput({
         className={`${styles.input} ${styles.secretInput} ${mono ? styles.mono : ""}`}
         autoComplete={autoComplete}
         spellCheck={spellCheck}
+        aria-label={ariaLabel}
       />
-      <button
-        type="button"
+      <IconButton
         onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? "Hide API key" : "Show API key"}
-        title={visible ? "Hide API key" : "Show API key"}
+        label={visible ? t("apiKey.hide") : t("apiKey.show")}
+        icon={visible ? <EyeOff strokeWidth={1.8} /> : <Eye strokeWidth={1.8} />}
+        size="compact"
         className={styles.revealButton}
-      >
-        {visible ? (
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C7 20 2.73 16.89 1 12a18.45 18.45 0 0 1 5.06-6.94" />
-            <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.11 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-            <path d="M14.12 14.12A3 3 0 0 1 9.88 9.88" />
-            <path d="M1 1l22 22" />
-          </svg>
-        ) : (
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12Z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-        )}
-      </button>
+      />
     </div>
   );
 }
@@ -84,10 +77,11 @@ export function NumInput({ value, onChange, placeholder }: { value: string; onCh
 }
 
 export function Select({ value, onChange, options, required }: { value: string; onChange: (v: string) => void; options: readonly string[]; required?: boolean }) {
+  const { t } = useI18n();
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)}
       className={`${styles.input} ${value ? "" : styles.selectEmpty}`}>
-      {!required && <option value="">— inherit / none —</option>}
+      {!required && <option value="">{t("models.inheritNone")}</option>}
       {options.map((o) => <option key={o} value={o}>{o}</option>)}
     </select>
   );

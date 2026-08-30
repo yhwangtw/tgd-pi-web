@@ -2,12 +2,21 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import { Folder, GitBranch, Search, Star, X } from "lucide-react";
+import { IconButton } from "@/components/ui/IconButton";
 import { shortenCwd } from "./session-utils";
 import type { ProjectEntry } from "./CwdPicker";
 import s from "./ProjectSwitcher.module.css";
 import { useI18n } from "@/lib/i18n";
+import { fetchJson, useRequestResource } from "@/hooks/useRequestResource";
 
 interface Worktree { path: string; branch: string | null; isMain: boolean }
+interface ProjectDiscoveryResponse { repos?: { path: string; name: string }[] }
+interface ProjectSwitcherData {
+  discovered: { path: string; name: string }[];
+  worktrees: [string, Worktree[]][];
+}
+interface BrowseResponse { path: string; dirs: string[] }
 
 /** One selectable row in the flattened, keyboard-navigable result list. */
 interface Row {
@@ -35,6 +44,7 @@ interface Props {
 
 const PINS_KEY = "pi-cwd-pins";
 const HIDDEN_KEY = "pi-cwd-hidden";
+const EMPTY_DISCOVERED: { path: string; name: string }[] = [];
 
 function loadList(key: string): string[] {
   try {
@@ -75,14 +85,51 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
   const [idx, setIdx] = useState(0);
   const [pins, setPins] = useState<string[]>([]);
   const [hidden, setHidden] = useState<string[]>([]);
-  const [discovered, setDiscovered] = useState<{ path: string; name: string }[]>([]);
-  const [worktrees, setWorktrees] = useState<Map<string, Worktree[]>>(new Map());
-  const [dirs, setDirs] = useState<{ base: string; names: string[] } | null>(null);
   const [pathError, setPathError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const pathMode = isPathQuery(query);
+  const projectTargets = useMemo(() => projects.slice(0, 8).map((project) => project.cwd), [projects]);
+  const projectTargetsKey = projectTargets.join("\u0000");
+  const projectResource = useRequestResource<ProjectSwitcherData>(
+    open ? `project-switcher:${projectTargetsKey}` : null,
+    async (signal) => {
+      const discovery = await fetchJson<ProjectDiscoveryResponse>("/api/projects/discover", {}, signal);
+      const worktrees = await Promise.all(projectTargets.map(async (cwd): Promise<[string, Worktree[]]> => {
+        try {
+          const response = await fetchJson<{ worktrees?: Worktree[] }>(`/api/worktrees?cwd=${encodeURIComponent(cwd)}`, {}, signal);
+          return [cwd, response.worktrees ?? []];
+        } catch (error) {
+          if (signal.aborted) throw error;
+          return [cwd, []];
+        }
+      }));
+      return { discovered: discovery.repos ?? [], worktrees };
+    },
+    { staleTimeMs: 60_000, retries: 1 },
+  );
+  const discovered = projectResource.data?.discovered ?? EMPTY_DISCOVERED;
+  const worktrees = useMemo(() => new Map(
+    (projectResource.data?.worktrees ?? []).filter(([, items]) => items.length > 1),
+  ), [projectResource.data]);
+  const browseParent = useMemo(() => {
+    if (!pathMode) return null;
+    const slash = query.lastIndexOf("/");
+    return slash <= 0 ? (query.startsWith("~") ? "~" : "/") : query.slice(0, slash);
+  }, [pathMode, query]);
+  const browseResource = useRequestResource<BrowseResponse>(
+    open && browseParent ? `project-browse:${browseParent}` : null,
+    (signal) => fetchJson<BrowseResponse>("/api/cwd/browse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: browseParent }),
+    }, signal),
+    { debounceMs: 150, staleTimeMs: 15_000, retries: 1 },
+  );
+  const dirs = useMemo(() => browseResource.data
+    ? { base: browseResource.data.path, names: browseResource.data.dirs }
+    : null, [browseResource.data]);
 
   // ── Data loading on open ──────────────────────────────────────────────────
   useEffect(() => {
@@ -92,52 +139,9 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
     setPathError(null);
     setPins(loadList(PINS_KEY));
     setHidden(loadList(HIDDEN_KEY));
-    requestAnimationFrame(() => inputRef.current?.focus());
-
-    let cancelled = false;
-    fetch("/api/projects/discover")
-      .then((r) => (r.ok ? r.json() : { repos: [] }))
-      .then((d: { repos?: { path: string; name: string }[] }) => { if (!cancelled) setDiscovered(d.repos ?? []); })
-      .catch(() => {});
-
-    // Worktrees for the projects most likely on screen (bounded git calls).
-    const targets = projects.slice(0, 8).map((p) => p.cwd);
-    Promise.all(targets.map(async (cwd): Promise<[string, Worktree[]]> => {
-      try {
-        const r = await fetch(`/api/worktrees?cwd=${encodeURIComponent(cwd)}`);
-        if (!r.ok) return [cwd, []];
-        const d = await r.json() as { worktrees?: Worktree[] };
-        return [cwd, d.worktrees ?? []];
-      } catch { return [cwd, []]; }
-    })).then((pairs) => {
-      if (cancelled) return;
-      setWorktrees(new Map(pairs.filter(([, w]) => w.length > 1)));
-    });
-    return () => { cancelled = true; };
-  }, [open, projects]);
-
-  // ── Path-mode directory completion ───────────────────────────────────────
-  useEffect(() => {
-    if (!open || !pathMode) { setDirs(null); return; }
-    const value = query;
-    const timer = setTimeout(async () => {
-      const slash = value.lastIndexOf("/");
-      const parent = slash <= 0 ? (value.startsWith("~") ? "~" : "/") : value.slice(0, slash);
-      try {
-        const res = await fetch("/api/cwd/browse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ path: parent }),
-        });
-        if (!res.ok) { setDirs(null); return; }
-        const data = await res.json() as { path: string; dirs: string[] };
-        setDirs({ base: data.path, names: data.dirs });
-      } catch {
-        setDirs(null);
-      }
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [query, pathMode, open]);
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
 
   // ── Result rows (flat, grouped by kind for labels) ───────────────────────
   const { rows, groups } = useMemo(() => {
@@ -259,19 +263,20 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
 
   if (!open || typeof document === "undefined") return null;
 
+  const resourceLoading = pathMode
+    ? browseResource.loading || browseResource.refreshing
+    : projectResource.loading || projectResource.refreshing;
+  const resourceError = pathMode ? browseResource.error : projectResource.error;
+  const retryResource = () => void (pathMode ? browseResource.refresh() : projectResource.refresh());
   let rowCursor = -1;
   return createPortal(
     <div className={s.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={s.modal} role="dialog" aria-label={t("cwd.switcherTitle")} data-testid="project-switcher">
+      <div className={s.modal} role="dialog" aria-modal="true" aria-label={t("cwd.switcherTitle")} data-testid="project-switcher">
         <div className={s.inputRow}>
           {pathMode ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-            </svg>
+            <Folder size={16} strokeWidth={1.8} color="var(--color-accent)" aria-hidden="true" />
           ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
+            <Search size={16} strokeWidth={1.8} color="var(--text-dim)" aria-hidden="true" />
           )}
           <input
             ref={inputRef}
@@ -279,15 +284,22 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
             onChange={(e) => { setQuery(e.target.value); setPathError(null); }}
             onKeyDown={onKeyDown}
             placeholder={t("cwd.switcherPlaceholder")}
+            aria-label={t("cwd.switcherTitle")}
             className={pathMode ? s.inputMono : s.input}
             spellCheck={false}
           />
         </div>
 
-        <div className={s.body} ref={listRef}>
+        <div className={s.body} ref={listRef} role="listbox" aria-label={t("cwd.switcherTitle")}>
           {pathError && <div className={s.error}>{pathError}</div>}
           {rows.length === 0 && !pathError && (
-            <div className={s.emptyNote}>{pathMode ? t("cwd.noSubdirs") : t("cwd.noMatches")}</div>
+            <div className={s.emptyNote} data-error={Boolean(resourceError)}>
+              {resourceLoading
+                ? t("cwd.loadingProjects")
+                : resourceError
+                  ? <><span>{t("cwd.loadFailed")}</span><button type="button" onClick={retryResource}>{t("common.retry")}</button></>
+                  : pathMode ? t("cwd.noSubdirs") : t("cwd.noMatches")}
+            </div>
           )}
           {groups.map((g, gi) => {
             const end = gi + 1 < groups.length ? groups[gi + 1].start : rows.length;
@@ -315,38 +327,38 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
                     >
                       <span className={s.rowIcon}>
                         {row.kind === "worktree" || row.kind === "discovered" ? (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>
+                          <GitBranch size={14} strokeWidth={1.8} aria-hidden="true" />
                         ) : (
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
+                          <Folder size={15} strokeWidth={1.8} aria-hidden="true" />
                         )}
                       </span>
                       <span className={s.rowName}>
-                        {row.pinned && <span className={s.pinDot} aria-hidden>★ </span>}
+                        {row.pinned && <Star className={s.pinDot} size={12} strokeWidth={1.8} fill="currentColor" aria-hidden="true" />}
                         <Name text={row.name} q={pathMode ? "" : query.trim()} />
                       </span>
                       <span className={s.rowPath}>{row.kind === "dir" ? "" : shortenCwd(row.path, homeDir)}</span>
                       {row.branch && <span className={s.branchChip}>{row.branch}</span>}
                       {row.kind === "project" && row.count !== undefined && (
-                        <span className={s.countChip}>{row.count} session{row.count === 1 ? "" : "s"}</span>
+                        <span className={s.countChip}>{t("cwd.sessionCount").replace("{count}", row.count.toLocaleString())}</span>
                       )}
                       {row.kind === "discovered" && <span className={s.gitChip}>git</span>}
                       {row.kind === "project" && (
                         <span className={s.rowActions}>
-                          <button
+                          <IconButton
+                            label={row.pinned ? t("cwd.unpin") : t("cwd.pin")}
+                            icon={<Star strokeWidth={1.8} fill={row.pinned ? "currentColor" : "none"} />}
+                            size="compact"
                             onClick={(e) => { e.stopPropagation(); togglePin(row.path); }}
                             className={s.rowActionBtn}
-                            title={row.pinned ? t("cwd.unpin") : t("cwd.pin")}
-                          >
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill={row.pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-                          </button>
+                          />
                           {row.path !== selectedCwd && (
-                            <button
+                            <IconButton
+                              label={t("cwd.hide")}
+                              icon={<X strokeWidth={2} />}
+                              size="compact"
                               onClick={(e) => { e.stopPropagation(); hideProject(row.path); }}
                               className={s.rowActionBtn}
-                              title={t("cwd.hide")}
-                            >
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                            </button>
+                            />
                           )}
                         </span>
                       )}
@@ -361,19 +373,19 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
         <div className={s.footer}>
           {pathMode ? (
             <>
-              <span><kbd>Tab</kbd> {t("cwd.footComplete")}</span>
+              <span><kbd>{t("cwd.keyTab")}</kbd> {t("cwd.footComplete")}</span>
               <span><kbd>↵</kbd> {t("cwd.useThis")}</span>
-              <span><kbd>esc</kbd> {t("cwd.footClose")}</span>
+              <span><kbd>{t("cwd.keyEscape")}</kbd> {t("cwd.footClose")}</span>
             </>
           ) : (
             <>
               <span><kbd>↑↓</kbd> {t("cwd.footNav")}</span>
               <span><kbd>↵</kbd> {t("cwd.footOpen")}</span>
-              <span><kbd>esc</kbd> {t("cwd.footClose")}</span>
+              <span><kbd>{t("cwd.keyEscape")}</kbd> {t("cwd.footClose")}</span>
               <span className={s.footHint}>{t("cwd.footPathHint")}</span>
             </>
           )}
-          <button className={s.defaultBtn} onClick={() => { onDefaultCwd(); onClose(); }}>
+          <button type="button" className={s.defaultBtn} onClick={() => { onDefaultCwd(); onClose(); }}>
             {t("cwd.default")}
           </button>
         </div>

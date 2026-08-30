@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { encodeFilePathForApi, getRelativeFilePath } from "@/lib/file-paths";
 import { hexPreview } from "@/lib/file-workbench";
+import { useI18n } from "@/lib/i18n";
 import { formatSize } from "./file-viewer-utils";
 import styles from "./BinaryViewer.module.css";
 
 const MAX_PREVIEW = 64 * 1024;
 
 export function BinaryViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
+  const { t } = useI18n();
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const [size, setSize] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -33,12 +35,12 @@ export function BinaryViewer({ filePath, cwd }: { filePath: string; cwd?: string
     <div className={styles.root}>
       <div className={styles.toolbar}>
         <span className={styles.path} title={filePath}>{getRelativeFilePath(filePath, cwd)}</span>
-        <span>binary</span><span>{formatSize(size)}</span>
-        <a className={styles.download} href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>Download</a>
+        <span>{t("files.binary")}</span><span>{formatSize(size)}</span>
+        <a className={styles.download} href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>{t("files.downloadFile")}</a>
       </div>
-      {error ? <div className={styles.notice}>{error}</div> : !bytes ? <div className={styles.notice}>Loading…</div> : (
+      {error ? <div className={styles.notice}>{error}</div> : !bytes ? <div className={styles.notice}>{t("common.loading")}</div> : (
         <div className={styles.body}>
-          {size > MAX_PREVIEW && <div className={styles.banner}>Showing the first {formatSize(MAX_PREVIEW)} of {formatSize(size)}</div>}
+          {size > MAX_PREVIEW && <div className={styles.banner}>{t("files.showingFirst")} {formatSize(MAX_PREVIEW)} / {formatSize(size)}</div>}
           <pre className={styles.hex}>{rows.join("\n")}</pre>
         </div>
       )}
