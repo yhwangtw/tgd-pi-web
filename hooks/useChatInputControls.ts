@@ -1,12 +1,9 @@
 "use client";
 
 import type { ToolSelectionMode } from "@/lib/tool-selection";
+import type { ModelCatalogEntry } from "@/lib/model-catalog-types";
 
-export interface ModelOption {
-  provider: string;
-  modelId: string;
-  name: string;
-}
+export interface ModelOption extends Omit<ModelCatalogEntry, "id"> { modelId: string; }
 
 export interface ModelsByProviderGroup {
   provider: string;
@@ -27,7 +24,7 @@ export type ToolPreset = ToolSelectionMode;
 export interface UseChatInputControlsOptions {
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
-  modelList?: { id: string; name: string; provider: string }[];
+  modelList?: ModelCatalogEntry[];
   onModelChange?: (provider: string, modelId: string) => void;
   thinkingLevel?: ThinkingLevel;
   onThinkingLevelChange?: (level: ThinkingLevel) => void;
@@ -62,7 +59,15 @@ export function useChatInputControls(
   // Build model options: prefer modelList (has provider info), fallback to modelNames
   const modelOptions: ModelOption[] = (() => {
     if (modelList && modelList.length > 0) {
-      return modelList.map((m) => ({ provider: m.provider, modelId: m.id, name: m.name }));
+      return modelList.map((m) => ({
+        provider: m.provider,
+        modelId: m.id,
+        name: m.name,
+        available: m.available,
+        contextWindow: m.contextWindow,
+        maxTokens: m.maxTokens,
+        cost: m.cost,
+      }));
     }
     return Object.entries(modelNames ?? {}).map(([modelId, name]) => ({
       provider: model?.provider ?? "unknown",

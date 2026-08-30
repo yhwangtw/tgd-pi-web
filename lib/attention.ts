@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { redactSensitiveText } from "./redaction";
 
 // ============================================================================
 // Tab-title store + completion notifications.
@@ -103,7 +104,7 @@ export function notifyDone(sessionName?: string | null, errorMessage?: string): 
         ? (sessionName ? `Failed — ${sessionName}` : "Agent run failed")
         : (sessionName ? `Done — ${sessionName}` : "Agent finished"),
       {
-        body: errorMessage ?? "The agent has finished responding.",
+        body: errorMessage ? redactSensitiveText(errorMessage) : "The agent has finished responding.",
         tag: "pi-agent-done", // collapse repeats instead of stacking
       },
     );

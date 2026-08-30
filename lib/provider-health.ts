@@ -18,6 +18,12 @@ export interface ProviderHealthEntry {
 export interface ProviderHealthReport {
   checkedAt: string;
   runtimeError?: string;
+  coverage: {
+    credentialReadiness: "checked";
+    localCatalog: "checked";
+    quotaAndBilling: "not_checked";
+    upstreamAvailability: "not_checked";
+  };
   summary: {
     total: number;
     ready: number;
@@ -99,6 +105,12 @@ export async function buildProviderHealthReport(
   return {
     checkedAt: (options.now?.() ?? new Date()).toISOString(),
     runtimeError,
+    coverage: {
+      credentialReadiness: "checked",
+      localCatalog: "checked",
+      quotaAndBilling: "not_checked",
+      upstreamAvailability: "not_checked",
+    },
     summary: {
       total: providers.length,
       ready: providers.filter((provider) => provider.status === "ready").length,

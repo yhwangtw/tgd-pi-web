@@ -32,6 +32,7 @@ interface RawSessionInfo {
   modifiedMs: number;
   messageCount: number;
   firstMessage: string;
+  lastMessage: string;
   parentSessionPath?: string;
 }
 
@@ -78,6 +79,7 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
   let name: string | undefined;
   let messageCount = 0;
   let firstMessage = "";
+  let lastMessage = "";
   let lastActivity = 0;
 
   for (let i = 1; i < entries.length; i++) {
@@ -96,9 +98,11 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
       ? message.timestamp
       : new Date(entry.timestamp as string).getTime();
     if (!Number.isNaN(activity)) lastActivity = Math.max(lastActivity, activity);
+    const readableText = extractText(message.content).replace(/\s+/g, " ").trim();
     if (!firstMessage && message.role === "user") {
-      firstMessage = extractText(message.content);
+      firstMessage = readableText;
     }
+    if (readableText) lastMessage = readableText;
   }
 
   const headerTime = header.timestamp ? new Date(header.timestamp).getTime() : NaN;
@@ -111,6 +115,7 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
     modifiedMs: lastActivity > 0 ? lastActivity : Number.isNaN(headerTime) ? mtimeMs : headerTime,
     messageCount,
     firstMessage: firstMessage || "(no messages)",
+    lastMessage,
     parentSessionPath: header.parentSession,
   };
 }
@@ -182,6 +187,7 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
       modified: new Date(info.modifiedMs).toISOString(),
       messageCount: info.messageCount,
       firstMessage: info.firstMessage,
+      lastMessage: info.lastMessage,
       parentSessionId: info.parentSessionPath ? pathToId.get(info.parentSessionPath) : undefined,
     };
   });

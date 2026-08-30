@@ -1,6 +1,23 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowDown,
+  BadgeCheck,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Code2,
+  FilePenLine,
+  ImagePlus,
+  ListChecks,
+  Map as MapIcon,
+  RotateCcw,
+  Search,
+  Send,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import type { AgentMessage, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle, type MessageQuote } from "./ChatInput";
@@ -10,7 +27,7 @@ import { BashBlock } from "./BashBlock";
 import { CollapsibleMessage } from "./CollapsibleMessage";
 import { TgdPipeline, type PhaseStatus } from "./TgdPipeline";
 import { CompactionSummary, getCompactionSummary } from "./CompactionSummary";
-import { pickTurnTarget } from "./turn-nav";
+import { pickRovingMessageTarget, pickTurnTarget, type MessageFocusDirection } from "./turn-nav";
 import { useScrollFollowMode } from "@/lib/prefs";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { isTranscriptTailOutOfView, preservedRunSpacerHeight } from "@/hooks/use-transcript-scroll";
@@ -49,40 +66,34 @@ interface Props {
   onOpenModels?: () => void;
 }
 
-const phaseSvg = (paths: React.ReactNode) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    {paths}
-  </svg>
-);
-
 const PHASE_ACTIONS: { cmd: string; label: string; labelKey: MsgKey; descKey: MsgKey; icon: React.ReactNode }[] = [
   {
     cmd: "/tgd-map", label: "Map", labelKey: "phase.label.map", descKey: "phase.map" as MsgKey,
-    icon: phaseSvg(<><polygon points="1 6 8 3 16 6 23 3 23 18 16 21 8 18 1 21" /><line x1="8" y1="3" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="21" /></>),
+    icon: <MapIcon size={14} strokeWidth={2} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-define", label: "Define", labelKey: "phase.label.define", descKey: "phase.define" as MsgKey,
-    icon: phaseSvg(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="13" y2="17" /></>),
+    icon: <FilePenLine size={14} strokeWidth={2} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-plan", label: "Plan", labelKey: "phase.label.plan", descKey: "phase.plan" as MsgKey,
-    icon: phaseSvg(<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>),
+    icon: <ListChecks size={14} strokeWidth={2} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-develop", label: "Develop", labelKey: "phase.label.develop", descKey: "phase.develop" as MsgKey,
-    icon: phaseSvg(<><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></>),
+    icon: <Code2 size={14} strokeWidth={2} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-verify", label: "Verify", labelKey: "phase.label.verify", descKey: "phase.verify" as MsgKey,
-    icon: phaseSvg(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></>),
+    icon: <BadgeCheck size={14} strokeWidth={2} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-review", label: "Review", labelKey: "phase.label.review", descKey: "phase.review" as MsgKey,
-    icon: phaseSvg(<><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>),
+    icon: <Search size={14} strokeWidth={2} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-release", label: "Release", labelKey: "phase.label.release", descKey: "phase.release" as MsgKey,
-    icon: phaseSvg(<><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9" /></>),
+    icon: <Send size={14} strokeWidth={2} aria-hidden="true" />,
   },
 ];
 
@@ -766,6 +777,48 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     return conversationLayout.displayIndices.map((index) => entryIds[index] ?? index);
   }, [conversationLayout.displayIndices, entryIds]);
 
+  // Roving focus keeps one transcript message in the page tab order. This
+  // makes long sessions keyboard-navigable without forcing a user to tab
+  // through every historical message before reaching the composer.
+  const [focusedMessageKey, setFocusedMessageKey] = useState<string | number | null>(null);
+  const rovingMessageIndex = useMemo(() => {
+    const restored = focusedMessageKey === null
+      ? -1
+      : visibleKeys.findIndex((key) => key === focusedMessageKey);
+    return restored >= 0 ? restored : Math.max(0, visibleKeys.length - 1);
+  }, [focusedMessageKey, visibleKeys]);
+
+  useEffect(() => {
+    setFocusedMessageKey(null);
+  }, [session?.id]);
+
+  const handleMessageRovingKeyDown = useCallback((
+    event: React.KeyboardEvent<HTMLDivElement>,
+    currentIndex: number,
+  ) => {
+    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) return;
+    const direction: MessageFocusDirection | null = event.key === "ArrowUp"
+      ? "prev"
+      : event.key === "ArrowDown"
+        ? "next"
+        : event.key === "Home"
+          ? "first"
+          : event.key === "End"
+            ? "last"
+            : null;
+    if (!direction) return;
+    const targetIndex = pickRovingMessageTarget(currentIndex, visibleKeys.length, direction);
+    if (targetIndex === null) return;
+
+    event.preventDefault();
+    setFocusedMessageKey(visibleKeys[targetIndex] ?? null);
+    requestAnimationFrame(() => {
+      const target = messageRefs.current[targetIndex];
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }, [messageRefs, visibleKeys]);
+
   useEffect(() => {
     const query = findQuery.trim().toLocaleLowerCase();
     if (!query) return;
@@ -1008,9 +1061,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </span>
           {onClosePane && (
             <button onClick={onClosePane} className={styles.paneClose} title={t("chat.closePane")} aria-label={t("chat.closePane")}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
+              <X size={11} strokeWidth={2.5} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -1026,24 +1077,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               />
             ))}
           </div>
-          <svg
-            width="280" height="280" viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg"
+          <ImagePlus
+            size={112}
+            strokeWidth={1.25}
+            color="var(--color-accent-border)"
             className="drop-shadow-[0_6px_18px_var(--color-accent-glow)]"
-          >
-            <rect x="28" y="44" width="84" height="60" rx="8" fill="var(--color-accent-bg)" stroke="var(--color-accent-border)" strokeWidth="1.8"/>
-            <path d="M36 100 L54 72 L68 88 L80 74 L104 100Z" fill="var(--color-accent-bg-strong)" stroke="var(--color-accent-border)" strokeWidth="1.4" strokeLinejoin="round"/>
-            <circle cx="96" cy="58" r="8" fill="var(--color-accent-bg-strong)" stroke="var(--color-accent-border)" strokeWidth="1.6"/>
-            <g stroke="var(--color-accent-border)" strokeWidth="1.4" strokeLinecap="round">
-              <line x1="96" y1="46" x2="96" y2="43"/>
-              <line x1="96" y1="70" x2="96" y2="73"/>
-              <line x1="84" y1="58" x2="81" y2="58"/>
-              <line x1="108" y1="58" x2="111" y2="58"/>
-              <line x1="87.5" y1="49.5" x2="85.4" y2="47.4"/>
-              <line x1="104.5" y1="66.5" x2="106.6" y2="68.6"/>
-              <line x1="104.5" y1="49.5" x2="106.6" y2="47.4"/>
-              <line x1="87.5" y1="66.5" x2="85.4" y2="68.6"/>
-            </g>
-          </svg>
+            aria-hidden="true"
+          />
         </div>
       )}
 
@@ -1062,10 +1102,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               </div>
               <div className={styles.versionColumn}>
                 <span className={styles.versionLabel}>
-                  web <span className={styles.versionValue}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
+                  {t("chat.runtimeWeb")} <span className={styles.versionValue}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
                 </span>
                 <span className={styles.versionLabel}>
-                  pi <span className={styles.versionValue}>v{process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}</span>
+                  {t("chat.runtimePi")} <span className={styles.versionValue}>v{process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}</span>
                 </span>
               </div>
             </div>
@@ -1091,7 +1131,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       <style>{`::highlight(conversation-find) { background: var(--color-warning-bg-strong); color: var(--text); text-decoration: underline var(--color-warning-border); text-decoration-thickness: 1px; }`}</style>
       {pipelineHidden || (!pipelineRelevant && !idlePipelineExpanded) ? (
         <button onClick={showPipeline} className={styles.pipelineShow} title={t("chat.showPipeline")}>
-          tGD · {t("chat.workflow")} ▸
+          {t("chat.tgdCompact")} · {t("chat.workflow")} ▸
         </button>
       ) : (
         <TgdPipeline phases={tgdPhases} statusOf={phaseStatusOf} onRun={runPhase} onHide={hidePipeline} feature={currentFeature?.name ?? null} active={activeTgdRun} />
@@ -1141,19 +1181,19 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               onClick={() => { if (findMatches.length) { const p = (findPos - 1 + findMatches.length) % findMatches.length; setFindPos(p); gotoMatch(p); } }}
               className="rounded p-0.5 text-[var(--text-muted)] hover:bg-[var(--bg-hover)]" aria-label={t("chat.previousMatch")}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+              <ChevronUp size={12} strokeWidth={2.5} aria-hidden="true" />
             </button>
             <button
               onClick={() => { if (findMatches.length) { const p = (findPos + 1) % findMatches.length; setFindPos(p); gotoMatch(p); } }}
               className="rounded p-0.5 text-[var(--text-muted)] hover:bg-[var(--bg-hover)]" aria-label={t("chat.nextMatch")}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+              <ChevronDown size={12} strokeWidth={2.5} aria-hidden="true" />
             </button>
             <button
               onClick={() => { setFindOpen(false); setFindQuery(""); }}
               className="rounded p-0.5 text-[var(--text-muted)] hover:bg-[var(--bg-hover)]" aria-label={t("chat.closeFind")}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              <X size={12} strokeWidth={2.5} aria-hidden="true" />
             </button>
           </div>
         )}
@@ -1163,7 +1203,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             aria-label={t("chat.jumpBottom")}
             className={`${styles.jumpButton} glass absolute bottom-4 left-1/2 z-10 flex h-8 -translate-x-1/2 items-center justify-center gap-1.5 rounded-full border px-3 text-[var(--text-muted)] shadow-[var(--color-shadow-dropdown)] transition hover:text-[var(--text)] ${agentRunning ? "!border-[var(--color-accent-border)] text-[var(--accent)]" : ""}`}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg>
+            <ArrowDown size={14} strokeWidth={2.2} aria-hidden="true" />
             <span className="text-[11.5px] font-medium whitespace-nowrap">
               {agentRunning && newLines > 0 ? `+${newLines} ${t("chat.lines")}` : t("chat.latest")}
             </span>
@@ -1316,7 +1356,17 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     aria-label={compactionSummary !== null
                       ? t("chat.compactionSummary")
                       : `${msg.role === "user" ? t("chat.userMessage") : t("chat.assistantMessage")}${turnIndex === undefined ? "" : ` · ${t("chat.turns")} ${turnIndex + 1}`}`}
-                    tabIndex={0}
+                    tabIndex={currentRefIdx === rovingMessageIndex ? 0 : -1}
+                    data-roving-tabstop={currentRefIdx === rovingMessageIndex || undefined}
+                    onFocus={(event) => {
+                      // Only the article itself participates in roving focus.
+                      // Letting focus from nested links and disclosures bubble
+                      // into this state update can re-render their subtree
+                      // between pointerdown and click, swallowing the user's
+                      // first activation.
+                      if (event.target === event.currentTarget) setFocusedMessageKey(key);
+                    }}
+                    onKeyDown={(event) => handleMessageRovingKeyDown(event, currentRefIdx)}
                     className={`msg-item hover-group relative ${styles.messageItem} ${msg.role === "user" && compactionSummary === null ? styles.messageItemUser : styles.messageItemAssistant} ${startsNewTurn ? styles.turnStart : ""}`}
                     ref={(el) => {
                     messageRefs.current[currentRefIdx] = el;
@@ -1341,12 +1391,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <div className={styles.recoveryActions}>
                 {lastAssistantOutcome.stopReason === "aborted" && (
                   <button type="button" onClick={() => void handleSend(t("chat.continuePrompt"))}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="9 18 15 12 9 6" /></svg>
+                    <ChevronRight size={12} strokeWidth={2} aria-hidden="true" />
                     {t("chat.continue")}
                   </button>
                 )}
                 <button type="button" onClick={() => void handleRetry()}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+                  <RotateCcw size={12} strokeWidth={2.2} aria-hidden="true" />
                   {t("chat.retry")}
                 </button>
               </div>
@@ -1411,7 +1461,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           <div className={`${styles.contextWarningWrap} pb-1 pl-4 pr-[52px]`}>
           <div className={`mx-auto flex items-center gap-2 ${wideChat ? "max-w-[1040px]" : "max-w-[780px]"}`}>
             <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-3 py-1.5 text-[12px] text-[var(--color-warning-text)]">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+              <TriangleAlert size={12} strokeWidth={2} className="shrink-0" aria-hidden="true" />
               {/* min-w-0 flex-1: a flex child's min-width:auto refuses to shrink,
                   so bare `truncate` never elides — the text collided with the
                   button on narrow screens. The percent is the key info, so it

@@ -1,12 +1,14 @@
 "use client";
 
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import type { Dispatch, KeyboardEvent, RefObject, SetStateAction } from "react";
+import { CheckCircle2, Circle } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { AskUserOption, WebExtensionUIDialogRequest } from "@/lib/web-extension-ui-types";
 import styles from "./ExtensionUIPanel.module.css";
 
 interface ChoiceListProps {
   questionId?: string;
+  ariaLabel?: string;
   options: AskUserOption[];
   selected?: string;
   firstRef?: RefObject<HTMLButtonElement | null>;
@@ -19,6 +21,7 @@ interface ChoiceListProps {
 
 export function QuestionChoiceList({
   questionId,
+  ariaLabel,
   options,
   selected,
   firstRef,
@@ -28,20 +31,37 @@ export function QuestionChoiceList({
   otherSelected = false,
   onSelectOther,
 }: ChoiceListProps) {
+  const moveSelection = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"].includes(event.key)) return;
+    event.preventDefault();
+    const choices = [...(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [])];
+    const current = choices.indexOf(event.currentTarget);
+    const direction = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
+    const next = choices[(current + direction + choices.length) % choices.length];
+    next?.focus();
+    next?.click();
+  };
+
   return (
-    <div className={styles.choices}>
+    <div className={styles.choices} role="radiogroup" aria-label={ariaLabel}>
       {options.map((option, index) => (
         <button
           key={option.label}
           ref={index === 0 ? firstRef : undefined}
           type="button"
-          aria-pressed={selected === option.label}
+          role="radio"
+          aria-checked={selected === option.label}
           data-question-id={questionId}
           data-value={option.label}
           className={`${styles.choice} ${selected === option.label ? styles.choiceSelected : ""}`}
           onClick={() => onSelect(option.label)}
+          onKeyDown={moveSelection}
         >
-          <span className={styles.choiceMark} aria-hidden />
+          <span className={styles.choiceMark} aria-hidden>
+            {selected === option.label
+              ? <CheckCircle2 size={19} strokeWidth={2.1} />
+              : <Circle size={19} strokeWidth={1.7} />}
+          </span>
           <span className={styles.choiceCopy}>
             <span className={styles.choiceLabel}>{option.label}</span>
             {option.description && <span className={styles.choiceDescription}>{option.description}</span>}
@@ -51,13 +71,19 @@ export function QuestionChoiceList({
       {allowOther && (
         <button
           type="button"
-          aria-pressed={otherSelected}
+          role="radio"
+          aria-checked={otherSelected}
           data-question-id={questionId}
           data-value="__other__"
           className={`${styles.choice} ${otherSelected ? styles.choiceSelected : ""}`}
           onClick={onSelectOther}
+          onKeyDown={moveSelection}
         >
-          <span className={styles.choiceMark} aria-hidden />
+          <span className={styles.choiceMark} aria-hidden>
+            {otherSelected
+              ? <CheckCircle2 size={19} strokeWidth={2.1} />
+              : <Circle size={19} strokeWidth={1.7} />}
+          </span>
           <span className={styles.choiceCopy}>
             <span className={styles.choiceLabel}>{otherLabel}</span>
           </span>
@@ -89,6 +115,7 @@ export function AskUserFields({ request, activeQuestionIndex, answers, setAnswer
       {question.options.length > 0 && (
         <QuestionChoiceList
           questionId={question.id}
+          ariaLabel={question.question}
           options={question.options}
           selected={customAnswers.has(question.id) ? undefined : answers[question.id]}
           firstRef={firstControlRef}

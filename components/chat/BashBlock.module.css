@@ -9,8 +9,8 @@
 .header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
   font-family: var(--font-mono);
@@ -43,7 +43,7 @@
 
 .abortButton {
   flex-shrink: 0;
-  padding: 1px 8px;
+  padding: var(--space-optical) var(--space-2);
   background: none;
   border: 1px solid var(--color-error-border);
   border-radius: var(--radius-control-compact);
@@ -58,7 +58,7 @@
 
 .badge {
   flex-shrink: 0;
-  padding: 1px 7px;
+  padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-control-compact);
   font-size: var(--text-xs);
   line-height: var(--leading-relaxed);
@@ -84,7 +84,7 @@
 
 .output {
   margin: 0;
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
   max-height: 320px;
   overflow: auto;
   font-family: var(--font-mono);
@@ -96,7 +96,7 @@
 }
 
 :global(html[data-ui-style="trae"]) .container { border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
-:global(html[data-ui-style="trae"]) .header { min-height: 40px; padding: 7px 12px; border-bottom-color: var(--trae-hairline); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .header { min-height: 40px; padding: var(--space-2) var(--space-3); border-bottom-color: var(--trae-hairline); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .badge,
 :global(html[data-ui-style="trae"]) .abortButton { border-radius: var(--radius-pill); }
-:global(html[data-ui-style="trae"]) .output { max-height: 360px; padding: 12px 14px; }
+:global(html[data-ui-style="trae"]) .output { max-height: 360px; padding: var(--space-3) var(--space-3); }

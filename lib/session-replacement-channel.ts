@@ -12,6 +12,30 @@ export interface SessionReplacementChannel {
 
 const CHANNEL_NAME = "pi-session-replacements";
 const STORAGE_KEY = "pi-session-replacement-event";
+let publishingChannel: BroadcastChannel | null = null;
+
+/**
+ * Publish a replacement even when the initiating view is not connected to
+ * the runtime SSE stream (for example, an idle session imported from a modal).
+ * A dedicated sender channel also lets listeners in the same window receive
+ * the event; their session-id guard makes duplicate SSE delivery idempotent.
+ */
+export function publishSessionReplacement(replacement: SessionReplacementBroadcast): void {
+  if (typeof window === "undefined") return;
+
+  if (typeof BroadcastChannel !== "undefined") {
+    publishingChannel ??= new BroadcastChannel(CHANNEL_NAME);
+    publishingChannel.postMessage(replacement);
+    return;
+  }
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...replacement, nonce: crypto.randomUUID?.() ?? Date.now() }));
+  } catch {
+    // Private browsing can reject localStorage. The initiating view still
+    // applies the replacement directly; this only affects other idle tabs.
+  }
+}
 
 /**
  * Idle tabs intentionally do not keep an SSE stream open. Mirror server-side
@@ -31,7 +55,7 @@ export function createSessionReplacementChannel(
       }
     };
     return {
-      publish: (replacement) => channel.postMessage(replacement),
+      publish: publishSessionReplacement,
       close: () => channel.close(),
     };
   }
@@ -49,14 +73,7 @@ export function createSessionReplacementChannel(
   };
   window.addEventListener("storage", onStorage);
   return {
-    publish: (replacement) => {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...replacement, nonce: crypto.randomUUID?.() ?? Date.now() }));
-      } catch {
-        // Private browsing can reject localStorage. The initiating tab still
-        // has the authoritative SSE event, so this is a best-effort fallback.
-      }
-    },
+    publish: publishSessionReplacement,
     close: () => window.removeEventListener("storage", onStorage),
   };
 }

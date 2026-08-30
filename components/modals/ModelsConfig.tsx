@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { ArrowLeft, CheckCircle2, Cpu, Plus } from "lucide-react";
+import { DialogShell } from "@/components/ui/DialogShell";
 import type { ModelEntry, ProviderEntry, ModelsJson, ModelTestState, Selection, OAuthProvider, ApiKeyProvider } from "./models-config-types";
 import { API_OPTIONS } from "./models-config-types";
 import { Field, TextInput, SecretTextInput, NumInput, Select, Check, SectionTitle } from "./models-config-forms";
@@ -18,6 +20,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
   name: string; provider: ProviderEntry;
   onChange: (p: ProviderEntry) => void; onRename: (n: string) => void; onDelete: () => void;
 }) {
+  const { t } = useI18n();
   const [editingName, setEditingName] = useState(name);
   useEffect(() => setEditingName(name), [name]);
   const set = <K extends keyof ProviderEntry>(k: K, v: ProviderEntry[K]) => onChange({ ...provider, [k]: v });
@@ -30,35 +33,35 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
   return (
     <div className={styles.detailSection}>
       <div className={styles.detailHeader}>
-        <SectionTitle>Provider</SectionTitle>
-        <button onClick={onDelete} className={styles.deleteButton}>
-          Delete
+        <SectionTitle>{t("models.provider")}</SectionTitle>
+        <button type="button" onClick={onDelete} className={styles.deleteButton}>
+          {t("common.delete")}
         </button>
       </div>
 
-      <Field label="Provider name">
-        <TextInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
+      <Field label={t("models.providerName")}>
+        <TextInput value={editingName} onChange={setEditingName} placeholder={t("models.providerNamePlaceholder")} mono />
         {editingName !== name && editingName.trim() && (
-          <button onClick={() => onRename(editingName.trim())} className={styles.renameButton}>
-            Rename
+          <button type="button" onClick={() => onRename(editingName.trim())} className={styles.renameButton}>
+            {t("models.rename")}
           </button>
         )}
       </Field>
 
-      <Field label="Base URL">
+      <Field label={t("models.baseUrl")}>
         <TextInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
           placeholder="https://api.example.com/v1" mono />
       </Field>
 
-      <Field label="API Key">
+      <Field label={t("apiKey.title")}>
         <SecretTextInput value={provider.apiKey ?? ""} onChange={(v) => set("apiKey", v || undefined)}
-          placeholder="ENV_VAR_NAME, !shell-command, or literal key" mono />
+          placeholder={t("models.apiKeyPlaceholder")} ariaLabel={t("apiKey.title")} mono />
         <span className={styles.helperText}>
-          Prefix with <code className={styles.helperCode}>!</code> to run a shell command, or use an env var name
+          {t("models.apiKeyHintBefore")} <code className={styles.helperCode}>!</code> {t("models.apiKeyHintAfter")}
         </span>
       </Field>
 
-      <Field label="API">
+      <Field label={t("models.api")}>
         <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
       </Field>
     </div>
@@ -87,6 +90,7 @@ function ThinkingLevelMapEditor({
   value: Record<string, string | null> | undefined;
   onChange: (v: Record<string, string | null> | undefined) => void;
 }) {
+  const { t } = useI18n();
   const map = value ?? {};
 
   const setLevel = (level: ThinkingLevel, entry: string | null | "omit") => {
@@ -115,6 +119,7 @@ function ThinkingLevelMapEditor({
               <span
                 className={styles.levelDot}
                 style={{ background: color, opacity: state === "null" ? 0.3 : 1 }}
+                aria-hidden="true"
               />
               <span
                 className={`${styles.levelLabel} ${state === "null" ? styles.levelLabelDisabled : styles.levelLabelOmit}`}
@@ -126,32 +131,36 @@ function ThinkingLevelMapEditor({
             {/* Default + Disabled buttons */}
             <div className={styles.thinkingBtnGroup}>
               <button
+                type="button"
                 onClick={() => setLevel(level, "omit")}
                 className={`${styles.thinkingBtn} ${state === "omit" ? styles.thinkingBtnActive : ""}`}
               >
-                Default
+                {t("models.default")}
               </button>
               <button
+                type="button"
                 onClick={() => setLevel(level, null)}
                 className={`${styles.thinkingBtn} ${styles.thinkingBtnBorderLeft} ${state === "null" ? styles.thinkingBtnDisabled : ""}`}
               >
-                Disabled
+                {t("models.disabled")}
               </button>
             </div>
 
             {/* Custom button + input fused */}
             <div className={`${styles.customInputGroup} ${state === "string" ? styles.customInputGroupActive : styles.customInputGroupInactive}`}>
               <button
+                type="button"
                 onClick={() => setLevel(level, strVal || level)}
                 className={`${styles.thinkingBtn} ${styles.thinkingBtnBorderRight} ${state === "string" ? styles.thinkingBtnActive : ""}`}
               >
-                Custom
+                {t("models.custom")}
               </button>
               <input
                 value={strVal}
                 onChange={(e) => setLevel(level, e.target.value)}
                 onFocus={() => { if (state !== "string") setLevel(level, strVal || level); }}
                 placeholder={level}
+                aria-label={t("models.customThinkingLevel").replace("{level}", level)}
                 maxLength={10}
                 className={`${styles.customInput} ${state === "string" ? styles.customInputActive : styles.customInputInactive}`}
               />
@@ -199,6 +208,7 @@ function ModelDetail({
   onChange: (m: ModelEntry) => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   const [testState, setTestState] = useState<ModelTestState>({ phase: "idle" });
   const set = <K extends keyof ModelEntry>(k: K, v: ModelEntry[K]) => onChange({ ...model, [k]: v });
   const costVal = (k: keyof NonNullable<ModelEntry["cost"]>) => model.cost?.[k] !== undefined ? String(model.cost[k]) : "";
@@ -208,15 +218,15 @@ function ModelDetail({
   };
   const testSummary = (() => {
     if (testState.phase === "idle") return null;
-    if (testState.phase === "testing") return "Testing model connection...";
+    if (testState.phase === "testing") return t("models.testingConnection");
     const meta = [
       testState.latencyMs !== undefined ? `${testState.latencyMs}ms` : null,
       testState.status !== undefined ? `HTTP ${testState.status}` : null,
     ].filter(Boolean);
     if (testState.phase === "success") {
-      return ["Connected", ...meta, testState.responseText || null].filter(Boolean).join(" · ");
+      return [t("models.connected"), ...meta, testState.responseText || null].filter(Boolean).join(" · ");
     }
-    return ["Failed", ...meta, testState.message].filter(Boolean).join(" · ");
+    return [t("models.failed"), ...meta, testState.message].filter(Boolean).join(" · ");
   })();
 
   useEffect(() => {
@@ -264,7 +274,7 @@ function ModelDetail({
   return (
     <div className={styles.detailSection}>
       <div className={styles.detailHeader}>
-        <SectionTitle>Model</SectionTitle>
+        <SectionTitle>{t("models.model")}</SectionTitle>
         <div className={styles.testButtonGroup}>
           {testSummary && (
             <span
@@ -279,55 +289,55 @@ function ModelDetail({
             </span>
           )}
           <button
+            type="button"
             onClick={handleTest}
             disabled={isTestDisabled}
-            title="Test model connection"
+            title={t("models.testConnection")}
             className={`${styles.testButton} ${isTestDisabled ? styles.testButtonDisabled : ""} ${testState.phase === "success" ? styles.testButtonSuccess : ""}`}
           >
             {testState.phase === "success" && (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+              <CheckCircle2 size={14} strokeWidth={2.4} aria-hidden="true" />
             )}
-            {testState.phase === "testing" ? "Testing…" : testState.phase === "success" ? "OK" : "Test"}
+            {testState.phase === "testing" ? t("models.testing") : testState.phase === "success" ? "OK" : t("models.test")}
           </button>
-          <button onClick={onDelete} className={styles.removeButton}>
-            Remove
+          <button type="button" onClick={onDelete} className={styles.removeButton}>
+            {t("common.remove")}
           </button>
         </div>
       </div>
 
       <div className={styles.twoColGrid}>
-        <Field label="ID *"><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
-        <Field label="Name"><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder="Display name" /></Field>
+        <Field label={t("models.idRequired")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder={t("models.modelIdPlaceholder")} mono /></Field>
+        <Field label={t("models.name")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("models.displayNamePlaceholder")} /></Field>
       </div>
 
-      <Field label="API override">
+      <Field label={t("models.apiOverride")}>
         <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
       </Field>
 
       <div className={styles.checkRow}>
-        <Check label="Reasoning / thinking" checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
-        <Check label="Image input" checked={model.input?.includes("image") ?? false}
+        <Check label={t("models.reasoning")} checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
+        <Check label={t("models.imageInput")} checked={model.input?.includes("image") ?? false}
           onChange={(v) => set("input", v ? ["text", "image"] : undefined)} />
       </div>
 
       {model.reasoning && (
         <>
           <Check
-            label="DeepSeek thinking compat"
+            label={t("models.deepseekCompat")}
             checked={hasDeepseekCompat(model)}
             onChange={(v) => onChange(setDeepseekCompat(model, v))}
           />
           <div>
             <div className={styles.thinkingLevelHeader}>
-              <SectionTitle>Thinking level map</SectionTitle>
+              <SectionTitle>{t("models.thinkingLevelMap")}</SectionTitle>
               {model.thinkingLevelMap && (
                 <button
+                  type="button"
                   onClick={() => set("thinkingLevelMap", undefined)}
                   className={styles.clearAllButton}
                 >
-                  clear all
+                  {t("common.clearAll")}
                 </button>
               )}
             </div>
@@ -340,21 +350,21 @@ function ModelDetail({
       )}
 
       <div className={styles.twoColGrid}>
-        <Field label="Context window (tokens)">
+        <Field label={t("models.contextWindow")}>
           <NumInput value={model.contextWindow !== undefined ? String(model.contextWindow) : ""}
             onChange={(v) => set("contextWindow", v ? parseInt(v) : undefined)} placeholder="128000" />
         </Field>
-        <Field label="Max output tokens">
+        <Field label={t("models.maxOutputTokens")}>
           <NumInput value={model.maxTokens !== undefined ? String(model.maxTokens) : ""}
             onChange={(v) => set("maxTokens", v ? parseInt(v) : undefined)} placeholder="16384" />
         </Field>
       </div>
 
       <div>
-        <SectionTitle>Cost (per million tokens)</SectionTitle>
+        <SectionTitle>{t("models.costPerMillion")}</SectionTitle>
         <div className={styles.costGrid}>
           {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
-            <Field key={k} label={k}>
+            <Field key={k} label={t(`models.cost.${k}` as "models.cost.input" | "models.cost.output" | "models.cost.cacheRead" | "models.cost.cacheWrite")}>
               <NumInput value={costVal(k)} onChange={(v) => setCost(k, v)} placeholder="0" />
             </Field>
           ))}
@@ -384,15 +394,6 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     setSelection(next);
     setMobilePane("detail");
   }, []);
-
-  // Esc closes the modal — consistent with AnalyticsModal and the palette.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const loadOAuthProviders = useCallback(() => {
     fetch("/api/auth/providers")
@@ -573,27 +574,30 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-    <div className={styles.overlay}>
-      <button type="button" tabIndex={-1} className={styles.overlayBackdrop} onClick={onClose} aria-label="Dismiss Models" />
-      <div
-        className={styles.modal}
-        data-testid="models-config-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="models-config-title"
-      >
-
-        {/* Header */}
-        <div className={styles.header}>
-          <div className={styles.headerLeft}>
-            <span id="models-config-title" className={styles.title}>Models</span>
-            <code className={styles.configPath}>~/.pi/agent/models.json</code>
+      <DialogShell
+        open
+        title={t("models.title")}
+        description="~/.pi/agent/models.json"
+        onClose={onClose}
+        size="xwide"
+        mobileMode="fullscreen"
+        bodyClassName={styles.shellBody}
+        testId="models-config-dialog"
+        footer={(
+          <div className={styles.footerContent}>
+            {saveError && <span className={styles.saveErrorText} role="alert">{saveError}</span>}
+            <button type="button" onClick={onClose} className={styles.cancelButton}>
+              {t("common.cancel")}
+            </button>
+            <button type="button" onClick={handleSave} disabled={saving || savedOk || !hasUnsavedChanges}
+              className={`${styles.saveButton} ${savedOk ? styles.saveButtonSaved : saving ? styles.saveButtonSaving : styles.saveButtonReady}`}>
+              {savedOk && <CheckCircle2 size={16} strokeWidth={2.4} aria-hidden="true" className={styles.saveCheckIcon} />}
+              <span>{savedOk ? t("common.saved") : saving ? t("common.saving") : t("common.save")}</span>
+            </button>
           </div>
-          <button onClick={onClose} className={styles.closeButton} aria-label="Close Models">×</button>
-        </div>
-
-        {/* Body */}
-        <div className={`${styles.body} ${mobilePane === "detail" ? styles.mobileDetail : styles.mobileList}`}>
+        )}
+      >
+        <div className={`${styles.layout} ${mobilePane === "detail" ? styles.mobileDetail : styles.mobileList}`}>
 
           {/* Left: tree */}
           <div className={styles.sidebar} data-testid="models-config-nav">
@@ -605,7 +609,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                 data-testid="provider-health-nav"
                 aria-pressed={selection?.type === "health"}
               >
-                <span className={styles.healthIcon} aria-hidden>✓</span>
+                <CheckCircle2 className={styles.healthIcon} strokeWidth={1.8} aria-hidden="true" />
                 <span className={styles.treeItemText}>{t("providerHealth.title")}</span>
               </button>
               <div className={styles.divider} />
@@ -650,7 +654,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
               {/* Custom providers */}
               {loading ? (
-                <div className={styles.loadingText}>Loading…</div>
+                <div className={styles.loadingText}>{t("common.loading")}</div>
               ) : providers.map(([pName, pData]) => {
                 const isProviderSelected = selection?.type === "provider" && selection.name === pName;
                 const models = pData.models ?? [];
@@ -663,13 +667,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                       className={`${styles.providerRow} ${isProviderSelected ? styles.providerRowSelected : ""} ${!isProviderSelected ? "hover-bg" : ""}`}
                       aria-pressed={isProviderSelected}
                     >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.providerIcon}>
-                        <rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" />
-                        <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
-                        <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
-                        <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
-                        <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
-                      </svg>
+                      <Cpu size={15} strokeWidth={1.8} aria-hidden="true" className={styles.providerIcon} />
                       <span className={`${styles.providerName} ${isProviderSelected ? styles.providerNameSelected : ""}`}>
                         {pName}
                       </span>
@@ -687,7 +685,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                           aria-pressed={isModelSelected}
                         >
                           <span className={`${styles.modelName} ${!m.id ? styles.modelNameEmpty : ""}`}>
-                            {m.id || "new model"}
+                            {m.id || t("models.newModel")}
                           </span>
                           {m.reasoning && (
                             <span className={styles.reasoningBadge}>T</span>
@@ -702,7 +700,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                       onClick={(e) => { e.stopPropagation(); addModel(pName); }}
                       className={`${styles.addModelButton} hover-bg-text`}
                     >
-                      <span className={styles.addModelText}>+ model</span>
+                      <Plus size={14} strokeWidth={1.8} aria-hidden="true" />
+                      <span className={styles.addModelText}>{t("models.addModel")}</span>
                     </button>
                   </div>
                 );
@@ -711,10 +710,11 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
             {/* Add provider */}
             <div className={styles.addProviderWrapper}>
-              <button onClick={() => setPickerOpen(true)}
+              <button type="button" onClick={() => setPickerOpen(true)}
                 className={`${styles.addProviderButton} hover-border-accent`}
               >
-                + Add provider
+                <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
+                {t("providers.add")}
               </button>
             </div>
           </div>
@@ -722,50 +722,30 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           {/* Right: detail */}
           <div className={styles.rightPanel} data-testid="models-config-detail">
             <button type="button" className={styles.mobileBack} onClick={() => setMobilePane("list")}>
-              Back to models
+              <ArrowLeft size={16} strokeWidth={1.8} aria-hidden="true" />
+              {t("models.back")}
             </button>
             {loading ? null : detailContent ?? (
               <div className={styles.emptyState}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <rect x="4" y="4" width="16" height="16" rx="3" /><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3" />
-                </svg>
-                <strong>No model selected</strong>
-                <span>Select a provider from the left, or connect a new one.</span>
-                <button type="button" onClick={() => setPickerOpen(true)}>Add provider</button>
+                <Cpu size={30} strokeWidth={1.6} aria-hidden="true" />
+                <strong>{t("models.noneSelected")}</strong>
+                <span>{t("models.noneSelectedHint")}</span>
+                <button type="button" onClick={() => setPickerOpen(true)}>{t("providers.add")}</button>
               </div>
             )}
           </div>
         </div>
-
-        {/* Footer */}
-        <div className={styles.footer}>
-          {saveError && <span className={styles.saveErrorText}>{saveError}</span>}
-          <button onClick={onClose} className={styles.cancelButton}>
-            Cancel
-          </button>
-          <button onClick={handleSave} disabled={saving || savedOk || !hasUnsavedChanges}
-            className={`${styles.saveButton} ${savedOk ? styles.saveButtonSaved : saving ? styles.saveButtonSaving : styles.saveButtonReady}`}>
-            {savedOk && (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                className={styles.saveCheckIcon}>
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-            <span>{savedOk ? "Saved" : saving ? "Saving…" : "Save"}</span>
-          </button>
-        </div>
-      </div>
-    </div>
-    {pickerOpen && (
-      <AddProviderPicker
-        oauthProviders={oauthProviders}
-        apiKeyProviders={apiKeyProviders}
-        onSelectOAuth={(id: string) => selectDetail({ type: "oauth", providerId: id })}
-        onSelectApiKey={(id: string) => selectDetail({ type: "apikey", providerId: id })}
-        onAddCustom={addCustomProvider}
-        onClose={() => setPickerOpen(false)}
-      />
-    )}
+      </DialogShell>
+      {pickerOpen && (
+        <AddProviderPicker
+          oauthProviders={oauthProviders}
+          apiKeyProviders={apiKeyProviders}
+          onSelectOAuth={(id: string) => selectDetail({ type: "oauth", providerId: id })}
+          onSelectApiKey={(id: string) => selectDetail({ type: "apikey", providerId: id })}
+          onAddCustom={addCustomProvider}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </>
   );
 }

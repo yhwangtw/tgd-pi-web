@@ -7,6 +7,9 @@ import { getFileName } from "@/lib/file-paths";
 import { useI18n } from "@/lib/i18n";
 import styles from "./SearchPanel.module.css";
 import type { SemanticHit } from "@/lib/semantic-search";
+import type { WorkspaceIdentity } from "@/lib/workspace-identity";
+import type { MsgKey } from "@/lib/i18n";
+import type { FileOpenOrigin } from "@/lib/file-open";
 
 interface Props {
   query: string;
@@ -26,7 +29,8 @@ interface Props {
   inputRef: RefObject<HTMLInputElement | null>;
   onPaletteResult: (result: PaletteResult) => void;
   onSelectSession: (sessionId: string) => void;
-  onOpenFile: (filePath: string, fileName: string, line?: number) => void;
+  onOpenFile: (filePath: string, fileName: string, line?: number, origin?: FileOpenOrigin) => void;
+  workspaceIdentities: Record<string, WorkspaceIdentity>;
 }
 
 function basename(filePath: string): string {
@@ -70,7 +74,7 @@ export function UnifiedSearchResults(props: Props) {
         <div className={styles.group}>
           <div className={styles.groupTitle}>{t("search.scope.semantic")}</div>
           {props.semanticHits.map((hit) => (
-            <button key={hit.id} data-search-result className={styles.result} onClick={() => hit.sessionId ? props.onSelectSession(hit.sessionId) : hit.path ? props.onOpenFile(hit.path, getFileName(hit.path), hit.line) : undefined} onKeyDown={keyDown}>
+            <button key={hit.id} data-search-result className={styles.result} onClick={() => hit.sessionId ? props.onSelectSession(hit.sessionId) : hit.path ? props.onOpenFile(hit.path, getFileName(hit.path), hit.line, { kind: "search", query: props.query }) : undefined} onKeyDown={keyDown}>
               <span className={styles.resultIcon}>{hit.source === "session" ? "◌" : hit.source === "artifact" ? "◇" : "□"}</span>
               <span className={styles.resultBody}>
                 <span className={styles.resultTitle}>{hit.title}</span>
@@ -93,16 +97,26 @@ export function UnifiedSearchResults(props: Props) {
               </span>
             </button>
           ))}
-          {props.sessionHits.slice(0, 30).map((hit) => (
+          {props.sessionHits.slice(0, 20).map((hit) => {
+            const identity = props.workspaceIdentities[hit.cwd];
+            const workspace = identity
+              ? `${identity.repository} / ${identity.branch ?? t("topbar.notGitRepository")}`
+              : basename(hit.cwd);
+            return (
             <button key={hit.id} data-search-result className={styles.result} onClick={() => props.onSelectSession(hit.id)} onKeyDown={keyDown}>
               <span className={styles.resultIcon}>◌</span>
               <span className={styles.resultBody}>
                 <span className={styles.resultTitle}>{hit.name || hit.firstMessage || hit.id.slice(0, 8)}</span>
-                <span className={styles.resultMeta}>{basename(hit.cwd)} · {hit.messageCount} msg</span>
+                <span className={styles.resultMeta}>
+                  {workspace}
+                  {hit.modelId ? ` · ${hit.modelId}` : ""}
+                  {` · ${t(`search.status.${hit.status}` as MsgKey)}`}
+                </span>
                 {hit.matches[0]?.text && <span className={styles.snippet}>{highlight(hit.matches[0].text, props.query)}</span>}
               </span>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -114,7 +128,7 @@ export function UnifiedSearchResults(props: Props) {
               key={hit.full}
               data-search-result
               className={styles.result}
-              onClick={() => props.onOpenFile(hit.full, hit.name)}
+              onClick={() => props.onOpenFile(hit.full, hit.name, undefined, { kind: "search", query: props.query })}
               onKeyDown={keyDown}
             >
               <span className={styles.resultIcon}>□</span>
@@ -131,7 +145,7 @@ export function UnifiedSearchResults(props: Props) {
         <div className={styles.group}>
           <div className={styles.groupTitle}>{t("search.scope.content")}</div>
           {props.contentHits.slice(0, 80).map((hit, index) => (
-            <button key={`${hit.full}:${hit.line}:${hit.col}:${index}`} data-search-result className={styles.result} onClick={() => props.onOpenFile(hit.full, getFileName(hit.full), hit.line)} onKeyDown={keyDown}>
+            <button key={`${hit.full}:${hit.line}:${hit.col}:${index}`} data-search-result className={styles.result} onClick={() => props.onOpenFile(hit.full, getFileName(hit.full), hit.line, { kind: "search", query: props.query })} onKeyDown={keyDown}>
               <span className={styles.lineNumber}>{hit.line}</span>
               <span className={styles.resultBody}>
                 <span className={styles.resultMeta}>{hit.relative}</span>

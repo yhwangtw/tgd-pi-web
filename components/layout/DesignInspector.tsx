@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatDesignContext, type DesignSnapshot } from "@/lib/design-context";
+import { useI18n } from "@/lib/i18n";
 import s from "./DesignInspector.module.css";
 
 interface Props {
@@ -63,6 +64,7 @@ function snapshotOf(element: HTMLElement): DesignSnapshot {
 }
 
 export function DesignInspector({ active, onClose, onCapture }: Props) {
+  const { t } = useI18n();
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [rect, setRect] = useState<DesignSnapshot["rect"] | null>(null);
   const [targetStyles, setTargetStyles] = useState<Record<string, string> | null>(null);
@@ -125,9 +127,9 @@ export function DesignInspector({ active, onClose, onCapture }: Props) {
       {rect && <div className={s.highlight} style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }} />}
       <div className={s.toolbar}>
         <span className={s.dot} aria-hidden="true" />
-        <strong>Design mode</strong>
-        <span className={s.hint}>{target ? "Click to capture" : "Move over an element"}</span>
-        <button type="button" onClick={onClose} aria-label="Close design mode">Esc</button>
+        <strong>{t("topbar.designMode")}</strong>
+        <span className={s.hint}>{target ? t("design.clickCapture") : t("design.moveOver")}</span>
+        <button type="button" onClick={onClose} aria-label={t("design.close")}>{t("design.escapeKey")}</button>
       </div>
       {target && rect && (
         <div className={s.label} style={{ left: Math.max(8, rect.x), top: Math.max(8, rect.y - 28) }}>

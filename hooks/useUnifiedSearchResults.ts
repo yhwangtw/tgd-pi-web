@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { SemanticHit } from "@/lib/semantic-search";
+import type { SessionSearchStatus } from "@/lib/session-search";
+import { fetchJson, useRequestResource } from "./useRequestResource";
 
 export type SearchScope = "all" | "semantic" | "sessions" | "files" | "content" | "commands";
 
@@ -19,6 +20,10 @@ export interface SessionHit {
   firstMessage: string;
   modified: string;
   messageCount: number;
+  provider?: string;
+  modelId?: string;
+  status: SessionSearchStatus;
+  score: number;
   matchedIn: "name" | "firstMessage" | "messages";
   matches: SessionMatch[];
 }
@@ -38,27 +43,24 @@ export interface ContentHit {
   text: string;
 }
 
-interface UnifiedSearchResults {
+interface UnifiedSearchPayload {
   sessionHits: SessionHit[];
   fileHits: FileHit[];
   contentHits: ContentHit[];
   semanticHits: SemanticHit[];
-  loading: boolean;
   error: boolean;
 }
 
-const EMPTY_RESULTS: Omit<UnifiedSearchResults, "loading" | "error"> = {
+interface UnifiedSearchResults extends UnifiedSearchPayload {
+  loading: boolean;
+}
+
+const EMPTY_RESULTS: Omit<UnifiedSearchPayload, "error"> = {
   sessionHits: [],
   fileHits: [],
   contentHits: [],
   semanticHits: [],
 };
-
-async function fetchJson<T>(url: string, signal: AbortSignal): Promise<T> {
-  const response = await fetch(url, { signal });
-  if (!response.ok) throw new Error(`Search failed (${response.status})`);
-  return response.json() as Promise<T>;
-}
 
 /** Debounced, abortable data loading for the unified search surface. */
 export function useUnifiedSearchResults(
@@ -67,45 +69,37 @@ export function useUnifiedSearchResults(
   scope: SearchScope,
   caseSensitive: boolean,
 ): UnifiedSearchResults {
-  const [results, setResults] = useState<UnifiedSearchResults>({
-    ...EMPTY_RESULTS,
-    loading: false,
-    error: false,
-  });
-
-  useEffect(() => {
-    if (query.length < 2) {
-      setResults({ ...EMPTY_RESULTS, loading: false, error: false });
-      return;
-    }
-
-    const controller = new AbortController();
-    let alive = true;
-    setResults((current) => ({ ...current, loading: true, error: false }));
-
-    const timer = setTimeout(async () => {
+  const normalizedQuery = query.trim();
+  const key = normalizedQuery.length >= 2
+    ? `unified-search:${JSON.stringify([cwd, normalizedQuery, scope, caseSensitive])}`
+    : null;
+  const resource = useRequestResource<UnifiedSearchPayload>(
+    key,
+    async (signal) => {
       const wantsSessions = scope === "all" || scope === "sessions";
       const wantsFiles = !!cwd && (scope === "all" || scope === "files");
       const wantsContent = !!cwd && (scope === "all" || scope === "content");
       const wantsSemantic = scope === "semantic";
+      const activeRequestCount = [wantsSessions, wantsFiles, wantsContent, wantsSemantic].filter(Boolean).length;
       const requests = await Promise.allSettled([
         wantsSessions
-          ? fetchJson<{ hits?: SessionHit[] }>(`/api/sessions/search?q=${encodeURIComponent(query)}`, controller.signal)
+          ? fetchJson<{ hits?: SessionHit[] }>(`/api/sessions/search?q=${encodeURIComponent(normalizedQuery)}`, {}, signal)
           : Promise.resolve({ hits: [] as SessionHit[] }),
         wantsFiles
-          ? fetchJson<{ results?: FileHit[] }>(`/api/files/search?cwd=${encodeURIComponent(cwd!)}&q=${encodeURIComponent(query)}`, controller.signal)
+          ? fetchJson<{ results?: FileHit[] }>(`/api/files/search?cwd=${encodeURIComponent(cwd!)}&q=${encodeURIComponent(normalizedQuery)}`, {}, signal)
           : Promise.resolve({ results: [] as FileHit[] }),
         wantsContent
-          ? fetchJson<{ matches?: ContentHit[] }>(`/api/files/grep?cwd=${encodeURIComponent(cwd!)}&q=${encodeURIComponent(query)}${caseSensitive ? "&case=1" : ""}`, controller.signal)
+          ? fetchJson<{ matches?: ContentHit[] }>(`/api/files/grep?cwd=${encodeURIComponent(cwd!)}&q=${encodeURIComponent(normalizedQuery)}${caseSensitive ? "&case=1" : ""}`, {}, signal)
           : Promise.resolve({ matches: [] as ContentHit[] }),
         wantsSemantic
-          ? fetchJson<{ hits?: SemanticHit[] }>(`/api/search/semantic?q=${encodeURIComponent(query)}${cwd ? `&cwd=${encodeURIComponent(cwd)}` : ""}`, controller.signal)
+          ? fetchJson<{ hits?: SemanticHit[] }>(`/api/search/semantic?q=${encodeURIComponent(normalizedQuery)}${cwd ? `&cwd=${encodeURIComponent(cwd)}` : ""}`, {}, signal)
           : Promise.resolve({ hits: [] as SemanticHit[] }),
       ]);
-
-      if (!alive) return;
       const [sessionsResult, filesResult, contentResult, semanticResult] = requests;
-      setResults({
+      const failures = requests.filter((result) => result.status === "rejected");
+      if (signal.aborted) throw failures[0]?.status === "rejected" ? failures[0].reason : new DOMException("Search aborted", "AbortError");
+      if (activeRequestCount > 0 && failures.length === activeRequestCount) throw failures[0].reason;
+      return {
         sessionHits: sessionsResult.status === "fulfilled" ? sessionsResult.value.hits ?? [] : [],
         // Directories are navigated in Explorer; unified search results open
         // concrete files, so do not render inert directory rows.
@@ -114,17 +108,15 @@ export function useUnifiedSearchResults(
           : [],
         contentHits: contentResult.status === "fulfilled" ? contentResult.value.matches ?? [] : [],
         semanticHits: semanticResult.status === "fulfilled" ? semanticResult.value.hits ?? [] : [],
-        error: requests.some((result) => result.status === "rejected" && (result.reason as Error)?.name !== "AbortError"),
-        loading: false,
-      });
-    }, 250);
-
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query, scope, cwd, caseSensitive]);
-
-  return results;
+        error: failures.some((result) => result.status === "rejected" && (result.reason as Error)?.name !== "AbortError"),
+      };
+    },
+    { debounceMs: 250, staleTimeMs: 30_000, retries: 1 },
+  );
+  const results = resource.data ?? { ...EMPTY_RESULTS, error: false };
+  return {
+    ...results,
+    loading: resource.loading || resource.refreshing,
+    error: results.error || Boolean(resource.error),
+  };
 }

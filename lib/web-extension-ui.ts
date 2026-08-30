@@ -15,6 +15,7 @@ import type {
   WebExtensionUIResponse,
   WebExtensionUIResponseResult,
 } from "./web-extension-ui-types";
+import { redactSensitiveText } from "./redaction";
 
 export type {
   AskUserOption,
@@ -48,6 +49,62 @@ interface WebExtensionUIBridgeOptions {
 
 const MAX_TEXT_RESPONSE_LENGTH = 200_000;
 export const ASK_USER_TOOL_NAME = "ask_user";
+
+const EXTENSION_UI_METHODS = [
+  "select",
+  "confirm",
+  "input",
+  "notify",
+  "onTerminalInput",
+  "setStatus",
+  "setWorkingMessage",
+  "setWorkingVisible",
+  "setWorkingIndicator",
+  "setHiddenThinkingLabel",
+  "setWidget",
+  "setFooter",
+  "setHeader",
+  "setTitle",
+  "custom",
+  "pasteToEditor",
+  "setEditorText",
+  "getEditorText",
+  "editor",
+  "addAutocompleteProvider",
+  "setEditorComponent",
+  "getEditorComponent",
+  "getAllThemes",
+  "getTheme",
+  "setTheme",
+  "getToolsExpanded",
+  "setToolsExpanded",
+] as const satisfies ReadonlyArray<keyof ExtensionUIContext>;
+
+/**
+ * Pi 0.84.4 wraps ExtensionUIContext with an object spread so it can decorate
+ * dialog methods with ui_prompt_start/ui_prompt_end events. Class prototype
+ * methods are not enumerable and disappear during that spread. Present the
+ * bridge as a plain object with bound, own methods so both the wrapper and
+ * future direct calls keep the documented ExtensionUIContext contract.
+ */
+export function toEnumerableExtensionUIContext(source: ExtensionUIContext): ExtensionUIContext {
+  const context: Record<string, unknown> = {};
+  for (const name of EXTENSION_UI_METHODS) {
+    const method = source[name];
+    if (typeof method !== "function") {
+      throw new TypeError(`Extension UI context method is unavailable: ${name}`);
+    }
+    Object.defineProperty(context, name, {
+      enumerable: true,
+      value: method.bind(source),
+    });
+  }
+  Object.defineProperty(context, "theme", {
+    enumerable: true,
+    get: () => source.theme,
+  });
+  return context as unknown as ExtensionUIContext;
+}
 
 export function withAskUserTool(toolNames: string[]): string[] {
   if (toolNames.length === 0 || toolNames.includes(ASK_USER_TOOL_NAME)) return [...toolNames];
@@ -283,11 +340,11 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
   }
 
   notify(message: string, type: "info" | "warning" | "error" = "info"): void {
-    this.emit({ type: "extension_ui_request", id: randomUUID(), method: "notify", message, notifyType: type });
+    this.emit({ type: "extension_ui_request", id: randomUUID(), method: "notify", message: redactSensitiveText(message), notifyType: type });
   }
 
   setStatus(key: string, text: string | undefined): void {
-    const event = { type: "extension_ui_request", id: randomUUID(), method: "setStatus", statusKey: key, statusText: text } as const;
+    const event = { type: "extension_ui_request", id: randomUUID(), method: "setStatus", statusKey: key, statusText: text === undefined ? undefined : redactSensitiveText(text) } as const;
     if (text === undefined) this.statuses.delete(key);
     else this.statuses.set(key, event);
     this.emit(event);
@@ -306,7 +363,7 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
       id: randomUUID(),
       method: "setWidget",
       widgetKey: key,
-      widgetLines: content ? [...content] : undefined,
+      widgetLines: content ? content.map(redactSensitiveText) : undefined,
       widgetPlacement: options?.placement ?? "aboveEditor",
     } as const;
     if (content === undefined) this.widgets.delete(key);
@@ -315,7 +372,7 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
   }
 
   setTitle(title: string): void {
-    const event = { type: "extension_ui_request", id: randomUUID(), method: "setTitle", title } as const;
+    const event = { type: "extension_ui_request", id: randomUUID(), method: "setTitle", title: redactSensitiveText(title) } as const;
     this.titleEvent = event;
     this.emit(event);
   }

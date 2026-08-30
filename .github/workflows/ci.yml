@@ -29,6 +29,15 @@ jobs:
       - name: Lint
         run: npx eslint .
 
+      - name: Design-system contract
+        run: npm run audit:design
+
+      - name: Localization contract
+        run: npm run audit:i18n
+
+      - name: Capability documentation contract
+        run: npm run audit:capabilities
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -67,6 +76,9 @@ jobs:
         run: npm run build
         env:
           CI: true
+
+      - name: Initial JavaScript budget
+        run: npm run audit:js-budget
 
   e2e:
     name: E2E

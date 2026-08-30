@@ -50,6 +50,7 @@ async function auditControls(page: Page, root: Locator, context: string, mobile:
   ].join(",");
   const results = await root.locator(selector).evaluateAll((elements, isMobile) => elements.flatMap((element) => {
       const node = element as HTMLElement;
+      if (node.closest("[inert], [aria-hidden='true']")) return [];
       const rect = node.getBoundingClientRect();
       const styles = getComputedStyle(node);
       if (styles.display === "none" || styles.visibility === "hidden" || Number(styles.opacity) === 0 || rect.width <= 0 || rect.height <= 0) return [];
@@ -455,7 +456,7 @@ async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: bool
     { button: mobile ? "Files" : "Explorer", testId: undefined },
     { button: "Search", testId: "unified-search" },
     { button: "Changes", testId: undefined },
-    { button: mobile ? "tGD" : "tGD artifacts", testId: undefined },
+    { button: "tGD artifacts", testId: undefined },
   ];
 
   for (const panel of panels) {
@@ -479,6 +480,9 @@ async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: bool
       await expect.poll(async () => (await openPanel.boundingBox())?.width ?? 0)
         .toBeGreaterThanOrEqual(settledWidth - 1);
     }
+    if (panel.button === "Changes") {
+      await expect(openPanel.getByRole("button", { name: "Refresh" })).toBeEnabled();
+    }
     await auditControls(page, openPanel, `${style}/${viewport}/${panel.button}`, mobile);
   }
 
@@ -488,14 +492,14 @@ async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: bool
   const agentEditor = page.getByTestId("agent-run-editor");
   await expect(agentEditor).toBeVisible();
   await auditControls(page, agentEditor, `${style}/${viewport}/new-agent`, mobile);
-  await agentEditor.getByRole("button", { name: "Back to agents", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).last().click();
 
   await openPrimaryView(page, "Schedules", mobile);
   await page.getByRole("button", { name: "New schedule", exact: true }).first().click();
   const scheduleEditor = page.getByTestId("schedule-editor");
   await expect(scheduleEditor).toBeVisible();
   await auditControls(page, scheduleEditor, `${style}/${viewport}/new-schedule`, mobile);
-  await scheduleEditor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).last().click();
 
   // Settings and analysis surfaces are modal/sheet states over the main shell.
   const modals = [

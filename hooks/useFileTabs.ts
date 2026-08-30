@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import type { Tab } from "@/components/layout/TabBar";
+import type { FileOpenIntent, FileViewState } from "@/lib/file-open";
 
 export function useFileTabs() {
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
@@ -27,21 +28,31 @@ export function useFileTabs() {
     localStorage.setItem("pi-file-workspace-v1", JSON.stringify({ tabs: fileTabs, active: activeFileTabId, split: splitFileTabId }));
   }, [activeFileTabId, fileTabs, restored, splitFileTabId]);
 
-  const handleOpenFile = useCallback((filePath: string, fileName: string, gotoLine?: number) => {
-    const tabId = `file:${filePath}`;
+  const handleOpenFile = useCallback((filePathOrIntent: string | FileOpenIntent, fileName?: string, gotoLine?: number) => {
+    const intent: FileOpenIntent = typeof filePathOrIntent === "string"
+      ? { path: filePathOrIntent, label: fileName ?? filePathOrIntent.split("/").pop() ?? filePathOrIntent, line: gotoLine, mode: gotoLine ? "source" : "auto" }
+      : filePathOrIntent;
+    const tabId = `file:${intent.path}`;
     // Fresh nonce whenever a line is requested, so reopening an already-open
     // file (or the same file at a new line) re-triggers the jump.
-    const gotoNonce = gotoLine ? Date.now() : undefined;
+    const gotoNonce = Date.now();
     setFileTabs((prev) => {
       const existing = prev.find((t) => t.id === tabId);
       if (existing) {
-        if (!gotoLine) return prev;
-        return prev.map((t) => (t.id === tabId ? { ...t, gotoLine, gotoNonce } : t));
+        return prev.map((t) => (t.id === tabId ? { ...t, label: intent.label, filePath: intent.path, gotoLine: intent.line, gotoNonce, intent } : t));
       }
-      return [...prev, { id: tabId, label: fileName, filePath, gotoLine, gotoNonce }];
+      return [...prev, { id: tabId, label: intent.label, filePath: intent.path, gotoLine: intent.line, gotoNonce, intent }];
     });
     setActiveFileTabId(tabId);
     setRightPanelOpen(true);
+  }, []);
+
+  const handleUpdateViewState = useCallback((tabId: string, viewState: FileViewState) => {
+    setFileTabs((current) => current.map((tab) => tab.id === tabId ? { ...tab, viewState } : tab));
+  }, []);
+
+  const handleConsumeNavigation = useCallback((tabId: string) => {
+    setFileTabs((current) => current.map((tab) => tab.id === tabId && tab.gotoLine ? { ...tab, gotoLine: undefined } : tab));
   }, []);
 
   const handleCloseFileTab = useCallback((tabId: string) => {
@@ -106,6 +117,8 @@ export function useFileTabs() {
     setRightPanelOpen,
     setActiveFileTabId,
     handleOpenFile,
+    handleUpdateViewState,
+    handleConsumeNavigation,
     handleCloseFileTab,
     handleCloseOthers,
     handleCloseAll,

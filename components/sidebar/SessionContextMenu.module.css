@@ -7,10 +7,10 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-menu);
   box-shadow: var(--color-shadow-dropdown);
-  padding: 4px;
+  padding: var(--space-1);
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--space-optical);
   font-size: var(--text-sm);
   user-select: none;
   animation: contextMenuIn 0.1s ease-out;
@@ -24,10 +24,10 @@
 .menuItem {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   height: 30px;
-  padding: 0 10px;
+  padding: 0 var(--space-2);
   background: none;
   border: none;
   border-radius: var(--radius-row);
@@ -76,10 +76,10 @@
 .tagForm {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   height: 30px;
-  padding: 0 10px;
+  padding: 0 var(--space-2);
   background: var(--bg-hover);
   border-radius: var(--radius-control-compact);
   color: var(--text-muted);
@@ -106,17 +106,17 @@
 .tagList {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px 10px 6px 32px;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2) var(--space-2) var(--space-8);
 }
 
 .tagListChip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-optical);
   font-size: var(--text-xs);
   line-height: var(--leading-tight);
-  padding: 2px 7px;
+  padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-pill);
   border: 1px solid transparent;
   font-weight: var(--weight-medium);
@@ -128,7 +128,7 @@
   color: inherit;
   font-size: var(--text-sm);
   line-height: var(--leading-none);
-  padding: 0 0 0 2px;
+  padding: 0 0 0 var(--space-optical);
   cursor: pointer;
   opacity: 0.6;
 }
@@ -138,7 +138,7 @@
 }
 
 :global(html[data-ui-style="trae"]) .menu {
-  padding: 6px;
+  padding: var(--space-2);
   border-color: var(--trae-hairline);
   border-radius: var(--radius-menu);
   background: var(--glass-bg);

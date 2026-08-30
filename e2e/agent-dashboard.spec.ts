@@ -131,6 +131,7 @@ test("AC-4.2: coding access is explicit and the run remains queued in the daemon
   await page.getByTestId("agent-new-run").click();
   await page.getByLabel("Run name").fill("Build dashboard");
   await page.getByLabel("Prompt").fill("Implement and verify the dashboard");
+  await page.getByText("Model and tool access", { exact: true }).click();
   await page.getByRole("button", { name: "Coding", exact: true }).click();
   await expect(page.getByText(/may edit files and run shell commands/)).toBeVisible();
 
@@ -162,16 +163,15 @@ test("AC-4.3: dashboard remains usable at 320px without page overflow", async ({
 
 test("AC-4.5: concurrent slots can be changed from the dashboard", async ({ page }) => {
   await openDashboard(page, []);
-  const trigger = page.getByRole("button", { name: "Concurrent agent slots", exact: true });
-  await expect(trigger).toContainText("3");
+  const select = page.getByRole("combobox", { name: "Concurrent agent slots", exact: true });
+  await expect(select).toHaveValue("3");
 
   const updateRequest = page.waitForRequest((request) => (
     request.url().endsWith("/api/agent-runs") && request.method() === "PATCH"
   ));
-  await trigger.click();
-  await page.getByRole("option", { name: "6", exact: true }).click();
+  await select.selectOption("6");
   const body = (await updateRequest).postDataJSON() as { maxConcurrency: number };
 
   expect(body).toEqual({ maxConcurrency: 6 });
-  await expect(trigger).toContainText("6");
+  await expect(select).toHaveValue("6");
 });

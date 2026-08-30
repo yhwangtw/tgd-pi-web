@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { readFileSync, existsSync } from "fs";
+import { redactSensitiveText, redactSensitiveValue } from "@/lib/redaction";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ function extractText(content: unknown): string {
         if (o.type === "thinking") return `*[thinking]*\n${o.text ?? ""}`;
         if (o.type === "toolCall") {
           const tc = o as { name?: string; toolName?: string; input?: unknown };
-          return `*[tool call: ${tc.name ?? tc.toolName ?? "?"}]*\n\`\`\`json\n${JSON.stringify(tc.input ?? {}, null, 2)}\n\`\`\``;
+          return `*[tool call: ${tc.name ?? tc.toolName ?? "?"}]*\n\`\`\`json\n${JSON.stringify(redactSensitiveValue(tc.input ?? {}), null, 2)}\n\`\`\``;
         }
         return "";
       })
@@ -113,7 +114,7 @@ export async function GET(
       out.push("");
       out.push(`*${formatTimestamp(m.timestamp)}*`);
       out.push("");
-      out.push(text);
+      out.push(redactSensitiveText(text));
       out.push("");
       out.push("---");
       out.push("");

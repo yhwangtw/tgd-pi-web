@@ -8,7 +8,7 @@
 
 .header {
   position: relative;
-  padding: 10px 10px 8px;
+  padding: var(--space-2) var(--space-2) var(--space-2);
   border-bottom: 1px solid var(--border);
 }
 
@@ -37,7 +37,7 @@
 .input {
   width: 100%;
   height: 36px;
-  padding: 0 30px 0 32px;
+  padding: 0 var(--space-8) 0 var(--space-8);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   outline: none;
@@ -80,7 +80,7 @@
 .scope {
   flex: 0 0 auto;
   min-height: 28px;
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border: 1px solid transparent;
   border-radius: var(--radius-control-compact);
   background: none;
@@ -104,7 +104,7 @@
   .scopes {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
-    gap: 2px;
+    gap: var(--space-optical);
     overflow: visible;
   }
 
@@ -120,7 +120,7 @@
   .scopes {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 3px;
+    gap: var(--space-1);
     overflow: visible;
   }
 
@@ -139,7 +139,7 @@
   top: 8px;
   min-width: 28px;
   height: 24px;
-  padding: 0 5px;
+  padding: 0 var(--space-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-control-compact);
   background: var(--bg);
@@ -154,9 +154,156 @@
   color: var(--accent);
 }
 
+.filterButton {
+  display: inline-flex;
+  min-height: var(--control-sm);
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: var(--type-label-size);
+  cursor: pointer;
+}
+.filterButton:hover { border-color: var(--color-accent-border-focus-strong); color: var(--text); }
+.filterButtonActive { border-color: var(--color-accent-border-focus-strong); color: var(--color-accent); }
+.filterButton strong {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  font-size: var(--text-2xs);
+  place-items: center;
+}
+
+.activeFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+.activeFilters button {
+  display: inline-flex;
+  min-height: var(--control-xs);
+  max-width: 100%;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  border: 1px solid var(--color-accent-border-focus-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.savedViews {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.savedViews::-webkit-scrollbar { display: none; }
+.savedViews > span {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+.savedViewChip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: var(--control-xs);
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+}
+.savedViewChip button,
+.saveViewButton {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.savedViewChip > button:first-child { max-width: 150px; padding: 0 var(--space-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.savedViewChip .savedViewDelete { display: grid; width: var(--control-xs); padding: 0; place-items: center; color: var(--text-dim); }
+.savedViewChip button:hover { color: var(--text); background: var(--bg-hover); }
+.saveViewButton {
+  display: inline-flex;
+  min-height: var(--control-xs);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-pill);
+}
+.saveViewButton:hover:not(:disabled) { border-color: var(--color-accent-border-focus-strong); color: var(--text); }
+.saveViewButton:disabled { cursor: default; opacity: .45; }
+
+.saveViewField { display: grid; gap: var(--space-2); }
+.saveViewField span { color: var(--text-muted); font-size: var(--type-label-size); font-weight: var(--weight-medium); }
+.saveViewField input {
+  width: 100%;
+  min-height: var(--control-default);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--type-ui-size);
+}
+.saveViewField input:focus { border-color: var(--color-accent-border-focus-strong); box-shadow: 0 0 0 2px var(--color-accent-bg); }
+
+.filterGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--layout-section-gap); }
+.filterGrid label { display: grid; min-width: 0; gap: var(--space-2); }
+.filterGrid label > span { color: var(--text-muted); font-size: var(--type-label-size); font-weight: var(--weight-medium); }
+.filterGrid select {
+  width: 100%;
+  min-height: var(--control-default);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--type-ui-size);
+}
+.filterGrid select:focus { border-color: var(--color-accent-border-focus-strong); box-shadow: 0 0 0 2px var(--color-accent-bg); }
+.filterSecondary,
+.filterPrimary {
+  min-height: var(--control-default);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-control);
+  font-size: var(--type-ui-size);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.filterSecondary { border: 1px solid var(--border); background: var(--bg); color: var(--text-muted); }
+.filterSecondary:disabled { cursor: not-allowed; opacity: 0.45; }
+.filterPrimary { border: 1px solid var(--color-accent); background: var(--color-accent); color: var(--color-accent-fg); }
+
 .status {
   min-height: 28px;
-  padding: 6px 10px;
+  padding: var(--space-2) var(--space-2);
   color: var(--text-dim);
   font-size: var(--text-xs);
 }
@@ -175,7 +322,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 6px 10px;
+  padding: var(--space-2) var(--space-2);
   background: var(--bg-panel);
   color: var(--text-dim);
   font-family: var(--font-mono);
@@ -187,10 +334,10 @@
 .result {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   min-height: 42px;
-  padding: 7px 10px;
+  padding: var(--space-2) var(--space-2);
   border: none;
   outline: none;
   background: none;
@@ -218,7 +365,7 @@
   align-items: center;
   justify-content: center;
   width: 16px;
-  padding-top: 1px;
+  padding-top: var(--space-optical);
   flex-shrink: 0;
   color: var(--text-dim);
   font-family: var(--font-mono);
@@ -229,7 +376,7 @@
   flex: 1;
   min-width: 0;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-optical);
 }
 
 .resultTitle {
@@ -256,7 +403,7 @@
 .lineNumber {
   min-width: 30px;
   flex-shrink: 0;
-  padding-top: 1px;
+  padding-top: var(--space-optical);
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -277,7 +424,7 @@
 }
 
 .empty {
-  padding: 28px 16px;
+  padding: var(--space-6) var(--space-4);
   color: var(--text-dim);
   font-size: var(--text-sm);
   text-align: center;
@@ -286,15 +433,28 @@
 @media (pointer: coarse) {
   .input { height: 44px; }
   .clearButton { width: 44px; height: 44px; right: 0; }
-  .scope { min-height: 44px; padding: 0 10px; }
+  .scope { min-height: 44px; padding: 0 var(--space-2); }
   .result { min-height: 48px; }
-  .caseButton { min-width: 44px; height: 32px; }
+  .caseButton { top: 0; min-width: var(--control-touch); height: var(--control-touch); }
+}
+
+@media (max-width: 700px) {
+  .filterButton { min-height: var(--control-mobile); }
+  .activeFilters button { min-height: var(--control-compact); }
+  .filterGrid { grid-template-columns: 1fr; }
+  .filterGrid select,
+  .filterSecondary,
+  .filterPrimary { min-height: var(--control-mobile); }
+  .savedViewChip,
+  .saveViewButton { min-height: var(--control-mobile); }
+  .savedViewChip .savedViewDelete { width: var(--control-mobile); }
+  .saveViewField input { min-height: var(--control-mobile); }
 }
 
 :global(html[data-ui-style="trae"]) .root { background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .header {
   margin: 8px 8px 0;
-  padding: 10px;
+  padding: var(--space-2);
   border: 0;
   border-radius: var(--radius-panel);
   background: var(--trae-surface);
@@ -306,12 +466,12 @@
   border-radius: var(--radius-control-prominent);
   background: var(--trae-control);
 }
-:global(html[data-ui-style="trae"]) .scope { min-height: 32px; padding: 0 9px; border-radius: var(--radius-pill); }
+:global(html[data-ui-style="trae"]) .scope { min-height: 32px; padding: 0 var(--space-2); border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .scopeActive { border-color: transparent; background: var(--bg-selected); }
-:global(html[data-ui-style="trae"]) .status { padding: 10px 14px 6px; }
-:global(html[data-ui-style="trae"]) .group { border: 0; padding: 0 6px 8px; }
+:global(html[data-ui-style="trae"]) .status { padding: var(--space-2) var(--space-3) var(--space-2); }
+:global(html[data-ui-style="trae"]) .group { border: 0; padding: 0 var(--space-2) var(--space-2); }
 :global(html[data-ui-style="trae"]) .groupTitle {
-  padding: 8px 8px 5px;
+  padding: var(--space-2) var(--space-2) var(--space-1);
   background: var(--trae-canvas);
   letter-spacing: var(--tracking-normal);
   text-transform: none;

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, ChevronDown, GitBranch, RefreshCw, RotateCcw } from "lucide-react";
+import { IconButton } from "@/components/ui/IconButton";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/hooks/useToast";
 import s from "./ChangesPanel.module.css";
@@ -17,6 +19,12 @@ interface Snapshot {
   ts: number;
   label: string;
   fileCount: number;
+  impact: {
+    total: number;
+    restore: number;
+    remove: number;
+    changes: Array<{ path: string; action: "restore" | "remove"; status: string }>;
+  };
 }
 
 interface Props {
@@ -57,6 +65,7 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
   const [loading, setLoading] = useState(false);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [snapsOpen, setSnapsOpen] = useState(false);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [commitMsg, setCommitMsg] = useState("");
   const [committing, setCommitting] = useState(false);
@@ -118,24 +127,53 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
 
   const restore = useCallback(async (snap: Snapshot) => {
     if (!cwd || !sessionId) return;
-    if (!window.confirm(`Restore files to "${snap.label}" (${snapTime(snap.ts)})?\n\nFiles changed since then are reverted; files created since are removed. This cannot be undone.`)) return;
     setRestoringId(snap.id);
     try {
+      const prepareRes = await fetch("/api/git/snapshots/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phase: "prepare", cwd, sessionId, id: snap.id }),
+      });
+      const prepared = await prepareRes.json() as {
+        confirmation?: { token: string; expiresAt: number };
+        review?: { label: string; impact: Snapshot["impact"] };
+        error?: string;
+      };
+      if (!prepareRes.ok || prepared.error || !prepared.confirmation || !prepared.review) {
+        throw new Error(prepared.error ?? `HTTP ${prepareRes.status}`);
+      }
+      if (JSON.stringify(prepared.review.impact) !== JSON.stringify(snap.impact)) {
+        setSnapshots((current) => current.map((item) => item.id === snap.id
+          ? { ...item, impact: prepared.review!.impact }
+          : item));
+        showToast(t("changes.restoreChanged"), { type: "warning" });
+        return;
+      }
       const res = await fetch("/api/git/snapshots/restore", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd, sessionId, id: snap.id }),
+        body: JSON.stringify({
+          phase: "execute",
+          cwd,
+          sessionId,
+          id: snap.id,
+          confirmationToken: prepared.confirmation.token,
+        }),
       });
       const d = await res.json() as { ok?: boolean; restored?: number; removed?: number; error?: string };
       if (!res.ok || d.error) throw new Error(d.error ?? `HTTP ${res.status}`);
-      showToast(`Restored ${d.restored ?? 0} file(s)${d.removed ? `, removed ${d.removed}` : ""}`, { type: "success" });
+      showToast(t("changes.restoreSuccess")
+        .replace("{restored}", String(d.restored ?? 0))
+        .replace("{removed}", String(d.removed ?? 0)), { type: "success" });
+      setReviewingId(null);
       await load();
+      await loadSnapshots();
     } catch (e) {
-      showToast(`Restore failed: ${e instanceof Error ? e.message : e}`, { type: "error" });
+      showToast(`${t("changes.restoreFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
     } finally {
       setRestoringId(null);
     }
-  }, [cwd, sessionId, showToast, load]);
+  }, [cwd, sessionId, showToast, load, loadSnapshots, t]);
 
   const commit = useCallback(async () => {
     if (!cwd || committing) return;
@@ -187,28 +225,25 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
   return (
     <div className={s.container}>
       <div className={`${s.header} chrome-mono`}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
-          <path d="M18 9a9 9 0 0 1-9 9" />
-        </svg>
+        <GitBranch size={14} strokeWidth={1.8} aria-hidden="true" />
         <span className={s.branch} title={branch ?? undefined}>{branch ?? "—"}</span>
         <span className={s.count}>{files.length}</span>
-        <button onClick={load} title="Refresh" className={s.refresh} disabled={loading}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={loading ? s.spinning : undefined}>
-            <polyline points="23 4 23 10 17 10" />
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-          </svg>
-        </button>
+        <IconButton
+          label={t("common.refresh")}
+          icon={<RefreshCw className={loading ? s.spinning : undefined} strokeWidth={1.8} />}
+          size="compact"
+          onClick={() => { if (!loading) void load(); }}
+          className={s.refresh}
+          aria-busy={loading}
+        />
       </div>
 
       {!isGit ? (
-        <div className={s.empty}>Not a git repository</div>
+        <div className={s.empty}>{t("changes.notGit")}</div>
       ) : files.length === 0 ? (
         <div className={s.empty}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-          </svg>
-          <span>Working tree clean</span>
+          <CheckCircle2 size={22} strokeWidth={1.6} aria-hidden="true" />
+          <span>{t("changes.clean")}</span>
         </div>
       ) : (
         <div className={s.list}>
@@ -220,6 +255,13 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
               title={f.path}
               role="button"
               tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpenDiff(f.path);
+                }
+              }}
             >
               <span className={`${s.status} ${s[STATUS_CLASS[f.status] ?? "statusM"]} chrome-mono`}>
                 {f.status === "??" ? "U" : f.status.slice(0, 1)}
@@ -231,18 +273,14 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
                   {f.deletions !== null && <span className={s.del}>−{f.deletions}</span>}
                 </span>
               )}
-              <button
+              <IconButton
+                label={t("changes.discard")}
+                icon={<RotateCcw strokeWidth={1.8} />}
+                size="compact"
                 onClick={(e) => { e.stopPropagation(); void discard(f.path); }}
                 disabled={discarding === f.path}
                 className={`hover-reveal ${s.discardBtn}`}
-                title={t("changes.discard")}
-                aria-label={t("changes.discard")}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="1 4 1 10 7 10" />
-                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                </svg>
-              </button>
+              />
             </div>
           ))}
         </div>
@@ -261,6 +299,7 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
             spellCheck={false}
           />
           <button
+            type="button"
             onClick={() => void commit()}
             disabled={committing || !commitMsg.trim()}
             className={s.commitBtn}
@@ -274,32 +313,79 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
       {isGit && sessionId && snapshots.length > 0 && (
         <div className={s.snapSection}>
           <button
+            type="button"
             className={`${s.snapHeader} chrome-mono`}
             onClick={() => setSnapsOpen((v) => !v)}
             aria-expanded={snapsOpen}
           >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={snapsOpen ? s.caretOpen : s.caretClosed}>
-              <polyline points="2 3.5 5 6.5 8 3.5" />
-            </svg>
-            <span>Restore points</span>
+            <ChevronDown size={14} strokeWidth={1.8} aria-hidden="true" className={snapsOpen ? s.caretOpen : s.caretClosed} />
+            <span>{t("changes.restorePoints")}</span>
             <span className={s.count}>{snapshots.length}</span>
           </button>
           {snapsOpen && (
             <div className={s.snapList}>
               {snapshots.map((snap) => (
-                <div key={snap.id} className={s.snapItem}>
-                  <div className={s.snapMain}>
-                    <span className={s.snapLabel} title={snap.label}>{snap.label}</span>
-                    <span className={`${s.snapMeta} chrome-mono`}>{snapTime(snap.ts)} · {snap.fileCount} changed</span>
+                <div key={snap.id} className={`${s.snapItem} ${reviewingId === snap.id ? s.snapItemReviewing : ""}`}>
+                  <div className={s.snapRow}>
+                    <div className={s.snapMain}>
+                      <span className={s.snapLabel} title={snap.label}>{snap.label}</span>
+                      <span className={`${s.snapMeta} chrome-mono`}>
+                        {snapTime(snap.ts)} · {t("changes.restoreAffected").replace("{count}", String(snap.impact.total))}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReviewingId((current) => current === snap.id ? null : snap.id)}
+                      disabled={restoringId !== null}
+                      className={s.snapRestore}
+                      aria-expanded={reviewingId === snap.id}
+                    >
+                      {t("changes.restoreReview")}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => restore(snap)}
-                    disabled={restoringId !== null}
-                    className={s.snapRestore}
-                    title="Revert the working tree to this point"
-                  >
-                    {restoringId === snap.id ? "…" : "Restore"}
-                  </button>
+                  {reviewingId === snap.id && (
+                    <div className={s.restorePreview} role="region" aria-label={t("changes.restorePreviewLabel")}>
+                      <p className={s.restoreSummary}>
+                        {t("changes.restoreSummary")
+                          .replace("{restore}", String(snap.impact.restore))
+                          .replace("{remove}", String(snap.impact.remove))}
+                      </p>
+                      <div className={s.restoreFiles}>
+                        {snap.impact.changes.slice(0, 12).map((change) => (
+                          <button
+                            type="button"
+                            key={`${change.action}:${change.path}`}
+                            className={s.restoreFile}
+                            onClick={() => onOpenDiff(change.path)}
+                            title={change.path}
+                          >
+                            <span className={change.action === "remove" ? s.restoreRemove : s.restoreRevert}>
+                              {t(change.action === "remove" ? "changes.restoreRemove" : "changes.restoreRevert")}
+                            </span>
+                            <span>{change.path}</span>
+                          </button>
+                        ))}
+                        {snap.impact.total > snap.impact.changes.slice(0, 12).length && (
+                          <span className={s.restoreMore}>
+                            {t("changes.restoreMore").replace("{count}", String(snap.impact.total - 12))}
+                          </span>
+                        )}
+                      </div>
+                      <div className={s.restoreActions}>
+                        <button type="button" className={s.restoreCancel} onClick={() => setReviewingId(null)}>
+                          {t("common.cancel")}
+                        </button>
+                        <button
+                          type="button"
+                          className={s.restoreConfirm}
+                          onClick={() => void restore(snap)}
+                          disabled={restoringId !== null}
+                        >
+                          {restoringId === snap.id ? t("changes.restoring") : t("changes.restoreConfirm")}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

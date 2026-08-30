@@ -28,9 +28,11 @@ describe("design system contracts", () => {
       "--space-1", "--space-2", "--space-3", "--space-4",
       "--control-xs", "--control-md", "--control-touch",
       "--text-2xs", "--text-xs", "--text-sm", "--text-md", "--text-base", "--text-lg", "--text-title",
+      "--type-display-size", "--type-title-size", "--type-body-size", "--type-ui-size", "--type-label-size", "--type-meta-size", "--type-code-size",
       "--weight-regular", "--weight-medium", "--weight-semibold", "--weight-bold",
       "--tracking-title", "--tracking-tight", "--tracking-normal", "--tracking-label", "--tracking-wide", "--tracking-caps",
       "--leading-none", "--leading-tight", "--leading-snug", "--leading-ui", "--leading-copy", "--leading-relaxed", "--leading-body",
+      "--type-display-leading", "--type-title-leading", "--type-body-leading", "--type-ui-leading", "--type-meta-leading",
       "--radius-xs", "--radius-sm", "--radius-md", "--radius-lg", "--radius-xl", "--radius-full",
       "--motion-fast", "--motion-normal", "--motion-slow", "--ease-standard",
     ]) {
@@ -58,6 +60,7 @@ describe("design system contracts", () => {
         // Fixed 16px is the deliberate iOS form-control floor that prevents
         // Safari from zooming the viewport when an input receives focus.
         const valid = value.startsWith("var(--text-")
+          || value.startsWith("var(--type-")
           || value === "16px"
           || /^(?:0|inherit|[\d.]+e?m)$/.test(value);
         if (valid) return [];
@@ -73,7 +76,7 @@ describe("design system contracts", () => {
       { property: "font-family", valid: (value: string) => value.startsWith("var(--font-") || value === "inherit" },
       { property: "font-weight", valid: (value: string) => value.startsWith("var(--weight-") || ["inherit", "normal", "bold", "bolder", "lighter"].includes(value) },
       { property: "letter-spacing", valid: (value: string) => value.startsWith("var(--tracking-") || ["inherit", "normal"].includes(value) },
-      { property: "line-height", valid: (value: string) => value.startsWith("var(--leading-") || /^(?:normal|inherit|\d+(?:\.\d+)?px)$/.test(value) },
+      { property: "line-height", valid: (value: string) => value.startsWith("var(--leading-") || value.startsWith("var(--type-") || /^(?:normal|inherit|\d+(?:\.\d+)?px)$/.test(value) },
     ];
     const failures = componentStyleFiles.flatMap((file) => {
       const css = readFileSync(file, "utf8");

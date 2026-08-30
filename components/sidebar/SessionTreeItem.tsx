@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { SessionInfo } from "@/lib/types";
+import type { WorkspaceIdentity } from "@/lib/workspace-identity";
 import type { SessionTreeNode } from "./session-utils";
 import { SessionItem } from "./SessionItem";
 
@@ -22,6 +23,14 @@ interface SessionTreeItemProps {
   isParallelOpen?: boolean;
   onOpenParallel?: (session: SessionInfo) => void;
   showProject?: boolean;
+  displayTitles?: Map<string, string>;
+  workspaceIdentities?: Record<string, WorkspaceIdentity>;
+  resolvePinned?: (id: string) => boolean;
+  resolveArchived?: (id: string) => boolean;
+  resolveTags?: (id: string) => string[];
+  resolveParallel?: (id: string) => boolean;
+  onSetSessionTag?: (id: string, tag: string) => void;
+  onRemoveSessionTag?: (id: string, tag: string) => void;
 }
 
 export function SessionTreeItem({
@@ -41,9 +50,21 @@ export function SessionTreeItem({
   isParallelOpen = false,
   onOpenParallel,
   showProject = false,
+  displayTitles,
+  workspaceIdentities,
+  resolvePinned,
+  resolveArchived,
+  resolveTags,
+  resolveParallel,
+  onSetSessionTag,
+  onRemoveSessionTag,
 }: SessionTreeItemProps) {
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = node.children.length > 0;
+  const sessionPinned = resolvePinned?.(node.session.id) ?? isPinned;
+  const sessionArchived = resolveArchived?.(node.session.id) ?? isArchived;
+  const sessionTags = resolveTags?.(node.session.id) ?? tags;
+  const sessionParallel = resolveParallel?.(node.session.id) ?? isParallelOpen;
 
   return (
     <div>
@@ -69,16 +90,18 @@ export function SessionTreeItem({
           hasChildren={hasChildren}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((v) => !v)}
-          isPinned={isPinned}
+          isPinned={sessionPinned}
           onPinToggle={onPinToggle}
-          tags={tags}
-          onSetTag={onSetTag}
-          onRemoveTag={onRemoveTag}
-          isArchived={isArchived}
+          tags={sessionTags}
+          onSetTag={onSetSessionTag ? (tag) => onSetSessionTag(node.session.id, tag) : onSetTag}
+          onRemoveTag={onRemoveSessionTag ? (tag) => onRemoveSessionTag(node.session.id, tag) : onRemoveTag}
+          isArchived={sessionArchived}
           onArchiveToggle={onArchiveToggle}
-          isParallelOpen={isParallelOpen}
+          isParallelOpen={sessionParallel}
           onOpenParallel={onOpenParallel}
           showProject={showProject}
+          displayTitle={displayTitles?.get(node.session.id)}
+          workspaceIdentity={workspaceIdentities?.[node.session.cwd]}
         />
       </div>
       {hasChildren && !collapsed && (
@@ -92,9 +115,21 @@ export function SessionTreeItem({
               onRenamed={onRenamed}
               onSessionDeleted={onSessionDeleted}
               depth={depth + 1}
-              isPinned={isPinned}
+              isPinned={resolvePinned?.(child.session.id) ?? false}
               onPinToggle={onPinToggle}
               showProject={showProject}
+              isArchived={resolveArchived?.(child.session.id) ?? false}
+              onArchiveToggle={onArchiveToggle}
+              isParallelOpen={resolveParallel?.(child.session.id) ?? false}
+              onOpenParallel={onOpenParallel}
+              displayTitles={displayTitles}
+              workspaceIdentities={workspaceIdentities}
+              resolvePinned={resolvePinned}
+              resolveArchived={resolveArchived}
+              resolveTags={resolveTags}
+              resolveParallel={resolveParallel}
+              onSetSessionTag={onSetSessionTag}
+              onRemoveSessionTag={onRemoveSessionTag}
             />
           ))}
         </div>

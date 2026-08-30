@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { Check, Copy, Ellipsis, GitFork, Pencil, Reply, RotateCcw } from "lucide-react";
 import { MarkdownBody } from "./MarkdownBody";
 import type {
   UserMessage,
@@ -176,10 +177,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
               <span className={styles.editHint}>{t("chat.editRerunHint")}</span>
               <button onClick={() => setEditing(false)} className={styles.editCancel}>{t("common.cancel")}</button>
               <button onClick={commitEdit} disabled={!draft.trim()} className={styles.editRerunBtn}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
+                <RotateCcw size={11} strokeWidth={2} aria-hidden="true" />
                 {t("chat.rerun")}
               </button>
             </div>
@@ -257,7 +255,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
       {/* Bottom row: action buttons + timestamp (hidden while editing) */}
       {!editing && (
         <div className={styles.bottomRow}>
-          <div className={styles.desktopActionToolbar} aria-hidden="true">
+          <div className={styles.desktopActionToolbar}>
           <div className={`${styles.actionButtons} ${styles.primaryActions}`}>
             <button
               onClick={copyContent}
@@ -265,20 +263,15 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
               className={`${styles.actionButton} ${copied ? "text-accent" : "text-dim hover-accent"}`}
             >
               {copied ? (
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <Check size={11} strokeWidth={1.8} aria-hidden="true" />
               ) : (
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
+                <Copy size={11} strokeWidth={1.8} aria-hidden="true" />
               )}
               {copied ? t("common.copied") : t("common.copy")}
             </button>
             {onQuote && (
               <button type="button" onClick={quoteContent} title={t("chat.quote")} className={`${styles.actionButton} text-dim hover-accent`}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 21c3-6 7-9 14-9" /><path d="M13 7l5 5-5 5" /></svg>
+                <Reply size={11} strokeWidth={1.8} aria-hidden="true" />
                 {t("chat.quote")}
               </button>
             )}
@@ -298,9 +291,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                   title={t("chat.editRerunHint")}
                   className={`${styles.actionButton} text-dim hover-accent`}
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                  </svg>
+                  <Pencil size={11} strokeWidth={1.8} aria-hidden="true" />
                   {t("chat.edit")}
                 </button>
               )}
@@ -311,12 +302,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                   title={forking ? t("chat.creating") : t("chat.newSession")}
                   className={`${styles.actionButton} ${forking ? "text-accent" : "text-dim hover-accent"}`}
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="6" y1="3" x2="6" y2="15" />
-                    <circle cx="18" cy="6" r="3" />
-                    <circle cx="6" cy="18" r="3" />
-                    <path d="M18 9a9 9 0 0 1-9 9" />
-                  </svg>
+                  <GitFork size={11} strokeWidth={1.8} aria-hidden="true" />
                   {forking ? t("chat.creating") : t("chat.newSession")}
                 </button>
               )}
@@ -325,9 +311,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
           </div>
           <details ref={actionsRef} className={styles.mobileActionMenu}>
               <summary role="button" title={t("chat.moreActions")} aria-label={t("chat.moreActions")} onClick={() => setActionsOpen(!(actionsRef.current?.open ?? false))}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" />
-                </svg>
+                <Ellipsis size={16} strokeWidth={2} aria-hidden="true" />
               </summary>
               <div
                 data-testid="user-message-actions"
@@ -340,9 +324,9 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                   className={`${styles.actionButton} ${copied ? "text-accent" : "text-dim hover-accent"}`}
                 >
                   {copied ? (
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    <Check size={13} strokeWidth={1.8} aria-hidden="true" />
                   ) : (
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                    <Copy size={13} strokeWidth={1.8} aria-hidden="true" />
                   )}
                   {copied ? t("common.copied") : t("common.copy")}
                 </button>
@@ -352,7 +336,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                     onClick={() => { closeActions(); quoteContent(); }}
                     className={`${styles.actionButton} text-dim hover-accent`}
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 21c3-6 7-9 14-9" /><path d="M13 7l5 5-5 5" /></svg>
+                    <Reply size={13} strokeWidth={1.8} aria-hidden="true" />
                     {t("chat.quote")}
                   </button>
                 )}
@@ -368,9 +352,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                     onClick={() => { closeActions(); startEdit(); }}
                     className={`${styles.actionButton} text-dim hover-accent`}
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                    </svg>
+                    <Pencil size={13} strokeWidth={1.8} aria-hidden="true" />
                     {t("chat.edit")}
                   </button>
                 )}
@@ -380,12 +362,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                     disabled={forking}
                     className={`${styles.actionButton} ${forking ? "text-accent" : "text-dim hover-accent"}`}
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <line x1="6" y1="3" x2="6" y2="15" />
-                      <circle cx="18" cy="6" r="3" />
-                      <circle cx="6" cy="18" r="3" />
-                      <path d="M18 9a9 9 0 0 1-9 9" />
-                    </svg>
+                    <GitFork size={13} strokeWidth={1.8} aria-hidden="true" />
                     {forking ? t("chat.creating") : t("chat.newSession")}
                   </button>
                 )}

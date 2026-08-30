@@ -10,6 +10,7 @@ import {
   type InlineExtension,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { redactedErrorMessage } from "./redaction";
 
 export type McpTransportKind = "stdio" | "http";
 export type McpScope = "global" | "project";
@@ -212,9 +213,9 @@ async function connectMcp(server: McpServerConfig, force = false): Promise<McpCl
     });
     return entry;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = redactedErrorMessage(error);
     statuses().set(server.id, { id: server.id, state: "error", toolCount: 0, tools: [], error: message, checkedAt: new Date().toISOString() });
-    throw error;
+    throw new Error(message, { cause: error });
   }
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import styles from "./CollapsibleMessage.module.css";
 import { useI18n } from "@/lib/i18n";
 
@@ -57,17 +58,13 @@ export function CollapsibleMessage({ collapsible, expanded, onToggle, children }
       </div>
       {collapsed && (
         <button type="button" className={styles.toggleBtn} onClick={onToggle}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+          <ChevronDown size={11} strokeWidth={2.5} aria-hidden />
           {t("chat.showFull")} · ~{hiddenLines} {t("chat.lines")}
         </button>
       )}
       {overflows && expanded && (
         <button type="button" className={styles.toggleBtn} onClick={onToggle}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <polyline points="18 15 12 9 6 15" />
-          </svg>
+          <ChevronUp size={11} strokeWidth={2.5} aria-hidden />
           {t("chat.collapseMsg")}
         </button>
       )}

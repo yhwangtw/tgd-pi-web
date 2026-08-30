@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useId } from "react";
+import { Check, Lightbulb } from "lucide-react";
 import { THINKING_LEVELS, type ThinkingLevelOption } from "./chat-input-constants";
 import { useI18n, type MsgKey } from "@/lib/i18n";
 import styles from "./ComposerSelector.module.css";
+import { announceComposerSelectorOpen, onAnotherComposerSelectorOpen } from "./composer-selector-coordination";
 
 const THINKING_LABEL_KEYS: Record<ThinkingLevelOption, MsgKey> = {
   auto: "input.thinking.auto",
@@ -30,6 +32,7 @@ interface ThinkingSelectorProps {
   thinkingLevelMap?: Record<string, string | null> | null;
   availableThinkingLevels?: string[] | null;
   isStreaming: boolean;
+  presentation?: "popover" | "inline";
   onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
 }
 
@@ -38,11 +41,16 @@ export function ThinkingSelector({
   thinkingLevelMap,
   availableThinkingLevels,
   isStreaming,
+  presentation = "popover",
   onThinkingLevelChange,
 }: ThinkingSelectorProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listboxId = useId();
+
+  useEffect(() => onAnotherComposerSelectorOpen(listboxId, () => setOpen(false)), [listboxId]);
 
   // Close on outside click
   useEffect(() => {
@@ -64,22 +72,28 @@ export function ThinkingSelector({
   if (!onThinkingLevelChange) return null;
 
   return (
-    <div ref={ref} className={styles.root}>
+    <div
+      ref={ref}
+      className={`${styles.root} ${presentation === "inline" ? styles.inlineRoot : ""}`}
+      data-inline-selector-open={presentation === "inline" && open ? "true" : undefined}
+    >
       <button
-        onClick={() => !isStreaming && setOpen((v) => !v)}
+        ref={triggerRef}
+        onClick={() => {
+          if (isStreaming) return;
+          if (!open) announceComposerSelectorOpen(listboxId);
+          setOpen(!open);
+        }}
         disabled={isStreaming}
         type="button"
         aria-label={t("input.thinkingTitle")}
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-controls={open ? listboxId : undefined}
         title={t("input.thinkingTitle")}
         className={`${styles.trigger} ${open ? styles.triggerOpen : ""}`}
       >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
-          <line x1="7" y1="18" x2="12" y2="18" />
-          <line x1="8" y1="21" x2="11" y2="21" />
-        </svg>
+        <Lightbulb size={11} aria-hidden />
         <span>{(() => {
           const lvl = thinkingLevel ?? "auto";
           if (lvl === "auto" || !thinkingLevelMap) return t(THINKING_LABEL_KEYS[lvl]);
@@ -88,7 +102,12 @@ export function ThinkingSelector({
         })()}</span>
       </button>
       {open && (
-        <div className={`${styles.panel} ${styles.panelAbsolute}`} role="listbox" aria-label={t("input.thinkingTitle")}>
+        <div
+          id={listboxId}
+          className={`${styles.panel} ${presentation === "inline" ? styles.panelInline : styles.panelAbsolute}`}
+          role="listbox"
+          aria-label={t("input.thinkingTitle")}
+        >
           {THINKING_LEVELS.filter((lvl) => {
             if (!availableThinkingLevels) return true;
             if (lvl === "auto") return true;
@@ -105,11 +124,15 @@ export function ThinkingSelector({
                 type="button"
                 role="option"
                 aria-selected={isActive}
-                onClick={() => { setOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
+                onClick={() => {
+                  setOpen(false);
+                  if (!isActive) onThinkingLevelChange(lvl);
+                  requestAnimationFrame(() => triggerRef.current?.focus());
+                }}
                 className={`${styles.option} ${isActive ? styles.optionActive : ""}`}
               >
                 {isActive
-                  ? <svg className={styles.check} width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
+                  ? <Check className={styles.check} size={10} strokeWidth={2} aria-hidden />
                   : <span className={styles.checkSpacer} />}
                 <span className={styles.optionLabel}>
                   {displayLabel}

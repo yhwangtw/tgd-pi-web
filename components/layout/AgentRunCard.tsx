@@ -34,6 +34,7 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
   const [reportOpen, setReportOpen] = useState(false);
   const active = run.status === "queued" || ACTIVE_AGENT_RUN_STATUSES.has(run.status);
   const terminal = TERMINAL_AGENT_RUN_STATUSES.has(run.status);
+  const repair = run.status === "failed" || run.status === "interrupted";
   const time = new Intl.DateTimeFormat(locale === "zh" ? "zh-TW" : "en", {
     month: "short",
     day: "numeric",
@@ -42,7 +43,7 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
   }).format(new Date(run.startedAt ?? run.createdAt));
 
   return (
-    <article className={`${s.card} ${run.status === "waiting_for_input" ? s.cardWaiting : ""}`} data-testid="agent-run-card">
+    <article className={`${s.card} ${run.status === "waiting_for_input" ? s.cardWaiting : ""}`} data-status={run.status} data-testid="agent-run-card">
       <div className={s.cardHeader}>
         {run.sessionId && onToggleSelect && (
           <input
@@ -55,30 +56,33 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
         )}
         <span className={`${s.statusDot} ${s[`status_${run.status}`]}`} aria-hidden="true" />
         <strong className={s.cardTitle}>{run.name}</strong>
+        {run.trigger === "subagent" && <span className={s.subagentBadge}>{t("agents.subagent")}</span>}
         {run.workspace?.branch && <span className={`${s.branch} chrome-mono`}>{run.workspace.branch}</span>}
       </div>
       <div className={s.cardMeta}>
         <span className={`${s.statusBadge} ${s[`status_${run.status}`]}`}>{t(STATUS_KEYS[run.status])}</span>
         <time dateTime={run.startedAt ?? run.createdAt}>{time}</time>
       </div>
-      <p className={s.promptPreview}>{run.prompt}</p>
-      <div className={`${s.path} chrome-mono`} title={run.cwd}>{run.cwd}</div>
-      {run.error && <div className={s.runError} role="status">{run.error}</div>}
-      {run.report && (
-        <div className={s.runReport}>
-          <button type="button" className={s.reportToggle} aria-expanded={reportOpen} onClick={() => setReportOpen((open) => !open)}>
-            <span>{t("agents.report")}</span>
-            <span className="chrome-mono">
-              {run.report.changedFiles.length} {t("agents.files")} · {run.report.tests.length} {t("agents.tests")} · ${run.report.usage.cost.toFixed(3)}
-            </span>
-          </button>
-          {reportOpen && <div className={s.reportBody}>
-            <p>{run.report.summary}</p>
-            {run.report.changedFiles.length > 0 && <div><strong>{t("agents.changedFiles")}</strong><ul>{run.report.changedFiles.map((file) => <li key={file} className="chrome-mono">{file}</li>)}</ul></div>}
-            {run.report.tests.length > 0 && <div><strong>{t("agents.tests")}</strong><ul>{run.report.tests.map((test, index) => <li key={`${test.name}-${index}`}><span className={s[`test_${test.status}`]}>{test.status}</span> {test.name}</li>)}</ul></div>}
-          </div>}
-        </div>
-      )}
+      <div className={s.cardDetails}>
+        <p className={s.promptPreview}>{run.prompt}</p>
+        <div className={`${s.path} chrome-mono`} title={run.cwd}>{run.cwd}</div>
+        {run.error && <div className={s.runError} role="status">{run.error}</div>}
+        {run.report && (
+          <div className={s.runReport}>
+            <button type="button" className={s.reportToggle} aria-expanded={reportOpen} onClick={() => setReportOpen((open) => !open)}>
+              <span>{t("agents.report")}</span>
+              <span className="chrome-mono">
+                {run.report.changedFiles.length} {t("agents.files")} · {run.report.tests.length} {t("agents.tests")} · ${run.report.usage.cost.toFixed(3)}
+              </span>
+            </button>
+            {reportOpen && <div className={s.reportBody}>
+              <p>{run.report.summary}</p>
+              {run.report.changedFiles.length > 0 && <div><strong>{t("agents.changedFiles")}</strong><ul>{run.report.changedFiles.map((file) => <li key={file} className="chrome-mono">{file}</li>)}</ul></div>}
+              {run.report.tests.length > 0 && <div><strong>{t("agents.tests")}</strong><ul>{run.report.tests.map((test, index) => <li key={`${test.name}-${index}`}><span className={s[`test_${test.status}`]}>{test.status}</span> {test.name}</li>)}</ul></div>}
+            </div>}
+          </div>
+        )}
+      </div>
       <div className={s.cardActions}>
         {run.sessionId && (
           <button type="button" onClick={() => void onOpenSession(run.sessionId as string)}>
@@ -91,7 +95,7 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
           </button>
         )}
         {terminal && (
-          <button type="button" disabled={busy} onClick={() => onRetry(run)}>
+          <button type="button" className={repair ? s.repairButton : undefined} disabled={busy} onClick={() => onRetry(run)}>
             {t("agents.retry")}
           </button>
         )}

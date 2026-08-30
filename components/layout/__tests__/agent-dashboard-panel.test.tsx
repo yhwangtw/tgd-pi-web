@@ -3,6 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resetRequestState } from "@/lib/request-state";
 import { AgentDashboardPanel } from "../AgentDashboardPanel";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -23,6 +24,7 @@ describe("AgentDashboardPanel", () => {
     root = null;
     container?.remove();
     container = null;
+    resetRequestState();
     vi.restoreAllMocks();
   });
 
@@ -50,22 +52,14 @@ describe("AgentDashboardPanel", () => {
       await Promise.resolve();
     });
 
-    const trigger = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Concurrent agent slots"]',
-    );
-    expect(trigger).not.toBeNull();
-    expect(trigger!.textContent).toContain("3");
+    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Concurrent agent slots"]');
+    expect(select).not.toBeNull();
+    expect(select!.value).toBe("3");
+    expect([...select!.options].map((option) => option.value)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
 
     await act(async () => {
-      trigger!.click();
-    });
-    const options = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')];
-    expect(options.map((option) => option.textContent?.replace("✓", ""))).toEqual(
-      ["1", "2", "3", "4", "5", "6", "7", "8"],
-    );
-
-    await act(async () => {
-      options[4]!.click();
+      select!.value = "5";
+      select!.dispatchEvent(new Event("change", { bubbles: true }));
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -74,6 +68,6 @@ describe("AgentDashboardPanel", () => {
       method: "PATCH",
       body: JSON.stringify({ maxConcurrency: 5 }),
     }));
-    expect(trigger!.textContent).toContain("5");
+    expect(select!.value).toBe("5");
   });
 });

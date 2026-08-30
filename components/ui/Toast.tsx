@@ -1,6 +1,9 @@
 "use client";
 
+import { Check, CircleX, Info, TriangleAlert, X } from "lucide-react";
 import type { ToastItem } from "@/hooks/useToast";
+import { useI18n } from "@/lib/i18n";
+import { IconButton } from "./IconButton";
 import styles from "./Toast.module.css";
 
 interface Props {
@@ -9,58 +12,31 @@ interface Props {
 }
 
 const ICONS: Record<ToastItem["type"], React.ReactNode> = {
-  success: (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  ),
-  error: (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="15" y1="9" x2="9" y2="15" />
-      <line x1="9" y1="9" x2="15" y2="15" />
-    </svg>
-  ),
-  warning: (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  ),
-  info: (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="12" y1="16" x2="12" y2="12" />
-      <line x1="12" y1="8" x2="12.01" y2="8" />
-    </svg>
-  ),
+  success: <Check size={14} strokeWidth={2.5} />,
+  error: <CircleX size={14} strokeWidth={2.5} />,
+  warning: <TriangleAlert size={14} strokeWidth={2.5} />,
+  info: <Info size={14} strokeWidth={2.5} />,
 };
 
 export function ToastContainer({ toasts, onDismiss }: Props) {
+  const { t } = useI18n();
   if (toasts.length === 0) return null;
   return (
-    <div className={styles.container} role="region" aria-label="Notifications" aria-live="polite">
-      {toasts.map((t) => (
+    <div className={styles.container} role="region" aria-label={t("common.notifications")} aria-live="polite">
+      {toasts.map((toast) => (
         <div
-          key={t.id}
-          role={t.type === "error" ? "alert" : "status"}
-          className={`${styles.toast} ${styles[t.type]}`}
+          key={toast.id}
+          role={toast.type === "error" ? "alert" : "status"}
+          className={`${styles.toast} ${styles[toast.type]}`}
         >
-          <span className={styles.icon} aria-hidden>{ICONS[t.type]}</span>
-          <span className={styles.message}>{t.message}</span>
-          <button
-            type="button"
-            onClick={() => onDismiss(t.id)}
-            className={styles.close}
-            aria-label="Dismiss"
-            title="Dismiss"
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <span className={styles.icon} aria-hidden>{ICONS[toast.type]}</span>
+          <span className={styles.message}>{toast.message}</span>
+          <IconButton
+            size="compact"
+            label={t("common.dismiss")}
+            icon={<X strokeWidth={2.2} />}
+            onClick={() => onDismiss(toast.id)}
+          />
         </div>
       ))}
     </div>

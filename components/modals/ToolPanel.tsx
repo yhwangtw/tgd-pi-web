@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useI18n } from "@/lib/i18n";
 import {
   TOOL_PRESET_DEFAULT,
   TOOL_PRESET_FULL,
@@ -31,13 +32,14 @@ interface Props {
   onClose: () => void;
 }
 
-const PRESETS: { id: Exclude<ToolPreset, "inherit" | "custom">; label: string; desc: string; tools: string[] }[] = [
-  { id: "none",    label: "Off",  desc: "No tools",                                tools: PRESET_NONE },
-  { id: "default", label: "Low",  desc: "read · bash · edit · write · ask",              tools: PRESET_DEFAULT },
-  { id: "full",    label: "High", desc: "read · bash · edit · write · grep · find · ls · ask", tools: PRESET_FULL },
+const PRESETS: { id: Exclude<ToolPreset, "inherit" | "custom" | "plan">; labelKey: "tools.level.off" | "tools.level.low" | "tools.level.high"; descKey: "tools.none" | "tools.defaultDescription" | "tools.fullDescription"; tools: string[] }[] = [
+  { id: "none", labelKey: "tools.level.off", descKey: "tools.none", tools: PRESET_NONE },
+  { id: "default", labelKey: "tools.level.low", descKey: "tools.defaultDescription", tools: PRESET_DEFAULT },
+  { id: "full", labelKey: "tools.level.high", descKey: "tools.fullDescription", tools: PRESET_FULL },
 ];
 
 export function ToolPanel({ tools, onPreset, onClose }: Props) {
+  const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement>(null);
   const current = getPresetFromTools(tools);
 
@@ -56,16 +58,18 @@ export function ToolPanel({ tools, onPreset, onClose }: Props) {
   return (
     <div ref={panelRef} className={styles.panel}>
       {/* Segmented control */}
-      <div className={styles.segmentedControl}>
+      <div className={styles.segmentedControl} role="group" aria-label={t("tools.accessLevel")}>
         {PRESETS.map((preset) => {
           const isActive = current === preset.id;
           return (
             <button
+              type="button"
               key={preset.id}
               onClick={() => { onPreset(preset.id, preset.tools); onClose(); }}
               className={`${styles.presetBtn} ${isActive ? styles.presetBtnActive : ""}`}
+              aria-pressed={isActive}
             >
-              {preset.label}
+              {t(preset.labelKey)}
             </button>
           );
         })}
@@ -73,8 +77,8 @@ export function ToolPanel({ tools, onPreset, onClose }: Props) {
 
       {/* Description of current selection */}
       <div className={styles.description}>
-        {currentIndex >= 0 ? PRESETS[currentIndex].desc || "No tools enabled" : ""}
-        {current === "none" && <span> — agent will not use any tools</span>}
+        {currentIndex >= 0 ? t(PRESETS[currentIndex].descKey) : ""}
+        {current === "none" && <span> — {t("tools.noneHint")}</span>}
       </div>
 
       {/* Track bar */}
@@ -88,7 +92,7 @@ export function ToolPanel({ tools, onPreset, onClose }: Props) {
       </div>
 
       <div className={styles.note}>
-        takes effect on next turn
+        {t("tools.nextTurn")}
       </div>
     </div>
   );

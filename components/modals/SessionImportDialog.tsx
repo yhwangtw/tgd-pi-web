@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import type { SessionImportPreview } from "@/lib/session-import";
 import { useI18n } from "@/lib/i18n";
+import { DialogShell } from "@/components/ui/DialogShell";
 import styles from "./SessionImportDialog.module.css";
 
 interface Props {
   sessionId: string;
   onClose: () => void;
-  onImported: (sessionId: string, cwd: string, sessionFile: string) => void;
+  onImported: (previousSessionId: string, sessionId: string, cwd: string, sessionFile: string) => void;
 }
 
 interface ImportResponse {
@@ -30,14 +31,7 @@ export function SessionImportDialog({ sessionId, onClose, onImported }: Props) {
   const [preview, setPreview] = useState<SessionImportPreview | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"preview" | "import" | null>(null);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
+  const pathInputRef = useRef<HTMLInputElement>(null);
 
   const request = async (action: "preview" | "import") => {
     if (!filePath.trim() || busy) return;
@@ -64,7 +58,7 @@ export function SessionImportDialog({ sessionId, onClose, onImported }: Props) {
       if (!result.newSessionId || !result.cwd || !result.sessionFile) {
         throw new Error(t("sessionImport.invalidResponse"));
       }
-      onImported(result.newSessionId, result.cwd, result.sessionFile);
+      onImported(sessionId, result.newSessionId, result.cwd, result.sessionFile);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
       if (action === "preview") setPreview(null);
@@ -78,25 +72,41 @@ export function SessionImportDialog({ sessionId, onClose, onImported }: Props) {
     setError("");
   };
 
-  return (
-    <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
-      <section className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="session-import-title">
-        <header className={styles.header}>
-          <div>
-            <h2 id="session-import-title">{t("sessionImport.title")}</h2>
-            <p>{t("sessionImport.description")}</p>
-          </div>
-          <button type="button" className={styles.close} onClick={onClose} disabled={!!busy} aria-label={t("common.close")}>×</button>
-        </header>
+  const footer = (
+    <>
+      <button type="button" className={styles.secondary} onClick={onClose} disabled={!!busy}>{t("common.cancel")}</button>
+      {!preview ? (
+        <button type="button" className={styles.primary} onClick={() => void request("preview")} disabled={!filePath.trim() || !!busy}>
+          {busy === "preview" ? t("sessionImport.previewing") : t("sessionImport.preview")}
+        </button>
+      ) : (
+        <button type="button" className={styles.primary} onClick={() => void request("import")} disabled={!!busy}>
+          {busy === "import" ? t("sessionImport.importing") : t("sessionImport.import")}
+        </button>
+      )}
+    </>
+  );
 
-        <div className={styles.body}>
+  return (
+    <DialogShell
+      open
+      size="compact"
+      mobileMode="fullscreen"
+      title={t("sessionImport.title")}
+      description={t("sessionImport.description")}
+      onClose={onClose}
+      canClose={!busy}
+      initialFocusRef={pathInputRef}
+      footer={footer}
+    >
+      <div className={styles.body}>
           <label className={styles.field}>
             <span>{t("sessionImport.path")}</span>
             <input
-              autoFocus
+              ref={pathInputRef}
               value={filePath}
               onChange={(event) => { setFilePath(event.target.value); resetPreview(); }}
-              placeholder="/path/to/session.jsonl"
+              placeholder={t("sessionImport.pathPlaceholder")}
               spellCheck={false}
               disabled={!!busy}
             />
@@ -125,21 +135,7 @@ export function SessionImportDialog({ sessionId, onClose, onImported }: Props) {
               </dl>
             </div>
           )}
-        </div>
-
-        <footer className={styles.footer}>
-          <button type="button" className={styles.secondary} onClick={onClose} disabled={!!busy}>{t("common.cancel")}</button>
-          {!preview ? (
-            <button type="button" className={styles.primary} onClick={() => void request("preview")} disabled={!filePath.trim() || !!busy}>
-              {busy === "preview" ? t("sessionImport.previewing") : t("sessionImport.preview")}
-            </button>
-          ) : (
-            <button type="button" className={styles.primary} onClick={() => void request("import")} disabled={!!busy}>
-              {busy === "import" ? t("sessionImport.importing") : t("sessionImport.import")}
-            </button>
-          )}
-        </footer>
-      </section>
-    </div>
+      </div>
+    </DialogShell>
   );
 }

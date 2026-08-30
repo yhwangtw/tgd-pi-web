@@ -20,7 +20,7 @@ const RUN_STATUSES = new Set<AgentRunStatus>([
   "cancelled",
   "interrupted",
 ]);
-const RUN_TRIGGERS = new Set(["manual", "retry"]);
+const RUN_TRIGGERS = new Set(["manual", "retry", "subagent"]);
 
 function isOptionalString(value: unknown): boolean {
   return value === undefined || typeof value === "string";
@@ -49,6 +49,15 @@ function isReport(value: unknown): boolean {
     && (report.durationMs === null || typeof report.durationMs === "number");
 }
 
+function isLimits(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const limits = value as Record<string, unknown>;
+  return (limits.maxTurns === undefined || (Number.isInteger(limits.maxTurns) && Number(limits.maxTurns) > 0))
+    && (limits.maxCostUsd === undefined || (typeof limits.maxCostUsd === "number" && limits.maxCostUsd > 0))
+    && (limits.timeoutMs === undefined || (Number.isInteger(limits.timeoutMs) && Number(limits.timeoutMs) > 0));
+}
+
 function isAgentRun(value: unknown): value is AgentRun {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<AgentRun>;
@@ -71,7 +80,8 @@ function isAgentRun(value: unknown): value is AgentRun {
     && isOptionalString(item.parentRunId)
     && isOptionalString(item.error)
     && isReport(item.report)
-    && isWorkspace(item.workspace);
+    && isWorkspace(item.workspace)
+    && isLimits(item.limits);
 }
 
 export function agentRunStorePath(): string {

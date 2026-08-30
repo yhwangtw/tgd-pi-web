@@ -106,7 +106,7 @@ export function DiffView({
   if (!hasChanges) {
     return (
       <div className={styles.noChanges}>
-        No changes
+        {t("files.diff.noChanges")}
       </div>
     );
   }
@@ -163,7 +163,7 @@ export function DiffView({
               key={si}
               className={styles.hiddenSegment}
             >
-              ... {seg.count} unchanged lines ...
+              {t("files.diff.unchangedLines").replace("{count}", String(seg.count))}
             </div>
           );
           diffIdx += seg.count;

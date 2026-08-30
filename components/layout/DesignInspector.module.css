@@ -22,9 +22,9 @@
   left: 50%;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-height: 34px;
-  padding: 6px 8px 6px 10px;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-2);
   transform: translateX(-50%);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-pill);
@@ -42,7 +42,7 @@
 .toolbar button {
   min-width: 28px;
   height: 24px;
-  padding: 0 6px;
+  padding: 0 var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-control-compact);
   background: var(--bg-elev-1);
@@ -55,7 +55,7 @@
   position: fixed;
   max-width: min(520px, calc(100vw - 16px));
   pointer-events: none;
-  padding: 3px 6px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-control-compact);
   background: var(--accent);
   color: var(--accent-fg);
@@ -72,7 +72,7 @@
     top: calc(var(--safe-area-top) + 6px);
     min-height: 56px;
     max-width: calc(100vw - 16px);
-    padding: 6px 8px 6px 12px;
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   }
   .hint { display: none; }
   .toolbar button {

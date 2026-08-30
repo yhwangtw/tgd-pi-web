@@ -1,5 +1,6 @@
 "use client";
 
+import { Folder } from "lucide-react";
 import { FileExplorer } from "../sidebar/FileExplorer";
 import { useI18n } from "@/lib/i18n";
 import s from "./FilesPanel.module.css";
@@ -25,9 +26,7 @@ export function FilesPanel({ cwd, onOpenFile, onAtMention, refreshKey, onOpenDif
   if (!cwd) {
     return (
       <div className={s.empty}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-        </svg>
+        <Folder size={24} strokeWidth={1.5} aria-hidden />
         <span>{t("sidebar.selectProjectFirst")}</span>
       </div>
     );

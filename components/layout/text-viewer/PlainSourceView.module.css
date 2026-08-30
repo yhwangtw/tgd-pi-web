@@ -1,6 +1,6 @@
 .plainPre {
   margin: 0;
-  padding: 12px 0;
+  padding: var(--space-3) 0;
   font-family: var(--font-mono);
   font-size: var(--text-md);
   line-height: var(--leading-relaxed);
@@ -18,7 +18,7 @@
 
 .line {
   white-space: pre;
-  padding: 0 12px 0 0;
+  padding: 0 var(--space-3) 0 0;
 }
 
 .lineActive {
@@ -35,6 +35,6 @@
   user-select: none;
 }
 
-:global(html[data-ui-style="trae"]) .plainPre { padding: 18px 0; background: var(--trae-canvas); }
-:global(html[data-ui-style="trae"]) .line { padding-right: 18px; }
+:global(html[data-ui-style="trae"]) .plainPre { padding: var(--space-4) 0; background: var(--trae-canvas); }
+:global(html[data-ui-style="trae"]) .line { padding-right: var(--space-4); }
 :global(html[data-ui-style="trae"]) .lineNo { border-right: 1px solid var(--trae-hairline); margin-right: 12px; }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pickTurnTarget } from "../turn-nav";
+import { pickRovingMessageTarget, pickTurnTarget } from "../turn-nav";
 
 describe("pickTurnTarget", () => {
   // tops are viewport-relative: negative = above the viewport top
@@ -25,5 +25,23 @@ describe("pickTurnTarget", () => {
   it("handles an empty list", () => {
     expect(pickTurnTarget([], "prev")).toBeNull();
     expect(pickTurnTarget([], "next")).toBeNull();
+  });
+});
+
+describe("pickRovingMessageTarget", () => {
+  it("moves one message at a time", () => {
+    expect(pickRovingMessageTarget(2, 5, "prev")).toBe(1);
+    expect(pickRovingMessageTarget(2, 5, "next")).toBe(3);
+  });
+
+  it("supports transcript boundaries", () => {
+    expect(pickRovingMessageTarget(2, 5, "first")).toBe(0);
+    expect(pickRovingMessageTarget(2, 5, "last")).toBe(4);
+  });
+
+  it("does not wrap or target an empty transcript", () => {
+    expect(pickRovingMessageTarget(0, 5, "prev")).toBeNull();
+    expect(pickRovingMessageTarget(4, 5, "next")).toBeNull();
+    expect(pickRovingMessageTarget(0, 0, "first")).toBeNull();
   });
 });

@@ -1,18 +1,22 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { Info, MoreHorizontal } from "lucide-react";
 import { encodeFilePathForApi, getRelativeFilePath } from "@/lib/file-paths";
+import { useI18n } from "@/lib/i18n";
+import type { FileOpenMode, FileViewState } from "@/lib/file-open";
 import { useFileWatch } from "@/hooks/useFileWatch";
 import { formatSize, type FileData } from "./file-viewer-utils";
 import { SourceView } from "./text-viewer/SourceView";
 import { PlainSourceView } from "./text-viewer/PlainSourceView";
 import { DiffViewMode } from "./text-viewer/DiffViewMode";
-import { PreviewView } from "./text-viewer/PreviewView";
 import { StructuredDataView } from "./text-viewer/StructuredDataView";
 import { FileInspectorDrawer } from "./FileInspectorDrawer";
 import { buildFileAgentPrompt, extractFileOutline, type TextSelectionRange } from "@/lib/file-workbench";
 import { showToast } from "@/hooks/useToast";
 import styles from "./TextFileViewer.module.css";
+
+const LazyPreviewView = lazy(() => import("./text-viewer/PreviewView").then((module) => ({ default: module.PreviewView })));
 
 interface Props {
   filePath: string;
@@ -23,11 +27,16 @@ interface Props {
   gotoNonce?: number;
   onSendToAgent?: (prompt: string) => void;
   sessionId?: string | null;
+  initialMode?: FileOpenMode;
+  initialViewState?: FileViewState;
+  onViewStateChange?: (viewState: FileViewState) => void;
+  onNavigationConsumed?: () => void;
 }
 
 type InspectorTab = "outline" | "problems" | "history" | "blame" | "notes";
 
-export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonce, onSendToAgent, sessionId }: Props) {
+export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonce, onSendToAgent, sessionId, initialMode = "auto", initialViewState, onViewStateChange, onNavigationConsumed }: Props) {
+  const { t } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,10 +49,76 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   const [inspectorTab, setInspectorTab] = useState<InspectorTab | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [previewRenderMs, setPreviewRenderMs] = useState<number | null>(null);
   const [selection, setSelection] = useState<TextSelectionRange | null>(null);
   const [version, setVersion] = useState<{ ref: string; label: string; content: string } | null>(null);
   const [diagnostics, setDiagnostics] = useState<Array<{ line: number; severity: "error" | "warning" }>>([]);
+  const fileInfoRef = useRef<HTMLDetailsElement>(null);
+  const previewStartedAtRef = useRef<number | null>(null);
+  const contentAreaRef = useRef<HTMLDivElement>(null);
+  const loadedFilePathRef = useRef<string | null>(null);
+  const initialViewStateRef = useRef(initialViewState);
+  const scrollSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restoreMonitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const restoredViewKeyRef = useRef<string | null>(null);
+  const restoringViewRef = useRef(true);
+  const pendingGotoLineRef = useRef(gotoLineProp);
+  const pendingGotoLineKeyRef = useRef<string | null>(null);
+  initialViewStateRef.current = initialViewState;
+  const openNavigationKey = `${filePath}:${gotoNonce ?? "initial"}`;
+  if (pendingGotoLineKeyRef.current !== openNavigationKey) {
+    pendingGotoLineKeyRef.current = openNavigationKey;
+    pendingGotoLineRef.current = gotoLineProp;
+  }
   const { watching, refreshTrigger } = useFileWatch(filePath);
+
+  const stopRestoringView = useCallback(() => {
+    if (restoreMonitorRef.current) {
+      clearInterval(restoreMonitorRef.current);
+      restoreMonitorRef.current = null;
+    }
+    restoringViewRef.current = false;
+  }, []);
+
+  const restoreReadingPosition = useCallback((scrollTop: number) => {
+    stopRestoringView();
+    const area = contentAreaRef.current;
+    if (!area) return;
+
+    const target = Math.max(0, scrollTop);
+    if (target === 0) {
+      area.scrollTop = 0;
+      return;
+    }
+
+    restoringViewRef.current = true;
+    let lastScrollHeight = -1;
+    const deadline = performance.now() + 1_500;
+    const apply = () => {
+      if (contentAreaRef.current !== area) {
+        stopRestoringView();
+        return;
+      }
+      const available = Math.max(0, area.scrollHeight - area.clientHeight);
+      const next = Math.min(target, available);
+      if (area.scrollTop !== next) area.scrollTop = next;
+      lastScrollHeight = area.scrollHeight;
+    };
+
+    // SyntaxHighlighter and lazy previews can replace their compact first
+    // paint after this component has restored the tab. Keep the intended
+    // position alive briefly while the child settles, then get out of the
+    // reader's way. Pointer/wheel/touch interaction cancels this monitor.
+    apply();
+    restoreMonitorRef.current = setInterval(() => {
+      if (performance.now() >= deadline) {
+        apply();
+        stopRestoringView();
+        return;
+      }
+      if (area.scrollHeight !== lastScrollHeight) apply();
+    }, 80);
+  }, [stopRestoringView]);
 
   // ── In-file find / go-to-line ────────────────────────────────────────────
   const [findQuery, setFindQuery] = useState("");
@@ -83,6 +158,10 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
           });
           setChangeCount((c) => c + 1);
         } else {
+          // Set the owner before React commits `data`. A file-path prop change
+          // briefly renders with the previous file's data; the restore effect
+          // must not consume the new tab's restore key during that stale frame.
+          loadedFilePathRef.current = filePath;
           setData(d);
         }
         return d;
@@ -95,6 +174,7 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
 
   // Initial load
   useEffect(() => {
+    loadedFilePathRef.current = null;
     setLoading(true);
     setError(null);
     setData(null);
@@ -110,9 +190,14 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     setDiagnostics([]);
 
     fetchContent(filePath).then((d) => {
-      if (d?.language === "markdown") setPreviewMode(true);
+      // Large files arrive as a guarded prefix and default to the fast plain
+      // source view. Preview remains an explicit opt-in for that sample.
+      if ((initialMode === "preview" || (initialMode === "auto" && d?.language === "markdown")) && !d?.truncated) {
+        previewStartedAtRef.current = performance.now();
+        setPreviewMode(true);
+      }
     }).finally(() => setLoading(false));
-  }, [filePath, fetchContent]);
+  }, [filePath, fetchContent, initialMode]);
 
   // Refresh on file-watch change events — debounced 300ms so an agent
   // writing in bursts triggers one reload, and never clobber an open editor.
@@ -126,23 +211,66 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
 
   // Reset transient tool state when switching files
   useEffect(() => {
+    restoringViewRef.current = true;
+    restoredViewKeyRef.current = null;
+    if (restoreMonitorRef.current) {
+      clearInterval(restoreMonitorRef.current);
+      restoreMonitorRef.current = null;
+    }
+    if (scrollSaveTimerRef.current) {
+      clearTimeout(scrollSaveTimerRef.current);
+      scrollSaveTimerRef.current = null;
+    }
     setFindQuery("");
     setFindPos(0);
     setEditing(false);
     setDraft("");
     setForceHighlight(false);
     setMoreOpen(false);
-    setSelection(null);
+    setPreviewRenderMs(null);
+    previewStartedAtRef.current = null;
+    setSelection(pendingGotoLineRef.current ? null : initialViewStateRef.current?.selection ?? null);
     setVersion(null);
-  }, [filePath]);
+  }, [filePath, gotoNonce]);
 
   // Jump to a line requested by a search hit. Reuses the ":N" go-to-line path
   // (seeds the find box), so the existing active-line scroll handles it. Keyed
   // on gotoNonce so reopening an already-open file at a new line re-fires.
   // Declared after the reset effect above so it wins on a fresh open.
   useEffect(() => {
-    if (gotoLineProp && gotoLineProp > 0) setFindQuery(`:${gotoLineProp}`);
-  }, [gotoLineProp, gotoNonce]);
+    if (gotoLineProp && gotoLineProp > 0) {
+      setViewMode("source");
+      setPreviewMode(false);
+      setStructuredMode(false);
+      setFindQuery(`:${gotoLineProp}`);
+      onNavigationConsumed?.();
+    }
+  }, [gotoLineProp, gotoNonce, onNavigationConsumed]);
+
+  useEffect(() => {
+    if (!data || loadedFilePathRef.current !== filePath || !contentAreaRef.current) return;
+    const key = `${filePath}:${gotoNonce ?? "initial"}:${viewMode}:${previewMode ? "preview" : structuredMode ? "structured" : "source"}`;
+    if (restoredViewKeyRef.current === key) return;
+    restoredViewKeyRef.current = key;
+    const frame = requestAnimationFrame(() => {
+      if (restoredViewKeyRef.current !== key) return;
+      if (pendingGotoLineRef.current) {
+        stopRestoringView();
+        if (contentAreaRef.current) contentAreaRef.current.scrollTop = 0;
+        return;
+      }
+      restoreReadingPosition(initialViewStateRef.current?.scrollTop ?? 0);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      if (restoredViewKeyRef.current === key) stopRestoringView();
+    };
+  }, [data, filePath, gotoNonce, previewMode, restoreReadingPosition, stopRestoringView, structuredMode, viewMode]);
+
+  useEffect(() => () => {
+    if (scrollSaveTimerRef.current) clearTimeout(scrollSaveTimerRef.current);
+    stopRestoringView();
+  }, [stopRestoringView]);
 
   // Line numbers (1-based) matching the (debounced) find query; ":123" jumps.
   const matches = useMemo(() => {
@@ -170,9 +298,41 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   const copyContent = useCallback(() => {
     if (!data) return;
     navigator.clipboard?.writeText(data.content)
-      .then(() => showToast("Copied file contents"))
+      .then(() => showToast(t("files.copied")))
       .catch(() => {});
-  }, [data]);
+  }, [data, t]);
+
+  const startPreview = useCallback(() => {
+    previewStartedAtRef.current = performance.now();
+    setPreviewRenderMs(null);
+    setPreviewMode(true);
+    setStructuredMode(false);
+  }, []);
+
+  const handlePreviewRendered = useCallback(() => {
+    const start = previewStartedAtRef.current;
+    if (start === null) return;
+    const end = performance.now();
+    const duration = Math.max(0, end - start);
+    previewStartedAtRef.current = null;
+    setPreviewRenderMs(Math.round(duration));
+    try {
+      performance.measure("pi:file-preview-render", {
+        start,
+        end,
+        detail: { language: data?.language ?? "unknown", size: data?.size ?? 0 },
+      });
+    } catch { /* older browsers still get the visible measurement */ }
+    window.dispatchEvent(new CustomEvent("pi:file-preview-render", {
+      detail: { durationMs: duration, language: data?.language ?? "unknown", size: data?.size ?? 0 },
+    }));
+    // Suspense initially commits a compact fallback; once the real preview
+    // chunk paints, restore the tab's saved reading position against its final
+    // scroll height instead of leaving the viewport clamped to zero.
+    if (!pendingGotoLineRef.current) {
+      restoreReadingPosition(initialViewStateRef.current?.scrollTop ?? 0);
+    }
+  }, [data?.language, data?.size, restoreReadingPosition]);
 
   const startEditing = useCallback(() => {
     if (!data) return;
@@ -193,18 +353,18 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
       });
       const result = await res.json().catch(() => ({})) as { error?: string; size?: number };
       if (!res.ok || result.error) {
-        showToast(`Save failed: ${result.error ?? `HTTP ${res.status}`}`, { type: "error" });
+        showToast(`${t("files.saveFailed")}: ${result.error ?? `HTTP ${res.status}`}`, { type: "error" });
         return;
       }
       setData((prev) => (prev ? { ...prev, content: draft, size: result.size ?? prev.size } : prev));
       setEditing(false);
-      showToast("Saved");
+      showToast(t("files.saved"));
     } catch (e) {
-      showToast(`Save failed: ${e instanceof Error ? e.message : e}`, { type: "error" });
+      showToast(`${t("files.saveFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
     } finally {
       setSaving(false);
     }
-  }, [draft, filePath, saving]);
+  }, [draft, filePath, saving, t]);
 
   const relativePath = getRelativeFilePath(filePath, cwd);
   const outline = useMemo(() => data ? extractFileOutline(data.content, data.language) : [], [data]);
@@ -219,13 +379,17 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   const sendToAgent = useCallback((action: "explain" | "review" | "fix" | "context") => {
     if (!onSendToAgent) return;
     onSendToAgent(buildFileAgentPrompt(action, relativePath, selection));
-    showToast(selection ? `Added lines ${selection.startLine}–${selection.endLine} to the prompt` : "Added file to the prompt", { type: "success" });
-  }, [onSendToAgent, relativePath, selection]);
+    showToast(selection ? `${t("files.addedLines")} ${selection.startLine}–${selection.endLine}` : t("files.addedFile"), { type: "success" });
+  }, [onSendToAgent, relativePath, selection, t]);
 
   const handleTextSelection = useCallback(() => {
     const selected = window.getSelection();
     const text = selected?.toString() ?? "";
-    if (!text.trim() || !data) { setSelection(null); return; }
+    if (!text.trim() || !data) {
+      setSelection(null);
+      onViewStateChange?.({ scrollTop: contentAreaRef.current?.scrollTop ?? 0, selection: null });
+      return;
+    }
     const elementOf = (node: Node | null) => node instanceof Element ? node : node?.parentElement ?? null;
     const startNode = elementOf(selected?.anchorNode ?? null)?.closest("[data-line-number]");
     const endNode = elementOf(selected?.focusNode ?? null)?.closest("[data-line-number]");
@@ -233,13 +397,19 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     let endLine = Number(endNode?.getAttribute("data-line-number"));
     if (!startLine || !endLine) {
       const offset = data.content.indexOf(text);
-      if (offset < 0) { setSelection(null); return; }
+      if (offset < 0) {
+        setSelection(null);
+        onViewStateChange?.({ scrollTop: contentAreaRef.current?.scrollTop ?? 0, selection: null });
+        return;
+      }
       startLine = data.content.slice(0, offset).split("\n").length;
       endLine = startLine + text.split("\n").length - 1;
     }
     if (startLine > endLine) [startLine, endLine] = [endLine, startLine];
-    setSelection({ startLine, endLine, text });
-  }, [data]);
+    const nextSelection = { startLine, endLine, text };
+    setSelection(nextSelection);
+    onViewStateChange?.({ scrollTop: contentAreaRef.current?.scrollTop ?? 0, selection: nextSelection });
+  }, [data, onViewStateChange]);
 
   const compareVersion = useCallback(async (commit: { sha: string; shortSha: string; subject: string }) => {
     if (!cwd) return;
@@ -251,8 +421,8 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
       setPreviewMode(false);
       setStructuredMode(false);
       setViewMode("diff");
-    } catch (reason) { showToast(`Version load failed: ${reason instanceof Error ? reason.message : String(reason)}`, { type: "error" }); }
-  }, [cwd, relativePath]);
+    } catch (reason) { showToast(`${t("files.versionLoadFailed")}: ${reason instanceof Error ? reason.message : String(reason)}`, { type: "error" }); }
+  }, [cwd, relativePath, t]);
 
   const compareSnapshot = useCallback(async (snapshot: { id: string; label: string }) => {
     if (!cwd || !sessionId) return;
@@ -260,10 +430,10 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
       const response = await fetch(`/api/git/snapshots/file?cwd=${encodeURIComponent(cwd)}&sessionId=${encodeURIComponent(sessionId)}&id=${encodeURIComponent(snapshot.id)}&path=${encodeURIComponent(relativePath)}`);
       const payload = await response.json() as { content?: string; error?: string };
       if (!response.ok || payload.error) throw new Error(payload.error ?? `HTTP ${response.status}`);
-      setVersion({ ref: snapshot.id, label: `Snapshot · ${snapshot.label}`, content: payload.content ?? "" });
+      setVersion({ ref: snapshot.id, label: `${t("files.snapshot")} · ${snapshot.label}`, content: payload.content ?? "" });
       setPreviewMode(false); setStructuredMode(false); setViewMode("diff");
-    } catch (reason) { showToast(`Snapshot load failed: ${reason instanceof Error ? reason.message : String(reason)}`, { type: "error" }); }
-  }, [cwd, relativePath, sessionId]);
+    } catch (reason) { showToast(`${t("files.snapshotLoadFailed")}: ${reason instanceof Error ? reason.message : String(reason)}`, { type: "error" }); }
+  }, [cwd, relativePath, sessionId, t]);
 
   useEffect(() => {
     if (!fullscreen && !moreOpen) return;
@@ -272,8 +442,29 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [fullscreen, moreOpen]);
 
+  // Native <details> does not dismiss itself when another toolbar control is
+  // used. Close the metadata popover on outside interaction so it never sits
+  // over the second toolbar row and makes those controls feel unresponsive.
+  useEffect(() => {
+    const closeInfo = (event: PointerEvent) => {
+      const details = fileInfoRef.current;
+      if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
+        details.removeAttribute("open");
+      }
+    };
+    const closeInfoWithKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") fileInfoRef.current?.removeAttribute("open");
+    };
+    document.addEventListener("pointerdown", closeInfo, true);
+    window.addEventListener("keydown", closeInfoWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closeInfo, true);
+      window.removeEventListener("keydown", closeInfoWithKeyboard);
+    };
+  }, []);
+
   if (loading) {
-    return <div className={styles.loadingState}>Loading...</div>;
+    return <div className={styles.loadingState}>{t("common.loading")}</div>;
   }
 
   if (error) {
@@ -285,6 +476,10 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   const isHtml = data.language === "html";
   const isMarkdown = data.language === "markdown";
   const lines = data.content.split("\n");
+  const pathParts = relativePath.split("/").filter(Boolean);
+  const compactPath = pathParts.length > 2
+    ? { start: pathParts[0], end: pathParts.at(-1)! }
+    : null;
   const diffBase = version?.content ?? prevContent;
   const hasComparedDiff = diffBase !== null && diffBase !== data.content;
 
@@ -292,85 +487,106 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     <div className={`${styles.root} ${fullscreen ? styles.fullscreen : ""}`}>
       <div className={styles.statusBar} data-testid="file-viewer-toolbar">
         <div className={styles.fileSummary}>
-          <span className={styles.filePath} title={filePath}>
-            {relativePath}
+          <span className={styles.filePath} title={filePath} aria-label={relativePath}>
+            {compactPath
+              ? <>
+                  <span className={styles.filePathStart}>{compactPath.start}</span>
+                  <span className={styles.filePathSeparator}>/…/</span>
+                  <span className={styles.filePathEnd}>{compactPath.end}</span>
+                </>
+              : relativePath}
           </span>
-          <span className={styles.fileMeta}>
-            <span className={styles.language}>{data.language}</span>
-            {viewMode === "source" && !structuredMode && <span>{lines.length} lines</span>}
-            <span>{formatSize(data.size)}</span>
-
-            {/* Live watch indicator */}
-            <span
-              title={watching ? "Live sync active" : "Not watching"}
-              className={watching ? styles.watchIndicatorActive : styles.watchIndicatorInactive}
-            >
-              <span className={watching ? styles.watchDotActive : styles.watchDotInactive} />
-              {watching ? "live" : "static"}
-            </span>
-          </span>
+          <details
+            ref={fileInfoRef}
+            className={styles.fileInfo}
+            onToggle={(event) => {
+              if (event.currentTarget.open) setMoreOpen(false);
+            }}
+          >
+            <summary aria-label={t("files.info")} title={t("files.info")}>
+              <Info size={14} strokeWidth={1.8} aria-hidden />
+              <span>{t("files.info")}</span>
+            </summary>
+            <div className={styles.fileInfoPopover}>
+              <span>{t("files.type")}</span><strong>{data.language}</strong>
+              <span>{t("files.lines")}</span><strong>{lines.length}</strong>
+              <span>{t("files.size")}</span><strong>{formatSize(data.size)}</strong>
+              <span>{t("files.sync")}</span>
+              <strong className={watching ? styles.watchIndicatorActive : styles.watchIndicatorInactive}>
+                <span className={watching ? styles.watchDotActive : styles.watchDotInactive} />
+                {t(watching ? "files.live" : "files.static")}
+              </strong>
+              {previewMode && previewRenderMs !== null && <>
+                <span>{t("files.render")}</span><strong>{previewRenderMs} {t("files.millisecondsShort")}</strong>
+              </>}
+            </div>
+          </details>
         </div>
 
         <div className={styles.fileActions}>
-        {onSendToAgent && !editing && (
-          <button className={styles.askPi} onClick={() => sendToAgent("context")} title="Add this file or selected lines to the composer">
-            Ask Pi
-          </button>
-        )}
-
         {(isHtml || isMarkdown) && viewMode === "source" && (
-          <div className={styles.toggleGroup}>
-            <button onClick={() => { setPreviewMode(false); setStructuredMode(false); }} className={`${styles.toggleGroupFirst} ${!previewMode && !structuredMode ? styles.toggleActive : styles.toggleInactive}`}>{isHtml ? "Code" : "Raw"}</button>
-            <button onClick={() => { setPreviewMode(true); setStructuredMode(false); }} className={`${styles.toggleGroupSecond} ${previewMode ? styles.toggleActive : styles.toggleInactive}`}>Preview</button>
+          <div className={styles.toggleGroup} role="group" aria-label={t("files.viewMode")}>
+            <button aria-pressed={!previewMode && !structuredMode} onClick={() => { setPreviewMode(false); setStructuredMode(false); }} className={`${styles.toggleGroupFirst} ${!previewMode && !structuredMode ? styles.toggleActive : styles.toggleInactive}`}>{t(isHtml ? "files.code" : "files.raw")}</button>
+            <button aria-pressed={previewMode} onClick={startPreview} className={`${styles.toggleGroupSecond} ${previewMode ? styles.toggleActive : styles.toggleInactive}`}>{t("files.preview")}</button>
           </div>
         )}
 
         {structuredKind && viewMode === "source" && (
-          <div className={styles.toggleGroup}>
-            <button onClick={() => { setStructuredMode(false); setPreviewMode(false); }} className={`${styles.toggleGroupFirst} ${!structuredMode ? styles.toggleActive : styles.toggleInactive}`}>Raw</button>
-            <button onClick={() => { setStructuredMode(true); setPreviewMode(false); }} className={`${styles.toggleGroupSecond} ${structuredMode ? styles.toggleActive : styles.toggleInactive}`}>{structuredKind === "csv" || structuredKind === "tsv" ? "Table" : "Tree"}</button>
+          <div className={styles.toggleGroup} role="group" aria-label={t("files.viewMode")}>
+            <button aria-pressed={!structuredMode} onClick={() => { setStructuredMode(false); setPreviewMode(false); }} className={`${styles.toggleGroupFirst} ${!structuredMode ? styles.toggleActive : styles.toggleInactive}`}>{t("files.raw")}</button>
+            <button aria-pressed={structuredMode} onClick={() => { setStructuredMode(true); setPreviewMode(false); }} className={`${styles.toggleGroupSecond} ${structuredMode ? styles.toggleActive : styles.toggleInactive}`}>{structuredKind === "csv" || structuredKind === "tsv" ? t("files.table") : t("files.tree")}</button>
           </div>
         )}
 
         {hasComparedDiff && (
-          <div className={styles.toggleGroup}>
+          <div className={styles.toggleGroup} role="group" aria-label={t("files.viewMode")}>
             <button
+              aria-pressed={viewMode === "source"}
               onClick={() => { setViewMode("source"); setVersion(null); }}
               className={`${styles.toggleGroupFirst} ${viewMode === "source" ? styles.toggleActive : styles.toggleInactive}`}
             >
-              Source
+              {t("files.source")}
             </button>
             <button
+              aria-pressed={viewMode === "diff"}
               onClick={() => setViewMode("diff")}
               className={`${styles.toggleGroupSecond} ${viewMode === "diff" ? styles.toggleActive : styles.toggleInactive}`}
             >
-              {version ? version.label : `Diff${changeCount > 0 ? ` +${changeCount}` : ""}`}
+              {version ? version.label : `${t("files.diff")}${changeCount > 0 ? ` +${changeCount}` : ""}`}
             </button>
           </div>
+        )}
+
+        {onSendToAgent && !editing && (
+          <button className={styles.askPi} onClick={() => sendToAgent("context")} title={t("files.askPiHint")}>
+            {t("files.askPi")}
+          </button>
         )}
 
         {viewMode === "source" && !previewMode && !structuredMode && !data.truncated && editing && (
           <div className={styles.toggleGroup}>
-            <button onClick={() => void saveEdit()} disabled={saving} className={`${styles.toggleGroupFirst} ${styles.toggleActive}`}>{saving ? "Saving…" : "Save"}</button>
-            <button onClick={() => { setEditing(false); setDraft(""); }} disabled={saving} className={`${styles.toggleGroupSecond} ${styles.toggleInactive}`}>Cancel</button>
+            <button onClick={() => void saveEdit()} disabled={saving} className={`${styles.toggleGroupFirst} ${styles.toggleActive}`}>{t(saving ? "files.saving" : "files.save")}</button>
+            <button onClick={() => { setEditing(false); setDraft(""); }} disabled={saving} className={`${styles.toggleGroupSecond} ${styles.toggleInactive}`}>{t("common.cancel")}</button>
           </div>
         )}
 
-        {!editing && <button className={`${styles.toggleStandalone} ${inspectorTab ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setInspectorTab((current) => current ? null : "outline")} aria-expanded={Boolean(inspectorTab)}>Inspector</button>}
+        {!editing && <button className={`${styles.toggleStandalone} ${inspectorTab ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setInspectorTab((current) => current ? null : "outline")} aria-expanded={Boolean(inspectorTab)}>{t("files.inspector")}</button>}
         <div className={styles.moreWrap}>
-          <button className={`${styles.moreButton} ${moreOpen ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setMoreOpen((current) => !current)} aria-label="More file actions" aria-expanded={moreOpen}>•••</button>
-          {moreOpen && <><button className={styles.menuBackdrop} aria-label="Close menu" onClick={() => setMoreOpen(false)} /><div className={styles.moreMenu} role="menu">
-            <button onClick={() => { copyContent(); setMoreOpen(false); }}>Copy file</button>
-            {viewMode === "source" && !previewMode && !structuredMode && !editing && !data.truncated && <button onClick={() => { startEditing(); setMoreOpen(false); }}>Edit file</button>}
-            {viewMode === "source" && !previewMode && !structuredMode && !editing && <button onClick={() => { setWrapLines((current) => !current); setMoreOpen(false); }}>{wrapLines ? "Disable" : "Enable"} word wrap</button>}
-            {isLarge && <button onClick={() => { setForceHighlight((current) => !current); setMoreOpen(false); }}>{usePlain ? "Force syntax highlighting" : "Use fast plain view"}</button>}
-            <button onClick={() => { setInspectorTab("outline"); setMoreOpen(false); }}>Outline</button>
-            <button onClick={() => { setInspectorTab("problems"); setMoreOpen(false); }}>Problems</button>
-            <button onClick={() => { setInspectorTab("history"); setMoreOpen(false); }}>History</button>
-            <button onClick={() => { setInspectorTab("blame"); setMoreOpen(false); }}>Git blame</button>
-            <button onClick={() => { setInspectorTab("notes"); setMoreOpen(false); }}>Notes</button>
-            <button onClick={() => { setFullscreen((current) => !current); setMoreOpen(false); }}>{fullscreen ? "Exit focus mode" : "Focus mode"}</button>
-            <a href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>Download</a>
+          <button className={`${styles.moreButton} ${moreOpen ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setMoreOpen((current) => !current)} aria-label={t("files.moreActions")} aria-expanded={moreOpen}><MoreHorizontal size={17} strokeWidth={1.8} aria-hidden /></button>
+          {moreOpen && <><button className={styles.menuBackdrop} aria-label={t("files.closeMenu")} onClick={() => setMoreOpen(false)} /><div className={styles.moreMenu} role="menu">
+            <button onClick={() => { copyContent(); setMoreOpen(false); }}>{t("files.copyFile")}</button>
+            {viewMode === "source" && !previewMode && !structuredMode && !editing && !data.truncated && <button onClick={() => { startEditing(); setMoreOpen(false); }}>{t("files.editFile")}</button>}
+            {viewMode === "source" && !previewMode && !structuredMode && !editing && <button onClick={() => { setWrapLines((current) => !current); setMoreOpen(false); }}>{t(wrapLines ? "files.disableWrap" : "files.enableWrap")}</button>}
+            {isLarge && <button onClick={() => { setForceHighlight((current) => !current); setMoreOpen(false); }}>{t(usePlain ? "files.forceHighlight" : "files.fastPlainView")}</button>}
+            <button onClick={() => { setInspectorTab("outline"); setMoreOpen(false); }}>{t("files.inspector.outline")}</button>
+            <button onClick={() => { setInspectorTab("problems"); setMoreOpen(false); }}>{t("files.inspector.problems")}</button>
+            <button onClick={() => { setInspectorTab("history"); setMoreOpen(false); }}>{t("files.inspector.history")}</button>
+            <button onClick={() => { setInspectorTab("blame"); setMoreOpen(false); }}>{t("files.gitBlame")}</button>
+            <button onClick={() => { setInspectorTab("notes"); setMoreOpen(false); }}>{t("files.inspector.notes")}</button>
+            <button onClick={() => { setFullscreen((current) => !current); setMoreOpen(false); }}>{t(fullscreen ? "files.exitFocus" : "files.focusMode")}</button>
+            <a href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>
+              {t(isHtml ? "files.downloadHtml" : isMarkdown ? "files.downloadMarkdown" : "files.downloadFile")}
+            </a>
           </div></>}
         </div>
         </div>
@@ -386,36 +602,49 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
                 if (e.key === "Enter" && matches.length > 0) { e.preventDefault(); setFindPos((p) => e.shiftKey ? (p - 1 + matches.length) % matches.length : (p + 1) % matches.length); }
                 else if (e.key === "Escape") setFindQuery("");
               }}
-              placeholder="find / :line"
+              placeholder={t("files.findLine")}
               className={styles.findInput}
               spellCheck={false}
             />
             {findQuery.trim() && !findQuery.trim().startsWith(":") && <span className={styles.findCount}>{matches.length > 0 ? `${Math.min(findPos, matches.length - 1) + 1}/${matches.length}` : "0/0"}</span>}
           </span>
-          {outline.length > 0 && <button onClick={() => setInspectorTab("outline")}>{outline.length} symbols</button>}
-          {wrapLines && <span>wrapped</span>}
-          {usePlain && <span>large-file mode</span>}
+          {outline.length > 0 && <button onClick={() => setInspectorTab("outline")}>{outline.length} {t("files.symbols")}</button>}
+          {wrapLines && <span>{t("files.wrapped")}</span>}
+          {usePlain && <span>{t("files.largeFileMode")}</span>}
         </div>
       )}
 
       {selection && !editing && (
-        <div className={styles.selectionBar} role="toolbar" aria-label={`Selected lines ${selection.startLine} to ${selection.endLine}`}>
+        <div className={styles.selectionBar} role="toolbar" aria-label={`${t("files.selectedLines")} ${selection.startLine}–${selection.endLine}`}>
           <strong>L{selection.startLine}{selection.endLine !== selection.startLine ? `–${selection.endLine}` : ""}</strong>
-          {onSendToAgent && <><button onClick={() => sendToAgent("explain")}>Explain</button><button onClick={() => sendToAgent("review")}>Review</button><button onClick={() => sendToAgent("fix")}>Fix</button><button onClick={() => sendToAgent("context")}>Add to prompt</button></>}
-          <button className={styles.selectionClose} onClick={() => { window.getSelection()?.removeAllRanges(); setSelection(null); }} aria-label="Clear selection">×</button>
+          {onSendToAgent && <><button onClick={() => sendToAgent("explain")}>{t("files.explain")}</button><button onClick={() => sendToAgent("review")}>{t("files.review")}</button><button onClick={() => sendToAgent("fix")}>{t("files.fix")}</button><button onClick={() => sendToAgent("context")}>{t("files.addToPrompt")}</button></>}
+          <button className={styles.selectionClose} onClick={() => { window.getSelection()?.removeAllRanges(); setSelection(null); onViewStateChange?.({ scrollTop: contentAreaRef.current?.scrollTop ?? 0, selection: null }); }} aria-label={t("files.clearSelection")}>×</button>
         </div>
       )}
 
       {/* Partial-preview banner: the API returned only the file's first chunk */}
       {data.truncated && (
         <div className={styles.truncatedNotice}>
-          Large file ({formatSize(data.size)}) — showing the beginning only; editing disabled.{" "}
-          <a href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>Download the full file</a>
+          {t("files.largeFilePrefix")} ({formatSize(data.size)}) — {t("files.largeFileNotice")}{" "}
+          <a href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>{t("files.downloadFull")}</a>
         </div>
       )}
 
       <div className={styles.workspaceBody}>
-      <div className={styles.contentArea} onPointerUp={handleTextSelection}>
+      <div
+        ref={contentAreaRef}
+        className={styles.contentArea}
+        onPointerDownCapture={stopRestoringView}
+        onTouchStartCapture={stopRestoringView}
+        onWheelCapture={stopRestoringView}
+        onPointerUp={handleTextSelection}
+        onScroll={(event) => {
+          if (!onViewStateChange || restoringViewRef.current) return;
+          const scrollTop = event.currentTarget.scrollTop;
+          if (scrollSaveTimerRef.current) clearTimeout(scrollSaveTimerRef.current);
+          scrollSaveTimerRef.current = setTimeout(() => onViewStateChange({ scrollTop, selection }), 120);
+        }}
+      >
         {editing ? (
           <textarea
             value={draft}
@@ -425,14 +654,16 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
             }}
             className={styles.editor}
             spellCheck={false}
-            aria-label="File editor"
+            aria-label={t("files.editor")}
           />
         ) : viewMode === "diff" && hasComparedDiff ? (
           <DiffViewMode oldContent={diffBase!} newContent={data.content} language={data.language} />
         ) : structuredMode && structuredKind ? (
           <StructuredDataView content={data.content} kind={structuredKind} onGotoLine={(line) => { setStructuredMode(false); setFindQuery(`:${line}`); }} />
         ) : (isHtml || isMarkdown) && previewMode ? (
-          <PreviewView content={data.content} language={data.language} filePath={filePath} />
+          <Suspense fallback={<div className={styles.previewLoading}>{t("files.renderingPreview")}</div>}>
+            <LazyPreviewView content={data.content} language={data.language} filePath={filePath} onRendered={handlePreviewRendered} />
+          </Suspense>
         ) : usePlain ? (
           <PlainSourceView content={data.content} activeLine={activeLine} diagnosticLines={diagnosticLines} />
         ) : (

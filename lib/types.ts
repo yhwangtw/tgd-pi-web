@@ -192,6 +192,8 @@ export interface SessionInfo {
   modified: string;
   messageCount: number;
   firstMessage: string;
+  /** Most recent readable user/assistant text, used as a conversation preview. */
+  lastMessage?: string;
   parentSessionId?: string; // set if this session was forked from another
   ephemeral?: boolean; // live only; intentionally disappears after reload/server restart
 }

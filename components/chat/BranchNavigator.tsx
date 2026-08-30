@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { ChevronDown, GitBranch } from "lucide-react";
 import type { SessionEntry, SessionTreeNode } from "@/lib/types";
 import styles from "./BranchNavigator.module.css";
 import { useI18n } from "@/lib/i18n";
@@ -208,9 +209,9 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
   }, [onLeafChange]);
 
   const noBranchReason = !hasSession
-    ? "No active session"
+    ? t("session.branch.noneActive")
     : !hasSessionBranches(tree)
-      ? "This session has no branches"
+      ? t("session.branch.none")
       : null;
 
   // Find first meaningful node (skip pure linear prefix)
@@ -218,19 +219,10 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
   const firstNode = compressed?.node ?? null;
   const hasContent = !noBranchReason && firstNode && firstNode.children.length > 1;
 
-  const branchIcon = (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={hasContent ? styles.branchIconActive : styles.branchIconInactive}>
-      <line x1="6" y1="3" x2="6" y2="15" />
-      <circle cx="18" cy="6" r="3" />
-      <circle cx="6" cy="18" r="3" />
-      <path d="M18 9a9 9 0 0 1-9 9" />
-    </svg>
-  );
+  const branchIcon = <GitBranch size={12} className={hasContent ? styles.branchIconActive : styles.branchIconInactive} aria-hidden />;
 
   const chevron = (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={styles.chevron} style={{ transform: open ? "rotate(180deg)" : "none" }}>
-      <polyline points="2 3.5 5 6.5 8 3.5" />
-    </svg>
+    <ChevronDown size={10} strokeWidth={1.6} className={styles.chevron} style={{ transform: open ? "rotate(180deg)" : "none" }} aria-hidden />
   );
 
 
@@ -315,7 +307,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
             </div>
           ) : (
             <div className={styles.dropdownEmpty}>
-              {noBranchReason ?? "This session has no branches"}
+              {noBranchReason ?? t("session.branch.none")}
             </div>
           )}
         </div>

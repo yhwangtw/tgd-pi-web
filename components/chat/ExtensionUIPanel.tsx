@@ -40,23 +40,31 @@ export function ExtensionUIPanel({ state, onRespond, wide = false }: Props) {
   if (!dialog && !hasAboveWidgets && !hasStatuses) return null;
 
   return (
-    <div className={styles.outer} data-testid="extension-question">
-      <div className={`${styles.inner} ${wide ? styles.innerWide : ""}`}>
-        <ExtensionWidgets state={state} placement="aboveEditor" bare />
-        {hasStatuses && (
-          <div className={styles.statusRow} role="status">
-            {statuses.map(([key, text]) => (
-              <span key={key} className={styles.statusChip}>
-                <span className={styles.statusDot} aria-hidden />
-                <span className={styles.statusKey}>{key}</span>
-                <span>{text}</span>
-              </span>
-            ))}
+    <>
+      {(hasAboveWidgets || hasStatuses) && (
+        <div className={styles.outer} data-testid="extension-status">
+          <div className={`${styles.inner} ${wide ? styles.innerWide : ""}`}>
+            <ExtensionWidgets state={state} placement="aboveEditor" bare />
+            {hasStatuses && (
+              <div className={styles.statusRow} role="status">
+                {statuses.map(([key, text]) => (
+                  <span key={key} className={styles.statusChip}>
+                    <span className={styles.statusDot} aria-hidden />
+                    <span className={styles.statusKey}>{key}</span>
+                    <span>{text}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-        {dialog && <UserQuestionCard request={dialog} pendingCount={state.dialogs.length} onRespond={onRespond} />}
-      </div>
-    </div>
+        </div>
+      )}
+      {dialog && (
+        <div data-testid="extension-question">
+          <UserQuestionCard request={dialog} pendingCount={state.dialogs.length} onRespond={onRespond} />
+        </div>
+      )}
+    </>
   );
 }
 

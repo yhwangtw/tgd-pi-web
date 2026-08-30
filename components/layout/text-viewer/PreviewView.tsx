@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import { MarkdownBody } from "@/components/chat/MarkdownBody";
 import { encodeFilePathForApi } from "@/lib/file-paths";
+import { useI18n } from "@/lib/i18n";
 import styles from "../TextFileViewer.module.css";
 
 interface Props {
@@ -9,9 +11,16 @@ interface Props {
   language: string;
   /** Absolute path of the previewed file — HTML preview renders via URL. */
   filePath?: string;
+  /** Fires after the lazy preview component commits its first rendered frame. */
+  onRendered?: () => void;
 }
 
-export function PreviewView({ content, language, filePath }: Props) {
+export function PreviewView({ content, language, filePath, onRendered }: Props) {
+  const { t } = useI18n();
+  useEffect(() => {
+    onRendered?.();
+  }, [content, filePath, language, onRendered]);
+
   if (language === "html" && filePath) {
     // src (not srcDoc) so the browser streams the document itself — HTML
     // preview works at any size, independent of the text-preview cap.
@@ -21,7 +30,7 @@ export function PreviewView({ content, language, filePath }: Props) {
         src={`/api/files/${encodeFilePathForApi(filePath)}?type=raw`}
         sandbox="allow-scripts"
         className={styles.htmlPreview}
-        title="HTML preview"
+        title={t("files.htmlPreview")}
       />
     );
   }
@@ -31,7 +40,7 @@ export function PreviewView({ content, language, filePath }: Props) {
         srcDoc={content}
         sandbox="allow-scripts"
         className={styles.htmlPreview}
-        title="HTML preview"
+        title={t("files.htmlPreview")}
       />
     );
   }

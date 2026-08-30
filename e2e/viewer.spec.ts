@@ -158,7 +158,7 @@ test.describe("file viewer", () => {
       selection?.addRange(range);
       line.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
     });
-    await expect(page.getByRole("toolbar", { name: /Selected lines 1 to 1/ })).toBeVisible();
+    await expect(page.getByRole("toolbar", { name: /Selected lines 1–1/ })).toBeVisible();
     await page.getByRole("button", { name: "Add to prompt", exact: true }).click();
     await expect.poll(() => page.locator("textarea").last().inputValue()).toContain("README.md:1");
   });
@@ -170,7 +170,7 @@ test.describe("file viewer", () => {
 
     await page.getByRole("treeitem", { name: "data.json" }).click();
     await page.getByRole("button", { name: "Tree", exact: true }).click();
-    await expect(page.getByTitle("Copy $.project")).toBeVisible();
+    await expect(page.getByTitle("Copy path $.project")).toBeVisible();
 
     await openFiles(page);
     await page.getByRole("treeitem", { name: "table.csv" }).click();
@@ -189,7 +189,7 @@ test.describe("file viewer", () => {
     await page.getByRole("treeitem", { name: "data.json" }).click();
     const readmeTab = page.locator('[class*="TabBar_tab"]').filter({ hasText: "README.md" }).first();
     await readmeTab.click({ button: "right" });
-    await page.getByRole("button", { name: "Open in split", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Open in split", exact: true }).click();
     await expect(page.getByTestId("file-split-pane")).toBeVisible();
 
     await page.reload();

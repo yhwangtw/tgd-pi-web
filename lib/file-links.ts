@@ -1,4 +1,6 @@
 // ============================================================================
+
+import type { FileOpenOrigin } from "@/lib/file-open";
 // Clickable file paths in chat messages.
 //
 // `looksLikeFilePath` is the conservative heuristic that decides whether a
@@ -12,6 +14,8 @@ export interface FileLink {
   path: string;
   /** Optional line from a `:N` suffix. */
   line?: number;
+  /** Optional return path when the link came from a message or search result. */
+  origin?: FileOpenOrigin;
 }
 
 // Bare filenames (no slash) must carry a recognizable extension, otherwise

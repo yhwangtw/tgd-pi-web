@@ -2,6 +2,7 @@
 
 import {
   displayExtensionSupport,
+  type ExtensionPermissionId,
   type ExtensionSupportDisplay,
   type ExtensionsReport,
 } from "@/lib/extensions-info";
@@ -17,6 +18,36 @@ const SUPPORT_LABELS: Record<ExtensionSupportDisplay, MsgKey> = {
   notApplicable: "extensions.notApplicable",
 };
 
+const PERMISSION_LABELS: Record<ExtensionPermissionId, MsgKey> = {
+  filesystem: "extensions.permission.filesystem",
+  process: "extensions.permission.process",
+  network: "extensions.permission.network",
+  credentials: "extensions.permission.credentials",
+  agentTools: "extensions.permission.agentTools",
+  commands: "extensions.permission.commands",
+  providers: "extensions.permission.providers",
+  configuration: "extensions.permission.configuration",
+  lifecycle: "extensions.permission.lifecycle",
+  keyboard: "extensions.permission.keyboard",
+  display: "extensions.permission.display",
+  instructions: "extensions.permission.instructions",
+  appearance: "extensions.permission.appearance",
+};
+
+const SCOPE_LABELS = {
+  runtime: "extensions.scope.runtime",
+  project: "extensions.scope.project",
+  user: "extensions.scope.user",
+  unknown: "extensions.scope.unknown",
+} satisfies Record<ExtensionsReport["permissions"][number]["scope"], MsgKey>;
+
+const ORIGIN_LABELS = {
+  inline: "extensions.origin.inline",
+  package: "extensions.origin.package",
+  local: "extensions.origin.local",
+  unknown: "extensions.origin.unknown",
+} satisfies Record<ExtensionsReport["permissions"][number]["origin"], MsgKey>;
+
 function SupportBadge({ value }: { value: ExtensionSupportDisplay }) {
   const { t } = useI18n();
   return <span className={styles.supportBadge} data-support={value}>{t(SUPPORT_LABELS[value])}</span>;
@@ -24,30 +55,90 @@ function SupportBadge({ value }: { value: ExtensionSupportDisplay }) {
 
 export function ExtensionInventoryDetails({ report, onRunShortcut, shortcutBusy }: { report: ExtensionsReport; onRunShortcut?: (shortcut: string) => void; shortcutBusy?: string | null }) {
   const { t } = useI18n();
-  const compatibility: Array<[MsgKey, ExtensionSupportDisplay]> = [
-    ["extensions.providers", report.compatibility.providers],
-    ["extensions.commands", report.compatibility.commands],
-    ["extensions.tools", report.compatibility.tools],
-    ["extensions.flags", report.compatibility.flags],
-    ["extensions.commandContext", report.compatibility.commandContext],
-    ["extensions.events", report.compatibility.events],
-    ["extensions.resources", report.compatibility.resources],
-    ["extensions.shortcuts", displayExtensionSupport(report.compatibility.shortcuts, report.shortcuts.length)],
-    ["extensions.renderers", displayExtensionSupport(report.compatibility.renderers, report.renderers.length)],
-    ["extensions.tuiUi", report.compatibility.tuiUi],
+  const compatibility: Array<{ key: MsgKey; support: ExtensionsReport["compatibility"][keyof ExtensionsReport["compatibility"]]; display: ExtensionSupportDisplay }> = [
+    { key: "extensions.providers", support: report.compatibility.providers, display: report.compatibility.providers },
+    { key: "extensions.commands", support: report.compatibility.commands, display: report.compatibility.commands },
+    { key: "extensions.tools", support: report.compatibility.tools, display: report.compatibility.tools },
+    { key: "extensions.flags", support: report.compatibility.flags, display: report.compatibility.flags },
+    { key: "extensions.commandContext", support: report.compatibility.commandContext, display: report.compatibility.commandContext },
+    { key: "extensions.events", support: report.compatibility.events, display: report.compatibility.events },
+    { key: "extensions.resources", support: report.compatibility.resources, display: report.compatibility.resources },
+    { key: "extensions.shortcuts", support: report.compatibility.shortcuts, display: displayExtensionSupport(report.compatibility.shortcuts, report.shortcuts.length) },
+    { key: "extensions.renderers", support: report.compatibility.renderers, display: displayExtensionSupport(report.compatibility.renderers, report.renderers.length) },
+    { key: "extensions.tuiUi", support: report.compatibility.tuiUi, display: report.compatibility.tuiUi },
+  ];
+  const supportGroups = [
+    { support: "supported" as const, title: "extensions.group.supported" as MsgKey, description: "extensions.group.supportedHint" as MsgKey },
+    { support: "partial" as const, title: "extensions.group.partial" as MsgKey, description: "extensions.group.partialHint" as MsgKey },
+    { support: "unsupported" as const, title: "extensions.group.unsupported" as MsgKey, description: "extensions.group.unsupportedHint" as MsgKey },
   ];
 
   return (
     <>
+      {report.permissions.length > 0 && <div className={styles.section} data-testid="extension-permissions">
+        <div className={styles.sectionTitle}>{t("extensions.permissions")}</div>
+        <p className={styles.permissionIntro}>{t("extensions.permissionsNote")}</p>
+        <div className={styles.permissionList}>
+          {report.permissions.map((manifest) => {
+            const observed = manifest.capabilities.filter((capability) => capability.evidence === "observed");
+            const potential = manifest.capabilities.filter((capability) => capability.evidence === "potential");
+            return (
+              <article key={manifest.source} className={styles.permissionCard}>
+                <header className={styles.permissionHeader}>
+                  <code title={manifest.source}>{tail(manifest.source) || manifest.source}</code>
+                  <div className={styles.permissionMeta}>
+                    <span>{t(SCOPE_LABELS[manifest.scope])}</span>
+                    <span>{t(ORIGIN_LABELS[manifest.origin])}</span>
+                  </div>
+                </header>
+                {observed.length > 0 && (
+                  <div className={styles.permissionGroup}>
+                    <span className={styles.permissionGroupLabel}>{t("extensions.observedAccess")}</span>
+                    <div className={styles.permissionChips}>
+                      {observed.map((capability) => (
+                        <span key={`${capability.evidence}:${capability.id}`} className={styles.permissionChip} data-evidence="observed">
+                          {t(PERMISSION_LABELS[capability.id])}{capability.count > 1 ? ` ×${capability.count}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className={styles.permissionGroup}>
+                  <span className={styles.permissionGroupLabel}>{t("extensions.potentialAccess")}</span>
+                  <div className={styles.permissionChips}>
+                    {potential.map((capability) => (
+                      <span key={`${capability.evidence}:${capability.id}`} className={styles.permissionChip} data-evidence="potential">
+                        {t(PERMISSION_LABELS[capability.id])}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>}
+
       <div className={styles.section}>
         <div className={styles.sectionTitle}>{t("extensions.compatibility")}</div>
-        <div className={styles.supportGrid}>
-          {compatibility.map(([key, support]) => (
-            <div key={key} className={styles.supportItem}>
-              <span>{t(key)}</span>
-              <SupportBadge value={support} />
-            </div>
-          ))}
+        <div className={styles.supportGroups}>
+          {supportGroups.map((group) => {
+            const items = compatibility.filter((item) => item.support === group.support);
+            return <section key={group.support} className={styles.supportGroup} data-support={group.support}>
+              <header className={styles.supportGroupHeader}>
+                <strong>{t(group.title)}</strong>
+                <span>{t(group.description)}</span>
+              </header>
+              {items.length > 0 ? <div className={styles.supportGrid}>
+                {items.map((item) => (
+                  <div key={item.key} className={styles.supportItem}>
+                    <span>{t(item.key)}</span>
+                    <SupportBadge value={item.display} />
+                  </div>
+                ))}
+              </div> : <div className={styles.supportEmpty}>{t("extensions.group.empty")}</div>}
+            </section>;
+          })}
         </div>
         <p className={styles.supportNote}>{t("extensions.interactiveUiNote")}</p>
       </div>

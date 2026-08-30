@@ -61,7 +61,20 @@ describe("AssistantMessageView conversation chrome", () => {
 
     const summary = container!.querySelector("details > summary");
     expect(summary?.textContent).toContain("Usage");
+    expect(summary?.textContent).toContain("$0.0036");
     expect(summary?.getAttribute("title")).toContain("1,060 in");
+  });
+
+  it("keeps hover actions available to assistive technology", async () => {
+    await render(
+      { ...baseMessage, content: [{ type: "text", text: "Accessible answer" }] },
+      { showActions: true, onQuote: vi.fn() },
+    );
+
+    const actions = container!.querySelector<HTMLElement>('[data-testid="assistant-message-actions"]');
+    expect(actions).not.toBeNull();
+    expect(actions!.hasAttribute("aria-hidden")).toBe(false);
+    expect(actions!.querySelectorAll("button")).toHaveLength(2);
   });
 
   it("does not leave a dangling footer on intermediate assistant output", async () => {
@@ -88,6 +101,17 @@ describe("AssistantMessageView conversation chrome", () => {
     const details = alert.querySelector("details");
     expect(details).not.toBeNull();
     expect(details!.hasAttribute("open")).toBe(false);
+  });
+
+  it("redacts credentials from provider errors before rendering details", async () => {
+    await render({
+      ...baseMessage,
+      stopReason: "error",
+      errorMessage: "401 failed Authorization: Bearer live-token-123456789",
+    });
+
+    expect(container!.textContent).toContain("[REDACTED]");
+    expect(container!.textContent).not.toContain("live-token-123456789");
   });
 
   it("keeps shell variables literal instead of rendering them as inline math", async () => {
@@ -177,6 +201,32 @@ describe("AssistantMessageView conversation chrome", () => {
     const workLog = container!.querySelector('[aria-label="Work log"]')!;
     const card = container!.querySelector('[data-testid="structured-output-card"]')!;
     expect(workLog.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders the terminating structured_output tool as the final result instead of a tool disclosure", async () => {
+    await render({
+      ...baseMessage,
+      content: [{
+        type: "toolCall",
+        toolCallId: "structured-1",
+        toolName: "structured_output",
+        input: {
+          headline: "Implementation plan",
+          summary: "The existing runtime can host the feature.",
+          actionItems: ["Register the extension", "Verify the Web card"],
+          kind: "info",
+          details: "Source: `lib/pi-runtime.ts`",
+        },
+      }],
+    });
+
+    const card = container!.querySelector<HTMLElement>('[data-testid="structured-output-card"]')!;
+    expect(card.dataset.outputKind).toBe("info");
+    expect(card.textContent).toContain("Implementation plan");
+    expect(card.textContent).toContain("The existing runtime can host the feature.");
+    expect(card.textContent).toContain("Register the extension");
+    expect(container!.querySelector("button")?.textContent).not.toContain("structured_output");
+    expect(card.querySelector("details")?.hasAttribute("open")).toBe(false);
   });
 
   it("opens a navigable focus surface for fenced code", async () => {

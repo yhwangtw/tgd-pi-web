@@ -23,7 +23,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
       onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
       role="dialog"
       aria-modal="true"
-      aria-label="Keyboard shortcuts"
+      aria-label={t("shortcuts.title")}
     >
       <div className={s.shortcutsDialog}>
         <h3 className={s.shortcutsTitle}>{t("shortcuts.title")}</h3>

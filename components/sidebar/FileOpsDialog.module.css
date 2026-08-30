@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-6);
 }
 
 .dialog {
@@ -15,7 +15,7 @@
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-dialog);
-  padding: 18px;
+  padding: var(--space-4);
   box-shadow: var(--color-shadow-modal);
 }
 
@@ -36,7 +36,7 @@
 .input {
   width: 100%;
   height: 34px;
-  padding: 0 10px;
+  padding: 0 var(--space-2);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
@@ -56,13 +56,13 @@
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
   margin-top: 14px;
 }
 
 .btn {
   height: 30px;
-  padding: 0 14px;
+  padding: 0 var(--space-3);
   border-radius: var(--radius-control);
   font-size: var(--text-sm);
   cursor: pointer;

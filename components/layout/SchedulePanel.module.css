@@ -11,8 +11,8 @@
   min-height: 42px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px 4px 12px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
   border-bottom: 1px solid var(--border);
   color: var(--text-muted);
   font-size: var(--text-sm);
@@ -35,30 +35,14 @@
   min-height: var(--control-md);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 0 8px;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
   background: var(--color-accent-bg);
   border-color: var(--color-accent-border-subtle);
   color: var(--accent);
   font-size: var(--text-xs);
 }
 .newButton:hover { background: var(--color-accent-bg-strong); }
-
-.iconButton {
-  width: var(--control-md);
-  height: var(--control-md);
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-control);
-  color: var(--text-dim);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.iconButton:hover { background: var(--bg-hover); color: var(--text); }
 
 .body,
 .form {
@@ -68,14 +52,14 @@
   overscroll-behavior: contain;
 }
 
-.body { padding: 8px; }
-.schedulerHealth { min-height: 34px; margin-bottom: 8px; padding: 6px 8px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text-dim); font-size: var(--text-2xs); }
+.body { padding: var(--space-2); }
+.schedulerHealth { min-height: 34px; margin-bottom: 8px; padding: var(--space-2) var(--space-2); display: flex; align-items: center; gap: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text-dim); font-size: var(--text-2xs); }
 .schedulerHealth strong { color: var(--text-muted); }
 .schedulerHealth time { margin-left: auto; white-space: nowrap; }
 .healthOk, .healthIdle { width: 7px; height: 7px; border-radius: var(--radius-circle); background: var(--color-success); }
 .healthIdle { background: var(--text-dim); }
 .form {
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .empty {
@@ -84,8 +68,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 24px 18px;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
   color: var(--text-muted);
   text-align: center;
   font-size: var(--text-sm);
@@ -95,9 +79,9 @@
 .empty span { line-height: var(--leading-copy); }
 .empty .primaryButton { margin-top: 6px; }
 
-.scheduleList { display: flex; flex-direction: column; gap: 8px; }
+.scheduleList { display: flex; flex-direction: column; gap: var(--space-2); }
 .card {
-  padding: 10px;
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   background: var(--bg-elev-1);
@@ -107,8 +91,8 @@
   border-color: var(--color-warning-border-strong);
   background: color-mix(in srgb, var(--color-warning-bg) 50%, var(--bg-elev-1));
 }
-.cardHeader { display: flex; align-items: center; gap: 6px; }
-.cardTitleWrap { min-width: 0; flex: 1; display: flex; align-items: center; gap: 6px; }
+.cardHeader { display: flex; align-items: center; gap: var(--space-2); }
+.cardTitleWrap { min-width: 0; flex: 1; display: flex; align-items: center; gap: var(--space-2); }
 .cardTitle {
   min-width: 0;
   overflow: hidden;
@@ -119,7 +103,7 @@
   font-weight: var(--weight-semibold);
 }
 .pausedBadge {
-  padding: 1px 5px;
+  padding: var(--space-optical) var(--space-1);
   border-radius: var(--radius-pill);
   background: var(--bg-hover);
   color: var(--text-dim);
@@ -147,7 +131,7 @@
   margin-top: 8px;
   display: flex;
   justify-content: space-between;
-  gap: 6px;
+  gap: var(--space-2);
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
@@ -159,8 +143,8 @@
   min-height: 27px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 7px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-control);
   background: var(--bg-hover);
   color: var(--text-muted);
@@ -170,16 +154,16 @@
 .runState > span:nth-child(2) { flex: 1; }
 .runState button,
 .historyStatus button {
-  padding: 2px 6px;
+  padding: var(--space-optical) var(--space-2);
   background: var(--bg-elev-2);
   color: inherit;
   font-size: var(--text-2xs);
 }
 
-.cardActions { margin-top: 8px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.cardActions { margin-top: 8px; display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
 .cardActions button {
   min-height: var(--control-sm);
-  padding: 4px 9px;
+  padding: var(--space-1) var(--space-2);
   background: transparent;
   color: var(--text-muted);
   font-size: var(--text-2xs);
@@ -190,7 +174,7 @@
 .dangerTextButton { margin-left: auto; color: var(--color-error-text) !important; border-color: transparent !important; }
 .dangerButton { flex: 1; color: var(--color-error-text) !important; border-color: var(--color-error-border) !important; background: var(--color-error-bg) !important; }
 
-.history { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.history { margin-top: 12px; border-top: 1px solid var(--border); padding-top: var(--space-2); }
 .history > summary,
 .advanced > summary {
   cursor: pointer;
@@ -200,15 +184,15 @@
   user-select: none;
 }
 .history > summary span { color: var(--text-dim); font-weight: var(--weight-regular); margin-left: 4px; }
-.historyList { margin-top: 7px; display: flex; flex-direction: column; gap: 6px; }
-.historyRow { padding: 8px; border-radius: var(--radius-control); background: var(--bg-elev-1); border: 1px solid var(--border); }
-.historyMain { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.historyList { margin-top: 7px; display: flex; flex-direction: column; gap: var(--space-2); }
+.historyRow { padding: var(--space-2); border-radius: var(--radius-control); background: var(--bg-elev-1); border: 1px solid var(--border); }
+.historyMain { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .historyMain strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: var(--text-xs); }
 .historyMain span { color: var(--text-dim); font-size: var(--text-2xs); white-space: nowrap; }
-.historyStatus { margin-top: 5px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.statusBadge { padding: 2px 6px; border-radius: var(--radius-pill); background: var(--bg-hover); font-size: var(--text-2xs); }
+.historyStatus { margin-top: 5px; display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
+.statusBadge { padding: var(--space-optical) var(--space-2); border-radius: var(--radius-pill); background: var(--bg-hover); font-size: var(--text-2xs); }
 .runError { margin-top: 5px; color: var(--color-error-text); font-size: var(--text-2xs); line-height: var(--leading-snug); overflow-wrap: anywhere; }
-.noHistory { padding: 10px; color: var(--text-dim); text-align: center; font-size: var(--text-xs); }
+.noHistory { padding: var(--space-2); color: var(--text-dim); text-align: center; font-size: var(--text-xs); }
 
 .status_running { color: var(--accent); }
 .status_waiting_for_input { color: var(--color-warning-text-strong); background: var(--color-warning-bg); }
@@ -220,7 +204,7 @@
 .fieldset {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-1);
   margin: 0 0 12px;
   padding: 0;
   border: none;
@@ -243,20 +227,60 @@
   outline: none;
 }
 .field input,
-.field select { height: 38px; padding: 0 10px; }
-.field textarea { resize: vertical; min-height: 108px; padding: 8px 9px; line-height: var(--leading-copy); }
+.field select { height: 38px; padding: 0 var(--space-2); }
+.field textarea { resize: vertical; min-height: 108px; padding: var(--space-2) var(--space-2); line-height: var(--leading-copy); }
 .field input:focus,
 .field textarea:focus,
 .field select:focus { border-color: var(--color-accent-border-focus); box-shadow: 0 0 0 2px var(--color-accent-bg); }
 .field small { color: var(--text-dim); font-size: var(--text-2xs); }
+.field .fieldError,
+.fieldset .fieldError {
+  color: var(--color-error-text);
+  font-weight: var(--weight-medium);
+}
+.field input[aria-invalid="true"],
+.field textarea[aria-invalid="true"],
+.field select[aria-invalid="true"] {
+  border-color: var(--color-error-border-strong);
+  box-shadow: 0 0 0 2px var(--color-error-bg);
+}
 .monoInput { font-family: var(--font-mono) !important; font-size: var(--text-xs) !important; }
-.twoColumns { display: grid; grid-template-columns: 1.35fr 1fr; gap: 8px; }
+.twoColumns { display: grid; grid-template-columns: 1.35fr 1fr; gap: var(--space-2); }
 
-.segmented { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 2px; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: var(--radius-control); }
+.dialogBody { padding: 0 !important; }
+.dialogForm {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+.formSection {
+  display: grid;
+  gap: var(--space-3);
+}
+.formSection .field,
+.formSection .fieldset { margin: 0; }
+.formSectionHeading {
+  display: grid;
+  gap: var(--space-1);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.formSectionHeading strong {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.formSectionHeading span {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-copy);
+}
+
+.segmented { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: var(--space-optical); background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: var(--radius-control); }
 .segment,
 .segmentActive {
   min-height: var(--control-md);
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border: none;
   border-radius: var(--radius-control-compact);
   background: transparent;
@@ -267,7 +291,7 @@
 }
 .segmentActive { background: var(--color-accent-bg-strong); color: var(--accent); }
 
-.weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-1); }
 .weekday,
 .weekdayActive {
   aspect-ratio: 1;
@@ -283,32 +307,34 @@
 }
 .weekdayActive { border-color: var(--color-accent-border-focus); background: var(--color-accent-bg); color: var(--accent); }
 
-.advanced { margin: 3px 0 12px; padding: 9px; border: 1px solid var(--border); border-radius: var(--radius-control-prominent); background: var(--bg-elev-1); }
-.advancedBody { padding-top: 12px; }
+.advanced { margin: 3px 0 12px; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control-prominent); background: var(--bg-elev-1); }
+.advancedBody { padding-top: var(--space-3); }
 .advancedBody .field:last-of-type { margin-bottom: 10px; }
-.checkbox { display: flex; align-items: center; gap: 7px; color: var(--text-muted); font-size: var(--text-xs); }
+.checkbox { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-xs); }
 .checkbox input { accent-color: var(--accent); }
 
-.formActions { display: flex; justify-content: flex-end; gap: 7px; margin: 14px -12px -12px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--bg-panel); }
+.formActions { display: flex; justify-content: flex-end; gap: var(--space-2); margin: 14px -12px -12px; padding: var(--space-2) var(--space-3); border-top: 1px solid var(--border); background: var(--bg-panel); }
 .primaryButton,
-.secondaryButton { min-height: var(--control-md); padding: 6px 11px; font-size: var(--text-sm); }
+.secondaryButton { min-height: var(--control-md); padding: var(--space-2) var(--space-3); font-size: var(--text-sm); }
 .primaryButton { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .primaryButton:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
 .secondaryButton { background: var(--bg-elev-1); color: var(--text-muted); }
 .formError,
-.listError { padding: 8px; border: 1px solid var(--color-error-border); border-radius: var(--radius-control); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--text-2xs); overflow-wrap: anywhere; }
+.listError { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--color-error-border); border-radius: var(--radius-control); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--text-2xs); overflow-wrap: anywhere; }
+.listError button { min-height: var(--control-compact); padding: 0 var(--space-2); border: 1px solid var(--color-error-border); border-radius: var(--radius-control-compact); background: var(--bg-elev-1); color: inherit; cursor: pointer; }
 .listError { margin-top: 8px; }
 
-@media (max-width: 380px) {
+@media (max-width: 480px) {
   .twoColumns { grid-template-columns: 1fr; gap: 0; }
   .segmented { grid-template-columns: repeat(2, 1fr); }
+  .dialogForm { padding: var(--space-3) var(--space-4); }
 }
 
 /* TRAE schedule cards share the same soft hierarchy as the agent dashboard. */
 :global(html[data-ui-style="trae"]) .container { background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .header {
   min-height: 44px;
-  padding: 4px 10px 4px 12px;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
   border-bottom: 0;
   background: transparent;
 }
@@ -319,8 +345,8 @@
 :global(html[data-ui-style="trae"]) .secondaryButton,
 :global(html[data-ui-style="trae"]) .cardActions button,
 :global(html[data-ui-style="trae"]) .runState button { border-radius: var(--radius-control); }
-:global(html[data-ui-style="trae"]) .body { padding: 10px; }
-:global(html[data-ui-style="trae"]) .scheduleList { gap: 10px; }
+:global(html[data-ui-style="trae"]) .body { padding: var(--space-2); }
+:global(html[data-ui-style="trae"]) .scheduleList { gap: var(--space-2); }
 :global(html[data-ui-style="trae"]) .card,
 :global(html[data-ui-style="trae"]) .historyRow {
   border-color: transparent;
@@ -328,7 +354,7 @@
   background: var(--trae-surface-solid);
   box-shadow: var(--trae-card-shadow);
 }
-:global(html[data-ui-style="trae"]) .card { padding: 13px; }
+:global(html[data-ui-style="trae"]) .card { padding: var(--space-3); }
 :global(html[data-ui-style="trae"]) .cardWaiting { border-color: var(--color-warning-border); }
 :global(html[data-ui-style="trae"]) .runState { border-radius: var(--radius-control-prominent); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .history { border-top-color: var(--trae-hairline); }

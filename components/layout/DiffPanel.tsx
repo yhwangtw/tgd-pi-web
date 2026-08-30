@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { DiffViewMode } from "./text-viewer/DiffViewMode";
 import type { DiffAnnotation } from "./DiffView";
 import { getLanguage } from "@/lib/file-mime";
+import { useI18n } from "@/lib/i18n";
 import s from "./DiffPanel.module.css";
 
 interface Props {
@@ -18,6 +20,7 @@ interface Props {
  * file is picked from the Changes view.
  */
 export function DiffPanel({ cwd, path, onClose, onAnnotate }: Props) {
+  const { t } = useI18n();
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "error"; message: string }
@@ -69,7 +72,7 @@ export function DiffPanel({ cwd, path, onClose, onAnnotate }: Props) {
   const revertHunk = useCallback(async () => {
     const hunk = hunks[hunkPos];
     if (!hunk || reverting) return;
-    if (!window.confirm(`Revert hunk ${hunkPos + 1} of ${hunks.length} in ${path}?`)) return;
+    if (!window.confirm(`${t("files.diff.revertConfirm")} ${hunkPos + 1}/${hunks.length}\n${path}`)) return;
     setReverting(true);
     try {
       const response = await fetch("/api/git/file-hunks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd, path, index: hunk.index }) });
@@ -79,7 +82,7 @@ export function DiffPanel({ cwd, path, onClose, onAnnotate }: Props) {
       load();
     } catch (reason) { setState({ kind: "error", message: reason instanceof Error ? reason.message : String(reason) }); }
     finally { setReverting(false); }
-  }, [cwd, hunkPos, hunks, load, path, reverting]);
+  }, [cwd, hunkPos, hunks, load, path, reverting, t]);
 
   return (
     <div className={s.container}>
@@ -87,22 +90,20 @@ export function DiffPanel({ cwd, path, onClose, onAnnotate }: Props) {
         <span className={s.badge}>diff</span>
         <span className={s.path} title={path}>{path}</span>
         {hunks.length > 0 && <div className={s.hunkNav}>
-          <button onClick={() => gotoHunk(hunkPos - 1)} aria-label="Previous hunk">‹</button>
+          <button onClick={() => gotoHunk(hunkPos - 1)} aria-label={t("files.diff.previousHunk")}>‹</button>
           <span>{hunkPos + 1}/{hunks.length}</span>
-          <button onClick={() => gotoHunk(hunkPos + 1)} aria-label="Next hunk">›</button>
-          <button className={reviewed.has(hunks[hunkPos]?.index) ? s.reviewed : undefined} onClick={() => setReviewed((current) => { const next = new Set(current); const index = hunks[hunkPos].index; if (next.has(index)) next.delete(index); else next.add(index); return next; })}>{reviewed.has(hunks[hunkPos]?.index) ? "Reviewed" : "Keep"}</button>
-          <button className={s.revertHunk} disabled={reverting} onClick={() => void revertHunk()}>{reverting ? "Reverting…" : "Revert hunk"}</button>
+          <button onClick={() => gotoHunk(hunkPos + 1)} aria-label={t("files.diff.nextHunk")}>›</button>
+          <button className={reviewed.has(hunks[hunkPos]?.index) ? s.reviewed : undefined} onClick={() => setReviewed((current) => { const next = new Set(current); const index = hunks[hunkPos].index; if (next.has(index)) next.delete(index); else next.add(index); return next; })}>{t(reviewed.has(hunks[hunkPos]?.index) ? "files.diff.reviewed" : "files.diff.keep")}</button>
+          <button className={s.revertHunk} disabled={reverting} onClick={() => void revertHunk()}>{t(reverting ? "files.diff.reverting" : "files.diff.revertHunk")}</button>
         </div>}
-        <button onClick={onClose} className={s.close} aria-label="Close diff">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
+        <button onClick={onClose} className={s.close} aria-label={t("files.diff.close")}>
+          <X size={15} strokeWidth={2} aria-hidden />
         </button>
       </div>
       <div className={s.body}>
-        {state.kind === "loading" && <div className={s.notice}>Loading diff…</div>}
-        {state.kind === "error" && <div className={s.notice}>Failed to load diff: {state.message}</div>}
-        {state.kind === "tooLarge" && <div className={s.notice}>File too large to diff (&gt;1 MB)</div>}
+        {state.kind === "loading" && <div className={s.notice}>{t("files.diff.loading")}</div>}
+        {state.kind === "error" && <div className={s.notice}>{t("files.diff.failed")}: {state.message}</div>}
+        {state.kind === "tooLarge" && <div className={s.notice}>{t("files.diff.tooLarge")}</div>}
         {state.kind === "ready" && (
           <DiffViewMode
             oldContent={state.oldText}

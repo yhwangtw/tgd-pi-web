@@ -16,18 +16,75 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# ── Git checkout 以 origin/main 為唯一真相 ───────────
-# End-user installations are disposable checkouts. Always replace tracked
-# changes, local commits, and non-ignored untracked files with origin/main,
-# then restart the newly fetched script. Ignored runtime state such as .env,
-# node_modules, and .next remains untouched. Source archives have no .git and
-# skip this step; an offline Git checkout can explicitly opt out.
+# ── 安全同步 origin/main ─────────────────────────────
+# A clean end-user checkout can update itself automatically. If the checkout
+# contains local commits or working-tree changes, create a private recovery
+# bundle first and require an explicit interactive confirmation. Automated
+# installs stop safely unless TGD_SETUP_FORCE_SYNC=1 is supplied. Source
+# archives have no .git and skip this step; offline mode explicitly keeps the
+# current checkout.
 if [ -e "$SCRIPT_DIR/.git" ] \
   && [ "${TGD_SETUP_SOURCE_SYNCED:-0}" != "1" ] \
   && [ "${TGD_SETUP_OFFLINE:-0}" != "1" ]; then
   echo -e "${CYAN}${BOLD}♻️  同步遠端正式版 origin/main...${NC}"
-  echo -e "  ${YELLOW}本地 commit、tracked 修改與未追蹤程式碼將被放棄。${NC}"
   git fetch --prune origin main
+
+  checkout_status="$(git status --porcelain)"
+  local_commits="$(git rev-list --count origin/main..HEAD 2>/dev/null || true)"
+  local_commits="${local_commits:-0}"
+  if [ -n "$checkout_status" ] || [ "$local_commits" -gt 0 ]; then
+    backup_root="${TGD_SETUP_BACKUP_DIR:-$HOME/.tgd-pi-web-backups}"
+    (
+      umask 077
+      mkdir -p "$backup_root"
+    )
+    backup_root="$(cd "$backup_root" && pwd)"
+    case "$backup_root/" in
+      "$SCRIPT_DIR/"*)
+        echo -e "  ${RED}❌ 備份位置不能位於即將同步的專案內: $backup_root${NC}"
+        exit 1
+        ;;
+    esac
+    project_name="$(basename "$SCRIPT_DIR")"
+    backup_dir="$backup_root/${project_name}-source-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+    (
+      umask 077
+      mkdir -p "$backup_dir"
+      git status --short > "$backup_dir/status.txt"
+      git rev-parse HEAD > "$backup_dir/head.txt"
+      git diff --binary > "$backup_dir/working-tree.patch"
+      git diff --cached --binary > "$backup_dir/staged.patch"
+      git log --oneline --decorate origin/main..HEAD > "$backup_dir/local-commits.txt"
+      if [ "$local_commits" -gt 0 ]; then
+        git bundle create "$backup_dir/local-commits.bundle" origin/main..HEAD
+      fi
+      if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+        git ls-files --others --exclude-standard -z \
+          | tar -czf "$backup_dir/untracked-files.tar.gz" --null -T -
+      fi
+    )
+    echo -e "  ${GREEN}✅ 已建立本地修改復原備份${NC}"
+    echo "  備份位置: $backup_dir"
+    echo "  本地 commits: $local_commits"
+
+    if [ "${TGD_SETUP_FORCE_SYNC:-0}" != "1" ]; then
+      if [ -t 0 ]; then
+        read -p "$(echo -e ${YELLOW}同步會以 origin/main 取代目前程式碼；繼續？[y/N]${NC} )" sync_source
+        case "$sync_source" in
+          y|Y) ;;
+          *)
+            echo "  已保留目前 checkout；未執行 reset 或 clean。"
+            exit 2
+            ;;
+        esac
+      else
+        echo -e "  ${YELLOW}偵測到本地修改；非互動模式不會自動覆蓋。${NC}"
+        echo "  檢查備份後，以 TGD_SETUP_FORCE_SYNC=1 重新執行即可同步。"
+        exit 2
+      fi
+    fi
+  fi
+
   git reset --hard origin/main
   git clean -fd
   echo -e "  ${GREEN}✅ 本地程式碼已同步為 origin/main${NC}"
@@ -156,6 +213,7 @@ echo ""
 echo -e "${BOLD}🤖 檢查 Pi Agent...${NC}"
 PI_RUNTIME_VERSION="$(node -p "require('./node_modules/@earendil-works/pi-coding-agent/package.json').version")"
 echo -e "  ${GREEN}✅ Web 內建 Pi runtime: ${PI_RUNTIME_VERSION}${NC}"
+echo -e "  ${GREEN}✅ Web 內建 Subagent: scout / planner / worker / reviewer${NC}"
 
 if command -v pi &>/dev/null; then
   PI_CLI_VERSION="$(pi --version 2>/dev/null || true)"

@@ -1,8 +1,8 @@
 .bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 5px 12px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
   background: color-mix(in srgb, var(--bg-elev-1, var(--bg-panel)) 72%, transparent);
   flex-shrink: 0;
   min-width: 0;
@@ -25,7 +25,7 @@
   color: var(--color-accent);
   background: var(--color-accent-bg);
   border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
-  padding: 1px 7px;
+  padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-pill);
   flex-shrink: 0;
   max-width: 160px;
@@ -40,8 +40,8 @@
   height: 30px;
   flex: 0 1 auto;
   align-items: center;
-  gap: 7px;
-  padding: 0 8px;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
@@ -50,7 +50,7 @@
   cursor: pointer;
 }
 .mobileSummary:hover { background: var(--bg-hover); }
-.mobileCurrent { display: flex; min-width: 0; align-items: baseline; gap: 7px; }
+.mobileCurrent { display: flex; min-width: 0; align-items: baseline; gap: var(--space-2); }
 .mobileCurrentLabel { color: var(--accent); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .mobileFeature { display: none; }
 .mobileProgress {
@@ -102,8 +102,8 @@
 .phase {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-pill);
   border: 1px solid transparent;
   background: none;
@@ -168,7 +168,7 @@
 }
 
 @media (min-width: 701px) {
-  :global(html[data-density="compact"]) .bar { padding-top: 2px; padding-bottom: 2px; }
+  :global(html[data-density="compact"]) .bar { padding-top: var(--space-optical); padding-bottom: var(--space-optical); }
   :global(html[data-density="compact"]) .mobileSummary { height: 26px; }
   :global(html[data-density="compact"]) .hide { width: 26px; height: 26px; }
 }
@@ -177,9 +177,9 @@
    scrollable phase track is visible. The track keeps its overflow-x scroll. */
 @media (max-width: 640px) {
   .bar {
-    gap: 4px;
+    gap: var(--space-1);
     min-height: 48px;
-    padding: 3px 6px;
+    padding: var(--space-1) var(--space-2);
     flex-wrap: wrap;
   }
   .brand { display: none; }
@@ -191,8 +191,8 @@
     min-height: var(--control-touch);
     flex: 1 1 auto;
     align-items: center;
-    gap: 7px;
-    padding: 4px 8px;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
     border: 0;
     border-radius: var(--radius-control);
     background: transparent;
@@ -204,7 +204,7 @@
     min-width: 0;
     flex: 1 1 auto;
     align-items: baseline;
-    gap: 7px;
+    gap: var(--space-2);
   }
   .mobileCurrentLabel {
     flex: 0 0 auto;
@@ -233,15 +233,15 @@
     order: 4;
     flex: 1 0 100%;
     scroll-padding-inline: 4px;
-    padding: 2px 0 4px;
+    padding: var(--space-optical) 0 var(--space-1);
   }
   .trackOpen {
     display: flex;
   }
   .phase {
     min-height: 40px;
-    gap: 3px;
-    padding: 3px 4px;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-1);
     font-size: var(--text-xs);
   }
   .icon {
@@ -262,7 +262,7 @@
 
 :global(html[data-ui-style="trae"]) .bar {
   margin: 0 14px;
-  padding: 6px 8px;
+  padding: var(--space-2) var(--space-2);
   border-radius: var(--radius-panel);
   background: transparent;
 }
@@ -281,7 +281,7 @@
   :global(html[data-ui-style="trae"]) .bar {
     min-height: 44px;
     margin: 0 8px;
-    padding: 2px 4px;
+    padding: var(--space-optical) var(--space-1);
   }
 
   :global(html[data-ui-style="trae"]) .mobileSummary {

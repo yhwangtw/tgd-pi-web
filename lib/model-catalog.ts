@@ -1,10 +1,14 @@
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
+import type { ModelCatalogEntry, ModelCatalogCost } from "./model-catalog-types";
 
 export interface CatalogModelLike {
   id: string;
   name: string;
   provider: string;
   thinkingLevelMap?: Record<string, string | null>;
+  contextWindow?: number;
+  maxTokens?: number;
+  cost?: ModelCatalogCost;
 }
 
 export interface CatalogRegistryLike {
@@ -24,7 +28,7 @@ export interface ModelCatalogSource {
 
 export interface ModelCatalogResponse {
   models: Record<string, string>;
-  modelList: Array<{ id: string; name: string; provider: string }>;
+  modelList: ModelCatalogEntry[];
   defaultModel: { provider: string; modelId: string } | null;
   thinkingLevels: Record<string, string[]>;
   thinkingLevelMaps: Record<string, Record<string, string | null>>;
@@ -54,7 +58,15 @@ export function buildModelCatalog(
     models[key] = model.name;
     thinkingLevels[key] = getSupportedThinkingLevels(model as never);
     if (model.thinkingLevelMap) thinkingLevelMaps[key] = model.thinkingLevelMap;
-    return { id: model.id, name: model.name, provider: model.provider };
+    return {
+      id: model.id,
+      name: model.name,
+      provider: model.provider,
+      available: true,
+      contextWindow: model.contextWindow,
+      maxTokens: model.maxTokens,
+      cost: model.cost,
+    };
   });
 
   const defaultProvider = settings.getDefaultProvider();

@@ -8,8 +8,8 @@
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 4px 16px;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-4);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-xs);
   color: var(--text-dim);
@@ -28,7 +28,7 @@
 .watchStatus {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .watchStatusLive {
@@ -63,7 +63,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: var(--space-4);
   background-image:
     linear-gradient(45deg, var(--bg) 25%, transparent 25%),
     linear-gradient(-45deg, var(--bg) 25%, transparent 25%),
@@ -91,13 +91,13 @@
   border-radius: var(--radius-control-compact);
   color: var(--text-muted);
   font-size: var(--text-xs);
-  padding: 1px 7px;
+  padding: var(--space-optical) var(--space-2);
   cursor: pointer;
 }
 .zoomReset:hover { color: var(--text); }
 
 :global(html[data-ui-style="trae"]) .root { background: var(--trae-canvas); }
-:global(html[data-ui-style="trae"]) .toolbar { min-height: 44px; padding: 7px 12px; border-bottom-color: var(--trae-hairline); background: var(--trae-surface); }
+:global(html[data-ui-style="trae"]) .toolbar { min-height: 44px; padding: var(--space-2) var(--space-3); border-bottom-color: var(--trae-hairline); background: var(--trae-surface); }
 :global(html[data-ui-style="trae"]) .imageContainer { background-color: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .image { border-radius: var(--radius-media); box-shadow: var(--trae-hover-shadow); }
 :global(html[data-ui-style="trae"]) .zoomReset { min-height: 28px; border-color: transparent; border-radius: var(--radius-control-prominent); background: var(--trae-control); }

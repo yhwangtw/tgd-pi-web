@@ -3,10 +3,10 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { SessionInfo } from "@/lib/types";
 import { FileExplorer } from "./FileExplorer";
-import { getRecentCwds, getSessionDateGroup, getSessionProjectName, buildSessionTree, type SessionSortMode } from "./session-utils";
+import { getRecentCwds, getSessionDateGroup, getSessionProjectName, buildSessionDisplayTitles, buildSessionTree, findSessionTreeNode, flattenSessionTree, shortenCwd, type FlatSessionTreeNode, type SessionSortMode } from "./session-utils";
 import { PiAgentTitle } from "./PiAgentTitle";
-import { SessionTreeItem } from "./SessionTreeItem";
-import { CwdPicker } from "./CwdPicker";
+import { SessionItem } from "./SessionItem";
+import { ProjectSwitcher } from "./ProjectSwitcher";
 import { useSessions } from "@/hooks/useSessions";
 import { useCwd } from "@/hooks/useCwd";
 import { useExplorer } from "@/hooks/useExplorer";
@@ -16,13 +16,21 @@ import { useI18n, translate, type MsgKey } from "@/lib/i18n";
 import { TagFilter } from "./TagFilter";
 import { resolveSessionForRestore } from "./session-restore";
 import { SessionItemSkeleton } from "@/components/ui/Skeleton";
+import { DialogShell } from "@/components/ui/DialogShell";
 import { useUnifiedSearchResults } from "@/hooks/useUnifiedSearchResults";
-import { Search, X } from "lucide-react";
+import { useWorkspaceIdentities } from "@/hooks/useWorkspaceIdentities";
+import { onOpenProjectSwitcher } from "@/lib/project-switcher-events";
+import { computeVirtualWindow } from "@/lib/virtual-list";
+import { ArrowDownAZ, BarChart3, Check, ChevronRight, Clock3, FolderGit2, Plus, RefreshCw, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import styles from "./SessionSidebar.module.css";
 
 const SORT_MODE_KEY = "pi-session-sort";
 const SESSION_SCOPE_KEY = "pi-session-scope";
 type SessionScope = "all" | "project";
+
+type VirtualSessionRow =
+  | { type: "group"; key: string; label: MsgKey; divider: boolean }
+  | { type: "session"; key: string; flat: FlatSessionTreeNode };
 
 interface Props {
   selectedSessionId: string | null;
@@ -48,9 +56,9 @@ interface Props {
 
 export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onOpenDiff, onOpenParallel, parallelSessionIds, activeTagFilter: activeTagFilterProp, onSelectTagFilter, showExplorer = true }: Props) {
   const { allSessions, loading, error, pinnedIds, sessionRefreshDone, loadSessions, handlePinToggle, archivedIds, handleArchiveToggle } = useSessions(refreshKey);
-  const { state: cwdState, actions: cwdActions, refs: cwdRefs } = useCwd(onCwdChange);
+  const { state: cwdState, actions: cwdActions } = useCwd(onCwdChange);
   const { selectedCwd } = cwdState;
-  const { setSelectedCwd } = cwdActions;
+  const { setSelectedCwd, setDropdownOpen, handleDefaultCwd } = cwdActions;
   const { explorerOpen, explorerKey, explorerRefreshDone, toggleExplorer, refreshExplorer } = useExplorer(explorerRefreshKey);
   const { tags, setTag, removeTag, sessionTagsOf } = useTags();
   const { showToast } = useToast();
@@ -61,12 +69,42 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const setActiveTagFilter = onSelectTagFilter ?? setLocalActiveTagFilter;
   const [sessionScope, setSessionScope] = useState<SessionScope>("all");
   const [sessionQuery, setSessionQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const normalizedSessionQuery = sessionQuery.trim();
   const {
     sessionHits,
     loading: sessionSearchLoading,
     error: sessionSearchError,
   } = useUnifiedSearchResults(null, normalizedSessionQuery, "sessions", false);
+
+  const pickProjectPath = useCallback(async (path: string): Promise<string | null> => {
+    try {
+      const response = await fetch("/api/cwd/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd: path }),
+      });
+      const data = await response.json().catch(() => ({})) as { cwd?: string; error?: string };
+      if (!response.ok || data.error) return data.error ?? `HTTP ${response.status}`;
+      setSelectedCwd(data.cwd ?? path);
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }, [setSelectedCwd]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setDropdownOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [setDropdownOpen]);
+
+  useEffect(() => onOpenProjectSwitcher(() => setDropdownOpen(true)), [setDropdownOpen]);
 
   useEffect(() => {
     try {
@@ -231,42 +269,215 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, [allSessions, selectedCwd, sessionScope, activeTagFilter, tags, showArchived, archivedSet, normalizedSessionQuery, sessionSearchError, sessionSearchLoading, sessionHits]);
 
   // Build parent-child tree within the filtered set
-  const sessionTree = buildSessionTree(filteredSessions, sortMode);
+  const sessionTree = useMemo(() => buildSessionTree(filteredSessions, sortMode), [filteredSessions, sortMode]);
+  const displayTitles = useMemo(() => buildSessionDisplayTitles(filteredSessions, 52), [filteredSessions]);
+  const workspaceCwds = useMemo(() => [...new Set(filteredSessions.map((session) => session.cwd).filter(Boolean))], [filteredSessions]);
+  const workspaceIdentities = useWorkspaceIdentities(workspaceCwds, refreshKey ?? 0);
+  const activeFilterCount = Number(Boolean(activeTagFilter)) + Number(showArchived);
 
-  // ── Keyboard navigation: ↑/↓ roves focus over visible rows, Enter opens ──
-  // DOM order is the source of truth — collapsed fork children aren't
-  // rendered, so querying [data-session-row] always matches what's visible.
-  const listRef = useRef<HTMLDivElement>(null);
-  const moveRowFocus = useCallback((delta: 1 | -1) => {
-    const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>("[data-session-row]") ?? []);
-    if (!rows.length) return;
-    const cur = rows.indexOf(document.activeElement as HTMLElement);
-    const next = cur === -1
-      ? (delta > 0 ? 0 : rows.length - 1)
-      : Math.min(rows.length - 1, Math.max(0, cur + delta));
-    rows[next].focus();
-    rows[next].scrollIntoView({ block: "nearest" });
+  // Pinned conversations stay outside the virtualized chronological list.
+  // Recursive lookup also allows a fork itself to be pinned (the previous
+  // root-only lookup silently dropped pinned forks).
+  const pinnedSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
+  const pinnedNodes = useMemo(() => {
+    const seen = new Set<string>();
+    const result: NonNullable<ReturnType<typeof findSessionTreeNode>>[] = [];
+    for (const id of pinnedIds) {
+      const node = findSessionTreeNode(sessionTree, id);
+      if (!node || seen.has(node.session.id)) continue;
+      seen.add(node.session.id);
+      result.push(node);
+    }
+    return result;
+  }, [pinnedIds, sessionTree]);
+  const [collapsedSessionIds, setCollapsedSessionIds] = useState<Set<string>>(() => new Set());
+  const toggleSessionCollapsed = useCallback((id: string) => {
+    setCollapsedSessionIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }, []);
+  const unpinnedFlatNodes = useMemo(
+    () => flattenSessionTree(sessionTree, collapsedSessionIds, pinnedSet),
+    [sessionTree, collapsedSessionIds, pinnedSet],
+  );
+  const virtualRows = useMemo<VirtualSessionRow[]>(() => {
+    const rows: VirtualSessionRow[] = [];
+    let previousRootGroup: string | null = null;
+    for (const flat of unpinnedFlatNodes) {
+      if (sortMode === "recent" && flat.depth === 0) {
+        const group = getSessionDateGroup(flat.node.session.modified);
+        if (group !== previousRootGroup) {
+          rows.push({
+            type: "group",
+            key: `group:${group}:${flat.node.session.id}`,
+            label: `group.${group}` as MsgKey,
+            divider: pinnedNodes.length > 0 || previousRootGroup !== null,
+          });
+          previousRootGroup = group;
+        }
+      }
+      rows.push({ type: "session", key: flat.node.session.id, flat });
+    }
+    return rows;
+  }, [pinnedNodes.length, sortMode, unpinnedFlatNodes]);
+  const orderedSessionIds = useMemo(
+    () => [
+      ...pinnedNodes.map((node) => node.session.id),
+      ...virtualRows.flatMap((row) => row.type === "session" ? [row.flat.node.session.id] : []),
+    ],
+    [pinnedNodes, virtualRows],
+  );
+  const sessionOrderById = useMemo(
+    () => new Map(orderedSessionIds.map((id, index) => [id, index])),
+    [orderedSessionIds],
+  );
+  const virtualRowIndexBySession = useMemo(() => {
+    const result = new Map<string, number>();
+    virtualRows.forEach((row, index) => {
+      if (row.type === "session") result.set(row.flat.node.session.id, index);
+    });
+    return result;
+  }, [virtualRows]);
+
+  // ── Fixed/estimated-height virtualization for hundreds or thousands of
+  // conversations. Pinned rows stay mounted; only the chronological portion
+  // is windowed. CSS owns the two row-height estimates so typography and
+  // mobile changes stay in sync with the calculation.
+  const listRef = useRef<HTMLDivElement>(null);
+  const virtualContentRef = useRef<HTMLDivElement>(null);
+  const [virtualViewport, setVirtualViewport] = useState({ scrollTop: 0, height: 600, rowHeight: 60, groupHeight: 34 });
+  const updateVirtualViewport = useCallback(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const styles = getComputedStyle(list);
+    const rowHeight = Number.parseFloat(styles.getPropertyValue("--session-row-height")) || 60;
+    const groupHeight = Number.parseFloat(styles.getPropertyValue("--session-group-height")) || 34;
+    const sectionTop = virtualContentRef.current?.offsetTop ?? 0;
+    const scrollTop = Math.max(0, list.scrollTop - sectionTop);
+    const height = list.clientHeight;
+    setVirtualViewport((current) => (
+      current.scrollTop === scrollTop
+      && current.height === height
+      && current.rowHeight === rowHeight
+      && current.groupHeight === groupHeight
+        ? current
+        : { scrollTop, height, rowHeight, groupHeight }
+    ));
+  }, []);
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const onScroll = () => updateVirtualViewport();
+    list.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(onScroll);
+    resizeObserver?.observe(list);
+    const frame = requestAnimationFrame(onScroll);
+    return () => {
+      cancelAnimationFrame(frame);
+      list.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      resizeObserver?.disconnect();
+    };
+  }, [pinnedNodes.length, updateVirtualViewport, virtualRows.length]);
+  useEffect(() => {
+    if (!listRef.current) return;
+    listRef.current.scrollTop = 0;
+    updateVirtualViewport();
+  }, [activeTagFilter, normalizedSessionQuery, sessionScope, showArchived, sortMode, updateVirtualViewport]);
+  const virtualRowHeights = useMemo(
+    () => virtualRows.map((row) => row.type === "group" ? virtualViewport.groupHeight : virtualViewport.rowHeight),
+    [virtualRows, virtualViewport.groupHeight, virtualViewport.rowHeight],
+  );
+  const virtualWindow = useMemo(
+    () => computeVirtualWindow(virtualRowHeights, virtualViewport.scrollTop, virtualViewport.height),
+    [virtualRowHeights, virtualViewport.height, virtualViewport.scrollTop],
+  );
+  const visibleVirtualRows = virtualRows.slice(virtualWindow.start, virtualWindow.end);
+
+  // Keyboard navigation uses logical row order rather than rendered DOM order,
+  // so ArrowUp/ArrowDown keep working when the next row is outside the window.
+  const focusSessionOrder = useCallback((order: number) => {
+    const bounded = Math.min(orderedSessionIds.length - 1, Math.max(0, order));
+    const sessionId = orderedSessionIds[bounded];
+    if (!sessionId) return;
+    const findRow = () => Array.from(listRef.current?.querySelectorAll<HTMLElement>("[data-session-row]") ?? [])
+      .find((row) => row.dataset.sessionRow === sessionId);
+    const existing = findRow();
+    if (existing) {
+      existing.focus();
+      existing.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    const virtualIndex = virtualRowIndexBySession.get(sessionId);
+    const list = listRef.current;
+    const content = virtualContentRef.current;
+    if (virtualIndex === undefined || !list || !content) return;
+    list.scrollTop = content.offsetTop + (virtualWindow.offsets[virtualIndex] ?? 0) - 8;
+    requestAnimationFrame(() => requestAnimationFrame(() => findRow()?.focus()));
+  }, [orderedSessionIds, virtualRowIndexBySession, virtualWindow.offsets]);
   const handleListKeyDown = useCallback((e: React.KeyboardEvent) => {
     const target = e.target as HTMLElement;
     // Inline rename/delete inputs keep their own arrow/Enter behavior.
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
-    if (e.key === "ArrowDown") { e.preventDefault(); moveRowFocus(1); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); moveRowFocus(-1); }
+    const row = target.closest<HTMLElement>("[data-session-row]");
+    const currentOrder = row?.dataset.sessionOrder === undefined ? -1 : Number(row.dataset.sessionOrder);
+    if (e.key === "ArrowDown") { e.preventDefault(); focusSessionOrder(currentOrder < 0 ? 0 : currentOrder + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); focusSessionOrder(currentOrder < 0 ? orderedSessionIds.length - 1 : currentOrder - 1); }
     else if ((e.key === "Enter" || e.key === " ") && target.dataset.sessionRow) {
       e.preventDefault();
       target.click();
     }
-  }, [moveRowFocus]);
+  }, [focusSessionOrder, orderedSessionIds.length]);
 
-  // Split into pinned vs unpinned. Pinned sessions float to the top, preserving
-  // their order in the pins file (most recently pinned first). Unpinned sessions
-  // keep the tree layout (parents + forks) with date group headers.
-  const pinnedSet = new Set(pinnedIds);
-  const pinnedNodes = pinnedIds
-    .map((id) => sessionTree.find((n) => n.session.id === id) ?? null)
-    .filter((n): n is NonNullable<typeof n> => n !== null);
-  const unpinnedNodes = sessionTree.filter((n) => !pinnedSet.has(n.session.id));
+  const renderSessionRow = (flat: FlatSessionTreeNode, forcedPinned = false) => {
+    const { node, depth } = flat;
+    const sessionId = node.session.id;
+    const isPinned = forcedPinned || pinnedSet.has(sessionId);
+    const hasVisibleChildren = node.children.some((child) => !pinnedSet.has(child.session.id));
+    return (
+      <div className={styles.sessionRowShell}>
+        {depth > 0 && (
+          <span
+            className={styles.forkLine}
+            style={{ left: depth * 12 + 6 }}
+            aria-hidden
+          />
+        )}
+        <SessionItem
+          session={node.session}
+          isSelected={sessionId === selectedSessionId}
+          onClick={() => onSelectSession(node.session)}
+          onRenamed={loadSessions}
+          onDeleted={(id) => {
+            onSessionDeleted?.(id);
+            loadSessions();
+            showToast(translate("toast.sessionDeleted"), { type: "success" });
+          }}
+          depth={depth}
+          hasChildren={!forcedPinned && hasVisibleChildren}
+          collapsed={collapsedSessionIds.has(sessionId)}
+          onToggleCollapse={() => toggleSessionCollapsed(sessionId)}
+          isPinned={isPinned}
+          onPinToggle={handlePinToggle}
+          tags={sessionTagsOf(sessionId)}
+          onSetTag={(tag) => { setTag(sessionId, tag); showToast(`${translate("toast.tagAdded")} #${tag}`, { type: "success" }); }}
+          onRemoveTag={(tag) => { removeTag(sessionId, tag); showToast(`${translate("toast.tagRemoved")} #${tag}`, { type: "info" }); }}
+          isParallelOpen={parallelSessionIds?.includes(sessionId) ?? false}
+          onOpenParallel={onOpenParallel}
+          isArchived={archivedSet.has(sessionId)}
+          onArchiveToggle={handleArchiveToggle}
+          showProject={sessionScope === "all"}
+          displayTitle={displayTitles.get(sessionId)}
+          workspaceIdentity={workspaceIdentities[node.session.cwd]}
+          listOrder={sessionOrderById.get(sessionId)}
+        />
+      </div>
+    );
+  };
 
   return (
     <div className={styles.container}>
@@ -281,10 +492,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               className={`${styles.newSessionButton} ${selectedCwd ? styles.newSessionButtonEnabled : styles.newSessionButtonDisabled} hover-bg-selected-accent`}
               title={selectedCwd ? `${t("sidebar.newIn")} ${selectedCwd}` : t("sidebar.selectProjectFirst")}
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                <line x1="6" y1="1" x2="6" y2="11" />
-                <line x1="1" y1="6" x2="11" y2="6" />
-              </svg>
+              <Plus size={12} strokeWidth={2.2} aria-hidden="true" />
               {t("sidebar.new")}
             </button>
             <button
@@ -293,28 +501,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               title={t("sidebar.refresh")}
             >
               {sessionRefreshDone ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <Check size={15} color="var(--color-success)" strokeWidth={2.5} aria-hidden="true" />
               ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
+                <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
               )}
             </button>
           </div>
         </div>
 
-        {/* CWD picker */}
-        <CwdPicker
-          state={cwdState}
-          actions={cwdActions}
-          refs={cwdRefs}
-          projects={projects}
-          initialSessionId={initialSessionId ?? null}
-          isRestoring={restoredSessionIdRef.current === initialSessionId}
-        />
       </div>
 
       {/* Conversation-first controls: search spans every project by default;
@@ -369,40 +563,32 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             </button>
           </div>
           <button
+            type="button"
             onClick={cycleSortMode}
             className={`${styles.sortButton} ${sortMode !== "recent" ? styles.sortButtonActive : ""} hover-bg-selected-accent`}
             title={`${t("sidebar.sortBy")}: ${t(sortMode === "recent" ? "sidebar.sortRecent" : sortMode === "name" ? "sidebar.sortName" : "sidebar.sortMessages")}`}
-            aria-label="Sort sessions"
+            aria-label={`${t("sidebar.sortBy")}: ${t(sortMode === "recent" ? "sidebar.sortRecent" : sortMode === "name" ? "sidebar.sortName" : "sidebar.sortMessages")}`}
           >
             {sortMode === "recent" ? (
-              /* clock */
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
-              </svg>
+              <Clock3 size={12} strokeWidth={2} aria-hidden="true" />
             ) : sortMode === "name" ? (
-              /* A→Z */
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 18 8 6l4 12" /><line x1="5.3" y1="14" x2="10.7" y2="14" />
-                <polyline points="15 8 21 8 15 18 21 18" />
-              </svg>
+              <ArrowDownAZ size={12} strokeWidth={2} aria-hidden="true" />
             ) : (
-              /* bars (count) */
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="4" y1="19" x2="4" y2="10" /><line x1="10" y1="19" x2="10" y2="5" /><line x1="16" y1="19" x2="16" y2="13" /><line x1="22" y1="19" x2="22" y2="8" />
-              </svg>
+              <BarChart3 size={12} strokeWidth={2} aria-hidden="true" />
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setFiltersOpen(true)}
+            className={`${styles.filterButton} ${activeFilterCount > 0 ? styles.filterButtonActive : ""}`}
+            aria-label={t("sidebar.filters")}
+            title={t("sidebar.filters")}
+          >
+            <SlidersHorizontal size={15} strokeWidth={1.8} aria-hidden />
+            {activeFilterCount > 0 && <span className={styles.filterCount}>{activeFilterCount}</span>}
           </button>
         </div>
       </div>
-
-      {/* Tag filter chips (visible when user has tagged any session) */}
-      {Object.keys(tags).length > 0 && (
-        <TagFilter
-          tags={tags}
-          activeTag={activeTagFilter}
-          onSelectTag={setActiveTagFilter}
-        />
-      )}
 
       {/* Session list */}
       <div
@@ -454,90 +640,42 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <>
             <div className={`${styles.groupHeader} ${styles.groupHeaderDivider}`}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--text-dim)" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </svg>
+                <Star size={11} color="var(--text-dim)" fill="var(--text-dim)" strokeWidth={2} aria-hidden="true" />
                 {t("sidebar.pinned")}
               </span>
             </div>
             {pinnedNodes.map((node) => (
-              <div key={node.session.id}>
-                <SessionTreeItem
-                  node={node}
-                  selectedSessionId={selectedSessionId}
-                  onSelectSession={onSelectSession}
-                  onRenamed={loadSessions}
-                  onSessionDeleted={(id) => {
-                    onSessionDeleted?.(id);
-                    loadSessions();
-                    showToast(translate("toast.sessionDeleted"), { type: "success" });
-                  }}
-                  depth={0}
-                  isPinned
-                  onPinToggle={handlePinToggle}
-                  tags={sessionTagsOf(node.session.id)}
-                  onSetTag={(tag) => { setTag(node.session.id, tag); showToast(`${translate("toast.tagAdded")} #${tag}`, { type: "success" }); }}
-                  onRemoveTag={(tag) => { removeTag(node.session.id, tag); showToast(`${translate("toast.tagRemoved")} #${tag}`, { type: "info" }); }}
-                  isParallelOpen={parallelSessionIds?.includes(node.session.id) ?? false}
-                  onOpenParallel={onOpenParallel}
-                  isArchived={archivedSet.has(node.session.id)}
-                  onArchiveToggle={handleArchiveToggle}
-                  showProject={sessionScope === "all"}
-                />
+              <div key={node.session.id} className={styles.pinnedSessionRow}>
+                {renderSessionRow({ node, depth: 0 }, true)}
               </div>
             ))}
           </>
         )}
-        {unpinnedNodes.map((node, idx) => {
-          const group = getSessionDateGroup(node.session.modified);
-          const prevGroup = idx > 0 ? getSessionDateGroup(unpinnedNodes[idx - 1].session.modified) : null;
-          // Date headers only make sense when the list is in recency order.
-          const showHeader = sortMode === "recent" && group !== prevGroup;
-          // First section never gets a divider (nothing to separate from). Pinned
-          // section already adds its own divider; the first unpinned group is
-          // the "first" only if there's no Pinned section above it.
-          const isFirstSection = idx === 0 && pinnedNodes.length === 0;
-          const headerClass = isFirstSection ? styles.groupHeader : `${styles.groupHeader} ${styles.groupHeaderDivider}`;
-          return (
-            <div key={node.session.id}>
-              {showHeader && (
-                <div className={headerClass}>
-                  {t(`group.${group}` as MsgKey)}
-                </div>
-              )}
-              <SessionTreeItem
-                node={node}
-                selectedSessionId={selectedSessionId}
-                onSelectSession={onSelectSession}
-                onRenamed={loadSessions}
-                onSessionDeleted={(id) => {
-                  onSessionDeleted?.(id);
-                  loadSessions();
-                  showToast(translate("toast.sessionDeleted"), { type: "success" });
-                }}
-                depth={0}
-                isPinned={false}
-                onPinToggle={handlePinToggle}
-                tags={sessionTagsOf(node.session.id)}
-                onSetTag={(tag) => { setTag(node.session.id, tag); showToast(`${translate("toast.tagAdded")} #${tag}`, { type: "success" }); }}
-                onRemoveTag={(tag) => { removeTag(node.session.id, tag); showToast(`${translate("toast.tagRemoved")} #${tag}`, { type: "info" }); }}
-                isParallelOpen={parallelSessionIds?.includes(node.session.id) ?? false}
-                onOpenParallel={onOpenParallel}
-                isArchived={archivedSet.has(node.session.id)}
-                onArchiveToggle={handleArchiveToggle}
-                showProject={sessionScope === "all"}
-              />
-            </div>
-          );
-        })}
-        {archivedCount > 0 && (
-          <button
-            onClick={() => setShowArchived((v) => !v)}
-            className={styles.archivedToggle}
+        <div
+          ref={virtualContentRef}
+          className={styles.virtualSessionContent}
+          style={{ height: virtualWindow.totalHeight }}
+          data-total-session-rows={unpinnedFlatNodes.length}
+          data-rendered-session-rows={visibleVirtualRows.filter((row) => row.type === "session").length}
+        >
+          <div
+            className={styles.virtualSessionWindow}
+            style={{ transform: `translateY(${virtualWindow.offsetTop}px)` }}
           >
-            {showArchived ? t("sidebar.hideArchived") : t("sidebar.showArchived")} ({archivedCount})
-          </button>
-        )}
+            {visibleVirtualRows.map((row) => row.type === "group" ? (
+              <div
+                key={row.key}
+                className={`${styles.groupHeader} ${row.divider ? styles.groupHeaderDivider : ""}`}
+              >
+                {t(row.label)}
+              </div>
+            ) : (
+              <div key={row.key} className={styles.virtualSessionRow}>
+                {renderSessionRow(row.flat)}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* File Explorer section */}
@@ -551,14 +689,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               onClick={toggleExplorer}
               className={styles.explorerToggle}
             >
-              <svg
-                width="9" height="9" viewBox="0 0 10 10" fill="none"
-                stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+              <ChevronRight
+                size={9}
+                strokeWidth={1.8}
                 className={styles.explorerChevron}
                 style={{ transform: explorerOpen ? "rotate(90deg)" : "none" }}
-              >
-                <polyline points="3 2 7 5 3 8" />
-              </svg>
+                aria-hidden="true"
+              />
               {t("sidebar.explorer")}
             </button>
             <button
@@ -567,14 +704,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               className={`${styles.explorerRefreshButton} ${explorerRefreshDone ? styles.explorerRefreshButtonDone : styles.explorerRefreshButtonDefault} ${explorerRefreshDone ? "" : "hover-bg-selected-accent"}`}
             >
               {explorerRefreshDone ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <Check size={13} color="var(--color-success)" strokeWidth={2.5} aria-hidden="true" />
               ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
+                <RefreshCw size={13} strokeWidth={2} aria-hidden="true" />
               )}
             </button>
           </div>
@@ -591,6 +723,86 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           )}
         </div>
       )}
+
+      <DialogShell
+        open={filtersOpen}
+        title={t("sidebar.filters")}
+        description={t("sidebar.filtersDescription")}
+        onClose={() => setFiltersOpen(false)}
+        size="compact"
+        mobileMode="sheet"
+        footer={(
+          <>
+            <button
+              type="button"
+              className={styles.filterFooterSecondary}
+              onClick={() => { setActiveTagFilter(null); setShowArchived(false); }}
+              disabled={!activeTagFilter && !showArchived}
+            >
+              {t("sidebar.clearFilters")}
+            </button>
+            <button type="button" className={styles.filterFooterPrimary} onClick={() => setFiltersOpen(false)}>
+              {t("common.done")}
+            </button>
+          </>
+        )}
+      >
+        <div className={styles.filterBody}>
+          <section className={styles.filterSection}>
+            <h3>{t("sidebar.workingProject")}</h3>
+            <p>{t("sidebar.workingProjectHint")}</p>
+            <button
+              type="button"
+              className={styles.projectFilterButton}
+              onClick={() => {
+                setFiltersOpen(false);
+                requestAnimationFrame(() => setDropdownOpen(true));
+              }}
+            >
+              <FolderGit2 size={18} strokeWidth={1.8} aria-hidden />
+              <span className={styles.projectFilterText}>
+                <strong>{selectedCwd ? getSessionProjectName(selectedCwd) : t("sidebar.noProject")}</strong>
+                <small>{selectedCwd ? shortenCwd(selectedCwd, cwdState.homeDir) : t("sidebar.selectProjectFirst")}</small>
+              </span>
+              <ChevronRight size={17} strokeWidth={1.8} aria-hidden />
+            </button>
+          </section>
+
+          {Object.keys(tags).length > 0 && (
+            <section className={styles.filterSection}>
+              <h3>{t("sidebar.tags")}</h3>
+              <TagFilter tags={tags} activeTag={activeTagFilter} onSelectTag={setActiveTagFilter} />
+            </section>
+          )}
+
+          <section className={styles.filterSection}>
+            <h3>{t("sidebar.history")}</h3>
+            <button
+              type="button"
+              className={`${styles.archiveFilter} ${showArchived ? styles.archiveFilterActive : ""}`}
+              onClick={() => setShowArchived((value) => !value)}
+              aria-pressed={showArchived}
+            >
+              <span className={styles.archiveCheck}>{showArchived && <Check size={14} strokeWidth={2.2} aria-hidden />}</span>
+              <span>
+                <strong>{t("sidebar.includeArchived")}</strong>
+                <small>{archivedCount} {t("sidebar.archivedConversations")}</small>
+              </span>
+            </button>
+          </section>
+        </div>
+      </DialogShell>
+
+      <ProjectSwitcher
+        open={cwdState.dropdownOpen}
+        onClose={() => setDropdownOpen(false)}
+        onPick={setSelectedCwd}
+        onPickPath={pickProjectPath}
+        onDefaultCwd={() => void handleDefaultCwd()}
+        projects={projects}
+        selectedCwd={selectedCwd}
+        homeDir={cwdState.homeDir}
+      />
     </div>
   );
 }

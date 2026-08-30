@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useI18n } from "@/lib/i18n";
 import type { OAuthProvider, OAuthLoginState } from "./models-config-types";
 import { SectionTitle } from "./models-config-forms";
 import styles from "./OAuthDetail.module.css";
 
 export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefresh: () => void }) {
+  const { t } = useI18n();
   const [loginState, setLoginState] = useState<OAuthLoginState>({ phase: "idle" });
   const [inputValue, setInputValue] = useState("");
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -76,9 +78,9 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
     };
     es.onerror = () => {
       es.close();
-      setLoginState((prev) => prev.phase === "success" ? prev : { phase: "error", message: "Connection lost" });
+      setLoginState((prev) => prev.phase === "success" ? prev : { phase: "error", message: t("oauth.connectionLost") });
     };
-  }, [provider.id, onRefresh]);
+  }, [provider.id, onRefresh, t]);
 
   const handleLogout = useCallback(async () => {
     await fetch(`/api/auth/logout/${encodeURIComponent(provider.id)}`, { method: "POST" });
@@ -88,7 +90,7 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
 
   const submitCode = useCallback(async (token: string, code: string) => {
     if (!code.trim()) return;
-    setLoginState({ phase: "progress", message: "Verifying…" });
+    setLoginState({ phase: "progress", message: t("oauth.verifying") });
     try {
       const res = await fetch(`/api/auth/login/${encodeURIComponent(provider.id)}`, {
         method: "POST",
@@ -97,18 +99,21 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as { error?: string };
-        setLoginState({ phase: "error", message: d.error ?? `Server error ${res.status}` });
+        setLoginState({
+          phase: "error",
+          message: d.error ?? t("oauth.serverError").replace("{status}", String(res.status)),
+        });
         return;
       }
       setInputValue("");
       // Success path: SSE stream will emit "success" and update state
     } catch (e) {
-      setLoginState({ phase: "error", message: e instanceof Error ? e.message : "Network error" });
+      setLoginState({ phase: "error", message: e instanceof Error ? e.message : t("oauth.networkError") });
     }
-  }, [provider.id]);
+  }, [provider.id, t]);
 
   const submitSelection = useCallback(async (token: string, value: string) => {
-    setLoginState({ phase: "progress", message: "Continuing…" });
+    setLoginState({ phase: "progress", message: t("oauth.continuing") });
     try {
       const res = await fetch(`/api/auth/login/${encodeURIComponent(provider.id)}`, {
         method: "POST",
@@ -117,12 +122,15 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as { error?: string };
-        setLoginState({ phase: "error", message: d.error ?? `Server error ${res.status}` });
+        setLoginState({
+          phase: "error",
+          message: d.error ?? t("oauth.serverError").replace("{status}", String(res.status)),
+        });
       }
     } catch (e) {
-      setLoginState({ phase: "error", message: e instanceof Error ? e.message : "Network error" });
+      setLoginState({ phase: "error", message: e instanceof Error ? e.message : t("oauth.networkError") });
     }
-  }, [provider.id]);
+  }, [provider.id, t]);
 
   const isWorking = loginState.phase === "connecting" || loginState.phase === "progress" ||
     loginState.phase === "auth" || loginState.phase === "device_code" ||
@@ -133,24 +141,29 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
   return (
     <div className={styles.container}>
       <div className={styles.headerRow}>
-        <SectionTitle>Subscription</SectionTitle>
+        <SectionTitle>{t("oauth.subscription")}</SectionTitle>
         <div className={styles.statusBadge}>
-          <span className={`${styles.statusDot} ${provider.loggedIn ? styles.statusDotConnected : styles.statusDotDisconnected}`} />
+          <span
+            className={`${styles.statusDot} ${provider.loggedIn ? styles.statusDotConnected : styles.statusDotDisconnected}`}
+            aria-hidden="true"
+          />
           <span className={`${styles.statusText} ${provider.loggedIn ? styles.statusTextConnected : styles.statusTextDisconnected}`}>
-            {provider.loggedIn ? "connected" : "not connected"}
+            {provider.loggedIn ? t("oauth.connected") : t("oauth.notConnected")}
           </span>
         </div>
       </div>
 
       {/* Status */}
-      <div className={styles.statusArea}>
+      <div className={styles.statusArea} aria-live="polite">
         {loginState.phase === "idle" && (
           <p className={styles.messageText}>
-            {provider.loggedIn ? "Already connected. You can re-login or disconnect." : `Connect your ${provider.name} account.`}
+            {provider.loggedIn
+              ? t("oauth.alreadyConnected")
+              : t("oauth.connectAccount").replace("{provider}", provider.name)}
           </p>
         )}
         {loginState.phase === "connecting" && (
-          <p className={styles.messageTextSimple}>Opening browser…</p>
+          <p className={styles.messageTextSimple}>{t("oauth.openingBrowser")}</p>
         )}
         {loginState.phase === "select" && (
           <div className={styles.columnGap10}>
@@ -174,14 +187,14 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
           <div className={styles.columnGap10}>
             <p className={styles.messageText}>
               {loginState.phase === "auth"
-                ? "Complete sign-in in the browser, then copy the redirect URL from the address bar and paste it below."
+                ? (loginState.instructions || t("oauth.completeBrowserSignIn"))
                 : loginState.message}
             </p>
             {loginState.phase === "auth" && (
               <p className={styles.helpText}>
-                If the browser window did not open,{" "}
+                {t("oauth.browserDidNotOpen")}{" "}
                 <a href={loginState.url} target="_blank" rel="noopener noreferrer" className={styles.link}>
-                  click here to open the login page
+                  {t("oauth.openLoginPage")}
                 </a>
                 .
               </p>
@@ -192,15 +205,19 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") submitCode(loginState.token, inputValue); }}
-                placeholder={loginState.phase === "auth" ? "http://localhost:1455/auth/callback?code=…" : (loginState.placeholder ?? "Enter value…")}
+                placeholder={loginState.phase === "auth" ? "http://localhost:1455/auth/callback?code=…" : (loginState.placeholder ?? t("oauth.enterValue"))}
+                aria-label={loginState.phase === "auth" ? t("oauth.redirectUrl") : t("oauth.authorizationResponse")}
                 className={styles.textInput}
+                autoComplete="off"
+                spellCheck={false}
               />
               <button
+                type="button"
                 onClick={() => submitCode(loginState.token, inputValue)}
                 disabled={!hasInput}
                 className={`${styles.submitBtn} ${hasInput ? styles.submitBtnEnabled : styles.submitBtnDisabled}`}
               >
-                Submit
+                {t("oauth.submit")}
               </button>
             </div>
           </div>
@@ -208,7 +225,7 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
         {loginState.phase === "device_code" && (
           <div className={styles.columnGap10}>
             <p className={styles.messageText}>
-              Open the verification page and enter this code:
+              {t("oauth.deviceCodeInstructions")}
             </p>
             <div className={styles.codeDisplay}>
               {loginState.userCode}
@@ -217,7 +234,9 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
               <a href={loginState.verificationUri} target="_blank" rel="noopener noreferrer" className={styles.link}>
                 {loginState.verificationUri}
               </a>
-              {loginState.expiresInSeconds ? ` Expires in ${Math.ceil(loginState.expiresInSeconds / 60)} minutes.` : ""}
+              {loginState.expiresInSeconds
+                ? ` ${t("oauth.expiresInMinutes").replace("{minutes}", String(Math.ceil(loginState.expiresInSeconds / 60)))}`
+                : ""}
             </p>
           </div>
         )}
@@ -225,7 +244,7 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
           <p className={styles.messageTextSimple}>{loginState.message}</p>
         )}
         {loginState.phase === "success" && (
-          <p className={styles.successMessage}>Connected successfully.</p>
+          <p className={styles.successMessage}>{t("oauth.connectedSuccessfully")}</p>
         )}
         {loginState.phase === "error" && (
           <p className={styles.errorMessage}>{loginState.message}</p>
@@ -236,25 +255,28 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
       <div className={styles.actionsRow}>
         {isWorking ? (
           <button
+            type="button"
             onClick={() => { eventSourceRef.current?.close(); setLoginState({ phase: "idle" }); }}
             className={styles.cancelBtn}
           >
-            Cancel
+            {t("common.cancel")}
           </button>
         ) : (
           <>
             <button
+              type="button"
               onClick={handleLogin}
               className={styles.loginBtn}
             >
-              {provider.loggedIn ? "Re-login" : "Login"}
+              {provider.loggedIn ? t("oauth.relogin") : t("oauth.login")}
             </button>
             {provider.loggedIn && (
               <button
+                type="button"
                 onClick={handleLogout}
                 className={styles.disconnectBtn}
               >
-                Disconnect
+                {t("oauth.disconnect")}
               </button>
             )}
           </>

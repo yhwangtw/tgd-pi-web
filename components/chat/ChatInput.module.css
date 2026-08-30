@@ -2,22 +2,22 @@
 .container {
   flex-shrink: 0;
   background: transparent;
-  padding: 0 16px 8px;
-  padding-right: 52px; /* 16px base + 36px for ChatMinimap alignment */
+  padding: 0 var(--space-4) var(--space-2);
+  padding-right: var(--component-chat-minimap-gutter); /* base + ChatMinimap alignment */
 }
 
 .containerExpanded {
   position: fixed;
   inset: 0;
   z-index: 300;
-  padding: 20px;
+  padding: var(--space-4);
   background: var(--bg);
 }
 
 @media (min-width: 701px) {
-  :global(html[data-density="compact"]) .container { padding-bottom: 4px; }
-  :global(html[data-density="compact"]) .inputWrapper { padding-top: 6px; padding-bottom: 6px; }
-  :global(html[data-density="compact"]) .textarea { min-height: 30px; padding-top: 3px; padding-bottom: 3px; }
+  :global(html[data-density="compact"]) .container { padding-bottom: var(--space-1); }
+  :global(html[data-density="compact"]) .inputWrapper { padding-top: var(--space-2); padding-bottom: var(--space-2); }
+  :global(html[data-density="compact"]) .textarea { min-height: 30px; padding-top: var(--space-1); padding-bottom: var(--space-1); }
   :global(html[data-density="compact"]) .bottomBar { margin-top: 1px; }
 }
 
@@ -44,7 +44,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   margin-bottom: 12px;
   color: var(--text);
 }
@@ -52,7 +52,7 @@
 .expandedHeader > div {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -87,7 +87,7 @@
 /* Retry banner */
 .retryBanner {
   margin-bottom: 8px;
-  padding: 5px 10px;
+  padding: var(--space-1) var(--space-2);
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning-border);
   border-radius: var(--radius-control);
@@ -95,7 +95,7 @@
   color: var(--color-warning-text);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .retryIcon {
@@ -124,8 +124,8 @@
   min-width: 0;
   flex: 1 1 auto;
   align-items: center;
-  gap: 8px;
-  padding: 6px 9px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
   border: 0;
   background: transparent;
   color: var(--text-muted);
@@ -156,14 +156,14 @@
 .contextRow {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 6px;
   min-width: 0;
 }
 
 .contextLabel {
   flex: 0 0 auto;
-  padding-top: 4px;
+  padding-top: var(--space-1);
   color: var(--text-dim);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
@@ -174,7 +174,7 @@
 .contextChips {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -193,9 +193,9 @@
 .contextOpen {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   min-width: 0;
-  padding: 4px 5px 4px 7px;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
   color: inherit;
   cursor: pointer;
 }
@@ -230,7 +230,7 @@
 /* Image previews */
 .imagePreviewRow {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
   margin-bottom: 6px;
   flex-wrap: wrap;
 }
@@ -269,12 +269,12 @@
 /* Main input wrapper */
 .inputWrapper {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
   position: relative;
   background: var(--bg-elev-1);
   border-radius: var(--radius-composer);
-  padding: 10px 10px 10px 14px;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   box-shadow: var(--color-shadow-input);
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
@@ -296,7 +296,7 @@
 .inputRow {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   min-width: 0;
   position: relative;
@@ -322,7 +322,7 @@
   min-height: 36px;
   max-height: 200px;
   margin: 0;
-  padding: 6px 0;
+  padding: var(--space-2) 0;
   overflow: auto;
   position: relative;
   z-index: 1;
@@ -343,7 +343,7 @@
 .streamingActions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   flex-shrink: 0;
   align-self: flex-end;
 }
@@ -352,8 +352,8 @@
 .steerButton {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 12px;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-warning-border-strong);
   border-radius: var(--radius-control);
   font-size: var(--text-md);
@@ -380,8 +380,8 @@
 .followUpButton {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 12px;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-accent-border);
   border-radius: var(--radius-control);
   font-size: var(--text-md);
@@ -410,8 +410,8 @@
   align-self: flex-end;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border: none;
   border-radius: var(--radius-control);
   font-size: var(--text-sm);
@@ -447,14 +447,14 @@
   margin-top: 8px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .bottomBarLeft {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-optical);
 }
 
 .modelControl {
@@ -468,31 +468,42 @@
 
 .sendModeSwitch {
   display: inline-flex;
+  height: 32px;
   align-items: center;
-  margin-left: 4px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--bg-panel);
+  gap: var(--space-optical);
+  margin-left: 0;
+  padding: var(--space-optical);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev-2);
 }
 
 .sendModeButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 60px;
+  min-width: 62px;
   height: 26px;
-  padding: 0 8px;
-  border-radius: var(--radius-control-compact);
-  color: var(--text-dim);
-  font-size: var(--text-xs);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
   font-weight: var(--weight-medium);
+  line-height: var(--leading-none);
   cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
 }
 
 .sendModeButton:hover {
   color: var(--text);
   background: var(--bg-hover);
+}
+
+.sendModeButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .sendModeActiveFollowUp {
@@ -510,7 +521,7 @@
 .bottomBarRight {
   display: none;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-optical);
 }
 
 .mobileLabeledControl {
@@ -527,6 +538,23 @@
   display: none;
 }
 
+.composerSettingsSheetBody { padding: 0; }
+
+.composerSettingsDone {
+  min-width: 96px;
+  min-height: var(--control-default);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.composerSettingsDone:hover { background: var(--accent-hover); }
+
 .bottomBarRightMobileOpen {
   position: absolute;
   right: 0;
@@ -536,8 +564,8 @@
   max-width: min(620px, calc(100vw - 40px));
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 4px;
-  padding: 8px;
+  gap: var(--space-1);
+  padding: var(--space-2);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-control-prominent);
   background: var(--glass-bg);
@@ -561,7 +589,7 @@
   flex: 0 1 auto;
   min-width: 0;
   margin-left: auto;
-  padding-left: 12px;
+  padding-left: var(--space-3);
   overflow: hidden;
   color: var(--text-dim);
   font-size: var(--text-2xs);
@@ -578,7 +606,7 @@
   flex: 0 0 32px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-control);
   background: transparent;
@@ -639,7 +667,7 @@
 .compactControls {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-optical);
 }
 
 .compactWrapper {
@@ -649,9 +677,9 @@
 .autoCompactButton {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   height: 32px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-control);
   font-size: var(--text-xs);
@@ -691,7 +719,7 @@
   background: var(--tool-bg);
   color: var(--color-error-text);
   font-size: var(--text-xs);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-menu);
   white-space: nowrap;
   pointer-events: none;
@@ -703,8 +731,8 @@
 .compactButton {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 8px 12px;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
   height: 32px;
   border: none;
   border-radius: var(--radius-control);
@@ -740,8 +768,8 @@
 .stopButton {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   height: 32px;
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-border);
@@ -811,13 +839,13 @@
 
 @media (max-width: 700px) {
   .container {
-    padding: 3px 8px 4px;
+    padding: var(--space-1) var(--space-2) var(--space-1);
     background: var(--bg);
     box-shadow: 0 -12px 28px -26px color-mix(in srgb, var(--text) 35%, transparent);
   }
 
   .containerExpanded {
-    padding: 12px;
+    padding: var(--space-3);
   }
 
   .expandedHeader > div {
@@ -834,26 +862,26 @@
   }
 
   .inputWrapper {
-    gap: 6px;
-    padding: 4px 5px 4px 10px;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
     border-radius: var(--radius-composer);
   }
 
   .inputRow {
-    gap: 6px;
+    gap: var(--space-2);
   }
 
   .textarea {
     min-height: 40px;
     max-height: min(34dvh, 180px);
-    font-size: 16px;
+    font-size: var(--text-lg);
     line-height: var(--leading-copy);
-    padding: 8px 0;
+    padding: var(--space-2) 0;
   }
 
   .textareaExpanded {
     max-height: none;
-    padding-top: 4px;
+    padding-top: var(--space-1);
   }
 
   .sendModeSwitch {
@@ -874,7 +902,7 @@
   .bottomBar {
     position: relative;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--space-1);
     margin-top: 2px;
     overflow: visible;
   }
@@ -885,14 +913,14 @@
   .bottomBarStreaming {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
   }
 
   .bottomBarStreaming .bottomBarLeft {
     display: flex;
     width: auto;
     flex: 1 1 auto;
-    gap: 4px;
+    gap: var(--space-1);
     overflow: visible;
   }
 
@@ -903,9 +931,10 @@
   .bottomBarStreaming .sendModeSwitch {
     width: auto;
     min-width: 0;
-    min-height: 44px;
+    height: var(--control-touch);
+    min-height: var(--control-touch);
     flex: 0 0 auto;
-    padding: 3px;
+    padding: var(--space-1);
   }
 
   .bottomBarStreaming .modelControl {
@@ -917,8 +946,8 @@
     min-width: 64px;
     flex: 1 1 0;
     height: 36px;
-    padding-right: 10px;
-    padding-left: 10px;
+    padding-right: var(--space-2);
+    padding-left: var(--space-2);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -948,8 +977,8 @@
   .bottomBarLeft > div button {
     width: 100%;
     max-width: 100% !important;
-    padding-left: 6px !important;
-    padding-right: 6px !important;
+    padding-left: var(--space-2) !important;
+    padding-right: var(--space-2) !important;
   }
 
   .modelControl > button {
@@ -973,8 +1002,8 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 0 11px;
+    gap: var(--space-2);
+    padding: 0 var(--space-3);
     border: 1px solid var(--border);
     border-radius: var(--radius-pill);
     color: var(--text-muted);
@@ -1007,9 +1036,9 @@
     max-height: min(42dvh, 360px);
     flex: 0 0 100%;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
+    gap: var(--space-2);
     margin-top: 5px;
-    padding: 8px;
+    padding: var(--space-2);
     overflow-y: auto;
     border: 1px solid var(--border);
     border-radius: var(--radius-control-prominent);
@@ -1023,7 +1052,7 @@
     grid-column: 1 / -1;
     align-items: center;
     justify-content: space-between;
-    padding: 0 2px 5px;
+    padding: 0 var(--space-optical) var(--space-1);
     border-bottom: 1px solid var(--border);
     color: var(--text);
     font-size: var(--text-sm);
@@ -1032,7 +1061,7 @@
 
   .bottomBarRightMobileOpen .mobileToolsHeader button {
     min-height: var(--control-touch);
-    padding: 0 10px;
+    padding: 0 var(--space-2);
     border-radius: var(--radius-pill);
     color: var(--accent);
     font-size: var(--text-xs);
@@ -1056,6 +1085,10 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
     background: var(--bg-elev-1);
+  }
+
+  .composerSettingsSheetContent .mobileLabeledControl:has([data-inline-selector-open="true"]) {
+    grid-column: 1 / -1;
   }
 
   .bottomBarRightMobileOpen .scrollModeControl {
@@ -1103,8 +1136,8 @@
     display: grid;
     min-height: 56px;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 3px;
-    padding: 6px;
+    gap: var(--space-1);
+    padding: var(--space-2);
   }
 
   .bottomBarRightMobileOpen .mobileLabeledControl > div {
@@ -1118,8 +1151,8 @@
     min-height: 56px;
     align-items: center;
     justify-content: flex-start;
-    gap: 6px;
-    padding: 20px 10px 4px !important;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-2) var(--space-1) !important;
     border-radius: var(--radius-control);
   }
 
@@ -1128,8 +1161,12 @@
     height: 44px !important;
     min-height: 44px;
     justify-content: center;
-    padding: 14px 5px 2px !important;
+    padding: var(--space-3) var(--space-1) var(--space-optical) !important;
     font-size: var(--text-xs);
+    line-height: var(--leading-compact);
+    overflow-wrap: anywhere;
+    text-align: center;
+    white-space: normal;
   }
 
   .bottomBarRightMobileOpen .compactWrapper {
@@ -1145,8 +1182,31 @@
     width: 100%;
     min-height: 56px;
     justify-content: flex-start;
-    padding: 20px 10px 4px;
+    padding: var(--space-4) var(--space-2) var(--space-1);
     border-radius: var(--radius-control);
+  }
+
+  .composerSettingsSheetContent.bottomBarRightMobileOpen {
+    display: grid;
+    width: 100%;
+    max-height: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    margin: 0;
+    padding: var(--space-4);
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .composerSettingsSheetContent .mobileToolsHeader { display: none; }
+
+  .composerSettingsDone {
+    width: 100%;
+    min-height: var(--control-touch);
+    border-radius: var(--radius-pill);
   }
 
   .bottomBarRightStreaming {
@@ -1196,17 +1256,17 @@
 
   .contextLabel {
     display: block;
-    padding: 0 0 4px;
+    padding: 0 0 var(--space-1);
   }
 }
 
 :global(html[data-ui-style="trae"]) .container {
-  padding: 0 24px 18px;
-  padding-right: 60px;
+  padding: 0 var(--space-6) var(--space-4);
+  padding-right: var(--component-composer-action-gutter);
 }
 
 :global(html[data-ui-style="trae"]) .innerWrapper:not(.innerWrapperExpanded) {
-  padding: 8px;
+  padding: var(--space-2);
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   border-radius: var(--radius-composer);
   background: var(--bg-elev-1);
@@ -1220,8 +1280,8 @@
 }
 
 :global(html[data-ui-style="trae"]) .inputWrapper {
-  gap: 10px;
-  padding: 9px 10px 7px 12px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border: 0;
   border-radius: var(--radius-composer);
   background: transparent;
@@ -1235,7 +1295,7 @@
 
 :global(html[data-ui-style="trae"]) .textarea {
   min-height: 44px;
-  padding: 8px 0;
+  padding: var(--space-2) 0;
   font-size: var(--text-lg);
   line-height: var(--leading-relaxed);
 }
@@ -1256,20 +1316,20 @@
 :global(html[data-ui-style="trae"]) .bottomBar {
   min-height: 40px;
   margin: 0;
-  padding: 0 10px 8px;
+  padding: 0 var(--space-2) var(--space-2);
 }
 
 :global(html[data-ui-style="trae"]) .bottomBarLeft {
-  gap: 5px;
+  gap: var(--space-1);
 }
 
 :global(html[data-ui-style="trae"]) .sendModeSwitch {
   margin-left: 0;
-  padding: 3px;
-  border: 0;
+  padding: var(--space-optical);
+  border: 1px solid var(--trae-hairline);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--text) 7%, var(--bg-panel));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent);
+  background: var(--trae-control);
+  box-shadow: none;
 }
 
 :global(html[data-ui-style="trae"]) .sendModeButton {
@@ -1280,9 +1340,9 @@
 
 :global(html[data-ui-style="trae"]) .sendModeActiveFollowUp,
 :global(html[data-ui-style="trae"]) .sendModeActiveSteer {
-  color: var(--text);
-  background: var(--bg-elev-1);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 12%, transparent);
+  color: var(--accent);
+  background: var(--color-accent-bg-strong);
+  box-shadow: none;
 }
 
 :global(html[data-ui-style="trae"]) .bottomBarLeft button,
@@ -1308,23 +1368,23 @@
 
 @media (max-width: 700px) {
   :global(html[data-ui-style="trae"]) .container {
-    padding: 4px 12px 10px;
+    padding: var(--space-1) var(--space-3) var(--space-2);
   }
 
   :global(html[data-ui-style="trae"]) .innerWrapper:not(.innerWrapperExpanded) {
-    padding: 6px;
+    padding: var(--space-2);
     border-radius: var(--radius-composer);
   }
 
   :global(html[data-ui-style="trae"]) .inputWrapper {
-    padding: 5px 4px 3px 9px;
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
     border-radius: var(--radius-composer);
   }
 
   :global(html[data-ui-style="trae"]) .textarea {
     min-height: 44px;
     max-height: min(32dvh, 170px);
-    padding: 7px 0;
+    padding: var(--space-2) 0;
   }
 
   :global(html[data-ui-style="trae"]) .sendButton,
@@ -1341,16 +1401,16 @@
 
   :global(html[data-ui-style="trae"]) .bottomBar {
     min-height: 40px;
-    padding: 0 5px 5px;
+    padding: 0 var(--space-1) var(--space-1);
   }
 
   :global(html[data-ui-style="trae"]) .bottomBarLeft > div button {
-    padding-left: 10px !important;
-    padding-right: 10px !important;
+    padding-left: var(--space-2) !important;
+    padding-right: var(--space-2) !important;
   }
 
   :global(html[data-ui-style="trae"]) .bottomBarRightMobileOpen {
-    padding: 8px;
+    padding: var(--space-2);
     border-radius: var(--radius-control-prominent);
     background: var(--bg-panel);
   }

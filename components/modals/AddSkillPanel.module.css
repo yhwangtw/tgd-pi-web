@@ -7,7 +7,7 @@
 .headerArea {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   margin-bottom: 20px;
 }
 
@@ -19,12 +19,12 @@
 
 .searchRow {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .searchInput {
   flex: 1;
-  padding: 7px 10px;
+  padding: var(--space-2) var(--space-2);
   font-size: var(--text-md);
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -34,7 +34,7 @@
 }
 
 .searchBtn {
-  padding: 7px 16px;
+  padding: var(--space-2) var(--space-4);
   font-size: var(--text-md);
   border-radius: var(--radius-control);
   border: none;
@@ -56,7 +56,7 @@
 .scopeRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
 }
 
 .scopeToggle {
@@ -69,7 +69,7 @@
 }
 
 .scopeBtn {
-  padding: 3px 10px;
+  padding: var(--space-1) var(--space-2);
   border: none;
   cursor: pointer;
 }
@@ -114,6 +114,47 @@
   word-break: break-word;
 }
 
+.confirmation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-card);
+  background: var(--color-warning-bg);
+}
+
+.confirmationCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.confirmationCopy strong { color: var(--color-warning-text-strong); font-size: var(--text-sm); }
+.confirmationCopy code { overflow: hidden; color: var(--text); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.confirmationCopy span { color: var(--color-warning-text); font-size: var(--text-xs); }
+
+.confirmationActions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-2);
+}
+
+.confirmationActions button {
+  min-height: var(--control-md);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-elev-1);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.confirmationActions button:disabled { cursor: not-allowed; opacity: .55; }
+.confirmationActions .confirmInstallBtn { border-color: var(--color-warning-border); color: var(--color-warning-text-strong); }
+
 .resultsList {
   flex: 1;
   overflow-y: auto;
@@ -122,8 +163,8 @@
 .resultItem {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 0;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -142,7 +183,7 @@
 .metaRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
@@ -166,7 +207,7 @@
 
 .installBtn {
   flex-shrink: 0;
-  padding: 5px 14px;
+  padding: var(--space-1) var(--space-3);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   border-radius: var(--radius-control-compact);
@@ -209,11 +250,16 @@
   text-decoration: none;
 }
 
-:global(html[data-ui-style="trae"]) .headerArea { gap: 14px; }
+:global(html[data-ui-style="trae"]) .headerArea { gap: var(--space-3); }
 :global(html[data-ui-style="trae"]) .searchInput { min-height: 42px; border-color: transparent; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .searchBtn,
 :global(html[data-ui-style="trae"]) .installBtn { min-height: 38px; border-color: transparent; border-radius: var(--radius-control); }
-:global(html[data-ui-style="trae"]) .scopeToggle { padding: 3px; border: 0; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .scopeToggle { padding: var(--space-1); border: 0; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .scopeBtn { min-height: 30px; border: 0; border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .scopeBtnActive { background: var(--trae-surface-solid); box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 9%, transparent); }
-:global(html[data-ui-style="trae"]) .resultItem { margin-bottom: 8px; padding: 12px; border: 0; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .resultItem { margin-bottom: 8px; padding: var(--space-3); border: 0; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
+
+@media (max-width: 680px) {
+  .confirmation { align-items: stretch; flex-direction: column; }
+  .confirmationActions { justify-content: flex-end; }
+}

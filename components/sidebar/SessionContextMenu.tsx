@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { Archive, Columns2, Pencil, Star, Tag, Trash2 } from "lucide-react";
 import type { SessionInfo } from "@/lib/types";
 import { getTagStyle } from "@/lib/tag-colors";
 import { useTheme } from "@/hooks/useTheme";
@@ -157,9 +158,7 @@ export function SessionContextMenu({
       onContextMenu={(e) => e.preventDefault()}
     >
       <button role="menuitem" onClick={handlePin} className={styles.menuItem}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill={isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.menuIcon}>
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-        </svg>
+        <Star size={13} fill={isPinned ? "currentColor" : "none"} className={styles.menuIcon} aria-hidden />
         <span>{isPinned ? t("session.unpin") : t("session.pin")}</span>
       </button>
       <button
@@ -169,25 +168,17 @@ export function SessionContextMenu({
         className={`${styles.menuItem} ${isParallelOpen ? styles.menuItemDisabled : ""}`}
         title={isParallelOpen ? t("session.alreadyParallel") : t("session.openParallel")}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.menuIcon}>
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <line x1="12" y1="3" x2="12" y2="21" />
-        </svg>
+        <Columns2 size={13} className={styles.menuIcon} aria-hidden />
         <span>{t("session.openParallel")}</span>
       </button>
       <div className={styles.separator} />
       <button role="menuitem" onClick={handleRename} className={styles.menuItem}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.menuIcon}>
-          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-        </svg>
+        <Pencil size={13} className={styles.menuIcon} aria-hidden />
         <span>{t("session.rename")}</span>
       </button>
       {addingTag ? (
         <form onSubmit={handleSubmitTag} className={styles.tagForm} role="menuitem">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.menuIcon}>
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-            <line x1="7" y1="7" x2="7.01" y2="7" />
-          </svg>
+          <Tag size={13} className={styles.menuIcon} aria-hidden />
           <input
             ref={tagInputRef}
             value={tagDraft}
@@ -210,10 +201,7 @@ export function SessionContextMenu({
           onClick={() => setAddingTag(true)}
           className={styles.menuItem}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.menuIcon}>
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-            <line x1="7" y1="7" x2="7.01" y2="7" />
-          </svg>
+          <Tag size={13} className={styles.menuIcon} aria-hidden />
           <span>{t("session.addTag")}</span>
         </button>
       )}
@@ -243,21 +231,12 @@ export function SessionContextMenu({
       <div className={styles.separator} />
       {onArchiveToggle && (
         <button role="menuitem" onClick={handleArchive} className={styles.menuItem}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.menuIcon}>
-            <polyline points="21 8 21 21 3 21 3 8" />
-            <rect x="1" y="3" width="22" height="5" />
-            <line x1="10" y1="12" x2="14" y2="12" />
-          </svg>
+          <Archive size={13} className={styles.menuIcon} aria-hidden />
           <span>{isArchived ? t("session.unarchive") : t("session.archive")}</span>
         </button>
       )}
       <button role="menuitem" onClick={handleDelete} className={`${styles.menuItem} ${styles.menuItemDanger}`}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.menuIcon}>
-          <polyline points="3 6 5 6 21 6" />
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-          <path d="M10 11v6M14 11v6" />
-          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-        </svg>
+        <Trash2 size={13} className={styles.menuIcon} aria-hidden />
         <span>{t("session.delete")}</span>
       </button>
     </div>

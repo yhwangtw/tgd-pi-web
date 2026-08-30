@@ -4,12 +4,32 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
+import { MODEL_PINNED_STORAGE_KEY, MODEL_RECENT_STORAGE_KEY } from "@/lib/model-selector-prefs";
 import { ChatInput } from "../ChatInput";
 import { ModelSelector } from "../ModelSelector";
 import { ThinkingSelector } from "../ThinkingSelector";
 import { ToolPresetSelector } from "../ToolPresetSelector";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const nativeMatchMedia = window.matchMedia;
+
+function useMobileViewport() {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: vi.fn((query: string) => ({
+      matches: query === "(max-width: 700px)",
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
 
 describe("composer controls", () => {
   let root: Root | null = null;
@@ -21,6 +41,13 @@ describe("composer controls", () => {
     container?.remove();
     container = null;
     localStorage.removeItem("pi-stream-send-mode");
+    localStorage.removeItem(MODEL_RECENT_STORAGE_KEY);
+    localStorage.removeItem(MODEL_PINNED_STORAGE_KEY);
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: nativeMatchMedia,
+    });
     setLocale("en");
   });
 
@@ -85,6 +112,7 @@ describe("composer controls", () => {
 
     await act(async () => tools!.click());
     expect(container!.textContent).toContain("No tools, chat only");
+    expect(container!.textContent).toContain("Read-only exploration and planning");
     expect(container!.textContent).toContain("All built-in tools");
   });
 
@@ -150,13 +178,88 @@ describe("composer controls", () => {
     await act(async () => trigger.click());
     await nextFrame();
     const nextModel = [...container!.querySelectorAll<HTMLButtonElement>('[role="option"]')]
-      .find((option) => option.textContent === "GPT-5.6")!;
+      .find((option) => option.textContent?.includes("GPT-5.6"))!;
     await act(async () => nextModel.click());
     await nextFrame();
 
     expect(onModelChange).toHaveBeenCalledWith("openai", "gpt-5.6");
     expect(container!.querySelector('[role="listbox"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it("uses a searchable mobile sheet with model metadata, pinning, and recent history", async () => {
+    useMobileViewport();
+    const onModelChange = vi.fn();
+    const options = [
+      {
+        provider: "openai",
+        modelId: "gpt-5.6-luna",
+        name: "GPT-5.6 Luna",
+        available: true,
+        contextWindow: 272_000,
+        cost: { input: 0.25, output: 2 },
+      },
+      {
+        provider: "zai",
+        modelId: "glm-5.3",
+        name: "GLM-5.3",
+        available: true,
+        contextWindow: 128_000,
+        cost: { input: 1, output: 3 },
+      },
+    ];
+    await render(
+      <ModelSelector
+        modelOptions={options}
+        modelsByProvider={[
+          { provider: "openai", options: [options[0]] },
+          { provider: "zai", options: [options[1]] },
+        ]}
+        currentName="GPT-5.6 Luna"
+        model={{ provider: "openai", modelId: "gpt-5.6-luna" }}
+        isStreaming={false}
+        onModelChange={onModelChange}
+      />,
+    );
+    await nextFrame();
+
+    const trigger = container!.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!;
+    await act(async () => trigger.click());
+    await nextFrame();
+
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.textContent).toContain("Choose a model");
+    expect(dialog.textContent).toContain("Available");
+    expect(dialog.textContent).toContain("272k ctx");
+    expect(dialog.textContent).toContain("$0.25 / $2 · 1M");
+    const search = dialog.querySelector<HTMLInputElement>('input[aria-label="Search models"]')!;
+    expect(document.activeElement).toBe(search);
+
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setValue?.call(search, "glm");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(dialog.textContent).not.toContain("GPT-5.6 Luna");
+    expect(dialog.textContent).toContain("GLM-5.3");
+
+    const glmSelect = [...dialog.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.includes("GLM-5.3"))!;
+    const glmRow = glmSelect.parentElement!;
+    const pin = glmRow.querySelector<HTMLButtonElement>('button[aria-label="Pin model"]')!;
+    await act(async () => pin.click());
+    expect(dialog.querySelector('button[aria-label="Unpin model"]')?.getAttribute("aria-pressed")).toBe("true");
+    expect(localStorage.getItem(MODEL_PINNED_STORAGE_KEY)).toContain("glm-5.3");
+
+    const pinnedGlmSelect = [...dialog.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.includes("GLM-5.3"))!;
+    await act(async () => pinnedGlmSelect.click());
+    await nextFrame();
+    expect(onModelChange).toHaveBeenCalledWith("zai", "glm-5.3");
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(localStorage.getItem(MODEL_RECENT_STORAGE_KEY)).toContain("glm-5.3");
   });
 
   it("exposes selector menus as listboxes and closes them with Escape", async () => {
@@ -237,6 +340,75 @@ describe("composer controls", () => {
     await act(async () => done.click());
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(panel.className).not.toContain("bottomBarRightMobileOpen");
+  });
+
+  it("opens mobile composer controls as a focus-managed bottom sheet", async () => {
+    useMobileViewport();
+    const onThinkingLevelChange = vi.fn();
+    const onToolPresetChange = vi.fn();
+    await render(
+      <ChatInput
+        onSend={vi.fn()}
+        onAbort={vi.fn()}
+        isStreaming={false}
+        onCompact={vi.fn()}
+        thinkingLevel="medium"
+        onThinkingLevelChange={onThinkingLevelChange}
+        toolPreset="default"
+        onToolPresetChange={onToolPresetChange}
+      />,
+    );
+    await nextFrame();
+
+    const trigger = container!.querySelector<HTMLButtonElement>('button[aria-label="More composer controls"]')!;
+    expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(document.body.querySelector('[data-testid="composer-controls-sheet"]')).toBeNull();
+
+    await act(async () => trigger.click());
+    await nextFrame();
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+    const sheet = dialog.querySelector<HTMLElement>('[data-testid="composer-controls-sheet"]')!;
+    expect(dialog.textContent).toContain("Composer controls");
+    expect(sheet.textContent).toContain("Composer");
+    expect(sheet.textContent).toContain("Reasoning");
+    expect(sheet.textContent).toContain("Tools");
+    expect(dialog.textContent).toContain("Done");
+    expect(Boolean(container!.inert)).toBe(true);
+    expect(document.activeElement).toBe(sheet.querySelector('button[aria-label="Expand composer"]'));
+
+    const reasoning = sheet.querySelector<HTMLButtonElement>('button[aria-label="Change reasoning level"]')!;
+    await act(async () => reasoning.click());
+    const reasoningList = sheet.querySelector<HTMLElement>('[role="listbox"][aria-label="Change reasoning level"]')!;
+    expect(reasoning.closest('[data-inline-selector-open="true"]')).not.toBeNull();
+    expect(reasoning.getAttribute("aria-controls")).toBe(reasoningList.id);
+    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    const high = [...reasoningList.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((option) => option.textContent?.includes("High"))!;
+    await act(async () => high.click());
+    await nextFrame();
+    expect(onThinkingLevelChange).toHaveBeenCalledWith("high");
+    expect(sheet.querySelector('[role="listbox"][aria-label="Change reasoning level"]')).toBeNull();
+    expect(document.activeElement).toBe(reasoning);
+
+    const tools = sheet.querySelector<HTMLButtonElement>('button[aria-label="Change tool preset"]')!;
+    await act(async () => tools.click());
+    const toolList = sheet.querySelector<HTMLElement>('[role="listbox"][aria-label="Change tool preset"]')!;
+    expect(tools.closest('[data-inline-selector-open="true"]')).not.toBeNull();
+    expect(sheet.querySelector('[role="listbox"][aria-label="Change reasoning level"]')).toBeNull();
+    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    const full = [...toolList.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((option) => option.textContent?.includes("All built-in tools"))!;
+    await act(async () => full.click());
+    await nextFrame();
+    expect(onToolPresetChange).toHaveBeenCalledWith("full");
+    expect(sheet.querySelector('[role="listbox"][aria-label="Change tool preset"]')).toBeNull();
+    expect(document.activeElement).toBe(tools);
+
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await nextFrame();
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(Boolean(container!.inert)).toBe(false);
   });
 
   it("uses a short streaming placeholder for the selected delivery mode", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { searchSessionEntries } from "../session-search";
+import { getSessionSearchMetadata, scoreSessionSearchHit, searchSessionEntries } from "../session-search";
 
 describe("searchSessionEntries", () => {
   it("finds user and assistant text without opening or mutating a session", () => {
@@ -41,5 +41,21 @@ describe("searchSessionEntries", () => {
     }));
 
     expect(searchSessionEntries(entries, "needle")).toHaveLength(8);
+  });
+
+  it("derives the latest model and assistant outcome for filters", () => {
+    expect(getSessionSearchMetadata([
+      { type: "model_change", provider: "openai", modelId: "gpt-5" },
+      { type: "message", id: "a", message: { role: "assistant", content: "ok", stopReason: "stop" } },
+      { type: "model_change", provider: "anthropic", modelId: "claude" },
+      { type: "message", id: "b", message: { role: "assistant", content: "no", stopReason: "error" } },
+    ])).toEqual({ provider: "anthropic", modelId: "claude", status: "failed" });
+  });
+
+  it("ranks title matches above body-only matches", () => {
+    const now = new Date("2026-08-30T00:00:00Z").getTime();
+    const title = scoreSessionSearchHit({ name: "Fix mobile layout", firstMessage: "hello", query: "mobile", matchCount: 0, modified: "2026-08-01T00:00:00Z", now });
+    const body = scoreSessionSearchHit({ firstMessage: "hello", query: "mobile", matchCount: 6, modified: "2026-08-30T00:00:00Z", now });
+    expect(title).toBeGreaterThan(body);
   });
 });

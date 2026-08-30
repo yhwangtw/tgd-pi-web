@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildExtensionsReport,
+  buildExtensionPermissionManifests,
   collectExtensionResources,
   displayExtensionSupport,
   type ExtensionLoadResultLike,
@@ -12,6 +13,45 @@ describe("displayExtensionSupport", () => {
     expect(displayExtensionSupport("unsupported", 0)).toBe("notApplicable");
     expect(displayExtensionSupport("unsupported", 1)).toBe("unsupported");
     expect(displayExtensionSupport("partial", 0)).toBe("partial");
+  });
+});
+
+describe("extension permission manifests", () => {
+  it("separates observed registrations from unavoidable host-process potential", () => {
+    const manifests = buildExtensionPermissionManifests({
+      paths: ["<inline:guard>"],
+      commands: [{ name: "guard", invocationName: "guard", source: "<inline:guard>" }],
+      tools: [{ name: "safe_read", source: "<inline:guard>" }],
+      flags: [],
+      providers: [],
+      shortcuts: [],
+      events: [{ name: "tool_call", handlerCount: 2, source: "<inline:guard>" }],
+      renderers: [],
+      resources: [],
+    }, "/work/project");
+
+    expect(manifests).toHaveLength(1);
+    expect(manifests[0]).toMatchObject({ source: "<inline:guard>", scope: "runtime", origin: "inline" });
+    expect(manifests[0].capabilities).toEqual(expect.arrayContaining([
+      { id: "commands", evidence: "observed", count: 1 },
+      { id: "agentTools", evidence: "observed", count: 1 },
+      { id: "lifecycle", evidence: "observed", count: 2 },
+      { id: "filesystem", evidence: "potential", count: 1 },
+      { id: "process", evidence: "potential", count: 1 },
+      { id: "network", evidence: "potential", count: 1 },
+      { id: "credentials", evidence: "potential", count: 1 },
+    ]));
+  });
+
+  it("marks project and installed package sources without claiming unobserved access", () => {
+    const manifests = buildExtensionPermissionManifests({
+      paths: ["/work/project/.pi/extensions/local.ts", "/Users/me/.pi/agent/npm/node_modules/pkg/index.ts"],
+      commands: [], tools: [], flags: [], providers: [], shortcuts: [], events: [], renderers: [], resources: [],
+    }, "/work/project");
+
+    expect(manifests.find((item) => item.source.includes("local.ts"))).toMatchObject({ scope: "project", origin: "local" });
+    expect(manifests.find((item) => item.source.includes("node_modules"))).toMatchObject({ scope: "user", origin: "package" });
+    expect(manifests.every((item) => item.capabilities.every((capability) => capability.evidence === "potential"))).toBe(true);
   });
 });
 
@@ -133,6 +173,10 @@ describe("buildExtensionsReport", () => {
       shortcuts: "partial",
       renderers: "partial",
     });
+    expect(r.permissions.length).toBeGreaterThan(0);
+    expect(r.permissions.flatMap((permission) => permission.capabilities)).toContainEqual(
+      expect.objectContaining({ id: "lifecycle", evidence: "observed" }),
+    );
   });
 
   it("collects resources contributed by extensions only", () => {

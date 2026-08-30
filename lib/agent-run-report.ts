@@ -1,5 +1,6 @@
 import type { AgentMessage, AssistantMessage } from "./types";
 import type { AgentRunReport } from "./agent-run-types";
+import { redactSensitiveText } from "./redaction";
 
 function textOf(message: AssistantMessage): string {
   if (!Array.isArray(message.content)) return "";
@@ -61,11 +62,12 @@ export function buildAgentRunReport(
     }
   }
 
-  const clippedSummary = summary.length > 900 ? `${summary.slice(0, 897)}…` : summary;
+  const safeSummary = redactSensitiveText(summary);
+  const clippedSummary = safeSummary.length > 900 ? `${safeSummary.slice(0, 897)}…` : safeSummary;
   return {
     summary: clippedSummary || "Run completed without a text summary.",
     changedFiles: [...changedFiles].slice(0, 100),
-    tests: tests.slice(-30),
+    tests: tests.slice(-30).map((test) => ({ ...test, name: redactSensitiveText(test.name) })),
     tools: [...tools],
     usage: { inputTokens, outputTokens, cost },
     durationMs: startedAt ? Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt)) : null,

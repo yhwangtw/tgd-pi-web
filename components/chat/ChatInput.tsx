@@ -1,6 +1,21 @@
 "use client";
 
-import React, { useRef, useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
+import React, { useRef, useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef, KeyboardEvent, type ReactNode, type RefObject } from "react";
+import {
+  ArrowRight,
+  FileText,
+  Image as ImageIcon,
+  Maximize2,
+  Minimize2,
+  RefreshCw,
+  Shrink,
+  SlidersHorizontal,
+  Square,
+  Upload,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
 import { COMPOSITION_END_ENTER_GRACE_MS, buildSlashItems } from "./chat-input-constants";
 import { SlashMenu, filterSlashItems } from "./SlashMenu";
 import { loadDraft, saveDraft, clearDraft, loadHistory, saveHistory } from "@/lib/composer-persistence";
@@ -20,6 +35,8 @@ import { useI18n } from "@/lib/i18n";
 import { extractComposerMentions, removeComposerMention, type ComposerMention } from "@/lib/composer-context";
 import { loadStreamingSendMode, resolveStreamingSendMode, saveStreamingSendMode, type StreamingSendMode } from "@/lib/composer-mode";
 import { requestOpenFile } from "@/lib/file-links";
+import type { ModelCatalogEntry } from "@/lib/model-catalog-types";
+import { DialogShell } from "@/components/ui/DialogShell";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -41,7 +58,7 @@ interface Props {
   isStreaming: boolean;
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
-  modelList?: { id: string; name: string; provider: string }[];
+  modelList?: ModelCatalogEntry[];
   onModelChange?: (provider: string, modelId: string) => void;
   onCompact?: () => void;
   onAbortCompaction?: () => void;
@@ -108,6 +125,65 @@ function resizeTextarea(textarea: HTMLTextAreaElement, expanded: boolean): void 
   textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
 }
 
+function ResponsiveComposerControls({
+  isMobile,
+  open,
+  isStreaming,
+  title,
+  doneLabel,
+  initialFocusRef,
+  onClose,
+  children,
+}: {
+  isMobile: boolean;
+  open: boolean;
+  isStreaming: boolean;
+  title: string;
+  doneLabel: string;
+  initialFocusRef: RefObject<HTMLElement | null>;
+  onClose: (restoreFocus?: boolean) => void;
+  children: ReactNode;
+}) {
+  if (isMobile && !isStreaming) {
+    return (
+      <DialogShell
+        open={open}
+        title={title}
+        onClose={() => onClose(false)}
+        initialFocusRef={initialFocusRef}
+        bodyClassName={styles.composerSettingsSheetBody}
+        mobileMode="sheet"
+        footer={(
+          <button type="button" className={styles.composerSettingsDone} onClick={() => onClose(false)}>
+            {doneLabel}
+          </button>
+        )}
+      >
+        <div
+          id="composer-secondary-tools"
+          className={`${styles.bottomBarRightMobileOpen} ${styles.composerSettingsSheetContent}`}
+          role="region"
+          aria-label={title}
+          data-testid="composer-controls-sheet"
+        >
+          {children}
+        </div>
+      </DialogShell>
+    );
+  }
+
+  return (
+    <div
+      id="composer-secondary-tools"
+      className={`${styles.bottomBarRight} ${open ? styles.bottomBarRightMobileOpen : ""} ${isStreaming ? styles.bottomBarRightStreaming : ""}`}
+      role={open && !isStreaming ? "region" : undefined}
+      aria-label={open && !isStreaming ? title : undefined}
+    >
+      {children}
+    </div>
+  );
+}
+
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
@@ -134,6 +210,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [streamingSendMode, setStreamingSendMode] = useState<StreamingSendMode>(() => loadStreamingSendMode());
   const contextMentions = useMemo(() => extractComposerMentions(value), [value]);
 
@@ -146,6 +223,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mobileToolsButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileControlsInitialRef = useRef<HTMLButtonElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
@@ -357,7 +435,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, []);
 
   useEffect(() => {
+    const media = window.matchMedia?.("(max-width: 700px)");
+    const update = () => setIsMobileViewport(media?.matches ?? false);
+    update();
+    media?.addEventListener?.("change", update);
+    return () => media?.removeEventListener?.("change", update);
+  }, []);
+
+  useEffect(() => {
     if (!mobileToolsOpen) return;
+    if (isMobileViewport) return;
     const closeOnPointer = (event: PointerEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) setMobileToolsOpen(false);
     };
@@ -370,7 +457,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       document.removeEventListener("pointerdown", closeOnPointer);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [closeMobileTools, mobileToolsOpen]);
+  }, [closeMobileTools, isMobileViewport, mobileToolsOpen]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -761,19 +848,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <span>{t("input.expandedHint")}</span>
             </div>
             <button type="button" onClick={toggleExpanded} aria-label={t("input.collapseComposer")} title={t("input.collapseComposer")}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="m8 3-5 5m0-5v5h5M16 21l5-5m0 5v-5h-5" />
-              </svg>
+              <Minimize2 size={16} strokeWidth={1.8} aria-hidden="true" />
             </button>
           </div>
         )}
         {/* Retry banner */}
         {retryInfo && (
           <div className={styles.retryBanner}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.retryIcon}>
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
+            <RefreshCw size={11} strokeWidth={2} className={styles.retryIcon} aria-hidden="true" />
             {t("input.retrying")} ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span className={styles.retryErrorText}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
@@ -784,7 +866,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <span className={styles.quotePreview}>{quote.text}</span>
             </button>
             <button type="button" className={styles.quoteRemove} onClick={onClearQuote} aria-label={t("chat.clearQuote")} title={t("chat.clearQuote")}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              <X size={12} strokeWidth={2} aria-hidden="true" />
             </button>
           </div>
         )}
@@ -800,9 +882,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     onClick={() => requestOpenFile({ path: item.path })}
                     title={item.path}
                   >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-                    </svg>
+                    <FileText size={11} strokeWidth={1.7} aria-hidden="true" />
                     <span>{item.path}</span>
                   </button>
                   <button
@@ -837,9 +917,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   title={t("input.removeImage")}
                   className={styles.imageRemoveButton}
                 >
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
-                  </svg>
+                  <X size={8} strokeWidth={1.8} aria-hidden="true" />
                 </button>
               </div>
             ))}
@@ -920,14 +998,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 }
               >
                 {streamingSendMode === "steer" ? (
-                  <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <path d="M5 1 L9 5 L5 9" /><line x1="1" y1="5" x2="9" y2="5" />
-                  </svg>
+                  <ArrowRight size={12} strokeWidth={1.8} aria-hidden="true" />
                 ) : (
-                  <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <line x1="5" y1="1" x2="5" y2="6" /><polyline points="2.5 3.5 5 1 7.5 3.5" />
-                    <line x1="2" y1="9" x2="8" y2="9" />
-                  </svg>
+                  <Upload size={12} strokeWidth={1.8} aria-hidden="true" />
                 )}
                 <span className={styles.actionLabel}>{t(streamingSendMode === "steer" ? "input.steer" : "input.followUp")}</span>
               </button>
@@ -943,10 +1016,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="2" y1="7" x2="11" y2="7" />
-                <polyline points="7.5 3 12 7 7.5 11" />
-              </svg>
+              <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
               <span className={styles.actionLabel}>{t("input.send")}</span>
             </button>
           )}
@@ -966,11 +1036,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               className={isStreaming || isSubmitting ? styles.attachButtonDisabled : styles.attachButtonEnabled}
               style={{ color: attachedImages.length ? "var(--accent)" : "var(--text-muted)" }}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
+              <ImageIcon size={15} strokeWidth={1.8} aria-hidden="true" />
             </button>
             {isStreaming && onSteer && onFollowUp && (
               <div className={styles.sendModeSwitch} aria-label={t("input.sendMode")} role="group">
@@ -1009,25 +1075,29 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               ref={mobileToolsButtonRef}
               type="button"
               className={`${styles.mobileToolsButton} ${mobileToolsOpen ? styles.mobileToolsButtonActive : ""}`}
-              onClick={() => setMobileToolsOpen((open) => !open)}
+              onClick={(event) => {
+                event.currentTarget.focus();
+                setMobileToolsOpen((open) => !open);
+              }}
               aria-label={t("input.moreControls")}
               aria-expanded={mobileToolsOpen}
+              aria-haspopup={isMobileViewport ? "dialog" : undefined}
               aria-controls="composer-secondary-tools"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
-                <line x1="4" y1="7" x2="20" y2="7" /><circle cx="9" cy="7" r="2" fill="var(--bg)" />
-                <line x1="4" y1="17" x2="20" y2="17" /><circle cx="15" cy="17" r="2" fill="var(--bg)" />
-              </svg>
+              <SlidersHorizontal size={18} strokeWidth={1.8} aria-hidden="true" />
               <span className={styles.mobileToolsText}>{t("input.controls")}</span>
             </button>
           )}
 
           {/* RIGHT: thinking + tools preset + compact + sound (idle) | Stop + sound (streaming) */}
-          <div
-            id="composer-secondary-tools"
-            className={`${styles.bottomBarRight} ${mobileToolsOpen ? styles.bottomBarRightMobileOpen : ""} ${isStreaming ? styles.bottomBarRightStreaming : ""}`}
-            role={mobileToolsOpen && !isStreaming ? "region" : undefined}
-            aria-label={mobileToolsOpen && !isStreaming ? t("input.controlsTitle") : undefined}
+          <ResponsiveComposerControls
+            isMobile={isMobileViewport}
+            open={mobileToolsOpen}
+            isStreaming={isStreaming}
+            title={t("input.controlsTitle")}
+            doneLabel={t("input.controlsDone")}
+            initialFocusRef={mobileControlsInitialRef}
+            onClose={closeMobileTools}
           >
             <div className={styles.mobileToolsHeader}>
               <span>{t("input.controlsTitle")}</span>
@@ -1038,6 +1108,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <div className={styles.mobileLabeledControl}>
               <span className={styles.mobileControlLabel}>{t("input.composerSize")}</span>
               <button
+                ref={mobileControlsInitialRef}
                 type="button"
                 onClick={toggleExpanded}
                 className={styles.expandButton}
@@ -1046,13 +1117,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 title={expanded ? t("input.collapseComposer") : t("input.expandComposer")}
               >
                 {expanded ? (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <path d="M8 3v5H3M16 21v-5h5M3 8l5-5M21 16l-5 5" />
-                  </svg>
+                  <Minimize2 size={13} strokeWidth={1.8} aria-hidden="true" />
                 ) : (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <path d="M8 3H3v5M16 21h5v-5M3 8l5-5M21 16l-5 5" />
-                  </svg>
+                  <Maximize2 size={13} strokeWidth={1.8} aria-hidden="true" />
                 )}
                 <span className={styles.mobileControlValue}>{t(expanded ? "input.collapseComposerShort" : "input.expandComposerShort")}</span>
               </button>
@@ -1064,6 +1131,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 thinkingLevelMap={thinkingLevelMap}
                 availableThinkingLevels={availableThinkingLevels}
                 isStreaming={isStreaming}
+                presentation={isMobileViewport ? "inline" : "popover"}
                 onThinkingLevelChange={onThinkingLevelChange}
               />
             </div>
@@ -1074,6 +1142,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 availableTools={availableTools}
                 customToolNames={customToolNames}
                 isStreaming={isStreaming}
+                presentation={isMobileViewport ? "inline" : "popover"}
                 onToolPresetChange={onToolPresetChange}
               />
             </div>
@@ -1125,12 +1194,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       title={isCompacting ? t("chat.stopCompaction") : t("chat.compactTitle")}
                     >
                       {isCompacting ? (
-                        <><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>{t("chat.compacting")}</>
+                        <><Square size={10} fill="currentColor" strokeWidth={1.5} aria-hidden="true" />{t("chat.compacting")}</>
                       ) : (
-                        <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
-                          <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
-                        </svg>{t("chat.compactNow")}</>
+                        <><Shrink size={11} strokeWidth={2} aria-hidden="true" />{t("chat.compactNow")}</>
                       )}
                     </button>
                   </div>
@@ -1145,9 +1211,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 title={t("input.stopTitle")}
                 className={styles.stopButton}
               >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
-                </svg>
+                <Square size={10} fill="currentColor" strokeWidth={1.5} aria-hidden="true" />
                 {t("input.stop")}
               </button>
             )}
@@ -1173,23 +1237,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }}
                 >
                   {soundEnabled ? (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                    </svg>
+                    <Volume2 size={12} strokeWidth={2} aria-hidden="true" />
                   ) : (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                      <line x1="23" y1="9" x2="17" y2="15" />
-                      <line x1="17" y1="9" x2="23" y2="15" />
-                    </svg>
+                    <VolumeX size={12} strokeWidth={2} aria-hidden="true" />
                   )}
                   <span className={styles.mobileControlValue}>{t(soundEnabled ? "chat.on" : "chat.off")}</span>
                 </button>
               </div>
             )}
-          </div>
+          </ResponsiveComposerControls>
 
         </div>
 

@@ -9,8 +9,8 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-xs);
 }
@@ -25,14 +25,14 @@
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-optical);
 }
 .viewTab, .viewTabActive {
   min-height: var(--control-xs);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px 8px;
+  padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-control);
   font-size: var(--text-xs);
   font-family: inherit;
@@ -42,13 +42,13 @@
 .viewTabActive { color: var(--color-accent); background: var(--color-accent-bg); }
 
 /* ── Full-tree (Files) view ── */
-.tree { padding: 2px 0; }
+.tree { padding: var(--space-optical) 0; }
 .dirRow {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   width: 100%;
-  padding: 4px 12px;
+  padding: var(--space-1) var(--space-3);
   background: none;
   border: none;
   color: var(--text-muted);
@@ -60,20 +60,10 @@
 .dirName { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .treeChevron { flex-shrink: 0; transition: transform 0.12s; }
 .treeChevron[data-open] { transform: rotate(90deg); }
-.treeLoading { padding: 8px 14px; font-size: var(--text-xs); color: var(--text-dim); }
+.treeLoading { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); color: var(--text-dim); }
 .refresh {
-  width: var(--control-xs);
-  height: var(--control-xs);
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  display: inline-flex;
+  margin-left: auto;
 }
-.refresh:hover { color: var(--text); }
 .refresh:disabled { opacity: 0.5; }
 .spinning { animation: tgdspin 0.8s linear infinite; }
 @keyframes tgdspin { to { transform: rotate(360deg); } }
@@ -81,24 +71,24 @@
 .body {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 0 12px;
+  padding: var(--space-2) 0 var(--space-3);
 }
 
-.section { padding: 4px 0 8px; }
+.section { padding: var(--space-1) 0 var(--space-2); }
 .sectionTitle {
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
   color: var(--text-dim);
-  padding: 4px 12px;
+  padding: var(--space-1) var(--space-3);
 }
 
 .fileRow {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 4px 12px;
+  padding: var(--space-1) var(--space-3);
   background: none;
   border: none;
   color: var(--text);
@@ -112,9 +102,9 @@
 
 .feature {
   border-top: 1px solid var(--border);
-  padding: 8px 0 6px;
+  padding: var(--space-2) 0 var(--space-2);
 }
-.featureHead { padding: 0 12px 4px; }
+.featureHead { padding: 0 var(--space-3) var(--space-1); }
 .featureName {
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
@@ -125,12 +115,12 @@
 .phases {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
-  padding: 2px 12px 6px;
+  gap: var(--space-1);
+  padding: var(--space-optical) var(--space-3) var(--space-2);
 }
 .phaseChip {
   font-size: var(--text-2xs);
-  padding: 1px 6px;
+  padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-pill);
   border: 1px solid transparent;
   font-weight: var(--weight-medium);
@@ -145,19 +135,19 @@
   border-color: var(--border);
 }
 
-.protoGroup { padding: 2px 0 0 12px; }
+.protoGroup { padding: var(--space-optical) 0 0 var(--space-3); }
 .protoLabel {
   display: block;
   font-size: var(--text-2xs);
   color: var(--text-dim);
-  padding: 2px 0;
+  padding: var(--space-optical) 0;
 }
-.protoGroup .fileRow { padding-left: 4px; }
+.protoGroup .fileRow { padding-left: var(--space-1); }
 
 .noFeatures {
   font-size: var(--text-sm);
   color: var(--text-dim);
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--border);
 }
 .noFeatures code, .emptyHint code {
@@ -170,9 +160,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
   height: 100%;
-  padding: 24px;
+  padding: var(--space-6);
   text-align: center;
   color: var(--text-muted);
   font-size: var(--text-md);
@@ -183,24 +173,24 @@
 :global(html[data-ui-style="trae"]) .header {
   min-height: 48px;
   margin: 8px 8px 2px;
-  padding: 7px 10px;
+  padding: var(--space-2) var(--space-2);
   border: 0;
   border-radius: var(--radius-card);
   background: var(--trae-surface);
 }
 :global(html[data-ui-style="trae"]) .viewToggle {
   flex: 0 0 auto;
-  padding: 3px;
+  padding: var(--space-1);
   border-radius: var(--radius-pill);
   background: var(--trae-control);
 }
 :global(html[data-ui-style="trae"]) .viewTab,
-:global(html[data-ui-style="trae"]) .viewTabActive { min-height: 28px; padding: 0 10px; border-radius: var(--radius-pill); }
+:global(html[data-ui-style="trae"]) .viewTabActive { min-height: 28px; padding: 0 var(--space-2); border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .viewTabActive { background: var(--trae-surface-solid); box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 9%, transparent); }
-:global(html[data-ui-style="trae"]) .body { padding: 8px 6px 14px; }
+:global(html[data-ui-style="trae"]) .body { padding: var(--space-2) var(--space-2) var(--space-3); }
 :global(html[data-ui-style="trae"]) .feature {
   margin: 4px 4px 8px;
-  padding: 10px 0;
+  padding: var(--space-2) 0;
   border: 0;
   border-radius: var(--radius-card);
   background: var(--trae-surface-solid);

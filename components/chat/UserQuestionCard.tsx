@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import { DialogShell } from "@/components/ui/DialogShell";
 import { useI18n } from "@/lib/i18n";
 import type { WebExtensionUIDialogRequest, WebExtensionUIResponse } from "@/lib/web-extension-ui-types";
 import { AskUserFields, QuestionChoiceList } from "./UserQuestionFields";
@@ -14,8 +16,10 @@ interface Props {
 
 export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
   const { t } = useI18n();
+  const formId = useId();
   const firstControlRef = useRef<HTMLButtonElement | null>(null);
   const firstInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const submittingRef = useRef(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [customAnswers, setCustomAnswers] = useState<Set<string>>(new Set());
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
@@ -29,17 +33,13 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
     else if (request.method === "ask_user") {
       for (const question of request.questions) initial[question.id] = "";
     }
+    submittingRef.current = false;
     setAnswers(initial);
     setCustomAnswers(new Set());
     setActiveQuestionIndex(0);
     setSubmitting(false);
     setError(null);
   }, [request]);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => (firstControlRef.current ?? firstInputRef.current)?.focus());
-    return () => cancelAnimationFrame(frame);
-  }, [activeQuestionIndex, request]);
 
   const activeQuestion = request.method === "ask_user"
     ? request.questions[activeQuestionIndex]
@@ -56,43 +56,83 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
     return request.method !== "confirm";
   }, [activeQuestionAnswered, answers, request]);
 
-  const respond = async (response: WebExtensionUIResponse) => {
-    if (submitting) return;
+  const respond = useCallback(async (response: WebExtensionUIResponse) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setError(null);
     try {
       await onRespond(response);
     } catch (cause) {
+      submittingRef.current = false;
       setError(cause instanceof Error ? cause.message : t("extensionUI.responseFailed"));
       setSubmitting(false);
     }
-  };
+  }, [onRespond, t]);
 
-  const cancel = () => respond({ type: "extension_ui_response", id: request.id, cancelled: true });
-  const title = request.method === "ask_user" ? t("extensionUI.agentQuestion") : request.title;
+  const cancel = useCallback(() => respond({
+    type: "extension_ui_response",
+    id: request.id,
+    cancelled: true,
+  }), [request.id, respond]);
+  const closeDialog = useCallback(() => { void cancel(); }, [cancel]);
+
+  // DialogShell owns initial focus and return-focus. Moving between ask_user
+  // steps keeps focus on the newly rendered choice/input without scrolling the
+  // transcript behind the modal.
+  useEffect(() => {
+    if (request.method !== "ask_user" || activeQuestionIndex === 0) return;
+    const frame = requestAnimationFrame(() => {
+      (firstControlRef.current ?? firstInputRef.current)?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeQuestionIndex, request.method]);
+
+  const initialFocusRef = (
+    request.method === "input" || request.method === "editor"
+      ? firstInputRef
+      : request.method === "ask_user" && (activeQuestion?.options.length ?? 0) === 0
+        ? firstInputRef
+        : firstControlRef
+  ) as RefObject<HTMLElement | null>;
+  const title = request.method === "ask_user" ? t("extensionUI.waiting") : request.title;
+  const description = request.method === "ask_user" ? t("extensionUI.waitingHint") : undefined;
+  const headerActions = (
+    <QuestionStatus
+      pendingCount={pendingCount}
+      questionIndex={request.method === "ask_user" ? activeQuestionIndex : undefined}
+      questionCount={request.method === "ask_user" ? request.questions.length : undefined}
+    />
+  );
 
   if (request.method === "confirm") {
     return (
-      <section
-        className={styles.card}
-        role="dialog"
-        aria-labelledby={`extension-question-${request.id}`}
-        onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); void cancel(); } }}
+      <DialogShell
+        open
+        title={request.title}
+        onClose={closeDialog}
+        canClose={!submitting}
+        size="compact"
+        mobileMode="sheet"
+        initialFocusRef={firstControlRef as RefObject<HTMLElement | null>}
+        headerActions={headerActions}
+        bodyClassName={styles.questionDialogBody}
+        footer={(
+          <>
+            <button ref={firstControlRef} type="button" className={styles.secondaryButton} disabled={submitting}
+              onClick={() => void respond({ type: "extension_ui_response", id: request.id, confirmed: false })}>
+              {t("extensionUI.no")}
+            </button>
+            <button type="button" className={styles.primaryButton} disabled={submitting}
+              onClick={() => void respond({ type: "extension_ui_response", id: request.id, confirmed: true })}>
+              {submitting ? t("extensionUI.sending") : t("extensionUI.yes")}
+            </button>
+          </>
+        )}
       >
-        <CardHeader id={request.id} title={request.title} pendingCount={pendingCount} onCancel={cancel} />
         <p className={styles.message}>{request.message}</p>
         {error && <p className={styles.error} role="alert">{error}</p>}
-        <div className={styles.actions}>
-          <button ref={firstControlRef} type="button" className={styles.secondaryButton} disabled={submitting}
-            onClick={() => respond({ type: "extension_ui_response", id: request.id, confirmed: false })}>
-            {t("extensionUI.no")}
-          </button>
-          <button type="button" className={styles.primaryButton} disabled={submitting}
-            onClick={() => respond({ type: "extension_ui_response", id: request.id, confirmed: true })}>
-            {submitting ? t("extensionUI.sending") : t("extensionUI.yes")}
-          </button>
-        </div>
-      </section>
+      </DialogShell>
     );
   }
 
@@ -114,33 +154,48 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
   };
 
   return (
-    <section
-      className={`${styles.card} ${styles.questionCard}`}
-      role="dialog"
-      aria-labelledby={`extension-question-${request.id}`}
-      onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); void cancel(); } }}
-    >
-      <CardHeader id={request.id} title={title} pendingCount={pendingCount} onCancel={cancel} />
-      <form onSubmit={submit}>
-        <div className={styles.formBody}>
-          {request.method === "ask_user" && (
-            <div className={styles.questionProgress} aria-label={`${t("extensionUI.question")} ${activeQuestionIndex + 1} / ${request.questions.length}`}>
-              <div className={styles.questionProgressMeta}>
-                <span>{t("extensionUI.question")} {activeQuestionIndex + 1} / {request.questions.length}</span>
-                <span>{t("extensionUI.chooseOne")}</span>
-              </div>
-              <div className={styles.progressTrack} aria-hidden>
-                {request.questions.map((question, index) => (
-                  <span
-                    key={question.id}
-                    className={`${styles.progressStep} ${index <= activeQuestionIndex ? styles.progressStepActive : ""}`}
-                  />
-                ))}
-              </div>
-            </div>
+    <DialogShell
+      open
+      title={title}
+      description={description}
+      onClose={closeDialog}
+      canClose={!submitting}
+      size={request.method === "ask_user" ? "default" : "compact"}
+      mobileMode="sheet"
+      initialFocusRef={initialFocusRef}
+      headerActions={headerActions}
+      bodyClassName={styles.questionDialogBody}
+      footer={(
+        <>
+          {request.method === "ask_user" && activeQuestionIndex > 0 && (
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              disabled={submitting}
+              onClick={() => setActiveQuestionIndex((current) => Math.max(0, current - 1))}
+            >
+              <ArrowLeft size={15} strokeWidth={2} aria-hidden />
+              {t("extensionUI.back")}
+            </button>
           )}
+          <button form={formId} type="submit" className={styles.primaryButton} disabled={!canSubmit || submitting}>
+            <span>
+              {submitting
+                ? t("extensionUI.sending")
+                : request.method === "ask_user" && !isLastQuestion
+                  ? t("extensionUI.next")
+                  : t("extensionUI.submit")}
+            </span>
+            {!submitting && <ArrowRight size={15} strokeWidth={2} aria-hidden />}
+          </button>
+        </>
+      )}
+    >
+      <form id={formId} onSubmit={submit} className={styles.questionForm}>
+        <div className={styles.formBody}>
           {request.method === "select" && (
             <QuestionChoiceList
+              ariaLabel={request.title}
               options={request.options.map((label) => ({ label }))}
               selected={answers.value}
               firstRef={firstControlRef}
@@ -149,7 +204,7 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
           )}
           {request.method === "input" && (
             <input
-              ref={firstInputRef as React.RefObject<HTMLInputElement>}
+              ref={firstInputRef as RefObject<HTMLInputElement>}
               className={styles.textInput}
               aria-label={request.title}
               value={answers.value ?? ""}
@@ -159,7 +214,7 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
           )}
           {request.method === "editor" && (
             <textarea
-              ref={firstInputRef as React.RefObject<HTMLTextAreaElement>}
+              ref={firstInputRef as RefObject<HTMLTextAreaElement>}
               className={styles.editor}
               aria-label={request.title}
               value={answers.value ?? ""}
@@ -181,56 +236,34 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
           )}
           {error && <p className={styles.error} role="alert">{error}</p>}
         </div>
-        <div className={`${styles.actions} ${styles.questionActions}`}>
-          <button type="button" className={styles.cancelButton} disabled={submitting} onClick={() => void cancel()}>
-            {t("extensionUI.cancel")}
-          </button>
-          {request.method === "ask_user" && activeQuestionIndex > 0 && (
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              disabled={submitting}
-              onClick={() => setActiveQuestionIndex((current) => Math.max(0, current - 1))}
-            >
-              {t("extensionUI.back")}
-            </button>
-          )}
-          <button type="submit" className={styles.primaryButton} disabled={!canSubmit || submitting}>
-            {submitting
-              ? t("extensionUI.sending")
-              : request.method === "ask_user" && !isLastQuestion
-                ? t("extensionUI.next")
-                : t("extensionUI.submit")}
-          </button>
-        </div>
       </form>
-    </section>
+    </DialogShell>
   );
 }
 
-function CardHeader({ id, title, pendingCount, onCancel }: {
-  id: string;
-  title: string;
+function QuestionStatus({ pendingCount, questionIndex, questionCount }: {
   pendingCount: number;
-  onCancel: () => Promise<void>;
+  questionIndex?: number;
+  questionCount?: number;
 }) {
   const { t } = useI18n();
+  const showStep = questionIndex !== undefined && questionCount !== undefined && questionCount > 1;
+  if (!showStep && pendingCount <= 1) return null;
   return (
-    <div className={styles.cardHeader}>
-      <div className={styles.cardHeading}>
-        <span className={styles.waitingMark} aria-hidden />
-        <div className={styles.headingCopy}>
-          <div className={styles.eyebrow}>{t("extensionUI.waiting")}</div>
-          <h2 id={`extension-question-${id}`} className={styles.cardTitle}>{title}</h2>
-        </div>
-      </div>
-      <div className={styles.headerActions}>
-        {pendingCount > 1 && <span className={styles.pendingCount}>+{pendingCount - 1}</span>}
-        <button type="button" className={styles.closeButton} onClick={() => void onCancel()}
-          aria-label={t("extensionUI.cancel")} title={t("extensionUI.cancel")}>
-          ×
-        </button>
-      </div>
+    <div className={styles.dialogStatus} role="status" aria-live="polite">
+      {showStep && (
+        <span
+          className={styles.stepCounter}
+          aria-label={`${t("extensionUI.question")} ${questionIndex + 1} / ${questionCount}`}
+        >
+          {questionIndex + 1}<span aria-hidden> / </span>{questionCount}
+        </span>
+      )}
+      {pendingCount > 1 && (
+        <span className={styles.pendingCount} aria-label={`${pendingCount} ${t("extensionUI.pending")}`}>
+          +{pendingCount - 1}
+        </span>
+      )}
     </div>
   );
 }

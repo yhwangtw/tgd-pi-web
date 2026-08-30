@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSessionTree, getSessionDisplayTitle, getSessionProjectName } from "../session-utils";
+import { buildSessionDisplayTitles, buildSessionTree, findSessionTreeNode, flattenSessionTree, getSessionDisplayTitle, getSessionPreview, getSessionProjectName } from "../session-utils";
 import type { SessionInfo } from "@/lib/types";
 
 const s = (id: string, over: Partial<SessionInfo> = {}): SessionInfo => ({
@@ -54,6 +54,29 @@ describe("buildSessionTree sort modes", () => {
   });
 });
 
+describe("windowed tree helpers", () => {
+  const tree = buildSessionTree([
+    s("root"),
+    s("fork", { parentSessionId: "root" }),
+    s("leaf", { parentSessionId: "fork" }),
+    s("other"),
+  ]);
+
+  it("finds pinned forks below the root level", () => {
+    expect(findSessionTreeNode(tree, "fork")?.session.id).toBe("fork");
+  });
+
+  it("flattens visible forks and promotes descendants of an excluded pin", () => {
+    expect(flattenSessionTree(tree).map(({ node, depth }) => [node.session.id, depth])).toEqual([
+      ["root", 0], ["fork", 1], ["leaf", 2], ["other", 0],
+    ]);
+    expect(flattenSessionTree(tree, new Set(), new Set(["fork"])).map(({ node, depth }) => [node.session.id, depth])).toEqual([
+      ["root", 0], ["leaf", 1], ["other", 0],
+    ]);
+    expect(flattenSessionTree(tree, new Set(["root"])).map(({ node }) => node.session.id)).toEqual(["root", "other"]);
+  });
+});
+
 describe("getSessionDisplayTitle", () => {
   it("prefers a custom name, then the first message, without exposing the id", () => {
     expect(getSessionDisplayTitle(s("secret-id", { name: "Release polish", firstMessage: "fallback" }))).toBe("Release polish");
@@ -63,6 +86,36 @@ describe("getSessionDisplayTitle", () => {
 
   it("truncates long titles with an ellipsis", () => {
     expect(getSessionDisplayTitle(s("x", { firstMessage: "123456789" }), 6)).toBe("12345…");
+  });
+});
+
+describe("conversation list labels", () => {
+  it("disambiguates duplicate titles by repo and then activity date", () => {
+    const titles = buildSessionDisplayTitles([
+      s("a", { name: "Fix layout", cwd: "/work/alpha", modified: "2026-07-03T00:00:00Z" }),
+      s("b", { name: "Fix layout", cwd: "/work/beta", modified: "2026-07-02T00:00:00Z" }),
+      s("c", { name: "Fix layout", cwd: "/other/beta", modified: "2026-07-01T00:00:00Z" }),
+    ]);
+    expect(titles.get("a")).toBe("Fix layout · alpha");
+    expect(titles.get("b")).toBe("Fix layout · beta · 2026-07-02");
+    expect(titles.get("c")).toBe("Fix layout · beta · 2026-07-01");
+  });
+
+  it("keeps same-project same-day duplicate titles unique", () => {
+    const titles = buildSessionDisplayTitles([
+      s("abcdef-one", { name: "Fix layout", cwd: "/work/alpha", modified: "2026-07-03T09:15:00Z" }),
+      s("abcdef-two", { name: "Fix layout", cwd: "/work/alpha", modified: "2026-07-03T10:30:00Z" }),
+      s("unique-id", { name: "Fix layout", cwd: "/work/alpha", modified: "2026-07-03T10:30:30Z" }),
+    ]);
+    expect(titles.get("abcdef-one")).toBe("Fix layout · alpha · 2026-07-03 09:15");
+    expect(titles.get("abcdef-two")).toBe("Fix layout · alpha · 2026-07-03 10:30 · deftwo");
+    expect(titles.get("unique-id")).toBe("Fix layout · alpha · 2026-07-03 10:30 · iqueid");
+    expect(new Set(titles.values()).size).toBe(3);
+  });
+
+  it("shows a last-message preview only when it adds information", () => {
+    expect(getSessionPreview(s("a", { firstMessage: "Start", lastMessage: "Done" }))).toBe("Done");
+    expect(getSessionPreview(s("b", { firstMessage: "Same", lastMessage: "Same" }))).toBe("");
   });
 });
 

@@ -1,24 +1,11 @@
 "use client";
 
 import { useI18n } from "@/lib/i18n";
+import { Star } from "lucide-react";
 import styles from "./MessageBookmarkAction.module.css";
 
 function BookmarkIcon({ filled, size }: { filled: boolean; size: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill={filled ? "currentColor" : "none"}
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  );
+  return <Star size={size} fill={filled ? "currentColor" : "none"} strokeWidth={1.9} aria-hidden />;
 }
 
 export function MessageBookmarkAction({

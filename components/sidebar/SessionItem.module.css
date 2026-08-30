@@ -1,9 +1,11 @@
 /* ── Session item — grid layout, dynamic height ── */
 .item {
+  box-sizing: border-box;
+  height: 100%;
   display: block;
-  padding-top: 7px;
-  padding-bottom: 7px;
-  padding-right: 6px;
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+  padding-right: var(--space-2);
   margin: 1px 6px;
   border-radius: var(--radius-row);
   transition: background 0.1s;
@@ -13,11 +15,11 @@
 
 @media (min-width: 701px) {
   :global(html[data-density="compact"]) .item {
-    padding-top: 4px;
-    padding-bottom: 4px;
+    padding-top: var(--space-1);
+    padding-bottom: var(--space-1);
   }
 
-  :global(html[data-density="compact"]) .grid { row-gap: 1px; }
+  :global(html[data-density="compact"]) .grid { row-gap: var(--space-optical); }
 }
 
 /* Keyboard-focused row (roving focus from the list's arrow-key nav) */
@@ -25,15 +27,11 @@
   box-shadow: inset 0 0 0 1.5px var(--color-accent-border-focus-strong);
 }
 
-/* The grid lives inside the item and owns the multi-row layout:
-     row 1 → title (+ collapse / overflow actions)
-     row 2 → meta (time · msg count · first 3 tag chips)
-     row 3 → overflow tag chips full width (only when >3 tags)
-   Auto rows means each row sizes to its own content; no fixed 54px floor. */
+/* Two-line conversation row: a title/action line and a compact context line. */
 .grid {
   display: grid;
-  grid-template-rows: auto auto auto;
-  row-gap: 3px;
+  grid-template-rows: auto auto;
+  row-gap: var(--space-1);
   min-width: 0;
 }
 
@@ -41,7 +39,7 @@
 .titleRow {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -69,7 +67,7 @@
 .titleActions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-optical);
   flex-shrink: 0;
   opacity: 0;
   pointer-events: none;
@@ -88,13 +86,29 @@
   pointer-events: auto;
 }
 
+.rowAction,
 .pinDot {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: var(--control-xs);
+  height: var(--control-xs);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control-compact);
+  background: transparent;
   color: var(--text-muted);
+  cursor: pointer;
+}
+
+.rowAction:hover,
+.rowAction:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.rowActionPinned {
+  color: var(--color-accent);
 }
 
 .collapseToggle {
@@ -147,12 +161,12 @@
   color: var(--text);
 }
 
-/* ── Row 2: meta — time · msg count · inline tag chips ── */
+/* ── Row 2: workspace · preview · time ── */
 .metaRow {
   font-family: var(--font-mono);
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   min-width: 0;
   color: var(--text-dim);
   font-size: var(--text-xs);
@@ -161,7 +175,8 @@
   overflow: hidden;
 }
 
-.metaItem {
+.metaItem,
+.metaTime {
   flex-shrink: 0;
 }
 
@@ -170,23 +185,49 @@
   opacity: 0.5;
 }
 
-.projectChip {
-  max-width: 104px;
+.workspaceMeta {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 42%;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-optical);
   overflow: hidden;
   color: var(--text-muted);
   font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.workspaceMeta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspaceSlash { flex: 0 0 auto; color: var(--text-dim); }
+.workspaceBranch { color: var(--color-accent); }
+
+.preview {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--text-dim);
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex-shrink: 1;
 }
+
+.tagCount {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-optical);
+  color: var(--text-dim);
+}
+
+.metaTime { color: var(--text-muted); }
 
 .tagChip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-optical);
   font-size: var(--text-xs);
   line-height: var(--leading-tight);
-  padding: 2px 7px;
+  padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-pill);
   /* transparent border so the inline borderColor from getTagStyle shows —
      keeps the pill identical to TagFilter / context-menu chips */
@@ -207,7 +248,7 @@
   align-items: center;
   font-size: var(--text-xs);
   line-height: var(--leading-tight);
-  padding: 1px 5px;
+  padding: var(--space-optical) var(--space-1);
   border-radius: var(--radius-control-prominent);
   background: var(--bg-hover);
   color: var(--text-muted);
@@ -221,12 +262,12 @@
 .tagRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: var(--space-1);
   align-items: center;
   min-width: 0;
   /* No right padding for hover actions — the row 3 only shows when
      many tags exist, and actions are no longer absolute-overlaying. */
-  padding-right: 2px;
+  padding-right: var(--space-optical);
 }
 
 .tagChipRemove {
@@ -235,7 +276,7 @@
   color: inherit;
   font-size: var(--text-sm);
   line-height: var(--leading-none);
-  padding: 0 2px 0 0;
+  padding: 0 var(--space-optical) 0 0;
   cursor: pointer;
   opacity: 0.6;
 }
@@ -247,7 +288,7 @@
 .deleteRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -267,7 +308,7 @@
 
 .deleteActions {
   display: flex;
-  gap: 5px;
+  gap: var(--space-1);
   flex-shrink: 0;
 }
 
@@ -275,9 +316,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--space-1);
   height: 30px;
-  padding: 0 11px;
+  padding: 0 var(--space-3);
   background: var(--color-error);
   border: none;
   border-radius: var(--radius-control);
@@ -293,7 +334,7 @@
   align-items: center;
   justify-content: center;
   height: 30px;
-  padding: 0 11px;
+  padding: 0 var(--space-3);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
@@ -315,7 +356,7 @@
   flex: 1;
   min-width: 0;
   font-size: var(--text-sm);
-  padding: 5px 8px;
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--accent);
   border-radius: var(--radius-control-compact);
   outline: none;
@@ -329,13 +370,13 @@
   .item {
     min-height: 64px;
     margin: 2px 8px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    padding-right: 8px;
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+    padding-right: var(--space-2);
   }
 
   .grid {
-    row-gap: 5px;
+    row-gap: var(--space-1);
   }
 
   .sessionTitle {
@@ -352,10 +393,13 @@
   }
 
   .collapseToggle,
+  .rowAction,
   .overflowButton {
-    width: 40px;
-    height: 40px;
+    width: var(--control-mobile);
+    height: var(--control-mobile);
   }
+
+  .workspaceMeta { max-width: 46%; }
 
   .deleteConfirmButton,
   .cancelButton,
@@ -367,7 +411,7 @@
 :global(html[data-ui-style="trae"]) .item {
   position: relative;
   margin: 3px 9px;
-  padding: 9px 10px;
+  padding: var(--space-2) var(--space-2);
   border-radius: var(--radius-row);
 }
 
@@ -391,6 +435,6 @@
   :global(html[data-ui-style="trae"]) .item {
     min-height: 70px;
     margin: 3px 10px;
-    padding: 11px 12px;
+    padding: var(--space-3) var(--space-3);
   }
 }

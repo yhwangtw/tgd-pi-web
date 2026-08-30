@@ -41,9 +41,9 @@ describe("ExtensionUIPanel", () => {
     };
     const { onRespond } = await render(state);
 
-    const production = container!.querySelector<HTMLButtonElement>('[data-value="Production"]')!;
+    const production = document.body.querySelector<HTMLButtonElement>('[data-value="Production"]')!;
     await act(async () => production.click());
-    const submit = container!.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    const submit = document.body.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     expect(submit.disabled).toBe(false);
     await act(async () => submit.click());
 
@@ -52,6 +52,52 @@ describe("ExtensionUIPanel", () => {
       id: "select-1",
       value: "Production",
     });
+  });
+
+  it("isolates the background, traps focus, cancels with Escape, and restores focus", async () => {
+    const launcher = document.createElement("button");
+    launcher.textContent = "Open question";
+    document.body.appendChild(launcher);
+    launcher.focus();
+    const onRespond = vi.fn().mockResolvedValue(undefined);
+    const state: ExtensionUIState = {
+      dialogs: [{
+        type: "extension_ui_request",
+        id: "confirm-modal",
+        method: "confirm",
+        title: "Confirm release",
+        message: "Continue?",
+      }],
+      statuses: {},
+      widgets: {},
+    };
+    await render(state, onRespond);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(container!.inert).toBe(true);
+    expect(launcher.inert).toBe(true);
+
+    const controls = [...dialog.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+    const first = controls[0];
+    const last = controls.at(-1)!;
+    last.focus();
+    await act(async () => last.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })));
+    expect(document.activeElement).toBe(first);
+
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(onRespond).toHaveBeenCalledWith({
+      type: "extension_ui_response",
+      id: "confirm-modal",
+      cancelled: true,
+    });
+
+    await act(async () => root?.render(<ExtensionUIPanel state={{ dialogs: [], statuses: {}, widgets: {} }} onRespond={onRespond} />));
+    expect(Boolean(container!.inert)).toBe(false);
+    expect(Boolean(launcher.inert)).toBe(false);
+    expect(document.activeElement).toBe(launcher);
+    launcher.remove();
   });
 
   it("collects structured ask_user answers and renders extension chrome", async () => {
@@ -85,25 +131,27 @@ describe("ExtensionUIPanel", () => {
     };
     const { onRespond } = await render(state);
 
-    expect(container!.textContent).toContain("Waiting for approval");
-    expect(container!.textContent).toContain("2 checks remaining");
-    expect(container!.textContent).toContain("Question 1 / 2");
-    expect(container!.querySelector<HTMLInputElement>('[data-question-id="note"]')).toBeNull();
-    await act(async () => container!.querySelector<HTMLButtonElement>(
+    expect(document.body.textContent).toContain("Waiting for approval");
+    expect(document.body.textContent).toContain("2 checks remaining");
+    expect(document.body.textContent).toContain("1 / 2");
+    expect(document.body.querySelector('[role="radiogroup"]')?.getAttribute("aria-label"))
+      .toBe("Where should this release go?");
+    expect(document.body.querySelector<HTMLInputElement>('[data-question-id="note"]')).toBeNull();
+    await act(async () => document.body.querySelector<HTMLButtonElement>(
       '[data-question-id="target"][data-value="Production"]',
     )!.click());
-    const next = container!.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    const next = document.body.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     expect(next.textContent).toBe("Next");
     await act(async () => next.click());
 
-    expect(container!.textContent).toContain("Question 2 / 2");
-    const note = container!.querySelector<HTMLInputElement>('[data-question-id="note"]')!;
+    expect(document.body.textContent).toContain("2 / 2");
+    const note = document.body.querySelector<HTMLInputElement>('[data-question-id="note"]')!;
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
       setter.call(note, "Roll out after smoke tests");
       note.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await act(async () => container!.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+    await act(async () => document.body.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
 
     expect(onRespond).toHaveBeenCalledWith({
       type: "extension_ui_response",
@@ -138,14 +186,43 @@ describe("ExtensionUIPanel", () => {
     };
     await render(state);
 
-    await act(async () => container!.querySelector<HTMLButtonElement>('[data-value="Production"]')!.click());
-    await act(async () => container!.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
-    const back = [...container!.querySelectorAll<HTMLButtonElement>("button")]
+    await act(async () => document.body.querySelector<HTMLButtonElement>('[data-value="Production"]')!.click());
+    await act(async () => document.body.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+    const back = [...document.body.querySelectorAll<HTMLButtonElement>("button")]
       .find((button) => button.textContent === "Back")!;
     await act(async () => back.click());
 
-    expect(container!.textContent).toContain("Question 1 / 2");
-    expect(container!.querySelector<HTMLButtonElement>('[data-value="Production"]')!.getAttribute("aria-pressed")).toBe("true");
+    expect(document.body.textContent).toContain("1 / 2");
+    expect(document.body.querySelector<HTMLButtonElement>('[data-value="Production"]')!.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("supports arrow-key selection inside an ask_user choice group", async () => {
+    const state: ExtensionUIState = {
+      dialogs: [{
+        type: "extension_ui_request",
+        id: "ask-keyboard",
+        method: "ask_user",
+        questions: [{
+          id: "target",
+          question: "Where should this release go?",
+          options: [{ label: "Staging" }, { label: "Production" }],
+          allowOther: false,
+        }],
+      }],
+      statuses: {},
+      widgets: {},
+    };
+    await render(state);
+
+    const staging = document.body.querySelector<HTMLButtonElement>('[data-value="Staging"]')!;
+    const production = document.body.querySelector<HTMLButtonElement>('[data-value="Production"]')!;
+    await act(async () => {
+      staging.focus();
+      staging.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+
+    expect(production.getAttribute("aria-checked")).toBe("true");
+    expect(document.activeElement).toBe(production);
   });
 
   it("keeps the custom answer inside the option grid and submits it", async () => {
@@ -167,17 +244,17 @@ describe("ExtensionUIPanel", () => {
     };
     const { onRespond } = await render(state);
 
-    const other = container!.querySelector<HTMLButtonElement>('[data-value="__other__"]')!;
+    const other = document.body.querySelector<HTMLButtonElement>('[data-value="__other__"]')!;
     expect(other.parentElement?.querySelector('[data-value="Default"]')).not.toBeNull();
     await act(async () => other.click());
 
-    const path = container!.querySelector<HTMLInputElement>('input[data-question-id="path"]')!;
+    const path = document.body.querySelector<HTMLInputElement>('input[data-question-id="path"]')!;
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
       setter.call(path, "/tmp/project-tGD");
       path.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await act(async () => container!.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+    await act(async () => document.body.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
 
     expect(onRespond).toHaveBeenCalledWith({
       type: "extension_ui_response",

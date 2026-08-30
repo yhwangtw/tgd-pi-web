@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { RefreshCw } from "lucide-react";
+import { DialogShell } from "@/components/ui/DialogShell";
 import type { ExtensionsReport, ExtensionFlagInfo } from "@/lib/extensions-info";
 import { showToast } from "@/hooks/useToast";
 import { useI18n } from "@/lib/i18n";
@@ -8,6 +10,7 @@ import { ExtensionInventoryDetails } from "./ExtensionInventoryDetails";
 import { PackageCenter } from "./PackageCenter";
 import { RuntimeCenter } from "./RuntimeCenter";
 import { McpCenter } from "./McpCenter";
+import { SecurityActivityCenter } from "./SecurityActivityCenter";
 import styles from "./ExtensionsConfig.module.css";
 
 interface Props {
@@ -32,7 +35,7 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [reloading, setReloading] = useState(false);
-  const [view, setView] = useState<"loaded" | "packages" | "runtime" | "mcp">("loaded");
+  const [view, setView] = useState<"loaded" | "packages" | "runtime" | "mcp" | "security">("loaded");
   const [shortcutBusy, setShortcutBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -55,12 +58,6 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
   }, [sessionId]);
 
   useEffect(() => { void load(); }, [load]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const setFlag = useCallback(async (flag: ExtensionFlagInfo, value: boolean | string) => {
     if (!sessionId) return;
@@ -127,18 +124,27 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
   );
 
   return (
-    <div className={styles.overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div
-        className={styles.modal}
-        data-testid="extensions-config"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="extensions-config-title"
-      >
-        <div className={styles.header}>
-          <div className={styles.titleGroup}>
-            <span id="extensions-config-title" className={styles.title}>{t("extensions.title")}</span>
-            <div className={styles.viewTabs} role="tablist" aria-label={t("extensions.title")}>
+    <DialogShell
+      open
+      title={t("extensions.title")}
+      onClose={onClose}
+      size="wide"
+      mobileMode="fullscreen"
+      bodyClassName={styles.shellBody}
+      headerActions={(
+        <>
+          {sessionId && <code className={styles.sessionCode}>{sessionId.slice(0, 8)}</code>}
+          {view === "loaded" && (
+            <button className={styles.reloadButton} onClick={() => void reload()} disabled={reloading || !sessionId}>
+              <RefreshCw size={15} strokeWidth={1.8} aria-hidden />
+              {reloading ? t("extensions.reloading") : t("extensions.reload")}
+            </button>
+          )}
+        </>
+      )}
+    >
+      <div data-testid="extensions-config">
+        <div className={styles.viewTabs} role="tablist" aria-label={t("extensions.title")}>
               <button type="button" role="tab" aria-selected={view === "loaded"}
                 className={view === "loaded" ? styles.viewTabActive : styles.viewTab}
                 onClick={() => setView("loaded")}>{t("extensions.loaded")}</button>
@@ -151,19 +157,9 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
               <button type="button" role="tab" aria-selected={view === "mcp"}
                 className={view === "mcp" ? styles.viewTabActive : styles.viewTab}
                 onClick={() => setView("mcp")}>{t("extensions.mcp")}</button>
-            </div>
-          </div>
-          {sessionId && <code className={styles.sessionCode}>{sessionId.slice(0, 8)}</code>}
-          <div className={styles.headerActions}>
-            {view === "loaded" && <button className={styles.reloadButton} onClick={() => void reload()} disabled={reloading || !sessionId}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <polyline points="23 4 23 10 17 10" />
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-              </svg>
-              {reloading ? t("extensions.reloading") : t("extensions.reload")}
-            </button>}
-            <button onClick={onClose} className={styles.closeButton} aria-label={t("common.close")}>×</button>
-          </div>
+              <button type="button" role="tab" aria-selected={view === "security"}
+                className={view === "security" ? styles.viewTabActive : styles.viewTab}
+                onClick={() => setView("security")}>{t("securityActivity.tab")}</button>
         </div>
 
         <div className={styles.body}>
@@ -173,10 +169,12 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
             <RuntimeCenter />
           ) : view === "mcp" ? (
             <McpCenter cwd={cwd} sessionId={sessionId} />
+          ) : view === "security" ? (
+            <SecurityActivityCenter />
           ) : !sessionId ? (
             <div className={styles.stateText}>{t("extensions.noSession")}</div>
           ) : state === "loading" ? (
-            <div className={styles.stateText}>Loading…</div>
+            <div className={styles.stateText}>{t("common.loading")}</div>
           ) : state === "error" ? (
             <div className={styles.stateText}>{error}</div>
           ) : report && (
@@ -284,6 +282,6 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
           )}
         </div>
       </div>
-    </div>
+    </DialogShell>
   );
 }

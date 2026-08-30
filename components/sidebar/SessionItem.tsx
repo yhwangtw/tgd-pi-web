@@ -2,11 +2,13 @@
 
 import { useState, useCallback, useRef } from "react";
 import type { SessionInfo } from "@/lib/types";
-import { formatRelativeTime, getSessionDisplayTitle, getSessionProjectName } from "./session-utils";
+import type { WorkspaceIdentity } from "@/lib/workspace-identity";
+import { formatRelativeTime, getSessionDisplayTitle, getSessionPreview, getSessionProjectName } from "./session-utils";
 import { getTagStyle } from "@/lib/tag-colors";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/lib/i18n";
 import { SessionContextMenu, type SessionContextMenuPosition } from "./SessionContextMenu";
+import { ChevronDown, GitFork, MoreHorizontal, Pencil, Star, Trash2 } from "lucide-react";
 import styles from "./SessionItem.module.css";
 
 interface SessionItemProps {
@@ -29,6 +31,9 @@ interface SessionItemProps {
   isArchived?: boolean;
   onArchiveToggle?: (id: string) => void;
   showProject?: boolean;
+  displayTitle?: string;
+  workspaceIdentity?: WorkspaceIdentity;
+  listOrder?: number;
 }
 
 export function SessionItem({
@@ -50,7 +55,9 @@ export function SessionItem({
   onOpenParallel,
   isArchived = false,
   onArchiveToggle,
-  showProject = false,
+  displayTitle,
+  workspaceIdentity,
+  listOrder,
 }: SessionItemProps) {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -58,10 +65,14 @@ export function SessionItem({
   const [deleting, setDeleting] = useState(false);
   const [contextMenu, setContextMenu] = useState<SessionContextMenuPosition | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { theme } = useTheme();
   const { locale, t } = useI18n();
+  const { theme } = useTheme();
 
-  const title = getSessionDisplayTitle(session, 50);
+  const title = displayTitle ?? getSessionDisplayTitle(session, 50);
+  const preview = getSessionPreview(session);
+  const repository = workspaceIdentity?.repository ?? getSessionProjectName(session.cwd);
+  const branch = workspaceIdentity?.branch
+    ?? (workspaceIdentity?.isGit ? "…" : t("topbar.notGitRepository"));
 
   const startRename = useCallback(() => {
     setRenameValue(session.name ?? "");
@@ -117,17 +128,10 @@ export function SessionItem({
     setContextMenu({ x: Math.round(rect.right), y: Math.round(rect.bottom + 4) });
   }, []);
 
-  const handleTagRemove = useCallback((e: React.MouseEvent, tag: string) => {
-    e.stopPropagation();
+  const handleTagRemove = useCallback((event: React.MouseEvent, tag: string) => {
+    event.stopPropagation();
     onRemoveTag?.(tag);
   }, [onRemoveTag]);
-
-  // Decide whether tags spill into a 3rd grid row
-  // - 0-3 tags → inline in meta row
-  // - >3 tags → inline shows first 3, remaining go on full row below
-  const hasOverflowTags = tags.length > 3;
-  const inlineTags = tags.slice(0, 3);
-  const overflowTags = tags.slice(3);
 
   return (
     <>
@@ -135,6 +139,7 @@ export function SessionItem({
         onClick={confirmDelete || renaming ? undefined : onClick}
         onContextMenu={handleContextMenu}
         data-session-row={session.id}
+        data-session-order={listOrder}
         tabIndex={-1}
         role="option"
         aria-selected={isSelected}
@@ -152,19 +157,14 @@ export function SessionItem({
           /* ── Delete confirmation: replaces grid with two flat buttons ── */
           <div className={styles.deleteRow}>
             <div className={styles.deleteText}>
-              {t("session.deleteConfirm")} <span className={styles.deleteTextBold}>&ldquo;{title.slice(0, 22)}{title.length > 22 ? "…" : ""}&rdquo;</span>?
+              {t("session.deleteTarget").replace("{name}", `${title.slice(0, 22)}${title.length > 22 ? "…" : ""}`)}
             </div>
             <div className={styles.deleteActions}>
-              <button onClick={handleDeleteConfirm} className={styles.deleteConfirmButton}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                  <path d="M10 11v6M14 11v6" />
-                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                </svg>
+              <button type="button" onClick={handleDeleteConfirm} className={styles.deleteConfirmButton}>
+                <Trash2 size={12} strokeWidth={2} aria-hidden="true" />
                 {t("session.delete")}
               </button>
-              <button onClick={handleDeleteCancel} className={styles.cancelButton}>
+              <button type="button" onClick={handleDeleteCancel} className={styles.cancelButton}>
                 {t("common.cancel")}
               </button>
             </div>
@@ -186,17 +186,12 @@ export function SessionItem({
             />
           </div>
         ) : (
-          /* ── Normal view: 3-row grid ── */
+          /* ── Normal view: one title line + one scannable context line ── */
           <div className={styles.grid}>
             {/* Row 1: title (with optional fork indicator) + overflow + collapse toggle */}
             <div className={styles.titleRow}>
               {depth > 0 && (
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.forkIndicator}>
-                  <line x1="6" y1="3" x2="6" y2="15" />
-                  <circle cx="18" cy="6" r="3" />
-                  <circle cx="6" cy="18" r="3" />
-                  <path d="M18 9a9 9 0 0 1-9 9" />
-                </svg>
+                <GitFork size={13} strokeWidth={1.8} className={styles.forkIndicator} aria-label={t("session.fork")} />
               )}
               <div
                 className={`${styles.sessionTitle} ${isSelected ? styles.sessionTitleSelected : styles.sessionTitleDefault}`}
@@ -205,13 +200,25 @@ export function SessionItem({
                 {title}
               </div>
               <div className={styles.titleActions}>
-                {isPinned && (
-                  <span className={styles.pinDot} title={t("session.pinned")} aria-label={t("session.pinned")}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                  </span>
-                )}
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); onPinToggle?.(session.id); }}
+                  title={isPinned ? t("session.unpin") : t("session.pin")}
+                  aria-label={isPinned ? t("session.unpin") : t("session.pin")}
+                  aria-pressed={isPinned}
+                  className={`${styles.rowAction} ${isPinned ? styles.rowActionPinned : ""}`}
+                >
+                  <Star size={14} strokeWidth={1.8} fill={isPinned ? "currentColor" : "none"} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); startRename(); }}
+                  title={t("session.rename")}
+                  aria-label={t("session.rename")}
+                  className={styles.rowAction}
+                >
+                  <Pencil size={14} strokeWidth={1.8} aria-hidden />
+                </button>
                 {hasChildren && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
@@ -220,9 +227,7 @@ export function SessionItem({
                     aria-label={collapsed ? t("session.expandForks") : t("session.collapseForks")}
                     className={`${styles.collapseToggle} ${collapsed ? styles.collapseToggleCollapsed : styles.collapseToggleExpanded}`}
                   >
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="2 3.5 5 6.5 8 3.5" />
-                    </svg>
+                    <ChevronDown size={14} strokeWidth={1.8} aria-hidden />
                   </button>
                 )}
                 <button
@@ -233,43 +238,36 @@ export function SessionItem({
                   aria-expanded={contextMenu !== null}
                   className={`${styles.overflowButton} ${contextMenu ? styles.overflowButtonOpen : ""}`}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                    <circle cx="5" cy="12" r="1.6" />
-                    <circle cx="12" cy="12" r="1.6" />
-                    <circle cx="19" cy="12" r="1.6" />
-                  </svg>
+                  <MoreHorizontal size={15} strokeWidth={1.8} aria-hidden />
                 </button>
               </div>
             </div>
 
-            {/* Row 2: meta — time + msg count + first 3 tag chips */}
+            {/* Row 2: repo/branch + last-message preview + time */}
             <div className={styles.metaRow}>
-              {showProject && (
-                <>
-                  <span className={styles.projectChip} title={session.cwd}>
-                    {getSessionProjectName(session.cwd)}
-                  </span>
-                  <span className={styles.metaDivider}>·</span>
-                </>
-              )}
-              <span className={styles.metaItem} title={session.modified}>
-                {formatRelativeTime(session.modified, locale)}
+              <span className={styles.workspaceMeta} title={`${session.cwd}${workspaceIdentity?.branch ? ` · ${workspaceIdentity.branch}` : ""}`}>
+                <span>{repository}</span>
+                <span className={styles.workspaceSlash}>/</span>
+                <span className={styles.workspaceBranch}>{branch}</span>
               </span>
               <span className={styles.metaDivider}>·</span>
-              <span className={styles.metaItem}>{session.messageCount} {session.messageCount === 1 ? t("sidebar.msg") : t("sidebar.msgs")}</span>
-              {inlineTags.map((tag) => {
-                const ts = getTagStyle(tag, theme);
+              <span className={styles.preview} title={preview || `${session.messageCount} ${session.messageCount === 1 ? t("sidebar.msg") : t("sidebar.msgs")}`}>
+                {preview || `${session.messageCount} ${session.messageCount === 1 ? t("sidebar.msg") : t("sidebar.msgs")}`}
+              </span>
+              {tags.slice(0, 1).map((tag) => {
+                const tagStyle = getTagStyle(tag, theme);
                 return (
                   <span
                     key={tag}
                     className={styles.tagChip}
                     title={`#${tag}`}
-                    style={{ background: ts.bg, color: ts.fg, borderColor: ts.border }}
+                    style={{ background: tagStyle.bg, color: tagStyle.fg, borderColor: tagStyle.border }}
                   >
                     #{tag}
                     {onRemoveTag && (
                       <button
-                        onClick={(e) => handleTagRemove(e, tag)}
+                        type="button"
+                        onClick={(event) => handleTagRemove(event, tag)}
                         className={styles.tagChipRemove}
                         title={`${t("session.removeTag")} #${tag}`}
                         aria-label={`${t("session.removeTag")} #${tag}`}
@@ -278,41 +276,9 @@ export function SessionItem({
                   </span>
                 );
               })}
-              {hasOverflowTags && (
-                <span
-                  className={styles.tagOverflow}
-                  title={overflowTags.map((t) => `#${t}`).join(" ")}
-                >
-                  +{overflowTags.length}
-                </span>
-              )}
+              {tags.length > 1 && <span className={styles.tagCount} title={tags.slice(1).map((tag) => `#${tag}`).join(" ")}>+{tags.length - 1}</span>}
+              <span className={styles.metaTime} title={session.modified}>{formatRelativeTime(session.modified, locale)}</span>
             </div>
-
-            {/* Row 3: overflow tag chips full width (only when >3 tags) */}
-            {hasOverflowTags && (
-              <div className={styles.tagRow} onClick={(e) => e.stopPropagation()}>
-                {overflowTags.map((tag) => {
-                  const ts = getTagStyle(tag, theme);
-                  return (
-                    <span
-                      key={tag}
-                      className={styles.tagChip}
-                      style={{ background: ts.bg, color: ts.fg, borderColor: ts.border }}
-                    >
-                      #{tag}
-                      {onRemoveTag && (
-                        <button
-                          onClick={(e) => handleTagRemove(e, tag)}
-                          className={styles.tagChipRemove}
-                          title={`${t("session.removeTag")} #${tag}`}
-                          aria-label={`${t("session.removeTag")} #${tag}`}
-                        >×</button>
-                      )}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
           </div>
         )}
       </div>

@@ -3,8 +3,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 32px;
+  gap: var(--space-3);
+  padding: var(--space-8);
   min-height: 200px;
   color: var(--text-muted);
   text-align: center;
@@ -16,6 +16,8 @@
   color: var(--text);
 }
 
+.icon { color: var(--color-error); }
+
 .message {
   font-size: var(--text-sm);
   max-width: 360px;
@@ -24,12 +26,12 @@
 
 .actions {
   display: flex;
-  gap: 8px;
-  margin-top: 4px;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
 }
 
 .retryBtn {
-  padding: 6px 16px;
+  padding: var(--space-2) var(--space-4);
   background: var(--accent);
   border: none;
   border-radius: var(--radius-control);
@@ -40,7 +42,7 @@
 }
 
 .reloadBtn {
-  padding: 6px 16px;
+  padding: var(--space-2) var(--space-4);
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
@@ -50,7 +52,7 @@
   font-weight: var(--weight-medium);
 }
 
-:global(html[data-ui-style="trae"]) .container { margin: 16px; border-radius: var(--radius-card); background: var(--trae-surface); }
+:global(html[data-ui-style="trae"]) .container { margin: var(--space-4); border-radius: var(--radius-card); background: var(--trae-surface); }
 :global(html[data-ui-style="trae"]) .retryBtn,
 :global(html[data-ui-style="trae"]) .reloadBtn { min-height: 38px; border-color: transparent; border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .reloadBtn { background: var(--trae-control); }

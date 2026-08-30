@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, type ReactNode } from "react";
+import { Check, ChevronDown, X } from "lucide-react";
 import styles from "./TgdPipeline.module.css";
 import { useI18n } from "@/lib/i18n";
 
@@ -58,9 +59,7 @@ export function TgdPipeline({ phases, statusOf, onRun, feature, onHide, active =
             {feature && <span className={styles.mobileFeature}>{feature}</span>}
           </span>
           <span className={styles.mobileProgress}>{doneCount}/{phases.length}</span>
-          <svg className={`${styles.mobileChevron} ${expanded ? styles.mobileChevronOpen : ""}`} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+          <ChevronDown className={`${styles.mobileChevron} ${expanded ? styles.mobileChevronOpen : ""}`} size={13} aria-hidden />
         </button>
       )}
       <div id={phaseListId} className={`${styles.track} ${expanded ? styles.trackOpen : ""}`}>
@@ -77,7 +76,7 @@ export function TgdPipeline({ phases, statusOf, onRun, feature, onHide, active =
               >
                 <span className={styles.icon} aria-hidden>
                   {status === "done" ? (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    <Check size={12} strokeWidth={3} />
                   ) : phase.icon}
                 </span>
                 <span className={styles.label}>{phase.label}</span>
@@ -88,7 +87,7 @@ export function TgdPipeline({ phases, statusOf, onRun, feature, onHide, active =
       </div>
       {onHide && (
         <button onClick={onHide} className={styles.hide} title={t("chat.hidePipeline")} aria-label={t("chat.hidePipeline")}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          <X size={12} aria-hidden />
         </button>
       )}
     </div>

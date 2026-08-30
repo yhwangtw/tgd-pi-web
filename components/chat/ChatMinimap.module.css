@@ -89,7 +89,7 @@
   margin-right: 6px;
   background: var(--bg);
   border-radius: var(--radius-menu);
-  padding: 2px 7px;
+  padding: var(--space-optical) var(--space-2);
   width: 200px;
   z-index: 100;
   pointer-events: none;
@@ -129,4 +129,4 @@
 :global(html[data-ui-style="trae"]) .container { border-left-color: var(--trae-hairline); background: transparent; }
 :global(html[data-ui-style="trae"]) .viewportIndicator { border-color: var(--trae-hairline); background: var(--color-accent-bg-subtle); }
 :global(html[data-ui-style="trae"]) .centerLine { background: var(--trae-hairline); }
-:global(html[data-ui-style="trae"]) .tooltip { padding: 5px 9px; border-radius: var(--radius-menu); background: var(--glass-bg); box-shadow: var(--color-shadow-dropdown); }
+:global(html[data-ui-style="trae"]) .tooltip { padding: var(--space-1) var(--space-2); border-radius: var(--radius-menu); background: var(--glass-bg); box-shadow: var(--color-shadow-dropdown); }

@@ -66,6 +66,13 @@ journalctl -u pi-web.service -f      # follow logs
 Run it as a **normal user**, not root — the agent's shell/file access inherits
 that user's permissions.
 
+Pi Web's Safety Guard is an application-level authorization layer: it confirms
+high-impact operations and can remember only an exact action in the same
+workspace for five minutes. It is **not** an OS sandbox. For stronger tool
+isolation, run the service under a dedicated account and put the entire service
+inside a container or VM with only the required workspace and credentials
+mounted. Extensions inherit the same boundary as the server process.
+
 ### macOS (launchd)
 
 ```bash
@@ -91,6 +98,36 @@ docker run -d --name pi-web --restart unless-stopped \
 
 (You still need the auth layer below — a container is not a security boundary
 against the network.)
+
+### Managed Update Center actions
+
+The Web Update Center can always compare releases, run preflight checks, and
+create private source backups. Update, restart, and rollback buttons remain
+disabled until the service operator provides explicit helper commands:
+
+```bash
+PIWEB_RELEASE_REPOSITORY='yhwangtw/tgd-pi-web'
+PIWEB_UPDATE_BACKUP_DIR='/var/lib/pi-web/update-backups'
+PIWEB_UPDATE_COMMAND_JSON='["/usr/local/libexec/pi-web-update"]'
+PIWEB_RESTART_COMMAND_JSON='["/usr/local/libexec/pi-web-restart"]'
+PIWEB_ROLLBACK_COMMAND_JSON='["/usr/local/libexec/pi-web-rollback"]'
+```
+
+Each command must be a JSON array whose first item is an absolute executable
+path. Pi Web launches that executable directly with no shell interpolation.
+The helper receives `PIWEB_UPDATE_ACTION`, `PIWEB_UPDATE_TARGET_TAG`,
+`PIWEB_UPDATE_BACKUP_ID`, and `PIWEB_UPDATE_BACKUP_PATH` in its environment.
+Keep helper files owned by the service operator and not writable through a
+trusted workspace.
+
+The update helper should download and validate a release in a separate staging
+directory, stop the service, replace the application source atomically, build,
+and then start the service. Do **not** point it directly at `npm run build` or
+`bash setup.sh` inside the checkout while the current Next.js server is still
+running. The rollback helper should stop the service and restore only the
+selected private backup before rebuilding. If managed helpers are not
+configured, stop the service and use the CLI fallback shown in the Update
+Center instead.
 
 ---
 

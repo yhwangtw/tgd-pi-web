@@ -219,6 +219,61 @@ describe("AgentRunSupervisor", () => {
     });
   });
 
+  it("resolves an embedded subagent waiter with its final messages", async () => {
+    const child = fakeSession();
+    harness.startRpcSession.mockResolvedValue({ session: child.session, realSessionId: "subagent-session" });
+    const supervisor = new AgentRunSupervisor({ maxConcurrency: 1 });
+    const updates: string[] = [];
+
+    const completionPromise = supervisor.enqueueAndWait({
+      ...input("Scout"),
+      limits: { maxTurns: 8, maxCostUsd: 1, timeoutMs: 60_000 },
+    }, {
+      trigger: "subagent",
+      onUpdate: (run) => updates.push(run.status),
+    });
+    await vi.waitFor(() => expect(harness.store.runs[0]?.sessionId).toBe("subagent-session"));
+    const messages = [{
+      role: "assistant",
+      provider: "test",
+      model: "model",
+      content: [{ type: "text", text: "Mapped the project." }],
+      stopReason: "stop",
+    }];
+    child.emit({ type: "agent_end", messages });
+
+    await expect(completionPromise).resolves.toMatchObject({
+      run: { trigger: "subagent", status: "completed", sessionId: "subagent-session" },
+      messages,
+    });
+    expect(updates).toEqual(expect.arrayContaining(["queued", "running", "completed"]));
+  });
+
+  it("aborts a delegated run after its configured turn budget", async () => {
+    const child = fakeSession();
+    harness.startRpcSession.mockResolvedValue({ session: child.session, realSessionId: "budget-session" });
+    const supervisor = new AgentRunSupervisor({ maxConcurrency: 1 });
+    const completionPromise = supervisor.enqueueAndWait({
+      ...input("Budget"),
+      limits: { maxTurns: 1, timeoutMs: 60_000 },
+    }, { trigger: "subagent" });
+    await vi.waitFor(() => expect(harness.store.runs[0]?.sessionId).toBe("budget-session"));
+
+    child.emit({ type: "message_end", message: {
+      role: "assistant",
+      usage: { cost: { total: 0 } },
+    } });
+    child.emit({ type: "message_end", message: {
+      role: "assistant",
+      usage: { cost: { total: 0 } },
+    } });
+
+    await expect(completionPromise).resolves.toMatchObject({
+      run: { status: "failed", error: "Subagent exceeded the 1-turn limit" },
+    });
+    expect(child.session.send).toHaveBeenCalledWith({ type: "abort" });
+  });
+
   it("AC-2.9: keeps the previous concurrency when persistence fails", () => {
     const supervisor = new AgentRunSupervisor({ maxConcurrency: 2 });
     harness.persistError = new Error("disk full");

@@ -1,8 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { Clock3, Pencil, Plus } from "lucide-react";
+import { fetchJson, useRequestResource } from "@/hooks/useRequestResource";
 import { showToast } from "@/hooks/useToast";
 import { useI18n, type MsgKey } from "@/lib/i18n";
+import { DialogShell } from "@/components/ui/DialogShell";
+import { IconButton } from "@/components/ui/IconButton";
 import type {
   AgentSchedule,
   ScheduleKind,
@@ -67,6 +71,7 @@ const COMMON_TIMEZONES = [
   "Europe/London", "Europe/Berlin", "America/New_York", "America/Chicago",
   "America/Denver", "America/Los_Angeles", "Australia/Sydney",
 ];
+const EMPTY_SCHEDULES: SchedulesResponse = { schedules: [], runs: [], serverTime: "" };
 
 function defaultDateTime(): { date: string; time: string } {
   const date = new Date(Date.now() + 60 * 60_000);
@@ -161,8 +166,7 @@ function scheduleSummary(
 
 export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
   const { locale, t } = useI18n();
-  const [data, setData] = useState<SchedulesResponse>({ schedules: [], runs: [], serverTime: "" });
-  const [loading, setLoading] = useState(true);
+  const formId = useId();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -170,28 +174,34 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [validationAttempted, setValidationAttempted] = useState(false);
+  const schedules = useRequestResource<SchedulesResponse>(
+    "schedules",
+    (signal) => fetchJson("/api/schedules", { cache: "no-store" }, signal),
+    { staleTimeMs: 2_000, retries: 1 },
+  );
+  const data = schedules.data ?? EMPTY_SCHEDULES;
+  const refreshSchedules = schedules.refresh;
 
-  const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const response = await fetch("/api/schedules", { cache: "no-store" });
-      setData(await responseJson<SchedulesResponse>(response));
-      setError(null);
-    } catch (loadError) {
-      if (!silent) showToast(t("schedule.loadFailed"), { type: "error" });
-      setError(loadError instanceof Error ? loadError.message : String(loadError));
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [t]);
+  const openEditor = useCallback((nextDraft: Draft) => {
+    setDraft(nextDraft);
+    setError(null);
+    setValidationAttempted(false);
+  }, []);
+
+  const closeEditor = useCallback(() => {
+    if (saving) return;
+    setDraft(null);
+    setError(null);
+    setValidationAttempted(false);
+  }, [saving]);
 
   useEffect(() => {
-    void load();
     const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void load(true);
+      if (document.visibilityState === "visible") void refreshSchedules();
     }, 4_000);
     return () => window.clearInterval(interval);
-  }, [load]);
+  }, [refreshSchedules]);
 
   useEffect(() => {
     if (!draft?.cwd.startsWith("/")) {
@@ -240,7 +250,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
         body: JSON.stringify(patch),
       });
       await responseJson(response);
-      await load(true);
+      await refreshSchedules();
     } catch (actionError) {
       const message = actionError instanceof Error ? actionError.message : String(actionError);
       setError(message);
@@ -248,7 +258,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
     } finally {
       setBusyId(null);
     }
-  }, [load, t]);
+  }, [refreshSchedules, t]);
 
   const runNow = useCallback(async (scheduleId: string) => {
     setBusyId(scheduleId);
@@ -261,7 +271,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
       });
       await responseJson(response);
       showToast(t("schedule.started"), { type: "success" });
-      await load(true);
+      await refreshSchedules();
     } catch (actionError) {
       const message = actionError instanceof Error ? actionError.message : String(actionError);
       setError(message);
@@ -269,7 +279,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
     } finally {
       setBusyId(null);
     }
-  }, [load, t]);
+  }, [refreshSchedules, t]);
 
   const remove = useCallback(async (scheduleId: string) => {
     setBusyId(scheduleId);
@@ -282,7 +292,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
       await responseJson(response);
       setDeleteId(null);
       showToast(t("schedule.deleted"), { type: "success" });
-      await load(true);
+      await refreshSchedules();
     } catch (actionError) {
       const message = actionError instanceof Error ? actionError.message : String(actionError);
       setError(message);
@@ -290,11 +300,25 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
     } finally {
       setBusyId(null);
     }
-  }, [load, t]);
+  }, [refreshSchedules, t]);
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!draft) return;
+    setValidationAttempted(true);
+    const missingBase = !draft.name.trim() || !draft.cwd.trim() || !draft.prompt.trim() || !draft.timezone.trim();
+    const missingOnce = draft.kind === "once" && (!draft.date || !draft.time);
+    const missingClock = (draft.kind === "daily" || draft.kind === "weekly") && !draft.time;
+    const missingWeekday = draft.kind === "weekly" && draft.weekdays.length === 0;
+    const missingCron = draft.kind === "cron" && !draft.cron.trim();
+    if (missingBase || missingOnce || missingClock || missingWeekday || missingCron) {
+      window.requestAnimationFrame(() => {
+        const form = document.getElementById(formId);
+        const target = form?.querySelector<HTMLElement>('[aria-invalid="true"], [data-invalid="true"] button');
+        target?.focus();
+      });
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -321,8 +345,9 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
       });
       await responseJson(response);
       setDraft(null);
+      setValidationAttempted(false);
       showToast(t("schedule.saved"), { type: "success" });
-      await load(true);
+      await refreshSchedules();
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : String(saveError);
       setError(message);
@@ -344,27 +369,42 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
     }
   };
 
-  if (draft) {
-    return (
-      <div className={s.container} data-testid="schedule-editor">
-        <div className={`${s.header} chrome-mono`}>
-          <button className={s.iconButton} type="button" onClick={() => { setDraft(null); setError(null); }} title={t("schedule.back")} aria-label={t("schedule.back")}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-          </button>
-          <strong>{draft.id ? t("schedule.edit") : t("schedule.new")}</strong>
-        </div>
-        <form className={s.form} onSubmit={save}>
+  const scheduleEditor = draft ? (
+    <DialogShell
+      open
+      title={draft.id ? t("schedule.edit") : t("schedule.new")}
+      description={t("schedule.editorDescription")}
+      onClose={closeEditor}
+      canClose={!saving}
+      mobileMode="fullscreen"
+      bodyClassName={s.dialogBody}
+      footer={(
+        <>
+          <button type="button" className={s.secondaryButton} onClick={closeEditor} disabled={saving}>{t("schedule.cancel")}</button>
+          <button type="submit" form={formId} className={s.primaryButton} disabled={saving}>{saving ? t("schedule.saving") : t("schedule.save")}</button>
+        </>
+      )}
+    >
+      <form id={formId} className={s.dialogForm} onSubmit={save} noValidate data-testid="schedule-editor">
+        <section className={s.formSection} aria-labelledby={`${formId}-basic`}>
+          <div className={s.formSectionHeading}>
+            <strong id={`${formId}-basic`}>{t("schedule.basicSettings")}</strong>
+            <span>{t("schedule.basicSettingsHint")}</span>
+          </div>
           <label className={s.field}>
             <span>{t("schedule.name")}</span>
-            <input required maxLength={100} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder={t("schedule.namePlaceholder")} />
+            <input required aria-invalid={validationAttempted && !draft.name.trim()} maxLength={100} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder={t("schedule.namePlaceholder")} />
+            {validationAttempted && !draft.name.trim() && <small className={s.fieldError}>{t("common.required")}</small>}
           </label>
           <label className={s.field}>
             <span>{t("schedule.project")}</span>
-            <input required value={draft.cwd} onChange={(event) => setDraft({ ...draft, cwd: event.target.value })} placeholder="/path/to/project" className={s.monoInput} />
+            <input required aria-invalid={validationAttempted && !draft.cwd.trim()} value={draft.cwd} onChange={(event) => setDraft({ ...draft, cwd: event.target.value })} placeholder={t("schedule.projectPlaceholder")} className={s.monoInput} />
+            {validationAttempted && !draft.cwd.trim() && <small className={s.fieldError}>{t("common.required")}</small>}
           </label>
           <label className={s.field}>
             <span>{t("schedule.prompt")}</span>
-            <textarea required rows={6} maxLength={200_000} value={draft.prompt} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} placeholder={t("schedule.promptPlaceholder")} />
+            <textarea required aria-invalid={validationAttempted && !draft.prompt.trim()} rows={6} maxLength={200_000} value={draft.prompt} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} placeholder={t("schedule.promptPlaceholder")} />
+            {validationAttempted && !draft.prompt.trim() && <small className={s.fieldError}>{t("common.required")}</small>}
           </label>
 
           <fieldset className={s.fieldset}>
@@ -380,17 +420,17 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
 
           {draft.kind === "once" && (
             <div className={s.twoColumns}>
-              <label className={s.field}><span>{t("schedule.date")}</span><input required type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
-              <label className={s.field}><span>{t("schedule.time")}</span><input required type="time" value={draft.time} onChange={(event) => setDraft({ ...draft, time: event.target.value })} /></label>
+              <label className={s.field}><span>{t("schedule.date")}</span><input required aria-invalid={validationAttempted && !draft.date} type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} />{validationAttempted && !draft.date && <small className={s.fieldError}>{t("common.required")}</small>}</label>
+              <label className={s.field}><span>{t("schedule.time")}</span><input required aria-invalid={validationAttempted && !draft.time} type="time" value={draft.time} onChange={(event) => setDraft({ ...draft, time: event.target.value })} />{validationAttempted && !draft.time && <small className={s.fieldError}>{t("common.required")}</small>}</label>
             </div>
           )}
           {draft.kind === "daily" && (
-            <label className={s.field}><span>{t("schedule.time")}</span><input required type="time" value={draft.time} onChange={(event) => setDraft({ ...draft, time: event.target.value })} /></label>
+            <label className={s.field}><span>{t("schedule.time")}</span><input required aria-invalid={validationAttempted && !draft.time} type="time" value={draft.time} onChange={(event) => setDraft({ ...draft, time: event.target.value })} />{validationAttempted && !draft.time && <small className={s.fieldError}>{t("common.required")}</small>}</label>
           )}
           {draft.kind === "weekly" && (
             <>
-              <label className={s.field}><span>{t("schedule.time")}</span><input required type="time" value={draft.time} onChange={(event) => setDraft({ ...draft, time: event.target.value })} /></label>
-              <fieldset className={s.fieldset}>
+              <label className={s.field}><span>{t("schedule.time")}</span><input required aria-invalid={validationAttempted && !draft.time} type="time" value={draft.time} onChange={(event) => setDraft({ ...draft, time: event.target.value })} />{validationAttempted && !draft.time && <small className={s.fieldError}>{t("common.required")}</small>}</label>
+              <fieldset className={s.fieldset} data-invalid={validationAttempted && draft.weekdays.length === 0 ? "true" : undefined}>
                 <legend>{t("schedule.weekdays")}</legend>
                 <div className={s.weekdays}>
                   {WEEKDAY_KEYS.map((key, day) => {
@@ -398,22 +438,26 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
                     return <button type="button" key={key} aria-pressed={selected} className={selected ? s.weekdayActive : s.weekday} onClick={() => setDraft({ ...draft, weekdays: selected ? draft.weekdays.filter((item) => item !== day) : [...draft.weekdays, day].sort() })}>{t(key)}</button>;
                   })}
                 </div>
+                {validationAttempted && draft.weekdays.length === 0 && <small className={s.fieldError}>{t("schedule.weekdayRequired")}</small>}
               </fieldset>
             </>
           )}
           {draft.kind === "cron" && (
             <label className={s.field}>
               <span>{t("schedule.cronExpression")}</span>
-              <input required className={s.monoInput} value={draft.cron} onChange={(event) => setDraft({ ...draft, cron: event.target.value })} placeholder="0 9 * * 1-5" />
+              <input required aria-invalid={validationAttempted && !draft.cron.trim()} className={s.monoInput} value={draft.cron} onChange={(event) => setDraft({ ...draft, cron: event.target.value })} placeholder="0 9 * * 1-5" />
               <small>{t("schedule.cronHint")}</small>
+              {validationAttempted && !draft.cron.trim() && <small className={s.fieldError}>{t("common.required")}</small>}
             </label>
           )}
 
           <label className={s.field}>
             <span>{t("schedule.timezone")}</span>
-            <input required list="schedule-timezones" value={draft.timezone} onChange={(event) => setDraft({ ...draft, timezone: event.target.value })} className={s.monoInput} />
+            <input required aria-invalid={validationAttempted && !draft.timezone.trim()} list="schedule-timezones" value={draft.timezone} onChange={(event) => setDraft({ ...draft, timezone: event.target.value })} className={s.monoInput} />
             <datalist id="schedule-timezones">{COMMON_TIMEZONES.map((zone) => <option key={zone} value={zone} />)}</datalist>
+            {validationAttempted && !draft.timezone.trim() && <small className={s.fieldError}>{t("common.required")}</small>}
           </label>
+        </section>
 
           <details className={s.advanced}>
             <summary>{t("schedule.agentSettings")}</summary>
@@ -455,21 +499,17 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
           </details>
 
           {error && <div className={s.formError} role="alert">{error}</div>}
-          <div className={s.formActions}>
-            <button type="button" className={s.secondaryButton} onClick={() => setDraft(null)}>{t("schedule.cancel")}</button>
-            <button type="submit" className={s.primaryButton} disabled={saving}>{saving ? t("schedule.saving") : t("schedule.save")}</button>
-          </div>
-        </form>
-      </div>
-    );
-  }
+      </form>
+    </DialogShell>
+  ) : null;
 
   return (
     <div className={s.container} data-testid="schedule-panel">
+      {scheduleEditor}
       <div className={`${s.header} chrome-mono`}>
         <strong>{t("schedule.title")}</strong>
-        <button className={s.newButton} type="button" onClick={() => { setDraft(emptyDraft(defaultCwd)); setError(null); }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <button className={s.newButton} type="button" onClick={() => openEditor(emptyDraft(defaultCwd))}>
+          <Plus size={12} strokeWidth={2.2} aria-hidden />
           {t("sidebar.new")}
         </button>
       </div>
@@ -482,14 +522,14 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
             {data.health.nextWakeAt && <time dateTime={data.health.nextWakeAt}>{formatRunTime(data.health.nextWakeAt)}</time>}
           </div>
         )}
-        {loading ? (
+        {schedules.loading ? (
           <div className={s.empty}>{t("search.searching")}</div>
         ) : data.schedules.length === 0 ? (
           <div className={s.empty}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            <Clock3 size={28} strokeWidth={1.5} aria-hidden />
             <strong>{t("schedule.empty")}</strong>
             <span>{t("schedule.emptyHint")}</span>
-            <button type="button" className={s.primaryButton} onClick={() => setDraft(emptyDraft(defaultCwd))}>{t("schedule.new")}</button>
+            <button type="button" className={s.primaryButton} onClick={() => openEditor(emptyDraft(defaultCwd))}>{t("schedule.new")}</button>
           </div>
         ) : (
           <div className={s.scheduleList}>
@@ -503,9 +543,11 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
                       <strong className={s.cardTitle} title={schedule.name}>{schedule.name}</strong>
                       {!schedule.enabled && <span className={s.pausedBadge}>{t("schedule.paused")}</span>}
                     </div>
-                    <button className={s.iconButton} type="button" onClick={() => { setDraft(scheduleDraft(schedule)); setError(null); }} title={t("schedule.edit")} aria-label={t("schedule.edit")}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                    </button>
+                    <IconButton
+                      label={t("schedule.edit")}
+                      icon={<Pencil strokeWidth={1.8} />}
+                      onClick={() => openEditor(scheduleDraft(schedule))}
+                    />
                   </div>
                   <div className={`${s.scheduleLine} chrome-mono`}>{scheduleSummary(schedule, (day) => t(WEEKDAY_KEYS[day]), t("schedule.daily"))}</div>
                   <div className={s.path} title={schedule.cwd}>{schedule.cwd}</div>
@@ -535,7 +577,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
           </div>
         )}
 
-        {error && !draft && <div className={s.listError} role="alert">{error}</div>}
+        {(error || schedules.error) && !draft && <div className={s.listError} role="alert"><span>{error || schedules.error}</span>{schedules.error && <button type="button" onClick={() => void refreshSchedules()}>{t("common.retry")}</button>}</div>}
 
         <details className={s.history} open={data.runs.some((run) => run.status === "waiting_for_input")}>
           <summary>{t("schedule.history")} <span>{data.runs.length}</span></summary>

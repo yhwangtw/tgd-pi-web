@@ -29,6 +29,12 @@ describe("buildProviderHealthReport", () => {
     const report = await buildProviderHealthReport(runtime, { now: () => new Date("2026-08-08T00:00:00Z") });
 
     expect(report.summary).toMatchObject({ total: 3, ready: 1, needsAuth: 1, invalid: 1 });
+    expect(report.coverage).toEqual({
+      credentialReadiness: "checked",
+      localCatalog: "checked",
+      quotaAndBilling: "not_checked",
+      upstreamAvailability: "not_checked",
+    });
     expect(report.providers.map((provider) => [provider.id, provider.status])).toEqual([
       ["broken", "invalid"],
       ["ready", "ready"],

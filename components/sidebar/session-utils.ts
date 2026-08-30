@@ -6,6 +6,69 @@ export function getSessionDisplayTitle(session: SessionInfo, maxLength = 80): st
   return `${title.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
 }
 
+/**
+ * Sidebar-only titles that remain distinguishable when several conversations
+ * share the same auto-generated title. Prefer the repo name; if that still
+ * collides, append progressively more precise activity time and finally the
+ * short session id. The final fallback matters for imported/test sessions
+ * whose timestamps can be identical down to the minute.
+ */
+export function buildSessionDisplayTitles(sessions: SessionInfo[], maxLength = 64): Map<string, string> {
+  const baseById = new Map(sessions.map((session) => [session.id, getSessionDisplayTitle(session, maxLength)]));
+  const groups = new Map<string, SessionInfo[]>();
+  for (const session of sessions) {
+    const key = (baseById.get(session.id) ?? "").toLocaleLowerCase();
+    const group = groups.get(key) ?? [];
+    group.push(session);
+    groups.set(key, group);
+  }
+
+  const result = new Map<string, string>();
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      const session = group[0];
+      result.set(session.id, baseById.get(session.id)!);
+      continue;
+    }
+
+    const repoCounts = new Map<string, number>();
+    const repoDateCounts = new Map<string, number>();
+    const repoMinuteCounts = new Map<string, number>();
+    for (const session of group) {
+      const repo = getSessionProjectName(session.cwd);
+      const date = session.modified.slice(0, 10);
+      const minute = session.modified.slice(0, 16).replace("T", " ");
+      repoCounts.set(repo, (repoCounts.get(repo) ?? 0) + 1);
+      repoDateCounts.set(`${repo}\0${date}`, (repoDateCounts.get(`${repo}\0${date}`) ?? 0) + 1);
+      repoMinuteCounts.set(`${repo}\0${minute}`, (repoMinuteCounts.get(`${repo}\0${minute}`) ?? 0) + 1);
+    }
+    for (const session of group) {
+      const base = baseById.get(session.id)!;
+      const repo = getSessionProjectName(session.cwd);
+      const date = session.modified.slice(0, 10);
+      const minute = session.modified.slice(0, 16).replace("T", " ");
+      const suffix = repoCounts.get(repo) === 1
+        ? repo
+        : repoDateCounts.get(`${repo}\0${date}`) === 1
+          ? `${repo} · ${date}`
+          : repoMinuteCounts.get(`${repo}\0${minute}`) === 1
+            ? `${repo} · ${minute}`
+            : `${repo} · ${minute} · ${session.id.replace(/-/g, "").slice(-6)}`;
+      const available = Math.max(1, maxLength - suffix.length - 3);
+      const compactBase = base.length > available ? `${base.slice(0, Math.max(1, available - 1)).trimEnd()}…` : base;
+      result.set(session.id, `${compactBase} · ${suffix}`);
+    }
+  }
+  return result;
+}
+
+/** Last-message preview, excluding a duplicate of the opening message. */
+export function getSessionPreview(session: SessionInfo): string {
+  const preview = session.lastMessage?.replace(/\s+/g, " ").trim() ?? "";
+  if (!preview) return "";
+  return preview === session.firstMessage?.replace(/\s+/g, " ").trim() ? "" : preview;
+}
+
 export function formatRelativeTime(dateStr: string, locale: "en" | "zh" = "en"): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -71,6 +134,11 @@ export interface SessionTreeNode {
   children: SessionTreeNode[];
 }
 
+export interface FlatSessionTreeNode {
+  node: SessionTreeNode;
+  depth: number;
+}
+
 export type SessionSortMode = "recent" | "name" | "messages";
 
 const SORT_COMPARATORS: Record<SessionSortMode, (a: SessionTreeNode, b: SessionTreeNode) => number> = {
@@ -125,4 +193,37 @@ export function buildSessionTree(sessions: SessionInfo[], sortMode: SessionSortM
   };
   roots.forEach((n) => sortChildren(n.children));
   return roots;
+}
+
+/** Find any node, including a fork nested below a root session. */
+export function findSessionTreeNode(nodes: SessionTreeNode[], id: string): SessionTreeNode | null {
+  for (const node of nodes) {
+    if (node.session.id === id) return node;
+    const child = findSessionTreeNode(node.children, id);
+    if (child) return child;
+  }
+  return null;
+}
+
+/**
+ * Flatten the visible portion of a fork tree for windowed rendering.
+ * Excluded nodes (for example pinned conversations) are removed without
+ * hiding their non-excluded descendants, which keeps the pinned section
+ * independent from the chronological list.
+ */
+export function flattenSessionTree(
+  nodes: SessionTreeNode[],
+  collapsedIds: ReadonlySet<string> = new Set(),
+  excludedIds: ReadonlySet<string> = new Set(),
+): FlatSessionTreeNode[] {
+  const rows: FlatSessionTreeNode[] = [];
+  const visit = (node: SessionTreeNode, depth: number) => {
+    const excluded = excludedIds.has(node.session.id);
+    if (!excluded) rows.push({ node, depth });
+    if (collapsedIds.has(node.session.id)) return;
+    const childDepth = excluded ? depth : depth + 1;
+    for (const child of node.children) visit(child, childDepth);
+  };
+  for (const node of nodes) visit(node, 0);
+  return rows;
 }

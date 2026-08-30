@@ -1,5 +1,5 @@
 .outer {
-  padding: 0 52px 4px 16px;
+  padding: 0 var(--component-chat-minimap-gutter) var(--space-1) var(--space-4);
 }
 
 .panel {
@@ -21,8 +21,8 @@
   align-items: center;
   justify-content: space-between;
   min-height: 32px;
-  gap: 8px;
-  padding: 4px 8px 4px 10px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--color-warning-border);
   font-size: var(--text-xs);
 }
@@ -30,7 +30,7 @@
 .header > div {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -44,7 +44,7 @@
   place-items: center;
   min-width: 18px;
   height: 18px;
-  padding: 0 5px;
+  padding: 0 var(--space-1);
   border-radius: var(--radius-pill);
   background: var(--color-warning-bg-strong);
   font-family: var(--font-mono);
@@ -53,7 +53,7 @@
 .clearButton,
 .updating {
   flex: 0 0 auto;
-  padding: 3px 6px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-control-compact);
   color: inherit;
   font-size: var(--text-xs);
@@ -79,9 +79,9 @@
 .item {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   min-width: 0;
-  padding: 5px 7px 5px 10px;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-2);
 }
 
 .item + .item {
@@ -104,10 +104,10 @@
 .message {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
   flex: 1;
-  padding: 3px 4px;
+  padding: var(--space-1) var(--space-1);
   text-align: left;
   color: inherit;
   cursor: text;
@@ -123,7 +123,7 @@
 
 .message small {
   flex: 0 0 auto;
-  padding: 2px 5px;
+  padding: var(--space-optical) var(--space-1);
   border-radius: var(--radius-control-compact);
   background: var(--color-warning-bg-strong);
   color: inherit;
@@ -133,7 +133,7 @@
 .actions {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: var(--space-optical);
   flex: 0 0 auto;
 }
 
@@ -159,7 +159,7 @@
 .editor {
   display: flex;
   align-items: flex-end;
-  gap: 7px;
+  gap: var(--space-2);
   min-width: 0;
   flex: 1;
 }
@@ -170,7 +170,7 @@
   resize: vertical;
   border: 1px solid var(--color-warning-border-strong);
   border-radius: var(--radius-control-compact);
-  padding: 6px 8px;
+  padding: var(--space-2) var(--space-2);
   background: var(--bg);
   color: var(--text);
   font: inherit;
@@ -185,12 +185,12 @@
 
 .editor > div {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .editor button {
   height: 28px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   border-radius: var(--radius-control-compact);
   color: inherit;
   font-size: var(--text-xs);
@@ -224,7 +224,7 @@
 
 @media (max-width: 700px) {
   .outer {
-    padding: 0 8px 4px;
+    padding: 0 var(--space-2) var(--space-1);
   }
 
   .item {

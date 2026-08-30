@@ -50,13 +50,15 @@ Pi 的終端體驗快速而專注；這個專案補上長時間或多工作流�
 
 - Node.js 22 以上
 - npm
-- 可正常運作的 Pi 環境與 `~/.pi/agent/`
+- `~/.pi/agent/` 中的模型憑證／設定，或支援的 Provider 環境變數；不需要安裝全域 `pi` CLI
 - Git
 
 本專案只透過 GitHub 原始碼發布，**不發布至 npm**。
 
 > [!IMPORTANT]
-> tGD Pi Web 能在允許的工作區讀寫檔案、檢查 git repository，並執行 shell 指令。預設只在 localhost 使用；若要遠端存取，請設定 `PIWEB_ACCESS_PASSWORD`，並放在具身分驗證的私人網路或 Access proxy 後方。詳見[部署指南](./deploy/README.md)。
+> tGD Pi Web 能在允許的工作區讀寫檔案、檢查 git repository，並執行 shell 指令。預設只在 localhost 使用；若要遠端存取，請設定 `PIWEB_ACCESS_PASSWORD` 與獨立的 `PIWEB_SESSION_SECRET`，並放在具身分驗證的私人網路或 Access proxy 後方。詳見[部署指南](./deploy/README.md)。
+
+內嵌 Safety Guard 會在高影響指令、受保護檔案、安裝相依套件及外部變更前要求確認。授權可以只用一次，或只允許同一工作區中的同一操作五分鐘；每次決定都會寫入 Security Activity。這是應用層授權，**不是**作業系統 sandbox：工具與 Extension 仍沿用伺服器帳號權限。需要更強隔離時，請使用專用作業系統帳號、container 或 VM。
 
 正式支援的一步式安裝請使用獨立 checkout：
 
@@ -164,12 +166,34 @@ parent/
 
 ## 主要功能
 
+<!-- capability-table:start -->
+下表由 `lib/capabilities.json` 自動產生，是 Web 支援程度與執行依賴的產品契約。
+
+| 能力 | 基礎 | Web 提供方式 | 全域 Pi CLI | 常駐 Server | 信任邊界 |
+| --- | --- | --- | --- | --- | --- |
+| **Agent 對話** | 官方 Pi SDK | 原生 Web | 不需要 | 一般 Web runtime | 單一使用者主機 |
+| **Session 與跨專案搜尋** | 官方 Pi SDK | Web 轉接 | 不需要 | 一般 Web runtime | 單一使用者主機 |
+| **Ask User 與 Extension 對話框** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 明確確認 |
+| **規劃模式** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 受信任工作區 |
+| **結構化輸出** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 無 |
+| **內嵌子代理** | 官方 Pi SDK | Web 轉接 | 不需要 | 一般 Web runtime | 受信任工作區 |
+| **權限閘門** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 明確確認 |
+| **受保護路徑** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 明確確認 |
+| **MCP 連線** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 受信任端點／指令 |
+| **Agent 排程** | 官方 Pi SDK | Web 轉接 | 不需要 | 必須常駐 | 管理者設定 |
+| **檔案、Git 與還原點** | Pi Web | 原生 Web | 不需要 | 一般 Web runtime | 受信任工作區 |
+| **Extension 與套件** | 官方套件格式 | Web 轉接 | 不需要 | 一般 Web runtime | 明確確認 |
+| **執行環境與安全診斷** | Pi Web | 原生 Web | 不需要 | 一般 Web runtime | 管理者設定 |
+| **安全更新中心** | Pi Web | 原生 Web | 不需要 | 必須常駐 | 管理者設定 |
+<!-- capability-table:end -->
+
 ### Agent 對話
 
 - 透過 SSE 即時串流，並在送出 prompt 前先建立事件連線。
 - 支援 prompt、steer、follow-up queue、retry、bash 與 context compaction。
 - 使用 `!command` 直接執行 shell；使用 `!!command` 讓結果不進入模型 context。
 - 在 session 中途切換模型與 thinking level。
+- Web runtime 內建第一方 `subagent` 工具，可把隔離工作交給 scout、planner、worker 與 reviewer，最多八項任務會沿用現有 Agent 佇列執行；每個子 Session 都能在 Agent 面板檢查或取消，不需要全域 `pi` CLI。
 - 內建 `ask_user` 工具，並支援 Pi extension 的 `select`、`confirm`、`input`、`editor` 對話框、通知、狀態與文字 Widget；等待中的決定可跨斷線重連保留。
 - Pi extension 的 session 指令（`newSession`、`fork`、`switchSession`）改由原生 `AgentSessionRuntime` 執行；Web UI 會跟隨替換後的 session，並將 SSE 重連至新 session。
 - 替換失敗時會恢復原本的 runtime；目標 session 已被其他 runtime 使用時會在切換前拒絕，所有開啟中的分頁也會同步跟隨。Extensions 設定可查看即時 runtime 診斷。
@@ -257,6 +281,12 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 |---|---|
 | `PI_CODING_AGENT_DIR` | 覆寫預設的 `~/.pi/agent` 目錄 |
 | `PIWEB_ACCESS_PASSWORD` | 啟用套用於所有 route 的內建共用密碼閘門 |
+| `PIWEB_SESSION_SECRET` | 獨立簽署存取 Cookie；遠端部署請使用至少 32 bytes 的隨機值 |
+| `PIWEB_RELEASE_REPOSITORY` | 更新中心使用的 GitHub `owner/repo`；預設為 `yhwangtw/tgd-pi-web` |
+| `PIWEB_UPDATE_BACKUP_DIR` | 位於應用程式 checkout 外的私人程式來源備份目錄；預設放在 Pi agent 資料目錄下 |
+| `PIWEB_UPDATE_COMMAND_JSON` | 管理者更新 helper 的絕對路徑 JSON argv 陣列；不經 shell 解析 |
+| `PIWEB_RESTART_COMMAND_JSON` | 管理者重新啟動 helper 的絕對路徑 JSON argv 陣列 |
+| `PIWEB_ROLLBACK_COMMAND_JSON` | 管理者回復 helper 的絕對路徑 JSON argv 陣列 |
 | `TGD_DIR` | 覆寫相鄰的 `<project>-tGD/` artifact 目錄 |
 | `models.json` | 模型與 provider 清單，包含自訂 `baseUrl` |
 | `auth.json` | 由 Pi 管理的各 provider API credential |

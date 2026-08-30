@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FileOutlineItem } from "@/lib/file-workbench";
+import { useI18n, type MsgKey } from "@/lib/i18n";
 import styles from "./FileInspectorDrawer.module.css";
 import { requestOpenFile } from "@/lib/file-links";
 
@@ -10,7 +11,13 @@ interface Diagnostic { source: "typescript" | "eslint" | "test"; line: number; c
 interface Commit { sha: string; shortSha: string; author: string; date: string; subject: string }
 interface BlameLine { line: number; sha: string; author: string; date: string; text: string }
 interface FileNote { id: string; line: number; text: string; createdAt: number }
-interface Snapshot { id: string; ts: number; label: string; fileCount: number }
+interface Snapshot {
+  id: string;
+  ts: number;
+  label: string;
+  fileCount: number;
+  impact?: { total: number };
+}
 interface SymbolMatch { path: string; line: number; preview: string }
 
 interface Props {
@@ -35,6 +42,7 @@ function readNotes(filePath: string): FileNote[] {
 }
 
 export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, outline, initialTab = "outline", onClose, onGotoLine, onCompareVersion, onCompareSnapshot, onSendDiagnostic, onDiagnosticsLoaded }: Props) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<InspectorTab>(initialTab);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[] | null>(null);
   const [history, setHistory] = useState<Commit[] | null>(null);
@@ -49,6 +57,13 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
   const [symbol, setSymbol] = useState("");
   const [symbolMode, setSymbolMode] = useState<"definition" | "references">("definition");
   const [symbolMatches, setSymbolMatches] = useState<SymbolMatch[] | null>(null);
+  const tabKeys: Record<InspectorTab, MsgKey> = {
+    outline: "files.inspector.outline",
+    problems: "files.inspector.problems",
+    history: "files.inspector.history",
+    blame: "files.inspector.blame",
+    notes: "files.inspector.notes",
+  };
 
   useEffect(() => { setTab(initialTab); }, [initialTab]);
   useEffect(() => { setNotes(readNotes(filePath)); setDiagnostics(null); setHistory(null); setBlame(null); }, [filePath]);
@@ -117,36 +132,36 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
   };
 
   return (
-    <div className={styles.drawer} role="complementary" aria-label="File inspector" data-testid="file-inspector">
-      <div className={styles.header}><strong>Inspector</strong><button onClick={onClose} aria-label="Close inspector">×</button></div>
+    <div className={styles.drawer} role="complementary" aria-label={t("files.inspector.title")} data-testid="file-inspector">
+      <div className={styles.header}><strong>{t("files.inspector.title")}</strong><button onClick={onClose} aria-label={t("files.inspector.close")}>×</button></div>
       <div className={styles.tabs} role="tablist">
-        {(["outline", "problems", "history", "blame", "notes"] as InspectorTab[]).map((item) => <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? styles.tabActive : styles.tab} onClick={() => setTab(item)}>{item === "outline" ? "Outline" : item === "problems" ? `Problems${diagnostics?.length ? ` ${diagnostics.length}` : ""}` : item[0].toUpperCase() + item.slice(1)}</button>)}
+        {(["outline", "problems", "history", "blame", "notes"] as InspectorTab[]).map((item) => <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? styles.tabActive : styles.tab} onClick={() => setTab(item)}>{t(tabKeys[item])}{item === "problems" && diagnostics?.length ? ` ${diagnostics.length}` : ""}</button>)}
       </div>
       <div className={styles.body}>
-        {loading && <div className={styles.empty}>Loading…</div>}
+        {loading && <div className={styles.empty}>{t("common.loading")}</div>}
         {error && <div className={styles.error}>{error}</div>}
         {!loading && !error && tab === "outline" && <>
           <form className={styles.symbolSearch} onSubmit={(event) => { event.preventDefault(); void findSymbol("definition"); }}>
-            <input value={symbol} onChange={(event) => setSymbol(event.target.value)} placeholder="Find symbol…" aria-label="Symbol" />
-            <button type="submit" disabled={!symbol.trim()}>Definition</button>
-            <button type="button" disabled={!symbol.trim()} onClick={() => void findSymbol("references")}>References</button>
+            <input value={symbol} onChange={(event) => setSymbol(event.target.value)} placeholder={t("files.inspector.findSymbol")} aria-label={t("files.inspector.symbol")} />
+            <button type="submit" disabled={!symbol.trim()}>{t("files.inspector.definition")}</button>
+            <button type="button" disabled={!symbol.trim()} onClick={() => void findSymbol("references")}>{t("files.inspector.references")}</button>
           </form>
-          {symbolMatches && <div className={styles.list} aria-label={`${symbolMode} results`}>
-            {symbolMatches.length === 0 ? <div className={styles.empty}>No {symbolMode} found</div> : symbolMatches.map((match, index) => <button key={`${match.path}:${match.line}:${index}`} className={styles.symbolResult} onClick={() => match.path === relativePath ? onGotoLine(match.line) : requestOpenFile({ path: match.path, line: match.line })}><span className="chrome-mono">{match.path}:{match.line}</span><span>{match.preview}</span></button>)}
+          {symbolMatches && <div className={styles.list} aria-label={t(symbolMode === "definition" ? "files.inspector.definitionResults" : "files.inspector.referenceResults")}>
+            {symbolMatches.length === 0 ? <div className={styles.empty}>{t(symbolMode === "definition" ? "files.inspector.noDefinition" : "files.inspector.noReferences")}</div> : symbolMatches.map((match, index) => <button key={`${match.path}:${match.line}:${index}`} className={styles.symbolResult} onClick={() => match.path === relativePath ? onGotoLine(match.line) : requestOpenFile({ path: match.path, line: match.line })}><span className="chrome-mono">{match.path}:{match.line}</span><span>{match.preview}</span></button>)}
           </div>}
-          {outline.length ? <div className={styles.list}>{outline.map((item) => <button key={item.id} className={styles.row} style={{ paddingLeft: 10 + (item.level - 1) * 14 }} onClick={() => onGotoLine(item.line)}><span className={styles.kind}>{item.kind.slice(0, 2)}</span><span className={styles.label}>{item.label}</span><span className={styles.line}>L{item.line}</span></button>)}</div> : !symbolMatches && <div className={styles.empty}>No symbols found</div>}
+          {outline.length ? <div className={styles.list}>{outline.map((item) => <button key={item.id} className={styles.row} style={{ paddingLeft: 10 + (item.level - 1) * 14 }} onClick={() => onGotoLine(item.line)}><span className={styles.kind}>{item.kind.slice(0, 2)}</span><span className={styles.label}>{item.label}</span><span className={styles.line}>L{item.line}</span></button>)}</div> : !symbolMatches && <div className={styles.empty}>{t("files.inspector.noSymbols")}</div>}
         </>}
         {!loading && !error && tab === "problems" && <div className={styles.problemsPane}>
-          <div className={styles.problemActions}><span>TypeScript · ESLint · related tests</span><button disabled={runningTests} onClick={() => void runRelatedTests()}>{runningTests ? "Running…" : "Run related tests"}</button></div>
-          {diagnostics?.length ? <div className={styles.list}>{diagnostics.map((item, index) => <div key={`${item.source}-${item.line}-${index}`} className={styles.problem}><button className={styles.problemMain} onClick={() => onGotoLine(item.line)}><span className={item.severity === "error" ? styles.problemError : styles.problemWarning}>{item.severity === "error" ? "●" : "▲"}</span><span><strong>{item.code ?? item.source}</strong> {item.message}</span><span className={styles.line}>{item.source === "test" ? "test" : `L${item.line}:${item.column}`}</span></button>{onSendDiagnostic && <button className={styles.fix} onClick={() => onSendDiagnostic(item)}>Ask Pi to fix</button>}</div>)}</div> : diagnostics && <div className={styles.empty}>No TypeScript, ESLint, or test problems</div>}
+          <div className={styles.problemActions}><span>{t("files.inspector.problemSources")}</span><button disabled={runningTests} onClick={() => void runRelatedTests()}>{t(runningTests ? "files.inspector.runningTests" : "files.inspector.runTests")}</button></div>
+          {diagnostics?.length ? <div className={styles.list}>{diagnostics.map((item, index) => <div key={`${item.source}-${item.line}-${index}`} className={styles.problem}><button className={styles.problemMain} onClick={() => onGotoLine(item.line)}><span className={item.severity === "error" ? styles.problemError : styles.problemWarning}>{item.severity === "error" ? "●" : "▲"}</span><span><strong>{item.code ?? item.source}</strong> {item.message}</span><span className={styles.line}>{item.source === "test" ? "test" : `L${item.line}:${item.column}`}</span></button>{onSendDiagnostic && <button className={styles.fix} onClick={() => onSendDiagnostic(item)}>{t("files.inspector.askPiFix")}</button>}</div>)}</div> : diagnostics && <div className={styles.empty}>{t("files.inspector.noProblems")}</div>}
         </div>}
         {!loading && !error && tab === "history" && <div className={styles.list}>
-          {snapshots.length > 0 && <><div className={styles.groupLabel}>Agent snapshots</div>{snapshots.map((snapshot) => <button key={snapshot.id} className={styles.commit} onClick={() => onCompareSnapshot?.(snapshot)}><span className={styles.sha}>snap</span><span className={styles.label}>{snapshot.label}</span><span className={styles.meta}>{new Date(snapshot.ts).toLocaleString()} · {snapshot.fileCount} files</span></button>)}</>}
-          {(history?.length ?? 0) > 0 && <><div className={styles.groupLabel}>Git history</div>{history!.map((commit) => <button key={commit.sha} className={styles.commit} onClick={() => onCompareVersion(commit)}><span className={styles.sha}>{commit.shortSha}</span><span className={styles.label}>{commit.subject}</span><span className={styles.meta}>{commit.author} · {new Date(commit.date).toLocaleDateString()}</span></button>)}</>}
-          {history && history.length === 0 && snapshots.length === 0 && <div className={styles.empty}>No history for this file</div>}
+          {snapshots.length > 0 && <><div className={styles.groupLabel}>{t("files.inspector.snapshots")}</div>{snapshots.map((snapshot) => <button type="button" key={snapshot.id} className={styles.commit} onClick={() => onCompareSnapshot?.(snapshot)}><span className={styles.sha}>{t("files.inspector.snapshotShort")}</span><span className={styles.label}>{snapshot.label}</span><span className={styles.meta}>{new Date(snapshot.ts).toLocaleString()} · {snapshot.impact?.total ?? snapshot.fileCount} {t("files.inspector.affected")}</span></button>)}</>}
+          {(history?.length ?? 0) > 0 && <><div className={styles.groupLabel}>{t("files.inspector.gitHistory")}</div>{history!.map((commit) => <button key={commit.sha} className={styles.commit} onClick={() => onCompareVersion(commit)}><span className={styles.sha}>{commit.shortSha}</span><span className={styles.label}>{commit.subject}</span><span className={styles.meta}>{commit.author} · {new Date(commit.date).toLocaleDateString()}</span></button>)}</>}
+          {history && history.length === 0 && snapshots.length === 0 && <div className={styles.empty}>{t("files.inspector.noHistory")}</div>}
         </div>}
-        {!loading && !error && tab === "blame" && (groupedBlame.length ? <div className={styles.list}>{groupedBlame.map((item) => <button key={`${item.sha}-${item.line}`} className={styles.commit} onClick={() => onGotoLine(item.line)}><span className={styles.sha}>{item.sha.slice(0, 8)}</span><span className={styles.label}>{item.author}</span><span className={styles.meta}>L{item.line}–{item.line + item.count - 1} · {new Date(item.date).toLocaleDateString()}</span></button>)}</div> : blame && <div className={styles.empty}>Blame is unavailable</div>)}
-        {tab === "notes" && <div className={styles.notes}><form onSubmit={(event) => { event.preventDefault(); const text = noteText.trim(); const line = Number(noteLine); if (!text || !Number.isFinite(line) || line < 1) return; saveNotes([...notes, { id: crypto.randomUUID(), line, text, createdAt: Date.now() }]); setNoteText(""); }}><div className={styles.noteForm}><input aria-label="Line" value={noteLine} onChange={(event) => setNoteLine(event.target.value)} inputMode="numeric" /><textarea aria-label="Note" value={noteText} onChange={(event) => setNoteText(event.target.value)} placeholder="Comment or review note…" rows={2} /><button disabled={!noteText.trim()}>Add</button></div></form>{notes.map((note) => <div className={styles.note} key={note.id}><button onClick={() => onGotoLine(note.line)}>L{note.line}</button><span>{note.text}</span><button aria-label="Delete note" onClick={() => saveNotes(notes.filter((item) => item.id !== note.id))}>×</button></div>)}</div>}
+        {!loading && !error && tab === "blame" && (groupedBlame.length ? <div className={styles.list}>{groupedBlame.map((item) => <button key={`${item.sha}-${item.line}`} className={styles.commit} onClick={() => onGotoLine(item.line)}><span className={styles.sha}>{item.sha.slice(0, 8)}</span><span className={styles.label}>{item.author}</span><span className={styles.meta}>L{item.line}–{item.line + item.count - 1} · {new Date(item.date).toLocaleDateString()}</span></button>)}</div> : blame && <div className={styles.empty}>{t("files.inspector.blameUnavailable")}</div>)}
+        {tab === "notes" && <div className={styles.notes}><form onSubmit={(event) => { event.preventDefault(); const text = noteText.trim(); const line = Number(noteLine); if (!text || !Number.isFinite(line) || line < 1) return; saveNotes([...notes, { id: crypto.randomUUID(), line, text, createdAt: Date.now() }]); setNoteText(""); }}><div className={styles.noteForm}><input aria-label={t("files.inspector.line")} value={noteLine} onChange={(event) => setNoteLine(event.target.value)} inputMode="numeric" /><textarea aria-label={t("files.inspector.note")} value={noteText} onChange={(event) => setNoteText(event.target.value)} placeholder={t("files.inspector.notePlaceholder")} rows={2} /><button disabled={!noteText.trim()}>{t("common.add")}</button></div></form>{notes.map((note) => <div className={styles.note} key={note.id}><button onClick={() => onGotoLine(note.line)}>L{note.line}</button><span>{note.text}</span><button aria-label={t("files.inspector.deleteNote")} onClick={() => saveNotes(notes.filter((item) => item.id !== note.id))}>×</button></div>)}</div>}
       </div>
     </div>
   );

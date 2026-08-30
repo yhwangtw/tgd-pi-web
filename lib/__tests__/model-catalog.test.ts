@@ -22,7 +22,15 @@ describe("model catalog", () => {
 
     const catalog = buildModelCatalog(registry, settings);
 
-    expect(catalog.modelList).toContainEqual({ id: "team-fast", name: "Team Fast", provider: "team-ai" });
+    expect(catalog.modelList).toContainEqual({
+      id: "team-fast",
+      name: "Team Fast",
+      provider: "team-ai",
+      available: true,
+      contextWindow: 32_000,
+      maxTokens: 4_096,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    });
     expect(catalog.models["team-ai:team-fast"]).toBe("Team Fast");
     expect(catalog.defaultModel).toEqual({ provider: "team-ai", modelId: "team-fast" });
   });
