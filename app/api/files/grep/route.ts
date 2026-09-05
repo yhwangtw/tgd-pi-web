@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { getAllowedRoots, isPathAllowed } from "@/lib/file-security";
+import { getAllowedRoots } from "@/lib/file-security";
+import { resolveSearchRoot } from "@/lib/search-files";
+import { fileSearchOptionsFromParams } from "@/lib/file-search-options";
 import { grepProject } from "@/lib/grep";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +14,7 @@ export async function GET(req: Request) {
   const q = url.searchParams.get("q") ?? "";
   const caseSensitive = url.searchParams.get("case") === "1";
 
-  if (!cwd || !q) {
+  if (!cwd || !q || q.length > 500 || /[\r\n]/.test(q)) {
     return NextResponse.json({ error: "cwd and q are required" }, { status: 400 });
   }
   // Very short queries match almost everything and are slow to render — skip.
@@ -20,13 +22,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ matches: [], truncated: false, engine: "none" });
   }
 
-  const allowed = await getAllowedRoots();
-  if (!isPathAllowed(cwd, allowed)) {
+  const root = await resolveSearchRoot(cwd, await getAllowedRoots());
+  if (!root) {
     return NextResponse.json({ error: "Path not allowed" }, { status: 403 });
   }
 
   try {
-    return NextResponse.json(await grepProject(cwd, q, { caseSensitive }));
+    return NextResponse.json(await grepProject(root, q, { caseSensitive, ...fileSearchOptionsFromParams(url.searchParams), signal: req.signal }));
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

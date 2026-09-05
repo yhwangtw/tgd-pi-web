@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EMPTY_SESSION_SEARCH_FILTERS, countSessionSearchFilters, matchesSessionSearchFilters } from "../search-filters";
-import { resolveWorkspaceIdentity } from "../workspace-identity";
+import { pendingWorkspaceIdentity, resolveWorkspaceIdentity } from "../workspace-identity";
 
 const identity = resolveWorkspaceIdentity("/work/demo", [
   { path: "/work/demo", branch: "main", head: "abcdef123456", isMain: true },
@@ -19,5 +19,13 @@ describe("session search filters", () => {
   it("leaves results untouched when filters are empty", () => {
     expect(countSessionSearchFilters(EMPTY_SESSION_SEARCH_FILTERS)).toBe(0);
     expect(matchesSessionSearchFilters(hit, identity, EMPTY_SESSION_SEARCH_FILTERS)).toBe(true);
+  });
+
+  it("does not label loading or unavailable Git metadata as a non-repository", () => {
+    const filters = { ...EMPTY_SESSION_SEARCH_FILTERS, branch: "not-git" };
+    for (const unknown of [undefined, pendingWorkspaceIdentity(hit.cwd), pendingWorkspaceIdentity(hit.cwd, "unknown")]) {
+      expect(matchesSessionSearchFilters(hit, unknown, filters)).toBe(false);
+    }
+    expect(matchesSessionSearchFilters(hit, resolveWorkspaceIdentity(hit.cwd, []), filters)).toBe(true);
   });
 });

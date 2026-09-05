@@ -3,6 +3,7 @@
 import type { SemanticHit } from "@/lib/semantic-search";
 import type { SessionSearchStatus } from "@/lib/session-search";
 import { fetchJson, useRequestResource } from "./useRequestResource";
+import { DEFAULT_FILE_SEARCH_OPTIONS, fileSearchOptionsQuery, type FileSearchOptions } from "@/lib/file-search-options";
 
 export type SearchScope = "all" | "semantic" | "sessions" | "files" | "content" | "commands";
 
@@ -49,6 +50,8 @@ interface UnifiedSearchPayload {
   contentHits: ContentHit[];
   semanticHits: SemanticHit[];
   error: boolean;
+  filesTruncated: boolean;
+  contentTruncated: boolean;
 }
 
 interface UnifiedSearchResults extends UnifiedSearchPayload {
@@ -60,6 +63,8 @@ const EMPTY_RESULTS: Omit<UnifiedSearchPayload, "error"> = {
   fileHits: [],
   contentHits: [],
   semanticHits: [],
+  filesTruncated: false,
+  contentTruncated: false,
 };
 
 /** Debounced, abortable data loading for the unified search surface. */
@@ -68,10 +73,11 @@ export function useUnifiedSearchResults(
   query: string,
   scope: SearchScope,
   caseSensitive: boolean,
+  fileOptions: FileSearchOptions = DEFAULT_FILE_SEARCH_OPTIONS,
 ): UnifiedSearchResults {
   const normalizedQuery = query.trim();
   const key = normalizedQuery.length >= 2
-    ? `unified-search:${JSON.stringify([cwd, normalizedQuery, scope, caseSensitive])}`
+    ? `unified-search:${JSON.stringify([cwd, normalizedQuery, scope, caseSensitive, fileOptions])}`
     : null;
   const resource = useRequestResource<UnifiedSearchPayload>(
     key,
@@ -80,17 +86,18 @@ export function useUnifiedSearchResults(
       const wantsFiles = !!cwd && (scope === "all" || scope === "files");
       const wantsContent = !!cwd && (scope === "all" || scope === "content");
       const wantsSemantic = scope === "semantic";
+      const fileParams = fileSearchOptionsQuery(fileOptions);
       const activeRequestCount = [wantsSessions, wantsFiles, wantsContent, wantsSemantic].filter(Boolean).length;
       const requests = await Promise.allSettled([
         wantsSessions
           ? fetchJson<{ hits?: SessionHit[] }>(`/api/sessions/search?q=${encodeURIComponent(normalizedQuery)}`, {}, signal)
           : Promise.resolve({ hits: [] as SessionHit[] }),
         wantsFiles
-          ? fetchJson<{ results?: FileHit[] }>(`/api/files/search?cwd=${encodeURIComponent(cwd!)}&q=${encodeURIComponent(normalizedQuery)}`, {}, signal)
-          : Promise.resolve({ results: [] as FileHit[] }),
+          ? fetchJson<{ results?: FileHit[]; truncated?: boolean }>(`/api/files/search?cwd=${encodeURIComponent(cwd!)}&q=${encodeURIComponent(normalizedQuery)}${fileParams}`, {}, signal)
+          : Promise.resolve({ results: [] as FileHit[], truncated: false }),
         wantsContent
-          ? fetchJson<{ matches?: ContentHit[] }>(`/api/files/grep?cwd=${encodeURIComponent(cwd!)}&q=${encodeURIComponent(normalizedQuery)}${caseSensitive ? "&case=1" : ""}`, {}, signal)
-          : Promise.resolve({ matches: [] as ContentHit[] }),
+          ? fetchJson<{ matches?: ContentHit[]; truncated?: boolean }>(`/api/files/grep?cwd=${encodeURIComponent(cwd!)}&q=${encodeURIComponent(normalizedQuery)}${caseSensitive ? "&case=1" : ""}${fileParams}`, {}, signal)
+          : Promise.resolve({ matches: [] as ContentHit[], truncated: false }),
         wantsSemantic
           ? fetchJson<{ hits?: SemanticHit[] }>(`/api/search/semantic?q=${encodeURIComponent(normalizedQuery)}${cwd ? `&cwd=${encodeURIComponent(cwd)}` : ""}`, {}, signal)
           : Promise.resolve({ hits: [] as SemanticHit[] }),
@@ -108,6 +115,8 @@ export function useUnifiedSearchResults(
           : [],
         contentHits: contentResult.status === "fulfilled" ? contentResult.value.matches ?? [] : [],
         semanticHits: semanticResult.status === "fulfilled" ? semanticResult.value.hits ?? [] : [],
+        filesTruncated: filesResult.status === "fulfilled" && filesResult.value.truncated === true,
+        contentTruncated: contentResult.status === "fulfilled" && contentResult.value.truncated === true,
         error: failures.some((result) => result.status === "rejected" && (result.reason as Error)?.name !== "AbortError"),
       };
     },

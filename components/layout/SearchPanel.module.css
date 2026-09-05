@@ -3,10 +3,12 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  overflow-y: auto;
   background: var(--bg-panel);
 }
 
 .header {
+  flex-shrink: 0;
   position: relative;
   padding: var(--space-2) var(--space-2) var(--space-2);
   border-bottom: 1px solid var(--border);
@@ -310,7 +312,7 @@
 
 .results {
   flex: 1;
-  min-height: 0;
+  min-height: 120px;
   overflow-y: auto;
 }
 
@@ -398,6 +400,7 @@
 }
 
 .snippet { color: var(--text-muted); }
+.resultPath { color: var(--text-dim); font-size: var(--text-xs); line-height: var(--leading-copy); overflow-wrap: anywhere; white-space: normal; }
 .mono { font-family: var(--font-mono); }
 
 .lineNumber {
@@ -485,4 +488,30 @@
     min-width: var(--control-touch);
     min-height: var(--control-touch);
   }
+}
+
+.filterActions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.filterActions .filterButton { min-width: 0; max-width: 100%; padding-block: var(--space-1); }
+.filterButton:disabled { cursor: default; opacity: .5; }
+.filterButton svg { flex-shrink: 0; }
+.scopeHint,
+.limitNote { margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--text-xs); line-height: var(--leading-copy); overflow-wrap: anywhere; }
+.limitNote { display: block; }
+.workspacePath { display: grid; min-width: 0; gap: var(--space-1); }
+.workspacePath > span { color: var(--text-muted); font-size: var(--text-xs); }
+.workspacePath code { font-family: var(--font-mono); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.fileScopeForm { display: grid; gap: var(--space-3); }
+.fileScopeForm fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.fileScopeForm legend { margin-bottom: var(--space-1); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.fileScopeForm label { display: flex; align-items: center; min-height: var(--control-touch); gap: var(--space-3); padding-block: var(--space-2); font-size: var(--text-sm); line-height: var(--leading-copy); cursor: pointer; }
+.fileScopeForm input { width: 18px; height: 18px; flex-shrink: 0; margin: 0; accent-color: var(--accent); }
+.fileScopeForm input:focus-visible,
+.filterButton:focus-visible { outline: 2px solid var(--color-accent-border-focus-strong); outline-offset: 2px; }
+
+@media (max-width: 700px), (pointer: coarse) {
+  .filterButton,
+  .scope,
+  :global(html[data-ui-style="trae"]) .scope { min-height: var(--control-touch); }
+  .scope,
+  :global(html[data-ui-style="trae"]) .scope { white-space: normal; padding-block: var(--space-1); }
 }

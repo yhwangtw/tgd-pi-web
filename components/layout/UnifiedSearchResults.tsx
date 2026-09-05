@@ -123,18 +123,19 @@ export function UnifiedSearchResults(props: Props) {
       {props.showFiles && props.fileHits.length > 0 && (
         <div className={styles.group}>
           <div className={styles.groupTitle}>{t("search.scope.files")}</div>
-          {props.fileHits.slice(0, 50).map((hit) => (
+          {props.fileHits.map((hit) => (
             <button
               key={hit.full}
               data-search-result
               className={styles.result}
+              title={hit.relative}
               onClick={() => props.onOpenFile(hit.full, hit.name, undefined, { kind: "search", query: props.query })}
               onKeyDown={keyDown}
             >
               <span className={styles.resultIcon}>□</span>
               <span className={styles.resultBody}>
                 <span className={styles.resultTitle}>{hit.name}</span>
-                <span className={styles.resultMeta}>{hit.relative}</span>
+                <span className={styles.resultPath}>{hit.relative}</span>
               </span>
             </button>
           ))}
@@ -144,11 +145,12 @@ export function UnifiedSearchResults(props: Props) {
       {props.showContent && props.contentHits.length > 0 && (
         <div className={styles.group}>
           <div className={styles.groupTitle}>{t("search.scope.content")}</div>
-          {props.contentHits.slice(0, 80).map((hit, index) => (
-            <button key={`${hit.full}:${hit.line}:${hit.col}:${index}`} data-search-result className={styles.result} onClick={() => props.onOpenFile(hit.full, getFileName(hit.full), hit.line, { kind: "search", query: props.query })} onKeyDown={keyDown}>
+          {props.contentHits.map((hit, index) => (
+            <button key={`${hit.full}:${hit.line}:${hit.col}:${index}`} data-search-result className={styles.result} title={`${hit.relative}:${hit.line}`} onClick={() => props.onOpenFile(hit.full, getFileName(hit.full), hit.line, { kind: "search", query: props.query })} onKeyDown={keyDown}>
               <span className={styles.lineNumber}>{hit.line}</span>
               <span className={styles.resultBody}>
-                <span className={styles.resultMeta}>{hit.relative}</span>
+                <span className={styles.resultTitle}>{getFileName(hit.full)}</span>
+                <span className={styles.resultPath}>{hit.relative}</span>
                 <span className={`${styles.snippet} ${styles.mono}`}>{highlight(hit.text, props.query, hit.col)}</span>
               </span>
             </button>

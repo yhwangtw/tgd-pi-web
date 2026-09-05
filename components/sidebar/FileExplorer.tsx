@@ -38,7 +38,6 @@ interface MenuTarget {
   fullPath: string;
   relative: string;
   isDir: boolean;
-  gitStatus?: string;
   /** Right-clicked empty space → only creation/upload actions. */
   rootArea?: boolean;
 }
@@ -158,7 +157,7 @@ function TreeNode({
         onClick={handleClick}
         onContextMenu={(e) => {
           e.preventDefault();
-          onContextMenu({ x: e.clientX, y: e.clientY, fullPath: node.fullPath, relative, isDir: node.isDir, gitStatus: fileStatus });
+          onContextMenu({ x: e.clientX, y: e.clientY, fullPath: node.fullPath, relative, isDir: node.isDir });
         }}
         onMouseDown={(e) => (e.currentTarget as HTMLElement).focus()}
         className={`hover-bg hover-group ${styles.treeNode} ${!node.isDir && activePath === node.fullPath ? styles.treeNodeActive : ""}`}
@@ -517,7 +516,7 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
               {t("explorer.mention")}
             </button>
           )}
-          {onOpenDiff && !menu.isDir && menu.gitStatus && (
+          {onOpenDiff && !menu.isDir && gitStatus.has(menu.relative) && (
             <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { onOpenDiff(menu.relative); setMenu(null); }}>
               {t("explorer.diff")}
             </button>

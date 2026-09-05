@@ -51,6 +51,7 @@
     "@radix-ui/react-dropdown-menu": "2.1.24",
     "brace-expansion": "5.0.9",
     "diff": "8.0.4",
+    "ignore": "7.0.5",
     "katex": "^0.17.0",
     "lucide-react": "^0.562.0",
     "mammoth": "^1.12.0",

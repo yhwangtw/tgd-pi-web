@@ -1,5 +1,6 @@
 import type { SearchScope } from "@/hooks/useUnifiedSearchResults";
 import { EMPTY_SESSION_SEARCH_FILTERS, type SessionSearchFilters } from "./search-filters";
+import { normalizeFileSearchOptions, type FileSearchOptions } from "./file-search-options";
 
 export interface SavedSearchView {
   id: string;
@@ -7,6 +8,8 @@ export interface SavedSearchView {
   scope: SearchScope;
   query: string;
   filters: SessionSearchFilters;
+  fileOptions?: FileSearchOptions;
+  caseSensitive?: boolean;
   createdAt: string;
 }
 
@@ -45,7 +48,9 @@ export function readSavedSearchViews(storage = availableStorage()): SavedSearchV
   if (!storage) return [];
   try {
     const parsed = JSON.parse(storage.getItem(STORAGE_KEY) ?? "[]") as unknown;
-    return Array.isArray(parsed) ? parsed.filter(isSavedView).slice(0, MAX_VIEWS) : [];
+    return Array.isArray(parsed) ? parsed.filter(isSavedView).slice(0, MAX_VIEWS).map((view) => ({
+      ...view, fileOptions: normalizeFileSearchOptions(view.fileOptions), caseSensitive: view.caseSensitive === true,
+    })) : [];
   } catch {
     return [];
   }
@@ -59,7 +64,7 @@ export function writeSavedSearchViews(views: SavedSearchView[], storage = availa
 }
 
 export function createSavedSearchView(
-  input: Pick<SavedSearchView, "name" | "scope" | "query" | "filters">,
+  input: Pick<SavedSearchView, "name" | "scope" | "query" | "filters" | "fileOptions" | "caseSensitive">,
   existing = readSavedSearchViews(),
   now = new Date(),
 ): SavedSearchView[] {
@@ -71,6 +76,8 @@ export function createSavedSearchView(
     scope: input.scope,
     query: input.query.trim().slice(0, 500),
     filters: { ...EMPTY_SESSION_SEARCH_FILTERS, ...input.filters },
+    fileOptions: normalizeFileSearchOptions(input.fileOptions),
+    caseSensitive: input.caseSensitive === true,
     createdAt: now.toISOString(),
   };
   return writeSavedSearchViews([view, ...existing.filter((item) => item.name.toLocaleLowerCase() !== name.toLocaleLowerCase())]);
