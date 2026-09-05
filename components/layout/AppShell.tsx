@@ -1293,7 +1293,7 @@ export function AppShell() {
           />
         )}
         {/* Right panel tab bar */}
-        <div className={s.rightPanelTabBar} data-testid="right-panel-tab-bar">
+        {!(diffFile && panelCwd) && <div className={s.rightPanelTabBar} data-testid="right-panel-tab-bar">
           <div className={s.rightPanelTabBarInner}>
             <TabBar
               tabs={fileTabs}
@@ -1336,10 +1336,11 @@ export function AppShell() {
           </button>
         </div>
 
+        }
         {/* File content */}
         <div className={s.rightPanelContent}>
           {diffFile && panelCwd ? (
-            <DiffPanel cwd={panelCwd} path={diffFile} onClose={() => setDiffFile(null)} onAnnotate={handleDiffAnnotation} />
+            <DiffPanel key={`${panelCwd}:${diffFile}`} cwd={panelCwd} path={diffFile} onClose={() => setDiffFile(null)} onAnnotate={handleDiffAnnotation} />
           ) : activeFileTab?.filePath ? (
             <div className={`${s.fileWorkspace} ${splitFileTab ? s.fileWorkspaceSplit : ""}`}>
               <div className={s.fileWorkspacePane}>

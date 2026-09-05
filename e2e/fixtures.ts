@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "fs";
+import { mkdirSync, readdirSync, writeFileSync } from "fs";
 import { execSync } from "child_process";
 import path from "path";
 
@@ -15,7 +15,9 @@ import path from "path";
  * specs may freely mutate session files.
  */
 export function createFixtures(root: string): { cwd: string } {
-  rmSync(root, { recursive: true, force: true });
+  // Never clean a supplied path: refusing a nonempty root protects unrelated
+  // files and makes accidental cross-run fixture sharing fail visibly.
+  if (readdirSync(root).length) throw new Error("E2E fixtures require a fresh, empty run directory");
   const cwd = path.join(root, "demo-project");
   mkdirSync(path.join(cwd, "src"), { recursive: true });
 
@@ -105,6 +107,8 @@ export function createFixtures(root: string): { cwd: string } {
   );
   const git = (args: string) =>
     execSync(`git -c user.email=e2e@test -c user.name=e2e ${args}`, { cwd, stdio: "pipe" });
+  const diffLines = Array.from({ length: 20_000 }, (_, i) => `review line ${i + 1}`);
+  writeFileSync(path.join(cwd, "diff-navigation.txt"), diffLines.join("\n") + "\n");
   git("init -q");
   git("add -A");
   git('commit -qm "initial"');
@@ -112,6 +116,8 @@ export function createFixtures(root: string): { cwd: string } {
   git(`worktree add -q ${JSON.stringify(path.join(root, "demo-project-wt"))} -b feature-wt`);
   // Working-tree state: one modified, two untracked
   writeFileSync(path.join(cwd, "src/index.ts"), "export const answer = 43; // modified\n");
+  for (let i = 500; i < diffLines.length; i += 1000) diffLines[i] = `review change ${i + 1}`;
+  writeFileSync(path.join(cwd, "diff-navigation.txt"), diffLines.join("\n") + "\n");
   writeFileSync(path.join(cwd, "from-bash.txt"), "bash-made\n");
   writeFileSync(path.join(cwd, "newfile.txt"), "hello\n");
   // Large file (>1500 lines) — drives the viewer's plain-mode fallback

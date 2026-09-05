@@ -1,13 +1,9 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
+import { diffLines, type DiffLine } from "@/lib/line-diff";
 import styles from "./DiffView.module.css";
-
-type DiffLine =
-  | { type: "unchanged"; text: string; lineNo: number }
-  | { type: "removed"; text: string; lineNo: number }
-  | { type: "added"; text: string; lineNo: number };
 
 export interface DiffAnnotation {
   lineNo: number;
@@ -16,73 +12,6 @@ export interface DiffAnnotation {
   comment: string;
 }
 
-function diffLines(oldLines: string[], newLines: string[]): DiffLine[] {
-  const m = oldLines.length;
-  const n = newLines.length;
-  const max = m + n;
-  const v: number[] = new Array(2 * max + 1).fill(0);
-  const trace: number[][] = [];
-
-  for (let d = 0; d <= max; d++) {
-    trace.push([...v]);
-    for (let k = -d; k <= d; k += 2) {
-      let x: number;
-      if (k === -d || (k !== d && v[k - 1 + max] < v[k + 1 + max])) {
-        x = v[k + 1 + max];
-      } else {
-        x = v[k - 1 + max] + 1;
-      }
-      let y = x - k;
-      while (x < m && y < n && oldLines[x] === newLines[y]) {
-        x++;
-        y++;
-      }
-      v[k + max] = x;
-      if (x >= m && y >= n) {
-        // backtrack
-        const result: DiffLine[] = [];
-        let cx = m, cy = n;
-        for (let dd = d; dd > 0; dd--) {
-          const pv = trace[dd - 1];
-          const pk = cx - cy;
-          let prevK: number;
-          if (pk === -dd || (pk !== dd && pv[pk - 1 + max] < pv[pk + 1 + max])) {
-            prevK = pk + 1;
-          } else {
-            prevK = pk - 1;
-          }
-          const prevX = pv[prevK + max];
-          const prevY = prevX - prevK;
-          while (cx > prevX && cy > prevY) {
-            cx--;
-            cy--;
-            result.unshift({ type: "unchanged", text: oldLines[cx], lineNo: cx + 1 });
-          }
-          if (dd > 0) {
-            if (cx > prevX) {
-              cx--;
-              result.unshift({ type: "removed", text: oldLines[cx], lineNo: cx + 1 });
-            } else {
-              cy--;
-              result.unshift({ type: "added", text: newLines[cy], lineNo: cy + 1 });
-            }
-          }
-        }
-        while (cx > 0 && cy > 0) {
-          cx--;
-          cy--;
-          result.unshift({ type: "unchanged", text: oldLines[cx], lineNo: cx + 1 });
-        }
-        return result;
-      }
-    }
-  }
-  // Fallback: treat all as replaced
-  return [
-    ...oldLines.map((t, i) => ({ type: "removed" as const, text: t, lineNo: i + 1 })),
-    ...newLines.map((t, i) => ({ type: "added" as const, text: t, lineNo: i + 1 })),
-  ];
-}
 
 export function DiffView({
   oldContent,
@@ -98,9 +27,10 @@ export function DiffView({
   const { t } = useI18n();
   const [annotationLine, setAnnotationLine] = useState<number | null>(null);
   const [annotationText, setAnnotationText] = useState("");
-  const oldLines = oldContent.split("\n");
-  const newLines = newContent.split("\n");
-  const diff = diffLines(oldLines, newLines);
+  const diff = useMemo(() => diffLines(
+    oldContent === "" ? [] : oldContent.split("\n"),
+    newContent === "" ? [] : newContent.split("\n"),
+  ), [oldContent, newContent]);
 
   const hasChanges = diff.some((l) => l.type !== "unchanged");
   if (!hasChanges) {
@@ -191,7 +121,9 @@ export function DiffView({
           const isAnnotating = annotationLine === idx;
           return (
             <Fragment key={li}>
-              <div className={lineClass} data-diff-line={lineNumber}>
+              <div className={lineClass} data-diff-line={lineNumber}
+                data-diff-new-line={line.type === "removed" ? undefined : newLno}
+                data-diff-old-line={line.type === "added" ? undefined : line.lineNo}>
                 <span className={styles.lineNumber}>{line.type === "removed" ? line.lineNo : newLno || ""}</span>
                 <span className={prefixClass}>{prefix}</span>
                 <span className={styles.lineText}>{line.text || "\u00a0"}</span>

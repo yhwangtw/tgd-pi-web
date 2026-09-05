@@ -1,10 +1,12 @@
 import { defineConfig } from "@playwright/test";
 import path from "path";
 import os from "os";
+import { mkdtempSync } from "fs";
 
-// One deterministic fixture root shared by global-setup, the web server, and
-// the specs (via env). Regenerated on every run.
-const E2E_ROOT = process.env.E2E_ROOT ?? path.join(os.tmpdir(), "pi-web-e2e");
+// Allocate a new fixture child for each invocation. Workers share the run root
+// through env; E2E_ROOT can select a parent but is never erased or reused.
+const E2E_ROOT = process.env.PI_E2E_RUN_ROOT ?? mkdtempSync(path.join(process.env.E2E_ROOT ?? os.tmpdir(), "pi-web-e2e-"));
+process.env.PI_E2E_RUN_ROOT = E2E_ROOT;
 const E2E_PORT = Number(process.env.E2E_PORT ?? 30177);
 process.env.E2E_ROOT = E2E_ROOT;
 process.env.E2E_PROJECT_CWD = path.join(E2E_ROOT, "demo-project");
