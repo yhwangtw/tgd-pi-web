@@ -14,6 +14,7 @@ import { StructuredDataView } from "./text-viewer/StructuredDataView";
 import { FileInspectorDrawer } from "./FileInspectorDrawer";
 import { buildFileAgentPrompt, extractFileOutline, type TextSelectionRange } from "@/lib/file-workbench";
 import { showToast } from "@/hooks/useToast";
+import { ActionMenu, ActionMenuItem } from "@/components/ui/ActionMenu";
 import styles from "./TextFileViewer.module.css";
 
 const LazyPreviewView = lazy(() => import("./text-viewer/PreviewView").then((module) => ({ default: module.PreviewView })));
@@ -436,8 +437,8 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   }, [cwd, relativePath, sessionId, t]);
 
   useEffect(() => {
-    if (!fullscreen && !moreOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { setFullscreen(false); setMoreOpen(false); } };
+    if (!fullscreen || moreOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setFullscreen(false); };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [fullscreen, moreOpen]);
@@ -572,22 +573,23 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
 
         {!editing && <button className={`${styles.toggleStandalone} ${inspectorTab ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setInspectorTab((current) => current ? null : "outline")} aria-expanded={Boolean(inspectorTab)}>{t("files.inspector")}</button>}
         <div className={styles.moreWrap}>
-          <button className={`${styles.moreButton} ${moreOpen ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setMoreOpen((current) => !current)} aria-label={t("files.moreActions")} aria-expanded={moreOpen}><MoreHorizontal size={17} strokeWidth={1.8} aria-hidden /></button>
-          {moreOpen && <><button className={styles.menuBackdrop} aria-label={t("files.closeMenu")} onClick={() => setMoreOpen(false)} /><div className={styles.moreMenu} role="menu">
-            <button onClick={() => { copyContent(); setMoreOpen(false); }}>{t("files.copyFile")}</button>
-            {viewMode === "source" && !previewMode && !structuredMode && !editing && !data.truncated && <button onClick={() => { startEditing(); setMoreOpen(false); }}>{t("files.editFile")}</button>}
-            {viewMode === "source" && !previewMode && !structuredMode && !editing && <button onClick={() => { setWrapLines((current) => !current); setMoreOpen(false); }}>{t(wrapLines ? "files.disableWrap" : "files.enableWrap")}</button>}
-            {isLarge && <button onClick={() => { setForceHighlight((current) => !current); setMoreOpen(false); }}>{t(usePlain ? "files.forceHighlight" : "files.fastPlainView")}</button>}
-            <button onClick={() => { setInspectorTab("outline"); setMoreOpen(false); }}>{t("files.inspector.outline")}</button>
-            <button onClick={() => { setInspectorTab("problems"); setMoreOpen(false); }}>{t("files.inspector.problems")}</button>
-            <button onClick={() => { setInspectorTab("history"); setMoreOpen(false); }}>{t("files.inspector.history")}</button>
-            <button onClick={() => { setInspectorTab("blame"); setMoreOpen(false); }}>{t("files.gitBlame")}</button>
-            <button onClick={() => { setInspectorTab("notes"); setMoreOpen(false); }}>{t("files.inspector.notes")}</button>
-            <button onClick={() => { setFullscreen((current) => !current); setMoreOpen(false); }}>{t(fullscreen ? "files.exitFocus" : "files.focusMode")}</button>
-            <a href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>
+          <ActionMenu open={moreOpen} onOpenChange={setMoreOpen} label={t("files.moreActions")} trigger={
+            <button type="button" className={`${styles.moreButton} ${moreOpen ? styles.toggleActive : styles.toggleInactive}`} aria-label={t("files.moreActions")}><MoreHorizontal size={17} strokeWidth={1.8} aria-hidden /></button>
+          }>
+            <ActionMenuItem><button onClick={copyContent}>{t("files.copyFile")}</button></ActionMenuItem>
+            {viewMode === "source" && !previewMode && !structuredMode && !editing && !data.truncated && <ActionMenuItem><button onClick={startEditing}>{t("files.editFile")}</button></ActionMenuItem>}
+            {viewMode === "source" && !previewMode && !structuredMode && !editing && <ActionMenuItem><button onClick={() => setWrapLines((current) => !current)}>{t(wrapLines ? "files.disableWrap" : "files.enableWrap")}</button></ActionMenuItem>}
+            {isLarge && <ActionMenuItem><button onClick={() => setForceHighlight((current) => !current)}>{t(usePlain ? "files.forceHighlight" : "files.fastPlainView")}</button></ActionMenuItem>}
+            <ActionMenuItem><button onClick={() => setInspectorTab("outline")}>{t("files.inspector.outline")}</button></ActionMenuItem>
+            <ActionMenuItem><button onClick={() => setInspectorTab("problems")}>{t("files.inspector.problems")}</button></ActionMenuItem>
+            <ActionMenuItem><button onClick={() => setInspectorTab("history")}>{t("files.inspector.history")}</button></ActionMenuItem>
+            <ActionMenuItem><button onClick={() => setInspectorTab("blame")}>{t("files.gitBlame")}</button></ActionMenuItem>
+            <ActionMenuItem><button onClick={() => setInspectorTab("notes")}>{t("files.inspector.notes")}</button></ActionMenuItem>
+            <ActionMenuItem><button onClick={() => setFullscreen((current) => !current)}>{t(fullscreen ? "files.exitFocus" : "files.focusMode")}</button></ActionMenuItem>
+            <ActionMenuItem><a href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>
               {t(isHtml ? "files.downloadHtml" : isMarkdown ? "files.downloadMarkdown" : "files.downloadFile")}
-            </a>
-          </div></>}
+            </a></ActionMenuItem>
+          </ActionMenu>
         </div>
         </div>
       </div>

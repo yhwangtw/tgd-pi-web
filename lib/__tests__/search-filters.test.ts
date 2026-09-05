@@ -1,14 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { EMPTY_SESSION_SEARCH_FILTERS, countSessionSearchFilters, matchesSessionSearchFilters } from "../search-filters";
+import { resolveWorkspaceIdentity } from "../workspace-identity";
 
-const identity = {
-  sourceCwd: "/work/demo",
-  repository: "demo",
-  branch: "main",
-  root: "/work/demo",
-  isGit: true,
-  detached: false,
-};
+const identity = resolveWorkspaceIdentity("/work/demo", [
+  { path: "/work/demo", branch: "main", head: "abcdef123456", isMain: true },
+]);
 
 const hit = { cwd: "/work/demo", modified: "2026-08-29T10:00:00.000Z", modelId: "gpt-5", status: "completed" as const };
 

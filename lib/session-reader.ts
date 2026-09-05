@@ -98,11 +98,13 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
       ? message.timestamp
       : new Date(entry.timestamp as string).getTime();
     if (!Number.isNaN(activity)) lastActivity = Math.max(lastActivity, activity);
-    const readableText = extractText(message.content).replace(/\s+/g, " ").trim();
+    const messageText = extractText(message.content).trim();
+    const readableText = messageText.replace(/\s+/g, " ");
     if (!firstMessage && message.role === "user") {
       firstMessage = readableText;
     }
-    if (readableText) lastMessage = readableText;
+    // Keep Markdown line boundaries until the UI creates its plain excerpt.
+    if (readableText) lastMessage = messageText;
   }
 
   const headerTime = header.timestamp ? new Date(header.timestamp).getTime() : NaN;

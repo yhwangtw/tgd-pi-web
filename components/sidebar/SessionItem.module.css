@@ -27,10 +27,10 @@
   box-shadow: inset 0 0 0 1.5px var(--color-accent-border-focus-strong);
 }
 
-/* Two-line conversation row: a title/action line and a compact context line. */
+/* Title/actions, repository identity, then a plain-language excerpt. */
 .grid {
   display: grid;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   row-gap: var(--space-1);
   min-width: 0;
 }
@@ -188,8 +188,7 @@
 .workspaceMeta {
   display: inline-flex;
   min-width: 0;
-  max-width: 42%;
-  flex: 0 1 auto;
+  flex: 1 1 0;
   align-items: center;
   gap: var(--space-optical);
   overflow: hidden;
@@ -200,7 +199,18 @@
 
 .workspaceMeta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspaceSlash { flex: 0 0 auto; color: var(--text-dim); }
-.workspaceBranch { color: var(--color-accent); }
+.workspaceMeta > span:first-child { flex: 0 1 auto; }
+.workspaceBranch { flex: 0 1 auto; max-width: 55%; color: var(--color-accent); }
+
+.previewRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}
 
 .preview {
   min-width: 0;
@@ -219,7 +229,7 @@
   color: var(--text-dim);
 }
 
-.metaTime { color: var(--text-muted); }
+.metaTime { color: var(--text-muted); font-family: var(--font-ui); font-size: var(--text-xs); }
 
 .tagChip {
   display: inline-flex;
@@ -383,7 +393,8 @@
     font-size: var(--text-base);
   }
 
-  .metaRow {
+  .metaRow,
+  .previewRow {
     font-size: var(--text-sm);
   }
 
@@ -399,7 +410,6 @@
     height: var(--control-mobile);
   }
 
-  .workspaceMeta { max-width: 46%; }
 
   .deleteConfirmButton,
   .cancelButton,

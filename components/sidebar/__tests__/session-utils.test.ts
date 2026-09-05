@@ -117,6 +117,15 @@ describe("conversation list labels", () => {
     expect(getSessionPreview(s("a", { firstMessage: "Start", lastMessage: "Done" }))).toBe("Done");
     expect(getSessionPreview(s("b", { firstMessage: "Same", lastMessage: "Same" }))).toBe("");
   });
+
+  it("turns Markdown into a compact, plain-language excerpt", () => {
+    expect(getSessionPreview(s("a", { lastMessage: "## 結果\n- **完成** [檔案](https://example.com/readme) `src/test_file.ts`\n```ts\nconst value = 1;\n```" })))
+      .toBe("結果 完成 檔案 src/test_file.ts const value = 1;");
+    expect(getSessionPreview(s("b", { firstMessage: "完成", lastMessage: "**完成**" }))).toBe("");
+    expect(getSessionPreview(s("c", { lastMessage: "text ".repeat(1000) })).length).toBeLessThanOrEqual(240);
+    expect(getSessionPreview(s("d", { lastMessage: "a < b and src/test_file.ts" }))).toBe("a < b and src/test_file.ts");
+    expect(getSessionPreview(s("e", { lastMessage: "> [!RESULT] 完成\n> - URL: <https://example.com>\n> - **正常**" }))).toBe("完成 URL: https://example.com 正常");
+  });
 });
 
 describe("getSessionProjectName", () => {

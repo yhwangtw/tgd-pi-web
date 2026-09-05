@@ -80,23 +80,6 @@
 
 .moreWrap { position: relative; flex: 0 0 auto; }
 .moreButton { min-width: 30px; min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); cursor: pointer; }
-.menuBackdrop { position: fixed; inset: 0; z-index: 40; border: 0; background: transparent; }
-.moreMenu {
-  position: absolute;
-  z-index: 41;
-  top: calc(100% + 6px);
-  right: 0;
-  width: 190px;
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-menu);
-  background: var(--bg-elev-2);
-  box-shadow: var(--color-shadow-modal);
-}
-.moreMenu button, .moreMenu a { min-height: 34px; display: flex; align-items: center; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-row); background: transparent; color: var(--text-muted); font-size: var(--text-sm); text-align: left; text-decoration: none; cursor: pointer; }
-.moreMenu button:hover, .moreMenu a:hover { background: var(--bg-hover); color: var(--text); }
 
 .sourceTools {
   min-height: 38px;
@@ -445,7 +428,6 @@
 :global(html[data-ui-style="trae"]) .askPi { border-color: transparent; border-radius: var(--radius-pill); background: var(--color-accent); color: var(--color-accent-contrast); }
 :global(html[data-ui-style="trae"]) .fileInfo > summary { border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .fileInfoPopover { border-color: var(--trae-hairline); background: var(--trae-surface-solid); }
-:global(html[data-ui-style="trae"]) .moreMenu { border-color: var(--trae-hairline); background: var(--trae-surface-solid); }
 :global(html[data-ui-style="trae"]) .sourceTools { border-color: var(--trae-hairline); background: var(--trae-canvas); }
 
 @container (max-width: 720px) {
@@ -486,8 +468,6 @@
   .fileActions { order: 2; }
   .askPi { min-height: var(--control-touch); padding-inline: 14px; }
   .moreButton { min-width: var(--control-touch); min-height: var(--control-touch); }
-  .moreMenu { position: fixed; left: 8px; right: 8px; top: auto; bottom: calc(var(--mobile-nav-height, 54px) + var(--safe-area-bottom) + 8px); width: auto; max-height: min(70dvh, 560px); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: 8px; border-radius: var(--radius-sheet); padding: var(--space-2); }
-  .moreMenu button, .moreMenu a { min-height: var(--control-touch); }
   .fileInfoPopover { width: min(240px, calc(100vw - 32px)); }
   .sourceTools { min-height: var(--control-touch); overflow-x: auto; scrollbar-width: none; }
   .sourceTools::-webkit-scrollbar { display: none; }

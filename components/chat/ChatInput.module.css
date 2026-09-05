@@ -253,8 +253,8 @@
   position: absolute;
   top: -4px;
   right: -4px;
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-circle);
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -267,6 +267,12 @@
 }
 
 /* Main input wrapper */
+@media (max-width: 700px), (pointer: coarse) {
+  .imageRemoveButton { width: 44px; height: 44px; top: -8px; right: -8px; border: 0; background: transparent; }
+  .imageRemoveButton::before { content: ""; position: absolute; inset: 10px; border: 1px solid var(--border); border-radius: var(--radius-circle); background: var(--bg-panel); }
+  .imageRemoveButton > svg { position: relative; }
+}
+
 .inputWrapper {
   display: flex;
   gap: var(--space-2);
@@ -1079,8 +1085,8 @@
     min-height: 56px;
     flex-direction: column;
     justify-content: center;
-    gap: 0;
-    padding: 0;
+    gap: var(--space-1);
+    padding: var(--space-2);
     overflow: visible;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
@@ -1096,30 +1102,24 @@
   }
 
   .bottomBarRightMobileOpen .mobileControlLabel {
-    position: absolute;
-    top: 8px;
-    right: 9px;
-    left: 9px;
-    z-index: 1;
     display: block;
-    overflow: hidden;
     color: var(--text-muted);
     font-family: var(--font-ui);
     font-size: var(--text-xs);
     font-weight: var(--weight-semibold);
     letter-spacing: normal;
-    line-height: var(--leading-none);
-    text-overflow: ellipsis;
+    line-height: var(--leading-snug);
     text-transform: none;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
     pointer-events: none;
   }
 
   .bottomBarRightMobileOpen .mobileControlValue {
-    display: inline;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: block;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
     font-size: var(--text-sm);
     font-weight: var(--weight-semibold);
   }
@@ -1134,34 +1134,37 @@
 
   .bottomBarRightMobileOpen .scrollModeControl > div {
     display: grid;
-    min-height: 56px;
+    min-height: var(--control-touch);
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-1);
-    padding: var(--space-2);
+    padding: 0;
   }
 
   .bottomBarRightMobileOpen .mobileLabeledControl > div {
-    min-height: 56px;
+    min-height: var(--control-touch);
   }
 
   .bottomBarRightMobileOpen .mobileLabeledControl > button,
   .bottomBarRightMobileOpen .mobileLabeledControl > div > button {
     display: flex !important;
-    height: 56px !important;
-    min-height: 56px;
+    height: auto !important;
+    min-height: var(--control-touch);
     align-items: center;
     justify-content: flex-start;
     gap: var(--space-2);
-    padding: var(--space-4) var(--space-2) var(--space-1) !important;
+    padding: var(--space-2) !important;
+    line-height: var(--leading-snug);
+    white-space: normal;
+    overflow-wrap: anywhere;
     border-radius: var(--radius-control);
   }
 
   .bottomBarRightMobileOpen .scrollModeControl > div > button {
     width: auto !important;
-    height: 44px !important;
+    height: auto !important;
     min-height: 44px;
     justify-content: center;
-    padding: var(--space-3) var(--space-1) var(--space-optical) !important;
+    padding: var(--space-2) var(--space-1) !important;
     font-size: var(--text-xs);
     line-height: var(--leading-compact);
     overflow-wrap: anywhere;
@@ -1173,16 +1176,16 @@
     display: flex;
     width: 100%;
     min-width: 0;
-    min-height: 56px;
+    min-height: var(--control-touch);
     align-items: center;
     padding: 0;
   }
 
   .bottomBarRightMobileOpen .compactWrapper > button {
     width: 100%;
-    min-height: 56px;
+    min-height: var(--control-touch);
     justify-content: flex-start;
-    padding: var(--space-4) var(--space-2) var(--space-1);
+    padding: var(--space-2);
     border-radius: var(--radius-control);
   }
 

@@ -138,6 +138,9 @@ export function useModalDialog<T extends HTMLElement = HTMLElement>({
     const unlockBody = lockBody();
     const modal = registerModal(panelRef.current);
     const focusFrame = requestAnimationFrame(() => {
+      // A fast keyboard/pointer interaction may have already chosen a control.
+      // Delayed initial focus must never override that choice.
+      if (panelRef.current?.contains(document.activeElement)) return;
       const first = initialFocusRefRef.current?.current
         ?? panelRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
         ?? panelRef.current;

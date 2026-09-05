@@ -1191,6 +1191,8 @@ const MESSAGES = {
   "files.resetZoom": { en: "Reset zoom", zh: "重設縮放" },
   "files.millisecondsShort": { en: "ms", zh: "毫秒" },
   "files.diff.noChanges": { en: "No changes", zh: "沒有變更" },
+  "topbar.gitLoading": { en: "Loading Git…", zh: "讀取 Git…" },
+  "topbar.gitUnavailable": { en: "Git unavailable", zh: "Git 狀態未知" },
   "files.diff.hunkLimit": { en: "Large rewrite: content is shown, but individual hunk actions are unavailable.", zh: "大量內容已改寫：仍可檢視差異，但暫不提供逐段還原。" },
   "files.diff.unchangedLines": { en: "{count} unchanged lines", zh: "{count} 行未變更" },
   "files.inspector.snapshotShort": { en: "snap", zh: "還原點" },

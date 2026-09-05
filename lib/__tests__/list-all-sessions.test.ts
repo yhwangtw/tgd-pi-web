@@ -73,6 +73,20 @@ describe("listAllSessions", () => {
     expect(sessions[0].id).toBe("bbbb-2222");
   });
 
+  it("preserves last-message line boundaries for plain Markdown previews", async () => {
+    const text = "> [!RESULT] 完成\n> - **正常**";
+    sessionFile(join(sessionsDir, "--tmp-proj"), "preview.jsonl", [
+      header("preview-1"), userMessage("m1", null, "Start\nworking"),
+      { type: "message", id: "m2", parentId: "m1", timestamp: "2026-07-01T10:01:00.000Z", message: { role: "assistant", content: [{ type: "text", text }] } },
+    ]);
+    const { listAllSessions } = await import("../session-reader");
+    const { getSessionPreview } = await import("../../components/sidebar/session-utils");
+    const [session] = await listAllSessions();
+    expect(session.firstMessage).toBe("Start working");
+    expect(session.lastMessage).toBe(text);
+    expect(getSessionPreview(session)).toBe("完成 正常");
+  });
+
   it("sorts by last activity, newest first", async () => {
     const dir = join(sessionsDir, "--tmp-proj");
     sessionFile(dir, "old.jsonl", [header("old-1"), userMessage("m1", null, "old", 1000)]);

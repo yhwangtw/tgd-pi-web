@@ -1,9 +1,6 @@
-import { createFixtures } from "./fixtures";
-
 export default function globalSetup(): void {
   const root = process.env.E2E_ROOT;
-  if (!root) throw new Error("E2E_ROOT not set (playwright.config.ts sets it)");
-  const { cwd } = createFixtures(root);
-  // Specs read this to type paths into the picker's autocomplete/browse.
-  process.env.E2E_PROJECT_CWD = cwd;
+  if (!root || process.env.PI_E2E_FIXTURES_READY !== root || !process.env.E2E_PROJECT_CWD) {
+    throw new Error("E2E fixtures must be initialized by playwright.config.ts before webServer starts");
+  }
 }
