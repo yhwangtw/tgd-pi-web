@@ -3,30 +3,8 @@
 import { useEffect, useState } from "react";
 import { DialogShell } from "@/components/ui/DialogShell";
 import { useI18n } from "@/lib/i18n";
+import { costState, type AnalyticsReport, type CostCoverage, type SessionAnalytics } from "@/lib/session-analytics";
 import styles from "./AnalyticsModal.module.css";
-
-interface SessionAnalytics {
-  id: string;
-  name?: string;
-  cwd: string;
-  messageCount: number;
-  modified: string;
-  compactions: number;
-  usage: {
-    total: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } };
-    byModel: Record<string, { cost: { total: number }; input: number; output: number }>;
-  };
-}
-
-interface Summary {
-  totalCost: number;
-  totalTokens: number;
-  totalMessages: number;
-  sessionCount: number;
-  monthly: Array<{ month: string; cost: number; tokens: number; sessions: number; messages: number }>;
-  byModel: Array<{ model: string; cost: number; input: number; output: number; sessions: number }>;
-  byProvider: Array<{ provider: string; cost: number; sessions: number }>;
-}
 
 interface Props {
   open: boolean;
@@ -37,6 +15,15 @@ function fmtMoney(n: number): string {
   if (n === 0) return "$0.00";
   if (n < 0.01) return `$${n.toFixed(4)}`;
   return `$${n.toFixed(2)}`;
+}
+
+function RecordedCost({ value, coverage }: { value: number; coverage: CostCoverage }) {
+  const { t } = useI18n();
+  const state = costState(coverage);
+  return <span className={styles.cost} data-cost-state={state}>
+    <span>{state === "unknown" || state === "no_usage" ? "—" : fmtMoney(value)}</span>
+    {state !== "recorded" && <small>{t(`analytics.costState.${state}`)}</small>}
+  </span>;
 }
 
 function fmtTokens(n: number): string {
@@ -51,7 +38,8 @@ function basename(p: string): string {
 
 export function AnalyticsModal({ open, onClose }: Props) {
   const { t } = useI18n();
-  const [summary, setSummary] = useState<Summary | null>(null);
+  const [summary, setSummary] = useState<AnalyticsReport["summary"] | null>(null);
+  const [scope, setScope] = useState<AnalyticsReport["scope"] | null>(null);
   const [perSession, setPerSession] = useState<SessionAnalytics[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,17 +48,21 @@ export function AnalyticsModal({ open, onClose }: Props) {
     if (!open) return;
     setLoading(true);
     setError(null);
-    fetch("/api/sessions/analytics")
-      .then((r) => r.json() as Promise<{ summary?: Summary; perSession?: SessionAnalytics[]; error?: string }>)
+    const controller = new AbortController();
+    fetch("/api/sessions/analytics", { signal: controller.signal, cache: "no-store" })
+      .then((r) => r.json() as Promise<Partial<AnalyticsReport> & { error?: string }>)
       .then((data) => {
+        if (controller.signal.aborted) return;
         if (data.error) setError(data.error);
         else {
           setSummary(data.summary ?? null);
+          setScope(data.scope ?? null);
           setPerSession(data.perSession ?? []);
         }
       })
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+      .catch((e) => { if (!controller.signal.aborted) setError(String(e)); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
   }, [open]);
 
   if (!open) return null;
@@ -94,11 +86,21 @@ export function AnalyticsModal({ open, onClose }: Props) {
         {error && <div className={styles.error}>{error}</div>}
 
         {!loading && !error && summary && (
-          <div className={styles.body}>
+          <div className={styles.body} data-testid="analytics-report">
+            <div className={styles.scopeNote}>
+              <strong>{t("analytics.scope")}</strong>
+              {!!scope?.skippedSessions && <span>{t("analytics.skipped").replace("{count}", String(scope.skippedSessions))}</span>}
+              <span>{t("analytics.coverage").replace("{recorded}", String(summary.coverage.recorded)).replace("{cost}", String(summary.coverage.missingCost)).replace("{usage}", String(summary.coverage.missingUsage))}</span>
+              <details>
+                <summary>{t("analytics.about")}</summary>
+                <p>{t("analytics.scopeDetail")}</p>
+                <p>{t("analytics.billingNote")}</p>
+              </details>
+            </div>
             <div className={styles.statRow}>
               <div className={styles.stat}>
                 <div className={styles.statLabel}>{t("analytics.totalCost")}</div>
-                <div className={styles.statValue}>{fmtMoney(summary.totalCost)}</div>
+                <div className={styles.statValue}><RecordedCost value={summary.totalCost} coverage={summary.coverage} /></div>
               </div>
               <div className={styles.stat}>
                 <div className={styles.statLabel}>{t("analytics.totalTokens")}</div>
@@ -120,14 +122,14 @@ export function AnalyticsModal({ open, onClose }: Props) {
                 <div className={styles.bars}>
                   {summary.monthly.map((m) => (
                     <div key={m.month} className={styles.barRow}>
-                      <div className={styles.barLabel}>{m.month}</div>
+                      <div className={styles.barLabel}>{m.month === "unknown" ? t("analytics.unknownDate") : m.month}</div>
                       <div className={styles.barTrack}>
                         <div
                           className={styles.barFill}
                           style={{ width: `${(m.cost / maxMonthlyCost) * 100}%` }}
                         />
                       </div>
-                      <div className={styles.barValue}>{fmtMoney(m.cost)}</div>
+                      <div className={styles.barValue}><RecordedCost value={m.cost} coverage={m.coverage} /></div>
                       <div className={styles.barMeta}>{t("analytics.sessionCount").replace("{count}", String(m.sessions))} · {fmtTokens(m.tokens)}</div>
                     </div>
                   ))}
@@ -147,10 +149,11 @@ export function AnalyticsModal({ open, onClose }: Props) {
                   </div>
                   {summary.byModel.map((m) => (
                     <div key={m.model} className={styles.tableRow}>
-                      <span className={styles.modelName} title={m.model}>
-                        {m.model.split("/").pop()}
+                      <span className={styles.modelName}>
+                        <strong>{m.modelId}</strong>
+                        <small>{m.provider}</small>
                       </span>
-                      <span data-label={t("analytics.cost")}>{fmtMoney(m.cost)}</span>
+                      <span data-label={t("analytics.cost")}><RecordedCost value={m.cost} coverage={m.coverage} /></span>
                       <span className={styles.tokenCol} data-label={t("analytics.inOut")}>
                         {fmtTokens(m.input)} / {fmtTokens(m.output)}
                       </span>
@@ -168,7 +171,7 @@ export function AnalyticsModal({ open, onClose }: Props) {
                   {summary.byProvider.map((p) => (
                     <div key={p.provider} className={styles.providerChip}>
                       <strong>{p.provider}</strong>
-                      <span>{fmtMoney(p.cost)}</span>
+                      <span><RecordedCost value={p.cost} coverage={p.coverage} /></span>
                       <span className={styles.dim}>{t("analytics.sessionCount").replace("{count}", String(p.sessions))}</span>
                     </div>
                   ))}
@@ -191,9 +194,9 @@ export function AnalyticsModal({ open, onClose }: Props) {
                       <span className={styles.modelName} title={s.id}>
                         {s.name || basename(s.cwd) || s.id.slice(0, 8)}
                       </span>
-                      <span data-label={t("analytics.cost")}>{fmtMoney(s.usage.total.cost.total)}</span>
+                      <span data-label={t("analytics.cost")}><RecordedCost value={s.usage.total.cost.total} coverage={s.coverage} /></span>
                       <span className={styles.tokenCol} data-label={t("analytics.tokens")}>
-                        {fmtTokens(s.usage.total.input + s.usage.total.output)}
+                        {fmtTokens(s.usage.total.input + s.usage.total.output + s.usage.total.cacheRead + s.usage.total.cacheWrite)}
                       </span>
                       <span data-label={t("analytics.messages")}>{s.messageCount}</span>
                     </div>
