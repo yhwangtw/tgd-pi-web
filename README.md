@@ -48,7 +48,7 @@ Pi's terminal experience is fast and focused. This project adds the visual conte
 
 ### Requirements
 
-- Node.js 22 or newer
+- Node.js 22.19+ on the 22.x line, or 23.4+ (including 24 and newer). This meets the bundled Pi runtime minimum and provides the built-in SQLite file lock without an extra flag.
 - npm
 - Model credentials/configuration in `~/.pi/agent/` or supported provider environment variables; a global `pi` CLI is not required
 - Git
@@ -235,6 +235,51 @@ This table is generated from `lib/capabilities.json`; it is the product contract
 - Allowed-root checks, path guards, `execFile` git calls, and response-size limits on file and git APIs.
 - Snapshot restore applies a precise delta and never rewrites the user's index or `HEAD`.
 - The file inspector includes symbols, definition/reference lookup, TypeScript/ESLint/related-test diagnostics, Git history, blame, and agent snapshots.
+
+Text editing requires the revision returned when the file was loaded. If the
+file changes on disk, Save keeps your draft and shows a disk-versus-draft
+comparison. Review or merge the content before choosing **Save this draft**;
+that retry checks the reviewed revision too, so another change cannot silently
+be overwritten. **Discard draft and use disk** explicitly replaces the draft.
+Failed saves and same-file navigation keep the editor open.
+
+Saves recheck the revision before a same-directory atomic replacement. Web
+instances sharing the same local Pi agent directory use a per-file OS-backed
+mutex for saves and hunk restores. A busy file is rejected immediately; a
+process crash releases its lock without a timed takeover. Node's built-in
+SQLite provides the mutex, with no additional CLI or native npm addon. Node 22
+may print an experimental SQLite warning on the server's first file mutation.
+
+Keep `<agent-dir>/file-mutation-locks/` on a local filesystem, private to the
+server account. The Web file API excludes this internal directory from reads,
+search, uploads and creation, and refuses moves/deletions of it or its parents.
+External programs must not read, remove or replace these empty lock database
+files while any instance is running. All instances that modify the same
+workspace must share this directory; separate agent directories and external
+editors do not participate. This is not an OS-level filesystem sandbox and
+does not prevent an external program from racing the final version check.
+Large, partial, binary and invalid UTF-8 previews cannot be saved as text. The
+edit endpoint does not create a deleted file.
+
+HTML previews run embedded scripts in an opaque-origin sandbox. The server
+applies Content Security Policy to raw HTML/SVG responses as well as the viewer,
+so opening a raw URL does not grant access to app cookies, storage or APIs.
+SVG and converted DOCX previews cannot execute scripts. Local/external script
+and asset dependencies, network requests, forms, popups and parent-page
+navigation are blocked; self-contained HTML and embedded data/blob media are
+supported. The viewer's **Isolated preview** disclosure explains these limits.
+This is not an OS sandbox, and a standalone HTML tab can still navigate itself.
+
+API reads also check browser origin metadata, including navigation from an
+opaque-origin preview. Cross-origin API links are refused: open the app first,
+then use its controls. Normal app entry links, address-bar navigation and CLI
+clients remain supported. This is defense in depth, not authentication; remote
+access still needs the password gate or a trusted access proxy.
+
+Downloads use bounded, pull-driven reads, support single byte ranges and release
+their file descriptor on completion, cancellation or disconnect. A file changed
+during transfer aborts the response instead of silently mixing versions; retry
+the download to obtain the current file.
 
 ### Rendering and appearance
 

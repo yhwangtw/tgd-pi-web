@@ -2,6 +2,8 @@ import { constants } from "node:fs";
 import * as fs from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { FileMutationLockError, isFileMutationLockPath, withFileMutationLock } from "./file-mutation-lock";
 
 export class FileOperationError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
@@ -15,6 +17,7 @@ export function contentDigest(value: string | Buffer): string {
 export async function confinedFile(root: string, path: string): Promise<string> {
   const canonicalRoot = await fs.realpath(root);
   const target = resolve(canonicalRoot, path);
+  if (isFileMutationLockPath(target, getAgentDir())) throw new FileOperationError("Internal file-lock paths are not accessible", 403);
   const rel = relative(canonicalRoot, target);
   if (!rel || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     throw new FileOperationError("Path is outside the workspace", 403);
@@ -79,13 +82,20 @@ export async function readFileSnapshot(root: string, path: string, maxBytes: num
 
 declare global { var __piFileMutations: Set<string> | undefined; }
 
-/** Serializes web mutations; editors outside this process do not share this lock. */
+/** Serializes cooperating web processes sharing the same local agent directory. */
 export async function withFileMutation<T>(root: string, path: string, action: () => Promise<T>): Promise<T> {
   const target = await confinedFile(root, path);
   const locks = globalThis.__piFileMutations ??= new Set();
   if (locks.has(target)) throw new FileOperationError("Another change is in progress; refresh and try again", 409);
   locks.add(target);
-  try { return await action(); } finally { locks.delete(target); }
+  try {
+    await fs.mkdir(getAgentDir(), { recursive: true, mode: 0o700 });
+    const agentDirectory = await fs.realpath(getAgentDir());
+    return await withFileMutationLock(join(agentDirectory, "file-mutation-locks"), target, action);
+  } catch (error) {
+    if (error instanceof FileMutationLockError) throw new FileOperationError(error.message, error.status);
+    throw error;
+  } finally { locks.delete(target); }
 }
 
 /** Caller holds withFileMutation. Recheck just before the atomic replacement. */

@@ -2,6 +2,8 @@ import { constants } from "fs";
 import { lstat, open, opendir, realpath } from "fs/promises";
 import path from "path";
 import ignore, { type Ignore } from "ignore";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { isFileMutationLockPath } from "./file-mutation-lock";
 import { IGNORED_NAMES, isPathAllowed } from "./file-security";
 import { normalizeFileSearchOptions, type FileSearchOptions } from "./file-search-options";
 
@@ -34,6 +36,7 @@ export async function resolveSearchRoot(cwd: string, allowed: Set<string>): Prom
 
 /** Bounded descriptor read; never follow a file symlink or open a device/FIFO. */
 export async function readSearchFile(file: string, maxBytes = 1024 * 1024): Promise<Buffer | null> {
+  if (isFileMutationLockPath(file, getAgentDir())) return null;
   if (!(await lstat(file)).isFile()) return null;
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
@@ -92,6 +95,7 @@ function isIgnored(full: string, isDir: boolean, layers: IgnoreLayer[]): boolean
  * Nested checkouts are opt-in and never expand outside the selected cwd.
  */
 export async function walkSearchFiles(root: string, options: SearchWalkOptions = {}): Promise<{ entries: SearchFile[]; truncated: boolean }> {
+  if (isFileMutationLockPath(root, getAgentDir())) return { entries: [], truncated: false };
   const opts = normalizeFileSearchOptions(options);
   options.signal?.throwIfAborted();
   const deadline = Date.now() + (options.maxMs ?? 5000);
@@ -113,6 +117,7 @@ export async function walkSearchFiles(root: string, options: SearchWalkOptions =
       if (++inspected > maxEntries || Date.now() >= deadline) { truncated = true; break; }
       if (IGNORED_NAMES.has(entry.name) || (!entry.isDirectory() && !entry.isFile())) continue;
       const full = path.join(current.dir, entry.name);
+      if (isFileMutationLockPath(full, getAgentDir())) continue;
       const isDir = entry.isDirectory();
       const container = isDir && WORKTREE_CONTAINERS.has(entry.name);
       const nested = isDir && await hasGit(full);

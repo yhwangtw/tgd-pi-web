@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # tGD-pi-web — 一鍵安裝 + Production 啟動
-# 需要：Node.js 22+
+# 需要：Node.js 22.19+（22.x）或 23.4+（含 24 以上）
 #
 set -e
 
@@ -186,9 +186,9 @@ if ! command -v node &>/dev/null; then
   exit 1
 fi
 
-NODE_MAJOR=$(node -e "console.log(process.versions.node.split('.')[0])")
-if [ "$NODE_MAJOR" -lt 22 ]; then
-  echo -e "  ${RED}❌ Node.js 版本過舊 ($NODE_MAJOR.x)，需要 22+${NC}"
+TGD_NODE_VERSION=$(node -p 'process.versions.node')
+if ! node -e 'const [major, minor] = process.argv[1].split(".").map(Number); process.exit(major > 23 || (major === 23 && minor >= 4) || (major === 22 && minor >= 19) ? 0 : 1)' "$TGD_NODE_VERSION"; then
+  echo -e "  ${RED}❌ 不支援的 Node.js 版本 ($TGD_NODE_VERSION)，需要 22.19+（22.x）或 23.4+（含 24 以上）${NC}"
   exit 1
 fi
 echo -e "  ${GREEN}✅ Node.js $(node --version)${NC}"

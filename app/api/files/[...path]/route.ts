@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { isFileMutationLockPath } from "@/lib/file-mutation-lock";
 import {
   IGNORED_NAMES,
   IGNORED_SUFFIXES,
@@ -21,13 +23,17 @@ import {
   documentPreviewKind,
 } from "@/lib/file-mime";
 import { streamFile, wrapDocxPreviewHtml } from "@/lib/file-stream";
+import { previewContentSecurityPolicy } from "@/lib/preview-policy";
+import { FileOperationError } from "@/lib/versioned-file";
+import { FileSaveConflict, readEditableFile, saveEditableFile } from "@/lib/file-editor";
 import { readTextPrefixSync } from "@/lib/text-prefix";
 import { validateEntryName } from "@/lib/file-name";
 
 async function handleRead(
   filePath: string,
   stat: fs.Stats,
-  request: NextRequest
+  request: NextRequest,
+  allowedRoots: Set<string>
 ): Promise<Response> {
   if (!stat.isFile()) {
     return NextResponse.json({ error: "Not a file" }, { status: 400 });
@@ -37,19 +43,19 @@ async function handleRead(
     if (stat.size > IMAGE_PREVIEW_MAX_BYTES) {
       return NextResponse.json({ error: "Image too large (>10MB)" }, { status: 413 });
     }
-    return streamFile(filePath, stat, imageMime, request.headers.get("range"));
+    return streamFile(filePath, stat, imageMime, request.headers.get("range"), "inline", { signal: request.signal });
   }
   const audioMime = getAudioMime(filePath);
   if (audioMime) {
-    return streamFile(filePath, stat, audioMime, request.headers.get("range"));
+    return streamFile(filePath, stat, audioMime, request.headers.get("range"), "inline", { signal: request.signal });
   }
   const videoMime = getVideoMime(filePath);
   if (videoMime) {
-    return streamFile(filePath, stat, videoMime, request.headers.get("range"));
+    return streamFile(filePath, stat, videoMime, request.headers.get("range"), "inline", { signal: request.signal });
   }
   const documentMime = getDocumentMime(filePath);
   if (documentMime) {
-    return streamFile(filePath, stat, documentMime, request.headers.get("range"));
+    return streamFile(filePath, stat, documentMime, request.headers.get("range"), "inline", { signal: request.signal });
   }
   const language = getLanguage(filePath);
   if (stat.size > TEXT_PREVIEW_MAX_BYTES) {
@@ -59,8 +65,8 @@ async function handleRead(
     const content = readTextPrefixSync(filePath, TEXT_PREVIEW_MAX_BYTES);
     return NextResponse.json({ content, language, size: stat.size, truncated: true });
   }
-  const content = fs.readFileSync(filePath, "utf-8");
-  return NextResponse.json({ content, language, size: stat.size });
+  const snapshot = await readEditableFile(filePath, allowedRoots);
+  return NextResponse.json({ ...snapshot, language });
 }
 
 function handleMeta(filePath: string, stat: fs.Stats): Response {
@@ -102,8 +108,8 @@ async function handlePreview(filePath: string, stat: fs.Stats): Promise<Response
   return new Response(html, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-cache",
-      "Content-Security-Policy": "default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+      "Cache-Control": "private, no-store",
+      "Content-Security-Policy": previewContentSecurityPolicy(),
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
     },
@@ -166,6 +172,7 @@ function handleList(filePath: string, stat: fs.Stats): Response {
   const names = fs.readdirSync(filePath);
   const entries = names
     .filter((name) => !IGNORED_NAMES.has(name) && !IGNORED_SUFFIXES.some((s) => name.endsWith(s)))
+    .filter((name) => !isFileMutationLockPath(path.join(filePath, name), getAgentDir()))
     .map((name) => {
       const full = path.join(filePath, name);
       try {
@@ -213,7 +220,7 @@ export async function GET(
 
     switch (type) {
       case "read":
-        return handleRead(filePath, stat, request);
+        return await handleRead(filePath, stat, request, allowedRoots);
       case "download": {
         // Any file, any size — streamed with an attachment disposition so the
         // browser saves it instead of previewing.
@@ -221,7 +228,7 @@ export async function GET(
           return NextResponse.json({ error: "Not a file" }, { status: 400 });
         }
         const mime = getImageMime(filePath) || getAudioMime(filePath) || getVideoMime(filePath) || getDocumentMime(filePath) || "application/octet-stream";
-        return streamFile(filePath, stat, mime, request.headers.get("range"), "attachment");
+        return await streamFile(filePath, stat, mime, request.headers.get("range"), "attachment", { signal: request.signal });
       }
       case "raw": {
         // Any file, any size — streamed inline so the browser renders it
@@ -234,12 +241,12 @@ export async function GET(
           ext === "html" || ext === "htm"
             ? "text/html; charset=utf-8"
             : getImageMime(filePath) || getAudioMime(filePath) || getVideoMime(filePath) || getDocumentMime(filePath) || "text/plain; charset=utf-8";
-        return streamFile(filePath, stat, mime, request.headers.get("range"), "inline");
+        return await streamFile(filePath, stat, mime, request.headers.get("range"), "inline", { signal: request.signal });
       }
       case "meta":
         return handleMeta(filePath, stat);
       case "preview":
-        return handlePreview(filePath, stat);
+        return await handlePreview(filePath, stat);
       case "watch":
         return handleWatch(filePath, stat);
       case "list":
@@ -247,11 +254,12 @@ export async function GET(
         return handleList(filePath, stat);
     }
   } catch (error) {
+    if (error instanceof FileOperationError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
 
-// PUT /api/files/<path>  body: { content: string }
+// PUT /api/files/<path>  body: { content: string, expectedVersion: string }
 // Saves a text file edited in the viewer. Existing files only (no create),
 // same allowed-roots gate as reads, capped at the text-preview limit so the
 // editor and the reader agree on what "a text file" is.
@@ -268,17 +276,7 @@ export async function PUT(
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    let stat: fs.Stats;
-    try {
-      stat = fs.statSync(filePath);
-    } catch {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    if (!stat.isFile()) {
-      return NextResponse.json({ error: "Not a file" }, { status: 400 });
-    }
-
-    const body = await request.json() as { content?: unknown };
+    const body = await request.json() as { content?: unknown; expectedVersion?: unknown };
     if (typeof body.content !== "string") {
       return NextResponse.json({ error: "content (string) is required" }, { status: 400 });
     }
@@ -287,9 +285,12 @@ export async function PUT(
       return NextResponse.json({ error: `Too large to save (${bytes} bytes)` }, { status: 413 });
     }
 
-    fs.writeFileSync(filePath, body.content, "utf8");
-    return NextResponse.json({ success: true, size: bytes });
+    const saved = await saveEditableFile(filePath, allowedRoots, body.content, body.expectedVersion);
+    return NextResponse.json({ success: true, ...saved });
   } catch (error) {
+    if (error instanceof FileSaveConflict) return NextResponse.json({ error: error.message, current: error.current }, { status: 409 });
+    if (error instanceof FileOperationError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
@@ -339,6 +340,7 @@ export async function POST(
         if (nameError) { results.push({ name: file.name, ok: false, error: nameError }); continue; }
         if (file.size > MAX_UPLOAD) { results.push({ name: file.name, ok: false, error: "Too large (>50MB)" }); continue; }
         const dest = path.join(filePath, file.name.trim());
+        if (!isPathAllowed(dest, allowedRoots)) { results.push({ name: file.name, ok: false, error: "Access denied" }); continue; }
         if (fs.existsSync(dest)) { results.push({ name: file.name, ok: false, error: "Already exists" }); continue; }
         fs.writeFileSync(dest, Buffer.from(await file.arrayBuffer()));
         results.push({ name: file.name, ok: true });
@@ -357,6 +359,7 @@ export async function POST(
         return NextResponse.json({ error: "Parent must be a folder" }, { status: 400 });
       }
       const target = path.join(filePath, name);
+      if (!isPathAllowed(target, allowedRoots)) return NextResponse.json({ error: "Access denied" }, { status: 403 });
       if (fs.existsSync(target)) {
         return NextResponse.json({ error: "Already exists" }, { status: 409 });
       }
@@ -367,6 +370,9 @@ export async function POST(
 
     if (body.action === "rename") {
       const target = path.join(path.dirname(filePath), name);
+      if ([filePath, target].some(value => isFileMutationLockPath(value, getAgentDir(), { includeAncestors: true }))) {
+        return NextResponse.json({ error: "Internal file-lock paths cannot be moved" }, { status: 403 });
+      }
       if (target === filePath) return NextResponse.json({ ok: true, path: target });
       if (!isPathAllowed(target, allowedRoots)) {
         return NextResponse.json({ error: "Access denied" }, { status: 403 });
@@ -400,6 +406,9 @@ export async function DELETE(
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
     // Refuse to delete an allowed root itself (a project directory).
+    if (isFileMutationLockPath(filePath, getAgentDir(), { includeAncestors: true })) {
+      return NextResponse.json({ error: "Internal file-lock paths cannot be removed" }, { status: 403 });
+    }
     for (const root of allowedRoots) {
       if (path.resolve(filePath) === path.resolve(root)) {
         return NextResponse.json({ error: "Cannot delete a project root" }, { status: 400 });

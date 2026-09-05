@@ -58,7 +58,15 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   const previewStartedAtRef = useRef<number | null>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const loadedFilePathRef = useRef<string | null>(null);
+  const activeFilePathRef = useRef(filePath);
+  activeFilePathRef.current = filePath;
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const readRequestRef = useRef<AbortController | null>(null);
+  const saveRequestRef = useRef<AbortController | null>(null);
   const initialViewStateRef = useRef(initialViewState);
+  const initialModeRef = useRef(initialMode);
+  initialModeRef.current = initialMode;
   const scrollSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoreMonitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restoredViewKeyRef = useRef<string | null>(null);
@@ -139,43 +147,51 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   // ── Edit mode ────────────────────────────────────────────────────────────
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [editBaseVersion, setEditBaseVersion] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveProblem, setSaveProblem] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<FileData | null>(null);
   const editingRef = useRef(editing);
   editingRef.current = editing;
 
   const fetchContent = useCallback((filePath: string, isRefresh = false) => {
+    readRequestRef.current?.abort();
+    const controller = new AbortController();
+    readRequestRef.current = controller;
     const encoded = encodeFilePathForApi(filePath);
-    return fetch(`/api/files/${encoded}?type=read`)
+    const current = () => !controller.signal.aborted && readRequestRef.current === controller && activeFilePathRef.current === filePath;
+    return fetch(`/api/files/${encoded}?type=read`, { signal: controller.signal })
       .then((r) => r.json())
       .then((d: FileData & { error?: string }) => {
+        if (!current() || (isRefresh && editingRef.current)) return null;
         if (d.error) {
           setError(d.error);
           return null;
         }
         if (isRefresh) {
-          setData((prev) => {
-            if (prev) setPrevContent(prev.content);
-            return d;
-          });
+          if (dataRef.current) setPrevContent(dataRef.current.content);
           setChangeCount((c) => c + 1);
         } else {
           // Set the owner before React commits `data`. A file-path prop change
           // briefly renders with the previous file's data; the restore effect
           // must not consume the new tab's restore key during that stale frame.
           loadedFilePathRef.current = filePath;
-          setData(d);
         }
+        dataRef.current = d;
+        setData(d);
         return d;
       })
       .catch((e) => {
-        setError(String(e));
+        if (current()) setError(String(e));
         return null;
       });
   }, []);
 
   // Initial load
   useEffect(() => {
+    let active = true;
     loadedFilePathRef.current = null;
+    dataRef.current = null;
     setLoading(true);
     setError(null);
     setData(null);
@@ -191,14 +207,39 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     setDiagnostics([]);
 
     fetchContent(filePath).then((d) => {
+      if (!active || !d) return;
       // Large files arrive as a guarded prefix and default to the fast plain
       // source view. Preview remains an explicit opt-in for that sample.
-      if ((initialMode === "preview" || (initialMode === "auto" && d?.language === "markdown")) && !d?.truncated) {
+      const mode = initialModeRef.current;
+      if ((mode === "preview" || (mode === "auto" && d.language === "markdown")) && !d.truncated) {
         previewStartedAtRef.current = performance.now();
         setPreviewMode(true);
       }
-    }).finally(() => setLoading(false));
-  }, [filePath, fetchContent, initialMode]);
+    }).finally(() => { if (active) setLoading(false); });
+    return () => {
+      active = false;
+      readRequestRef.current?.abort();
+      saveRequestRef.current?.abort();
+      saveRequestRef.current = null;
+    };
+  }, [filePath, fetchContent]);
+
+  useEffect(() => {
+    if (editingRef.current || loadedFilePathRef.current !== filePath || !dataRef.current) return;
+    const current = dataRef.current;
+    setPreviewMode(!current.truncated && (initialMode === "preview" || (initialMode === "auto" && current.language === "markdown")));
+  }, [filePath, initialMode]);
+
+  // A same-file jump must preserve the draft and an in-flight save.
+  useEffect(() => {
+    setEditing(false);
+    editingRef.current = false;
+    setDraft("");
+    setEditBaseVersion(null);
+    setSaving(false);
+    setSaveProblem(null);
+    setConflict(null);
+  }, [filePath]);
 
   // Refresh on file-watch change events — debounced 300ms so an agent
   // writing in bursts triggers one reload, and never clobber an open editor.
@@ -210,7 +251,7 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     return () => clearTimeout(t);
   }, [refreshTrigger, filePath, fetchContent]);
 
-  // Reset transient tool state when switching files
+  // Reset transient navigation state for each jump request.
   useEffect(() => {
     restoringViewRef.current = true;
     restoredViewKeyRef.current = null;
@@ -224,8 +265,6 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     }
     setFindQuery("");
     setFindPos(0);
-    setEditing(false);
-    setDraft("");
     setForceHighlight(false);
     setMoreOpen(false);
     setPreviewRenderMs(null);
@@ -336,36 +375,63 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   }, [data?.language, data?.size, restoreReadingPosition]);
 
   const startEditing = useCallback(() => {
-    if (!data) return;
+    if (!data?.version || loadedFilePathRef.current !== filePath) return;
+    readRequestRef.current?.abort();
+    editingRef.current = true;
     setDraft(data.content);
+    setEditBaseVersion(data.version);
     setEditing(true);
+    setSaveProblem(null);
+    setConflict(null);
     setFindQuery("");
-  }, [data]);
+  }, [data, filePath]);
 
-  const saveEdit = useCallback(async () => {
-    if (saving) return;
+  const saveEdit = useCallback(async (reviewedVersion?: string) => {
+    if (saveRequestRef.current || !editingRef.current || loadedFilePathRef.current !== filePath || (conflict && !reviewedVersion)) return;
+    const expectedVersion = reviewedVersion ?? editBaseVersion;
+    if (!expectedVersion) return;
+    const controller = new AbortController();
+    saveRequestRef.current = controller;
+    const current = () => !controller.signal.aborted && saveRequestRef.current === controller && activeFilePathRef.current === filePath;
     setSaving(true);
+    setSaveProblem(null);
     try {
       const encoded = encodeFilePathForApi(filePath);
       const res = await fetch(`/api/files/${encoded}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: draft }),
+        body: JSON.stringify({ content: draft, expectedVersion }),
+        signal: controller.signal,
       });
-      const result = await res.json().catch(() => ({})) as { error?: string; size?: number };
-      if (!res.ok || result.error) {
-        showToast(`${t("files.saveFailed")}: ${result.error ?? `HTTP ${res.status}`}`, { type: "error" });
+      const result = await res.json().catch(() => ({})) as Partial<FileData> & { error?: string; current?: FileData };
+      if (!current()) return;
+      if (res.status === 409) {
+        // A busy writer may not return a snapshot. Read it for review only;
+        // never apply the response to the editor or discard the draft.
+        const disk = result.current ?? await fetch(`/api/files/${encoded}?type=read`, { signal: controller.signal }).then(r => r.ok ? r.json() : null);
+        if (!current()) return;
+        if (disk?.version && typeof disk.content === "string") setConflict({ ...data!, ...disk });
+        setSaveProblem(t("files.saveConflict"));
         return;
       }
-      setData((prev) => (prev ? { ...prev, content: draft, size: result.size ?? prev.size } : prev));
+      if (!res.ok || result.error) {
+        setSaveProblem(`${t("files.saveFailed")}: ${result.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
+      if (typeof result.content !== "string" || !result.version) throw new Error("Missing saved file revision");
+      const saved = { ...data!, content: result.content, size: result.size ?? data!.size, version: result.version };
+      dataRef.current = saved;
+      setData(saved);
+      setConflict(null);
+      editingRef.current = false;
       setEditing(false);
       showToast(t("files.saved"));
     } catch (e) {
-      showToast(`${t("files.saveFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
+      if (current()) setSaveProblem(`${t("files.saveFailed")}: ${e instanceof Error ? e.message : e}`);
     } finally {
-      setSaving(false);
+      if (current()) { saveRequestRef.current = null; setSaving(false); }
     }
-  }, [draft, filePath, saving, t]);
+  }, [draft, filePath, data, editBaseVersion, conflict, t]);
 
   const relativePath = getRelativeFilePath(filePath, cwd);
   const outline = useMemo(() => data ? extractFileOutline(data.content, data.language) : [], [data]);
@@ -525,21 +591,21 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
         </div>
 
         <div className={styles.fileActions}>
-        {(isHtml || isMarkdown) && viewMode === "source" && (
+        {!editing && (isHtml || isMarkdown) && viewMode === "source" && (
           <div className={styles.toggleGroup} role="group" aria-label={t("files.viewMode")}>
             <button aria-pressed={!previewMode && !structuredMode} onClick={() => { setPreviewMode(false); setStructuredMode(false); }} className={`${styles.toggleGroupFirst} ${!previewMode && !structuredMode ? styles.toggleActive : styles.toggleInactive}`}>{t(isHtml ? "files.code" : "files.raw")}</button>
             <button aria-pressed={previewMode} onClick={startPreview} className={`${styles.toggleGroupSecond} ${previewMode ? styles.toggleActive : styles.toggleInactive}`}>{t("files.preview")}</button>
           </div>
         )}
 
-        {structuredKind && viewMode === "source" && (
+        {!editing && structuredKind && viewMode === "source" && (
           <div className={styles.toggleGroup} role="group" aria-label={t("files.viewMode")}>
             <button aria-pressed={!structuredMode} onClick={() => { setStructuredMode(false); setPreviewMode(false); }} className={`${styles.toggleGroupFirst} ${!structuredMode ? styles.toggleActive : styles.toggleInactive}`}>{t("files.raw")}</button>
             <button aria-pressed={structuredMode} onClick={() => { setStructuredMode(true); setPreviewMode(false); }} className={`${styles.toggleGroupSecond} ${structuredMode ? styles.toggleActive : styles.toggleInactive}`}>{structuredKind === "csv" || structuredKind === "tsv" ? t("files.table") : t("files.tree")}</button>
           </div>
         )}
 
-        {hasComparedDiff && (
+        {!editing && hasComparedDiff && (
           <div className={styles.toggleGroup} role="group" aria-label={t("files.viewMode")}>
             <button
               aria-pressed={viewMode === "source"}
@@ -566,8 +632,8 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
 
         {viewMode === "source" && !previewMode && !structuredMode && !data.truncated && editing && (
           <div className={styles.toggleGroup}>
-            <button onClick={() => void saveEdit()} disabled={saving} className={`${styles.toggleGroupFirst} ${styles.toggleActive}`}>{t(saving ? "files.saving" : "files.save")}</button>
-            <button onClick={() => { setEditing(false); setDraft(""); }} disabled={saving} className={`${styles.toggleGroupSecond} ${styles.toggleInactive}`}>{t("common.cancel")}</button>
+            <button onClick={() => void saveEdit()} disabled={saving || Boolean(conflict)} className={`${styles.toggleGroupFirst} ${styles.toggleActive}`}>{t(saving ? "files.saving" : "files.save")}</button>
+            <button onClick={() => { editingRef.current = false; setEditing(false); setDraft(""); setConflict(null); setSaveProblem(null); void fetchContent(filePath, true); }} disabled={saving} className={`${styles.toggleGroupSecond} ${styles.toggleInactive}`}>{t("common.cancel")}</button>
           </div>
         )}
 
@@ -577,7 +643,7 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
             <button type="button" className={`${styles.moreButton} ${moreOpen ? styles.toggleActive : styles.toggleInactive}`} aria-label={t("files.moreActions")}><MoreHorizontal size={17} strokeWidth={1.8} aria-hidden /></button>
           }>
             <ActionMenuItem><button onClick={copyContent}>{t("files.copyFile")}</button></ActionMenuItem>
-            {viewMode === "source" && !previewMode && !structuredMode && !editing && !data.truncated && <ActionMenuItem><button onClick={startEditing}>{t("files.editFile")}</button></ActionMenuItem>}
+            {viewMode === "source" && !previewMode && !structuredMode && !editing && !data.truncated && <ActionMenuItem><button disabled={!data.version} onClick={startEditing}>{t("files.editFile")}</button></ActionMenuItem>}
             {viewMode === "source" && !previewMode && !structuredMode && !editing && <ActionMenuItem><button onClick={() => setWrapLines((current) => !current)}>{t(wrapLines ? "files.disableWrap" : "files.enableWrap")}</button></ActionMenuItem>}
             {isLarge && <ActionMenuItem><button onClick={() => setForceHighlight((current) => !current)}>{t(usePlain ? "files.forceHighlight" : "files.fastPlainView")}</button></ActionMenuItem>}
             <ActionMenuItem><button onClick={() => setInspectorTab("outline")}>{t("files.inspector.outline")}</button></ActionMenuItem>
@@ -632,6 +698,13 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
         </div>
       )}
 
+      {isHtml && previewMode && viewMode === "source" && !editing && (
+        <details className={styles.previewNotice}>
+          <summary>{t("files.isolatedPreview")}</summary>
+          <p>{t("files.isolatedPreviewHelp")}</p>
+        </details>
+      )}
+
       <div className={styles.workspaceBody}>
       <div
         ref={contentAreaRef}
@@ -648,8 +721,22 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
         }}
       >
         {editing ? (
+          <div className={styles.editWorkspace}>
+          {saveProblem && <div className={styles.saveProblem} role="status">{saveProblem}</div>}
+          {conflict && <section className={styles.saveConflict} aria-label={t("files.conflictReview")}>
+            <details open>
+              <summary>{t("files.conflictReview")}</summary>
+              <p>{t("files.conflictHelp")}</p>
+              <div className={styles.conflictDiff}><DiffViewMode oldContent={conflict.content} newContent={draft} language={data.language} /></div>
+            </details>
+            <div className={styles.conflictActions}>
+              <button disabled={saving} onClick={() => { dataRef.current = conflict; setData(conflict); setDraft(conflict.content); setEditBaseVersion(conflict.version ?? null); setConflict(null); setSaveProblem(null); }}>{t("files.useDiskVersion")}</button>
+              <button disabled={saving} onClick={() => void saveEdit(conflict.version)}>{t("files.saveReviewedDraft")}</button>
+            </div>
+          </section>}
           <textarea
             value={draft}
+            readOnly={saving}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); void saveEdit(); }
@@ -658,6 +745,7 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
             spellCheck={false}
             aria-label={t("files.editor")}
           />
+          </div>
         ) : viewMode === "diff" && hasComparedDiff ? (
           <DiffViewMode oldContent={diffBase!} newContent={data.content} language={data.language} />
         ) : structuredMode && structuredKind ? (

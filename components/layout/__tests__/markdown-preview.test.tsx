@@ -55,4 +55,17 @@ describe("Markdown file preview", () => {
     expect(container.querySelector("img")?.getAttribute("src"))
       .toBe("/api/files/workspace/project/screenshots/mobile%20view.png?type=raw");
   });
+
+  it("keeps inline HTML network-isolated as well as sandboxed", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => root?.render(<PreviewView language="html" content="<h1>Demo</h1>" />));
+    const frame = container.querySelector("iframe")!;
+    expect(frame.getAttribute("sandbox")).toBe("allow-scripts");
+    expect(frame.getAttribute("referrerpolicy")).toBe("no-referrer");
+    expect(frame.srcdoc).toContain("connect-src 'none'");
+    expect(frame.srcdoc.indexOf("Content-Security-Policy")).toBeLessThan(frame.srcdoc.indexOf("<h1>"));
+    expect(frame.srcdoc).not.toContain("allow-same-origin");
+  });
 });

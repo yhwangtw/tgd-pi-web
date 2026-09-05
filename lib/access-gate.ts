@@ -116,10 +116,13 @@ export async function cookieAuthorizes(cookieValue: string | undefined, nowMs = 
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-/** Block explicit browser cross-origin mutations while allowing CLI clients with no Origin header. */
+/** API reads are origin-sensitive too: an isolated document can navigate itself. */
 export function requestIsSameOrigin(request: Pick<Request, "headers" | "method" | "url">): boolean {
-  if (SAFE_METHODS.has(request.method.toUpperCase())) return true;
-  if (request.headers.get("sec-fetch-site")?.toLowerCase() === "cross-site") return false;
+  const pathname = new URL(request.url).pathname;
+  const isApi = pathname === "/api" || pathname.startsWith("/api/");
+  if (!isApi && SAFE_METHODS.has(request.method.toUpperCase())) return true;
+  const site = request.headers.get("sec-fetch-site")?.toLowerCase();
+  if (site === "cross-site" || site === "same-site") return false;
 
   const origin = request.headers.get("origin");
   if (!origin) return true;

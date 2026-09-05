@@ -81,9 +81,21 @@ describe("requestIsSameOrigin", () => {
     url,
   });
 
-  it("allows safe methods and non-browser clients without Origin", () => {
-    expect(requestIsSameOrigin(request("GET", { origin: "https://evil.example" }))).toBe(true);
+  it("allows public page navigation and non-browser clients without Origin", () => {
+    expect(requestIsSameOrigin(request("GET", { origin: "https://evil.example" }, "https://pi.example.com/"))).toBe(true);
+    expect(requestIsSameOrigin(request("GET", { "sec-fetch-site": "none" }))).toBe(true);
     expect(requestIsSameOrigin(request("POST"))).toBe(true);
+  });
+
+  it("blocks opaque and cross-origin API reads, including document navigation", () => {
+    for (const method of ["GET", "HEAD", "OPTIONS", "POST"]) {
+      expect(requestIsSameOrigin(request(method, { origin: "null" }))).toBe(false);
+      expect(requestIsSameOrigin(request(method, { origin: "https://evil.example" }))).toBe(false);
+      for (const site of ["cross-site", "same-site"]) {
+        expect(requestIsSameOrigin(request(method, { "sec-fetch-site": site, "sec-fetch-mode": "navigate" }))).toBe(false);
+      }
+      expect(requestIsSameOrigin(request(method, { "sec-fetch-site": "same-origin", origin: "https://pi.example.com" }))).toBe(true);
+    }
   });
 
   it("allows same-origin mutations through a forwarded deployment", () => {

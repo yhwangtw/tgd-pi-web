@@ -30,6 +30,7 @@ function runSetupFixture(
     forceSync?: boolean;
     piVersion?: string;
     tscExit?: number;
+    nodeVersion?: string;
   } = {},
 ) {
   const sandbox = mkdtempSync(join(tmpdir(), "tgd-pi-web-setup-"));
@@ -78,6 +79,18 @@ fi
 exit 0
 `);
   chmodSync(fakeNpm, 0o755);
+
+  if (options.nodeVersion) {
+    const fakeNode = join(fakeBin, "node");
+    writeFileSync(fakeNode, `#!/usr/bin/env bash
+if [ "$1" = "-p" ] && [ "$2" = "process.versions.node" ]; then
+  echo "${options.nodeVersion}"
+  exit 0
+fi
+exec ${JSON.stringify(process.execPath)} "$@"
+`);
+    chmodSync(fakeNode, 0o755);
+  }
 
   const fakePi = join(fakeBin, "pi");
   writeFileSync(fakePi, `#!/usr/bin/env bash
@@ -151,6 +164,18 @@ exit ${options.tscExit ?? 0}
 }
 
 describe("workspace root setup", () => {
+  it("rejects Node without the bundled runtime and unflagged SQLite before installing dependencies", () => {
+    for (const nodeVersion of ["20.19.0", "22.18.0", "23.3.0"]) {
+      const { npmCalls, result } = runSetupFixture({ nodeVersion });
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("22.19+");
+      expect(npmCalls).not.toContain("ci");
+    }
+    for (const nodeVersion of ["22.19.0", "23.4.0", "24.0.0"]) {
+      expect(runSetupFixture({ nodeVersion }).result.status).toBe(0);
+    }
+  });
+
   it("pins Next.js tracing and Turbopack to the repository root", () => {
     const repositoryRoot = resolve(__dirname, "../..");
 

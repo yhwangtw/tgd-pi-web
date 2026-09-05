@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { MarkdownBody } from "@/components/chat/MarkdownBody";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { useI18n } from "@/lib/i18n";
+import { isolatedPreviewDocument } from "@/lib/preview-policy";
 import styles from "../TextFileViewer.module.css";
 
 interface Props {
@@ -24,11 +25,12 @@ export function PreviewView({ content, language, filePath, onRendered }: Props) 
   if (language === "html" && filePath) {
     // src (not srcDoc) so the browser streams the document itself — HTML
     // preview works at any size, independent of the text-preview cap.
-    // Same sandbox as before: scripts run, no same-origin access.
+    // Response CSP also protects direct URLs. The iframe is defense in depth.
     return (
       <iframe
         src={`/api/files/${encodeFilePathForApi(filePath)}?type=raw`}
         sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
         className={styles.htmlPreview}
         title={t("files.htmlPreview")}
       />
@@ -37,8 +39,9 @@ export function PreviewView({ content, language, filePath, onRendered }: Props) 
   if (language === "html") {
     return (
       <iframe
-        srcDoc={content}
+        srcDoc={isolatedPreviewDocument(content)}
         sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
         className={styles.htmlPreview}
         title={t("files.htmlPreview")}
       />
