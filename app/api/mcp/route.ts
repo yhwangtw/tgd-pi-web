@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { redactedErrorMessage } from "@/lib/redaction";
-import { deleteMcpServer, getMcpStatuses, readMcpServers, refreshMcpServer, saveMcpServer, testMcpServer, validateMcpServer, type McpServerConfig } from "@/lib/mcp";
+import { deleteMcpServer, getMcpStatuses, McpConfigurationError, readMcpServers, refreshMcpServer, saveMcpServer, testMcpServer, validateMcpServer, type McpServerConfig } from "@/lib/mcp";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { consumeSensitiveAction, prepareSensitiveAction } from "@/lib/sensitive-action-confirmation";
 import { recordSecurityActivity, type SecurityActivityOutcome } from "@/lib/security-activity";
@@ -178,7 +178,7 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(
       { error: redactedErrorMessage(error) },
-      { status: error instanceof McpRequestError ? error.status : 500 },
+      { status: error instanceof McpRequestError ? error.status : error instanceof McpConfigurationError ? 400 : 500 },
     );
   }
 }

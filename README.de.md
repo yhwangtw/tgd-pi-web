@@ -171,6 +171,17 @@ Das mobile Layout hält aktive Phase, Gespräch, Composer, Modellsteuerung und H
 - Fehlerkarten pro Lauf, Stall-Warnungen, Benachrichtigungen, Abschlusston und Tab-Status.
 - Frühere Turns bearbeiten, vom vorherigen Verzweigungspunkt erneut ausführen, unabhängige Forks und In-Session-Branches.
 
+### MCP-Verbindungen
+
+Unter **Extensions → MCP** lassen sich vertrauenswürdige stdio-Befehle oder Streamable-HTTP-Endpunkte
+einrichten; eine globale Pi CLI ist nicht erforderlich. Das Timeout-Feld verwendet **1–120 Sekunden**,
+die gespeicherte/API-Eigenschaft `timeoutMs` weiterhin Millisekunden. Ein Verbindungstest nutzt eine
+separate Verbindung und schließt sie anschließend, ohne die gemeinsame Agent-Verbindung zu ersetzen.
+Alle Seiten der Werkzeugliste werden geladen. Nach Änderungen erst den aktiven Lauf beenden und
+**Reload Extensions** ausführen. Der Status zeigt die letzte Prüfung, keine permanente Überwachung.
+OAuth/PKCE, Resource-/Prompt-Browsing und Required-Task-Ausführung sind noch nicht integriert.
+Details: [MCP-Verbindungen und Grenzen](docs/MCP.md).
+
 ### Geplante Agenten
 
 - Das Schedule Center in der linken Leiste unterstützt einmalige, tägliche, wöchentliche und fünfteilige Cron-Zeitpläne mit expliziter IANA-Zeitzone.

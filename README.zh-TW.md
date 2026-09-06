@@ -205,6 +205,14 @@ parent/
 - 每次執行都有錯誤卡、停滯警告、通知、完成音效與分頁狀態。
 - 可編輯過去的 turn、從先前分支點 retry、建立獨立 fork，或在 session 內切換分支。
 
+### MCP 連線
+
+從 **Extensions → MCP** 設定受信任的 stdio 指令或 Streamable HTTP 端點，不需要全域 Pi CLI。
+逾時欄位使用 **1–120 秒**，儲存及 API 的 `timeoutMs` 仍是毫秒。一次性測試使用獨立連線，
+結束即清理，不會替換 Agent 共用的連線。工具清單會讀取全部分頁；清單變更後，請等目前執行
+結束再 **Reload Extensions**。連線狀態代表最近一次檢查，不是持續監控。
+OAuth/PKCE、resource/prompt 瀏覽與 required-task 執行尚未整合；詳見 [MCP 連線契約與限制](docs/MCP.md)。
+
 ### Agent 排程
 
 - 左側排程中心支援單次、每天、每週與標準五欄 cron，並明確指定 IANA 時區。

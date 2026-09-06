@@ -16,30 +16,31 @@ import {
 import styles from "./McpCenter.module.css";
 
 interface Props { cwd: string | null; sessionId: string | null }
-type Draft = Partial<McpServerConfig> & { argsText: string; headersText: string };
+type Draft = Partial<McpServerConfig> & { argsText: string; headersText: string; timeoutSeconds: string };
 type PendingTest = {
   token: string;
   expiresAt: number;
   server: McpServerConfig;
   review: { id: string; name: string; command?: string; args: string[]; cwd: string | null };
 };
-type DraftErrors = Partial<Record<"name" | "endpoint" | "headers", string>>;
+type DraftErrors = Partial<Record<"name" | "endpoint" | "headers" | "timeout", string>>;
 type McpResource = { servers?: McpServerConfig[]; statuses?: McpServerStatus[]; error?: string };
 const EMPTY_SERVERS: McpServerConfig[] = [];
 const EMPTY_STATUSES: McpServerStatus[] = [];
 
 function blankDraft(cwd: string | null): Draft {
-  return { name: "", enabled: false, scope: cwd ? "project" : "global", projectCwd: cwd ?? undefined, transport: "stdio", timeoutMs: 15_000, argsText: "", headersText: "{}" };
+  return { name: "", enabled: false, scope: cwd ? "project" : "global", projectCwd: cwd ?? undefined, transport: "stdio", timeoutMs: 15_000, timeoutSeconds: "15", argsText: "", headersText: "{}" };
 }
 
 function toDraft(server: McpServerConfig): Draft {
-  return { ...server, argsText: (server.args ?? []).join("\n"), headersText: JSON.stringify(server.headers ?? {}, null, 2) };
+  return { ...server, timeoutSeconds: String(server.timeoutMs / 1000), argsText: (server.args ?? []).join("\n"), headersText: JSON.stringify(server.headers ?? {}, null, 2) };
 }
 
 function templateDraft(id: OfficialMcpTemplateId, cwd: string | null): Draft {
   const seed = createOfficialMcpSeed(id, cwd);
   return {
     ...seed,
+    timeoutSeconds: String((seed.timeoutMs ?? 15_000) / 1000),
     argsText: (seed.args ?? []).join("\n"),
     headersText: JSON.stringify(seed.headers ?? {}, null, 2),
   };
@@ -63,6 +64,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
   const [pendingTest, setPendingTest] = useState<PendingTest | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const endpointInputRef = useRef<HTMLInputElement>(null);
+  const timeoutInputRef = useRef<HTMLInputElement>(null);
   const resourceUrl = `/api/mcp${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`;
   const resource = useRequestResource<McpResource>(
     `mcp:${cwd ?? "global"}`,
@@ -74,8 +76,10 @@ export function McpCenter({ cwd, sessionId }: Props) {
   const statusMap = useMemo(() => new Map(statuses.map((status) => [status.id, status])), [statuses]);
   const statusLabels = {
     disabled: t("mcp.status.disabled"),
+    idle: t("mcp.status.idle"),
     connecting: t("mcp.status.connecting"),
     connected: t("mcp.status.connected"),
+    disconnected: t("mcp.status.disconnected"),
     error: t("mcp.status.error"),
   };
 
@@ -151,6 +155,10 @@ export function McpCenter({ cwd, sessionId }: Props) {
   const save = async () => {
     if (!draft) return;
     const nextErrors: DraftErrors = {};
+    const timeoutSeconds = Number(draft.timeoutSeconds);
+    const timeoutMs = Math.round(timeoutSeconds * 1000);
+    if (!draft.timeoutSeconds.trim() || !Number.isFinite(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 120
+      || Math.abs(timeoutSeconds * 1000 - timeoutMs) > 0.000001) nextErrors.timeout = t("mcp.timeoutInvalid");
     if (!draft.name?.trim()) nextErrors.name = t("mcp.requiredName");
     if (draft.transport === "http" && !draft.url?.trim()) nextErrors.endpoint = t("mcp.requiredUrl");
     if (draft.transport === "stdio" && !draft.command?.trim()) nextErrors.endpoint = t("mcp.requiredCommand");
@@ -162,11 +170,13 @@ export function McpCenter({ cwd, sessionId }: Props) {
     } catch { nextErrors.headers = t("mcp.headersInvalid"); }
     if (Object.keys(nextErrors).length) {
       setDraftErrors(nextErrors);
-      requestAnimationFrame(() => (nextErrors.name ? nameInputRef.current : endpointInputRef.current)?.focus());
+      requestAnimationFrame(() => (nextErrors.name ? nameInputRef.current : nextErrors.endpoint ? endpointInputRef.current : nextErrors.timeout ? timeoutInputRef.current : endpointInputRef.current)?.focus());
       return;
     }
     const server = {
       ...draft,
+      timeoutMs,
+      timeoutSeconds: undefined,
       projectCwd: draft.scope === "project" ? cwd : undefined,
       args: draft.argsText.split("\n").map((value) => value.trim()).filter(Boolean),
       headers,
@@ -198,10 +208,11 @@ export function McpCenter({ cwd, sessionId }: Props) {
           </button>
         </div>
       </div>
+      {servers.length > 0 && <p className={styles.notice}>{t("mcp.statusHint")}</p>}
       {resource.error && <div className={styles.loadError} role="alert"><span>{resource.error}</span><button type="button" onClick={() => void resource.refresh()}>{t("common.retry")}</button></div>}
       {!servers.length ? <div className={styles.empty}><strong>{t("mcp.emptyTitle")}</strong><span>{t("mcp.emptyHint")}</span></div> : (
         <div className={styles.list}>{servers.map((server) => {
-          const status: McpServerStatus = statusMap.get(server.id) ?? { id: server.id, state: server.enabled ? "connecting" : "disabled", toolCount: 0, tools: [] };
+          const status: McpServerStatus = statusMap.get(server.id) ?? { id: server.id, state: server.enabled ? "idle" : "disabled", toolCount: 0, tools: [] };
           return <article key={server.id} className={styles.card}>
             <div className={styles.cardTop}>
               <div className={styles.identity}><span className={styles.dot} data-state={status.state} /><div><strong>{server.name}</strong><small>{server.transport === "stdio" ? `${server.command} ${(server.args ?? []).join(" ")}` : server.url}</small></div></div>
@@ -211,7 +222,9 @@ export function McpCenter({ cwd, sessionId }: Props) {
               }}><span /></button>
             </div>
             <div className={styles.meta}><span>{server.scope === "global" ? t("mcp.scopeAll") : t("mcp.scopeProject")}</span><span data-state={status.state}>{statusLabels[status.state]}</span><span>{status.toolCount} {t("mcp.toolsCount")}</span></div>
+            {status.checkedAt && Number.isFinite(Date.parse(status.checkedAt)) && <p className={styles.notice}>{t("mcp.lastChecked")} <time dateTime={status.checkedAt}>{new Date(status.checkedAt).toLocaleString()}</time></p>}
             {status.error && <p className={styles.error}>{status.error}</p>}
+            {status.catalogChanged && <p className={styles.notice}>{t("mcp.catalogChanged")}</p>}
             {status.tools.length > 0 && <div className={styles.tools}>{status.tools.slice(0, 8).map((tool) => <span key={tool.name} title={tool.description}>{tool.title ?? tool.name}</span>)}{status.tools.length > 8 && <span>+{status.tools.length - 8}</span>}</div>}
             <div className={styles.actions}>
               <button type="button" onClick={() => { setSelectedTemplateId(null); setDraftErrors({}); setDraft(toDraft(server)); }}>{t("mcp.edit")}</button>
@@ -329,7 +342,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
           </label>
           <label><span>{t("mcp.scope")}</span><select value={draft.scope} onChange={(event) => setDraft({ ...draft, scope: event.target.value as "global" | "project" })}><option value="global">{t("mcp.scopeAll")}</option><option value="project" disabled={!cwd}>{t("mcp.scopeProject")}</option></select></label>
           <label><span>{t("mcp.transport")}</span><select value={draft.transport} onChange={(event) => { setDraftErrors((current) => ({ ...current, endpoint: undefined })); setDraft({ ...draft, transport: event.target.value as "stdio" | "http" }); }}><option value="stdio">{t("mcp.transportStdio")}</option><option value="http">{t("mcp.transportHttp")}</option></select></label>
-          <label><span>{t("mcp.timeout")}</span><input type="number" min="1000" max="120000" step="1000" value={draft.timeoutMs ?? 15000} onChange={(event) => setDraft({ ...draft, timeoutMs: Number(event.target.value) })} /></label>
+          <label><span>{t("mcp.timeout")}</span><input ref={timeoutInputRef} type="number" min="1" max="120" step="0.001" value={draft.timeoutSeconds} aria-invalid={!!draftErrors.timeout} aria-describedby="mcp-timeout-hint" onChange={(event) => { setDraftErrors((current) => ({ ...current, timeout: undefined })); setDraft({ ...draft, timeoutSeconds: event.target.value }); }} /><small id="mcp-timeout-hint" className={draftErrors.timeout ? styles.fieldError : undefined}>{draftErrors.timeout ?? t("mcp.timeoutHint")}</small></label>
           {draft.transport === "http" ? <>
             <label className={styles.full}>
               <span>{t("mcp.url")}</span>

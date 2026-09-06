@@ -1,8 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { createHash } from "node:crypto";
 import {
   defineTool,
   getAgentDir,
@@ -10,7 +8,7 @@ import {
   type InlineExtension,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { redactedErrorMessage } from "./redaction";
+import { McpConnectionManager, mcpSignature } from "./mcp-client";
 
 export type McpTransportKind = "stdio" | "http";
 export type McpScope = "global" | "project";
@@ -34,7 +32,8 @@ export interface McpServerConfig {
 
 export interface McpServerStatus {
   id: string;
-  state: "disabled" | "connecting" | "connected" | "error";
+  state: "disabled" | "idle" | "connecting" | "connected" | "disconnected" | "error";
+  catalogChanged?: boolean;
   toolCount: number;
   tools: Array<{ name: string; title?: string; description?: string }>;
   error?: string;
@@ -44,6 +43,8 @@ export interface McpServerStatus {
 interface McpFile { version: 1; servers: McpServerConfig[] }
 
 const MCP_PATH = () => join(getAgentDir(), "mcp-servers.json");
+
+export class McpConfigurationError extends Error {}
 
 function safeId(value: string): string {
   const normalized = value.toLowerCase().trim().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -64,8 +65,14 @@ function sanitizeHeaders(value: unknown): Record<string, string> {
 
 export function validateMcpServer(input: Partial<McpServerConfig>, existing?: McpServerConfig, touchUpdated = true): McpServerConfig {
   const now = new Date().toISOString();
-  const transport: McpTransportKind = input.transport === "http" ? "http" : "stdio";
-  const scope: McpScope = input.scope === "project" ? "project" : "global";
+  const transport = input.transport ?? existing?.transport ?? "stdio";
+  const scope = input.scope ?? existing?.scope ?? "global";
+  if (transport !== "stdio" && transport !== "http") throw new McpConfigurationError("Unknown MCP transport");
+  if (scope !== "global" && scope !== "project") throw new McpConfigurationError("Unknown MCP scope");
+  const timeoutMs = input.timeoutMs === undefined ? existing?.timeoutMs ?? 15_000 : input.timeoutMs;
+  if (typeof timeoutMs !== "number" || !Number.isInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 120_000) {
+    throw new McpConfigurationError("MCP timeout must be between 1000 and 120000 milliseconds");
+  }
   const name = String(input.name ?? existing?.name ?? "").trim().slice(0, 80);
   if (!name) throw new Error("MCP server name is required");
   const id = safeId(String(input.id ?? existing?.id ?? name));
@@ -97,7 +104,7 @@ export function validateMcpServer(input: Partial<McpServerConfig>, existing?: Mc
     ...(String(input.cwd ?? existing?.cwd ?? "").trim() ? { cwd: String(input.cwd ?? existing?.cwd).trim() } : {}),
     ...(url ? { url } : {}),
     headers,
-    timeoutMs: Math.max(1_000, Math.min(120_000, Number(input.timeoutMs ?? existing?.timeoutMs ?? 15_000))),
+    timeoutMs,
     createdAt: existing?.createdAt ?? now,
     updatedAt: touchUpdated ? now : (input.updatedAt ?? existing?.updatedAt ?? now),
   };
@@ -142,105 +149,37 @@ export async function deleteMcpServer(id: string): Promise<boolean> {
   return true;
 }
 
-function interpolate(value: string): string {
-  return value.replace(/\$\{([A-Z_][A-Z0-9_]*)\}/gi, (_, key: string) => {
-    const resolved = process.env[key];
-    if (resolved === undefined) throw new Error(`Missing environment variable: ${key}`);
-    return resolved;
-  });
+function registeredToolName(serverId: string, toolName: string): string {
+  // Names sent to providers must fit their entire 64-character function-name
+  // budget, including our namespace. Hash the ORIGINAL tuple, not its lossy
+  // display slugs: punctuation, long names, and server-id aliases stay distinct.
+  const digest = createHash("sha256").update(JSON.stringify([serverId, toolName])).digest("hex").slice(0, 32);
+  const slug = (value: string, limit: number) => value.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, limit);
+  return `mcp_${slug(serverId, 12)}_${slug(toolName, 14)}_${digest}`;
 }
-
-function toolPrefix(server: McpServerConfig): string {
-  return `mcp_${safeId(server.id).replace(/-/g, "_")}`;
-}
-
-function safeToolName(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 64);
-}
-
-type McpClientEntry = {
-  signature: string;
-  client: Client;
-  transport: StdioClientTransport | StreamableHTTPClientTransport;
-  tools: Awaited<ReturnType<Client["listTools"]>>["tools"];
-};
 
 declare global {
-  var __piMcpClients: Map<string, McpClientEntry> | undefined;
-  var __piMcpStatus: Map<string, McpServerStatus> | undefined;
+  var __piMcpManager: McpConnectionManager | undefined;
 }
 
-function clients(): Map<string, McpClientEntry> {
-  return globalThis.__piMcpClients ??= new Map();
-}
-
-function statuses(): Map<string, McpServerStatus> {
-  return globalThis.__piMcpStatus ??= new Map();
-}
-
-function signature(server: McpServerConfig): string {
-  return JSON.stringify({ ...server, createdAt: undefined, updatedAt: undefined });
-}
-
-async function connectMcp(server: McpServerConfig, force = false): Promise<McpClientEntry> {
-  const current = clients().get(server.id);
-  const nextSignature = signature(server);
-  if (!force && current?.signature === nextSignature) return current;
-  if (current) await invalidateMcpClient(server.id);
-  statuses().set(server.id, { id: server.id, state: "connecting", toolCount: 0, tools: [] });
-  try {
-    const client = new Client({ name: "tgd-pi-web", version: "1" }, { capabilities: {} });
-    const transport = server.transport === "http"
-      ? new StreamableHTTPClientTransport(new URL(server.url!), {
-          requestInit: { headers: Object.fromEntries(Object.entries(server.headers ?? {}).map(([key, value]) => [key, interpolate(value)])) },
-        })
-      : new StdioClientTransport({
-          command: server.command!,
-          args: (server.args ?? []).map(interpolate),
-          ...(server.cwd ? { cwd: server.cwd } : {}),
-          stderr: "pipe",
-        });
-    await client.connect(transport, { timeout: server.timeoutMs });
-    const listed = await client.listTools(undefined, { timeout: server.timeoutMs });
-    const entry: McpClientEntry = { signature: nextSignature, client, transport, tools: listed.tools };
-    clients().set(server.id, entry);
-    statuses().set(server.id, {
-      id: server.id,
-      state: "connected",
-      toolCount: listed.tools.length,
-      tools: listed.tools.map((tool) => ({ name: tool.name, title: tool.title, description: tool.description })),
-      checkedAt: new Date().toISOString(),
-    });
-    return entry;
-  } catch (error) {
-    const message = redactedErrorMessage(error);
-    statuses().set(server.id, { id: server.id, state: "error", toolCount: 0, tools: [], error: message, checkedAt: new Date().toISOString() });
-    throw new Error(message, { cause: error });
-  }
+function manager(): McpConnectionManager {
+  return globalThis.__piMcpManager ??= new McpConnectionManager();
 }
 
 export async function invalidateMcpClient(id: string): Promise<void> {
-  const entry = clients().get(id);
-  clients().delete(id);
-  statuses().delete(id);
-  if (entry) await entry.transport.close().catch(() => undefined);
+  await manager().invalidate(id);
 }
 
 export async function testMcpServer(server: McpServerConfig): Promise<McpServerStatus> {
-  await connectMcp(server, true);
-  return statuses().get(server.id)!;
+  return manager().test(server);
 }
 
 export async function refreshMcpServer(server: McpServerConfig): Promise<McpServerStatus> {
-  await connectMcp(server);
-  return statuses().get(server.id)!;
+  return manager().refresh(server);
 }
 
 export function getMcpStatuses(servers: McpServerConfig[]): McpServerStatus[] {
-  return servers.map((server) => {
-    if (!server.enabled) return { id: server.id, state: "disabled", toolCount: 0, tools: [] };
-    return statuses().get(server.id) ?? { id: server.id, state: "connecting", toolCount: 0, tools: [] };
-  });
+  return servers.map((server) => manager().status(server));
 }
 
 type McpCallResult = {
@@ -267,9 +206,9 @@ function resultContent(result: McpCallResult): Array<{ type: "text"; text: strin
 }
 
 async function registerServerTools(pi: ExtensionAPI, server: McpServerConfig): Promise<void> {
-  const entry = await connectMcp(server);
+  const entry = await manager().connect(server);
   for (const tool of entry.tools) {
-    const name = `${toolPrefix(server)}_${safeToolName(tool.name)}`;
+    const name = registeredToolName(server.id, tool.name);
     pi.registerTool(defineTool({
       name,
       label: tool.title ?? `${server.name} · ${tool.name}`,
@@ -277,10 +216,11 @@ async function registerServerTools(pi: ExtensionAPI, server: McpServerConfig): P
       promptSnippet: `${name}: ${tool.description ?? `MCP tool from ${server.name}`}`,
       parameters: Type.Unsafe(tool.inputSchema),
       async execute(_toolCallId, params, signal) {
-        const result = await entry.client.callTool({ name: tool.name, arguments: params as Record<string, unknown> }, undefined, {
-          timeout: server.timeoutMs,
-          ...(signal ? { signal } : {}),
-        });
+        const configured = (await readMcpServers()).find((item) => item.id === server.id);
+        if (!configured?.enabled || mcpSignature(configured) !== mcpSignature(server)) {
+          throw new Error("MCP configuration changed or was disabled. Reload Extensions before calling this tool.");
+        }
+        const result = await manager().callTool(configured, tool, params as Record<string, unknown>, signal);
         const content = resultContent(result as unknown as McpCallResult);
         if (result.isError === true) {
           const message = content

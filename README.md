@@ -210,6 +210,15 @@ This table is generated from `lib/capabilities.json`; it is the product contract
 - Project trust can be reviewed and changed from the Context inspector. Extension shortcuts can be invoked from the Extensions panel, while TUI-only custom messages receive a safe generic Web rendering.
 - Extensions settings include a Runtime status center and an MCP manager for trusted stdio or Streamable HTTP servers; MCP tools are bridged through Pi's supported Extension API rather than patching Pi core.
 
+### MCP connections
+
+For MCP setup, timeout units, one-time tests, connection cleanup, paginated tools
+and current protocol limits, see [MCP connections](docs/MCP.md). The editor uses
+**1–120 seconds**; stored `timeoutMs` values remain milliseconds. Tests use a
+separate connection and never replace an agent's shared connection. Tool-list
+changes require **Reload Extensions** after the active run; OAuth/PKCE,
+resource/prompt browsing and required-task execution are not yet integrated.
+
 ### Attention and recovery
 
 - A global Attention Center combines failed sessions, background agents, scheduled runs, and agents waiting for a decision; read state stays per device.

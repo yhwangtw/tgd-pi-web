@@ -171,6 +171,15 @@ artifacts が別の場所にある場合は `TGD_DIR` を設定してくださ�
 - 実行エラーカード、stall 警告、通知、完了音、タブ状態。
 - 過去 turn の編集、以前の分岐点からの retry、独立 fork、セッション内ブランチ移動。
 
+### MCP 接続
+
+**Extensions → MCP** で信頼できる stdio コマンドまたは Streamable HTTP endpoint を設定します。
+グローバル Pi CLI は不要です。タイムアウト欄は **1–120 秒**、保存値と API の `timeoutMs` は
+ミリ秒です。接続テストは独立した接続を使い、終了時に閉じるため、Agent の共有接続を置き換えません。
+ツール一覧は全ページを取得し、変更時は実行終了後に **Reload Extensions** を行います。
+接続状態は最終確認の結果であり、常時監視ではありません。OAuth/PKCE、resource/prompt の閲覧、
+required-task 実行は未対応です。詳細は [MCP 接続の契約と制限](docs/MCP.md) を参照してください。
+
 ### スケジュール Agent
 
 - 左レールの Schedule Center は、1 回、毎日、毎週、標準 5 フィールド cron と明示的な IANA タイムゾーンに対応します。
