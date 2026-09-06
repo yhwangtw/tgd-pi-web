@@ -20,21 +20,28 @@ postinstall downloads browser binaries and would break offline/Nexus
 tsconfig/eslint for the same reason.  
 **Never run `next build` while the dev server is running** — pollutes `.next/` and breaks `npm run dev`.
 
-Release: after PR CI passes and the PR is merged, run
-`gh workflow run release.yml -f tag=vYYYY.MM.DD`. New tags must use the current
+Release: after the PR is merged and CI passes on the exact merged main, use a
+clean up-to-date main checkout: `bash scripts/release.sh` is read-only preflight;
+add `--dispatch` to request the canonical GitHub workflow. It pins the expected
+source SHA, and the workflow rechecks source ancestry and all five CI jobs before
+publishing. See `docs/RELEASING.md`. New tags must use the current
 UTC date; for another release on the same date, append a sequence such as
 `vYYYY.MM.DD-1`. The workflow updates both
 package version files, creates the `[skip ci]` release commit and annotated tag,
 and publishes the GitHub Release in one run. Do not manually create a version
-commit or wait for duplicate main/version CI runs. A pre-versioned `v*` tag push
-remains a compatibility path. There is no npm publish step.
+commit or wait for duplicate version-only CI runs. Inherited CI requires actual
+version-only Git/JSON diffs, not a commit message. Existing tags are never moved;
+a pre-versioned `v*` tag push must pass the same source/CI gate. There is no npm
+publish or automatic production deployment step.
 
 Production setup: `bash setup.sh` treats `origin/main` as authoritative for Git
 checkouts. It runs `git fetch --prune origin main`, `git reset --hard
 origin/main`, and `git clean -fd`, then re-executes the fetched script. This
-intentionally discards local commits, tracked changes, and non-ignored untracked
-files; ignored runtime state remains. `TGD_SETUP_OFFLINE=1 bash setup.sh` is the
-explicit offline escape hatch. Source archives skip Git synchronization and
+replaces source only after a dirty/local-commit checkout gets a private recovery
+backup and interactive approval (unattended requires `TGD_SETUP_FORCE_SYNC=1`).
+Ignored runtime state remains, but is not in the source backup. Stop the server
+before setup/build. `TGD_SETUP_OFFLINE=1 bash setup.sh` skips Git synchronization,
+not npm networking. Source archives skip Git synchronization and
 back up known obsolete search files outside the source tree before building.
 
 E2E traps: transcript text offscreen is `content-visibility`-skipped and

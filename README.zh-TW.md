@@ -48,7 +48,7 @@ Pi 的終端體驗快速而專注；這個專案補上長時間或多工作流�
 
 ### 系統需求
 
-- Node.js 22 以上
+- Node.js 22.x 需 22.19 以上，或 23.4 以上（含 24 與更新版本）；需內建免額外旗標的 SQLite 鎖
 - npm
 - `~/.pi/agent/` 中的模型憑證／設定，或支援的 Provider 環境變數；不需要安裝全域 `pi` CLI
 - Git
@@ -68,10 +68,10 @@ cd tGD-pi-web
 bash setup.sh
 ```
 
-安裝腳本是正式支援的一步式 production 流程。Git checkout 會先用 `origin/main` 取代本地原始碼，再檢查 Node.js 與 npm、安裝相依套件、執行 TypeScript 驗證、建立 production build，並可選擇啟動 production server。若使用原始碼壓縮檔，已知的舊版殘留會先移至 `~/.tgd-pi-web-backups/`（可用 `TGD_SETUP_BACKUP_DIR` 覆寫）。
+安裝腳本是正式支援的一步式 production 流程。Git checkout 會先取得 `origin/main` 並檢查本地修改，再同步原始碼、檢查 Node.js 與 npm、安裝相依套件、執行 TypeScript 驗證、建立 production build，並可選擇啟動 production server。若使用原始碼壓縮檔，已知的舊版殘留會先移至 `~/.tgd-pi-web-backups/`（可用 `TGD_SETUP_BACKUP_DIR` 覆寫）。
 
 > [!WARNING]
-> 一般使用者的 Git 安裝以 `origin/main` 為唯一真相。執行 `bash setup.sh` 會透過 `git reset --hard origin/main` 與 `git clean -fd` 放棄本地 commit、tracked 修改及未被 ignore 的 untracked 檔案；`.env`、`node_modules`、`.next` 等 ignored runtime 狀態會保留。
+> setup/build 前請停止使用這個目錄的伺服器。Git 安裝以 `origin/main` 為準；若有本地 commit 或未被 ignore 的修改，先建立私人原始碼復原備份並詢問，再決定是否替換。非互動模式會停止，除非明確設定 `TGD_SETUP_FORCE_SYNC=1`。核准同步後仍會執行 `git reset --hard origin/main` 與 `git clean -fd`；ignored runtime 狀態保留，但不包含在這份原始碼備份裡。詳見[更新與回滾邊界](./docs/RELEASING.md#installation-updates-and-rollback-are-separate)。
 
 手動安裝：
 
@@ -96,6 +96,10 @@ TypeScript 驗證失敗時，`setup.sh` 會顯示完整錯誤並立即停止，�
 ```bash
 TGD_SETUP_OFFLINE=1 bash setup.sh
 ```
+
+這只略過 Git 同步；npm 仍需內部 registry 或預先準備的 cache。
+`origin/main` 可能比最新 release 還新；要安裝精確版本，請把該 release
+原始碼壓縮檔解壓到全新目錄，不要直接覆蓋舊安裝。
 
 ## 瀏覽器內的 tGD 流程
 
@@ -250,7 +254,8 @@ parent/
 
 | 指令 | 用途 |
 |---|---|
-| `bash setup.sh` | 以 `origin/main` 取代本地原始碼、驗證、安裝、build，並可選擇啟動 production |
+| `bash setup.sh` | 檢查／備份本地修改，必要時核准後同步 `origin/main`，安裝、驗證、build 與可選啟動 |
+| `bash scripts/release.sh` | 唯讀發版檢查；加上 `--dispatch` 才送出 GitHub 發版請求 |
 | `npm run dev` | 視需要在 `30141` port 啟動開發環境 |
 | `node_modules/.bin/tsc --noEmit` | Typecheck |
 | `npx eslint .` | Lint |
@@ -377,13 +382,14 @@ Compaction 會加入摘要並保留最近的訊息尾端，不會從 `.jsonl` �
 
 ## 發布
 
-PR 通過 CI 並合併後，使用快速發版流程：
+PR 合併後，先等精確的 merged `main` 通過 CI，再從乾淨且已同步的 main checkout 執行：
 
 ```bash
-gh workflow run release.yml -f tag=vYYYY.MM.DD
+bash scripts/release.sh                        # 唯讀檢查，預設 UTC 今天
+bash scripts/release.sh vYYYY.MM.DD --dispatch  # 明確送出發布請求
 ```
 
-請使用目前的 UTC 日期；同一天再次發布時，加入 `vYYYY.MM.DD-1` 這類流水號，未來日期會被拒絕。單一 workflow 會更新 `package.json` 與 `package-lock.json`、建立 release commit 與 annotated tag，接著發布 GitHub Release；它的驗證推送不會再啟動一輪 CI。既有的 `v*` tag 推送方式仍可使用。這個流程**不會發布至 npm**。
+日期使用 UTC，同日後續版本加上 `-1`、`-2` 等流水號。入口不會在本機 build、改版本或推送；workflow 會再次核對已審閱的 source SHA 與五個 CI 工作，才原子推送版本 commit/tag 並發布 GitHub Release。只有經差異核對的純版本提交能沿用 CI；缺少、跳過、失敗或仍在執行的檢查都會阻擋。既有 tag 可續發，但不移動 tag，也不把較新的 Latest 換掉。這**不等於 npm 發布或正式部署**。詳見[發版、復原與驗證手冊](./docs/RELEASING.md)。
 
 ## 授權
 

@@ -48,9 +48,9 @@ Pi のターミナル体験は高速で集中しやすいものです。本プ�
 
 ### 必要環境
 
-- Node.js 22 以降
+- Node.js 22.x は 22.19 以上、または 23.4 以上（24 以降を含む）。追加フラグ不要の組み込み SQLite ロックが必要です
 - npm
-- `~/.pi/agent/` を含む、動作する Pi 環境
+- `~/.pi/agent/` のモデル認証・設定、または対応する環境変数。グローバル `pi` CLI は不要です
 - Git
 
 本プロジェクトは GitHub のソースコードから配布され、**npm には公開されません**。
@@ -66,10 +66,10 @@ cd tGD-pi-web
 bash setup.sh
 ```
 
-セットアップスクリプトは、Git checkout ではまずローカルソースを `origin/main` で置き換え、その後 Node.js と npm の確認、依存関係のインストール、TypeScript 検証、production build を行い、必要に応じて production server を起動します。ソースアーカイブでは、既知の古いファイルを build 前に `~/.tgd-pi-web-backups/` へ移動します（`TGD_SETUP_BACKUP_DIR` で変更可能）。
+セットアップは Git checkout の `origin/main` を取得してローカル変更を確認した後、同期、Node.js と npm の確認、依存関係のインストール、TypeScript 検証、production build、必要に応じた起動を行います。ソースアーカイブの既知の古いファイルは `~/.tgd-pi-web-backups/` へ退避します（`TGD_SETUP_BACKUP_DIR` で変更可能）。
 
 > [!WARNING]
-> エンドユーザー向け Git インストールでは `origin/main` が唯一の正です。`bash setup.sh` は `git reset --hard origin/main` と `git clean -fd` を実行し、ローカル commit、tracked 変更、ignore されていない untracked ファイルを破棄します。`.env`、`node_modules`、`.next` など ignore 済みの runtime state は保持されます。
+> setup/build 前に、このディレクトリを使うサーバーを停止してください。ローカル commit や ignore されていない変更がある場合、非公開のソース復元バックアップを作成し、置き換え前に確認します。非対話モードは `TGD_SETUP_FORCE_SYNC=1` の明示指定がなければ停止します。承認後の同期は `git reset --hard origin/main` と `git clean -fd` を実行します。ignore 済みの runtime データは保持されますが、このソースバックアップには含まれません。[更新・ロールバックの境界](./docs/RELEASING.md#installation-updates-and-rollback-are-separate)を参照してください。
 
 手動セットアップ：
 
@@ -88,6 +88,10 @@ bash setup.sh
 ```
 
 意図的にオフラインで使う Git checkout では、`TGD_SETUP_OFFLINE=1 bash setup.sh` を実行して remote 同期をスキップします。
+
+これは Git 同期だけを省略します。npm には内部 registry または準備済み cache が必要です。
+`origin/main` は最新 release より新しい場合があります。正確な release を使うには、
+そのソースアーカイブを新しいディレクトリに展開してください。
 
 ## ブラウザ内の tGD ワークフロー
 
@@ -216,7 +220,8 @@ artifacts が別の場所にある場合は `TGD_DIR` を設定してくださ�
 
 | コマンド | 用途 |
 |---|---|
-| `bash setup.sh` | ローカル source を `origin/main` で置き換え、検証、install、build を行い、必要に応じて production を起動 |
+| `bash setup.sh` | ローカル変更を確認・バックアップし、必要な承認後に同期、install、検証、build、任意の起動 |
+| `bash scripts/release.sh` | 読み取り専用のリリース確認。`--dispatch` で明示的に workflow を要求 |
 | `npm run dev` | 必要に応じてポート `30141` で開発サーバーを起動 |
 | `node_modules/.bin/tsc --noEmit` | Typecheck |
 | `npx eslint .` | Lint |
@@ -337,13 +342,14 @@ Issue と pull request を歓迎します。
 
 ## リリース
 
-PR の CI が通過してマージされたら、次の高速リリースフローを使用します。
+PR マージ後、その正確な `main` commit の CI 完了を待ち、同期済みのクリーンな main checkout から実行します。
 
 ```bash
-gh workflow run release.yml -f tag=vYYYY.MM.DD
+bash scripts/release.sh                        # 読み取り専用、UTC の今日
+bash scripts/release.sh vYYYY.MM.DD --dispatch  # 明示的に公開を要求
 ```
 
-1 つの workflow が `package.json` と `package-lock.json` を更新し、release commit と annotated tag を作成してから GitHub Release を公開します。認証済みの push で新たな CI は起動しません。バージョン更新済みの `v*` tag を push する従来の方法も利用できます。この workflow は **npm へ公開しません**。
+日付は UTC、同日の追加 release は `-1`、`-2` を付けます。ローカル build・バージョン変更・push は行いません。workflow は確認済み source SHA と 5 つの CI job を再検証し、version commit/tag を原子的に push して GitHub Release を公開します。実際の差分がバージョンだけの場合に限り CI を継承します。失敗・欠落・skip・実行中は公開を停止します。既存 tag は移動せず再開でき、古い release が新しい Latest を置き換えることもありません。**npm 公開や production deploy とは別です。** [手順・復元・結果確認](./docs/RELEASING.md)を参照してください。
 
 ## ライセンス
 

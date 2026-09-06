@@ -48,9 +48,9 @@ Die Terminal-Oberfläche von Pi ist schnell und fokussiert. Dieses Projekt ergä
 
 ### Voraussetzungen
 
-- Node.js 22 oder neuer
+- Node.js 22.x ab 22.19 oder ab 23.4 (einschließlich 24 und neuer); benötigt die integrierte SQLite-Sperre ohne Zusatz-Flag
 - npm
-- Eine funktionierende Pi-Einrichtung mit `~/.pi/agent/`
+- Modell-Zugangsdaten und Konfiguration in `~/.pi/agent/` oder unterstützten Umgebungsvariablen; die globale `pi` CLI ist nicht erforderlich
 - Git
 
 Dieses Projekt wird als GitHub-Quellcode verteilt und **nicht auf npm veröffentlicht**.
@@ -66,10 +66,10 @@ cd tGD-pi-web
 bash setup.sh
 ```
 
-In einem Git-Checkout ersetzt das Setup-Skript zuerst die lokale Quelle durch `origin/main`. Danach prüft es Node.js und npm, installiert Abhängigkeiten, führt die TypeScript-Validierung aus, erstellt den Production-Build und kann den Production-Server starten. Bei Quellarchiven werden bekannte veraltete Dateien vor dem Build nach `~/.tgd-pi-web-backups/` verschoben; der Pfad lässt sich mit `TGD_SETUP_BACKUP_DIR` ändern.
+In einem Git-Checkout lädt Setup zuerst `origin/main` und prüft lokale Änderungen, bevor es synchronisiert. Danach folgen Node.js/npm-Prüfung, Installation, TypeScript-Validierung, Production-Build und optionaler Start. Bekannte veraltete Dateien aus Quellarchiven werden nach `~/.tgd-pi-web-backups/` verschoben (`TGD_SETUP_BACKUP_DIR` überschreibt den Pfad).
 
 > [!WARNING]
-> Für Git-Installationen von Endanwendern ist `origin/main` die einzige Quelle der Wahrheit. `bash setup.sh` führt `git reset --hard origin/main` und `git clean -fd` aus. Lokale Commits, getrackte Änderungen und nicht ignorierte untracked Dateien werden verworfen. Ignorierter Runtime-State wie `.env`, `node_modules` und `.next` bleibt erhalten.
+> Vor Setup/Build den Server dieses Verzeichnisses stoppen. Bei lokalen Commits oder nicht ignorierten Änderungen erstellt Setup zuerst ein privates Quell-Backup und fragt vor dem Ersetzen nach. Unbeaufsichtigt stoppt es ohne ausdrückliches `TGD_SETUP_FORCE_SYNC=1`. Die genehmigte Synchronisierung führt weiterhin `git reset --hard origin/main` und `git clean -fd` aus. Ignorierte Laufzeitdaten bleiben erhalten, sind aber nicht Teil dieses Quell-Backups. Siehe [Update- und Rollback-Grenzen](./docs/RELEASING.md#installation-updates-and-rollback-are-separate).
 
 Manuelle Einrichtung:
 
@@ -88,6 +88,10 @@ bash setup.sh
 ```
 
 Für einen bewusst offline verwendeten Git-Checkout überspringt `TGD_SETUP_OFFLINE=1 bash setup.sh` die Remote-Synchronisierung.
+
+Das überspringt nur Git; npm benötigt weiterhin eine interne Registry oder einen
+vorbereiteten Cache. `origin/main` kann neuer sein als das letzte Release. Für
+eine exakte Version deren Quellarchiv in ein neues Verzeichnis entpacken.
 
 ## tGD-Workflow im Browser
 
@@ -216,7 +220,8 @@ Das mobile Layout hält aktive Phase, Gespräch, Composer, Modellsteuerung und H
 
 | Befehl | Zweck |
 |---|---|
-| `bash setup.sh` | Lokalen Quellstand durch `origin/main` ersetzen, prüfen, installieren, bauen und Production optional starten |
+| `bash setup.sh` | Lokale Änderungen prüfen/sichern, gegebenenfalls nach Zustimmung synchronisieren, installieren, prüfen, bauen und optional starten |
+| `bash scripts/release.sh` | Nur lesende Release-Prüfung; `--dispatch` fordert ausdrücklich den GitHub-Workflow an |
 | `npm run dev` | Optional den Entwicklungsserver auf Port `30141` starten |
 | `node_modules/.bin/tsc --noEmit` | Typecheck |
 | `npx eslint .` | Lint |
@@ -337,13 +342,14 @@ Issues und Pull Requests sind willkommen.
 
 ## Release
 
-Nachdem ein PR die CI bestanden hat und gemergt wurde, wird der schnelle Release-Ablauf gestartet:
+Nach dem PR-Merge muss CI für exakt diesen `main`-Commit bestehen. Dann in einem sauberen, aktuellen Main-Checkout ausführen:
 
 ```bash
-gh workflow run release.yml -f tag=vYYYY.MM.DD
+bash scripts/release.sh                        # Nur prüfen, heutiges UTC-Datum
+bash scripts/release.sh vYYYY.MM.DD --dispatch  # Veröffentlichung anfordern
 ```
 
-Ein einzelner Workflow aktualisiert `package.json` und `package-lock.json`, erstellt den Release-Commit und ein annotiertes Tag und veröffentlicht anschließend das GitHub Release. Sein authentifizierter Push startet keinen weiteren CI-Lauf. Das Pushen eines bereits versionierten `v*`-Tags wird weiterhin unterstützt. Der Workflow veröffentlicht **nicht auf npm**.
+Es gilt UTC; weitere Releases am selben Tag erhalten `-1`, `-2` usw. Lokal werden weder Build noch Versionsänderung oder Push ausgeführt. Der Workflow prüft die besprochene Source-SHA und alle fünf CI-Jobs erneut, pusht Version-Commit/Tag atomar und erstellt das GitHub Release. Nur nachgewiesene reine Versionsänderungen dürfen CI erben. Fehlende, übersprungene, fehlgeschlagene oder laufende Prüfungen blockieren. Bestehende Tags können unverändert fortgesetzt werden; ein altes Release ersetzt kein neueres Latest. **Kein npm-Publish und kein Production-Deploy.** Siehe [Release, Wiederherstellung und Verifikation](./docs/RELEASING.md).
 
 ## Lizenz
 

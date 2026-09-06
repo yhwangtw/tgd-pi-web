@@ -285,7 +285,7 @@ echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━
 echo ""
 echo -e "  啟動 Production：${BOLD}npm start${NC}"
 echo -e "  重新建置：       ${BOLD}npm run build${NC}"
-echo -e "  更新並重新建置： ${BOLD}git pull && npm install && npm run build${NC}"
+echo -e "  更新並重新建置： ${BOLD}先停止本目錄的伺服器，再執行 bash setup.sh${NC}"
 echo ""
 echo -e "  預設埠號：      ${BOLD}30141${NC}"
 echo ""

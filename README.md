@@ -68,10 +68,10 @@ cd tGD-pi-web
 bash setup.sh
 ```
 
-The setup script is the supported one-step production path. In a Git checkout it first replaces local source changes with `origin/main`, then checks Node.js and npm, installs dependencies, runs TypeScript validation, creates a production build, and can start the production server. For source archives, known obsolete files are moved to `~/.tgd-pi-web-backups/` (override with `TGD_SETUP_BACKUP_DIR`) before the build. The Web always uses its pinned local Pi runtime; when an installed global `pi` CLI has a different version, interactive setup offers to synchronize it while unattended setup only prints the exact opt-in command.
+The setup script is the supported one-step production path. In a Git checkout it fetches `origin/main` and checks local changes before synchronizing, then checks Node.js and npm, installs dependencies, runs TypeScript validation, creates a production build, and can start the production server. For source archives, known obsolete files are moved to `~/.tgd-pi-web-backups/` (override with `TGD_SETUP_BACKUP_DIR`) before the build. The Web always uses its pinned local Pi runtime; when an installed global `pi` CLI has a different version, interactive setup offers to synchronize it while unattended setup only prints the exact opt-in command.
 
 > [!WARNING]
-> `origin/main` is the source of truth for end-user Git installations. Running `bash setup.sh` discards local commits, tracked changes, and non-ignored untracked files with `git reset --hard origin/main` and `git clean -fd`. Ignored runtime state such as `.env`, `node_modules`, and `.next` is retained.
+> Stop the server using this checkout before setup/build. `origin/main` is authoritative for end-user Git installations. If local commits or non-ignored changes exist, setup creates a private recovery backup and asks before replacing source; unattended setup stops unless `TGD_SETUP_FORCE_SYNC=1` explicitly authorizes it. Approved synchronization uses `git reset --hard origin/main` and `git clean -fd`. Ignored runtime state is retained but is not part of this source backup. See [update and rollback boundaries](./docs/RELEASING.md#installation-updates-and-rollback-are-separate).
 
 Manual setup:
 
@@ -96,6 +96,10 @@ For a deliberately offline Git checkout, skip remote synchronization explicitly:
 ```bash
 TGD_SETUP_OFFLINE=1 bash setup.sh
 ```
+
+This skips Git synchronization only; npm still needs an internal registry or
+prepared cache. `origin/main` may be newer than the last release. Use a release
+source archive in a new directory when you need an exact released version.
 
 ## tGD Workflow in the Browser
 
@@ -307,7 +311,8 @@ the download to obtain the current file.
 
 | Command | Purpose |
 |---|---|
-| `bash setup.sh` | Replace local source with `origin/main`, validate, install, build, and optionally start production |
+| `bash setup.sh` | Check/backup local changes, synchronize `origin/main` after approval where required, install, validate, build and optionally start |
+| `bash scripts/release.sh` | Read-only release preflight; `--dispatch` explicitly requests the GitHub workflow |
 | `npm run dev` | Optionally start the development server on port `30141` |
 | `node_modules/.bin/tsc --noEmit` | Typecheck |
 | `npx eslint .` | Lint |
@@ -434,13 +439,22 @@ Improve application translations in `lib/i18n.tsx`. New skins must use semantic 
 
 ## Release
 
-After a PR passes CI and is merged, use the fast release path:
+After a PR is merged and CI passes on the exact merged `main`, use a clean,
+up-to-date main checkout:
 
 ```bash
-gh workflow run release.yml -f tag=vYYYY.MM.DD
+bash scripts/release.sh                        # read-only preflight, UTC today
+bash scripts/release.sh vYYYY.MM.DD --dispatch  # explicitly request publication
 ```
 
-Use the current UTC date. For another release on the same day, append a sequence suffix such as `vYYYY.MM.DD-1`; future-dated tags are rejected. One workflow updates `package.json` and `package-lock.json`, creates the release commit and annotated tag, then publishes the GitHub Release. Its authenticated push does not start another CI cycle. Pushing an already-versioned `v*` tag remains supported. The workflow does **not** publish to npm.
+Use today's UTC date, adding `-1`, `-2`, etc. for later releases that day. The
+helper never builds or versions the local checkout. The workflow rechecks the
+reviewed source SHA and all five CI jobs before atomically pushing the version
+commit/tag and publishing a GitHub Release. Only verified version-only commits
+inherit CI; skipped, failed, missing or pending checks block publication. Existing
+tags can be resumed without moving them or replacing a newer Latest release.
+This does **not** publish to npm or deploy production. See the
+[release, recovery and readback guide](./docs/RELEASING.md).
 
 ## License
 
