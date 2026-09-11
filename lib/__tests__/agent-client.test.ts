@@ -47,6 +47,27 @@ describe("sendAgentCommand", () => {
     expect(url).toBe("/api/agent/session%2Fwith%2Fslashes");
   });
 
+  it("gives each deliberate fork a transport-stable request key", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data: { newSessionId: "next" } }) });
+    globalThis.fetch = mockFetch as unknown as typeof globalThis.fetch;
+    await sendAgentCommand("old", { type: "fork", entryId: "entry-1" });
+    await sendAgentCommand("old", { type: "fork", entryId: "entry-1" });
+    const keys = mockFetch.mock.calls.map(([, init]) => init.headers["Idempotency-Key"]);
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keys[1]).not.toBe(keys[0]);
+  });
+
+  it("keeps fork retry protection on HTTP LAN origins without randomUUID", async () => {
+    const getRandomValues = crypto.getRandomValues.bind(crypto);
+    vi.stubGlobal("crypto", { getRandomValues });
+    try {
+      const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data: {} }) });
+      globalThis.fetch = mockFetch as unknown as typeof globalThis.fetch;
+      await sendAgentCommand("old", { type: "fork", entryId: "entry-1" });
+      expect(mockFetch.mock.calls[0][1].headers["Idempotency-Key"]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it("throws when the response is not ok", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,

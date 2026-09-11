@@ -18,8 +18,8 @@ describe("grepWithJs", () => {
   });
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-  it("finds matches with line + column", () => {
-    const matches = grepWithJs(root, "answer", { caseSensitive: false, maxResults: 100 });
+  it("finds matches with line + column", async () => {
+    const matches = await grepWithJs(root, "answer", { caseSensitive: false, maxResults: 100 });
     const rels = matches.map((m) => `${m.relative}:${m.line}`);
     expect(rels).toContain(path.join("src", "a.ts") + ":1");
     expect(rels).toContain(path.join("src", "b.ts") + ":2");
@@ -28,20 +28,20 @@ describe("grepWithJs", () => {
     expect(a.text).toBe("export const answer = 42;");
   });
 
-  it("skips node_modules and binary files", () => {
-    const matches = grepWithJs(root, "answer", { caseSensitive: false, maxResults: 100 });
+  it("skips node_modules and binary files", async () => {
+    const matches = await grepWithJs(root, "answer", { caseSensitive: false, maxResults: 100 });
     expect(matches.some((m) => m.relative.includes("node_modules"))).toBe(false);
     expect(matches.some((m) => m.relative.includes("bin.dat"))).toBe(false);
   });
 
-  it("honors case sensitivity", () => {
+  it("honors case sensitivity", async () => {
     writeFileSync(path.join(root, "src", "c.ts"), "const ANSWER = 1;\n");
-    expect(grepWithJs(root, "ANSWER", { caseSensitive: true, maxResults: 100 }).length).toBe(1);
-    expect(grepWithJs(root, "ANSWER", { caseSensitive: false, maxResults: 100 }).length).toBeGreaterThan(1);
+    expect((await grepWithJs(root, "ANSWER", { caseSensitive: true, maxResults: 100 })).length).toBe(1);
+    expect((await grepWithJs(root, "ANSWER", { caseSensitive: false, maxResults: 100 })).length).toBeGreaterThan(1);
   });
 
-  it("respects maxResults", () => {
-    expect(grepWithJs(root, "answer", { caseSensitive: false, maxResults: 1 }).length).toBe(1);
+  it("respects maxResults", async () => {
+    expect((await grepWithJs(root, "answer", { caseSensitive: false, maxResults: 1 })).length).toBe(1);
   });
 });
 

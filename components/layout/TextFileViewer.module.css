@@ -78,25 +78,8 @@
   cursor: pointer;
 }
 
-.moreWrap { position: relative; flex: 0 0 auto; }
+.moreWrap { position: relative; display: flex; align-items: center; flex: 0 0 auto; }
 .moreButton { min-width: 30px; min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); cursor: pointer; }
-.menuBackdrop { position: fixed; inset: 0; z-index: 40; border: 0; background: transparent; }
-.moreMenu {
-  position: absolute;
-  z-index: 41;
-  top: calc(100% + 6px);
-  right: 0;
-  width: 190px;
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-menu);
-  background: var(--bg-elev-2);
-  box-shadow: var(--color-shadow-modal);
-}
-.moreMenu button, .moreMenu a { min-height: 34px; display: flex; align-items: center; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-row); background: transparent; color: var(--text-muted); font-size: var(--text-sm); text-align: left; text-decoration: none; cursor: pointer; }
-.moreMenu button:hover, .moreMenu a:hover { background: var(--bg-hover); color: var(--text); }
 
 .sourceTools {
   min-height: 38px;
@@ -147,6 +130,9 @@
   justify-content: flex-end;
   gap: var(--space-1);
 }
+
+.fileActions > button { flex: 0 0 auto; white-space: nowrap; }
+.fileActions .toggleGroup button { white-space: nowrap; }
 
 /* Partial-preview banner for files above the preview cap */
 .truncatedNotice {
@@ -346,6 +332,21 @@
 .workspaceBody { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 
 /* HTML preview iframe */
+.previewNotice {
+  flex: 0 0 auto;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-copy);
+  overflow-wrap: anywhere;
+}
+
+.previewNotice summary { cursor: pointer; min-height: 44px; box-sizing: border-box; padding: var(--space-2) 0; }
+.previewNotice summary:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.previewNotice p { margin: 0 0 var(--space-2); }
+
 .htmlPreview {
   width: 100%;
   height: 100%;
@@ -393,6 +394,17 @@
 }
 
 /* In-place editor */
+.editWorkspace { display: flex; flex-direction: column; min-height: 100%; }
+.saveProblem, .saveConflict { padding: var(--space-3); border-bottom: 1px solid var(--border); overflow-wrap: anywhere; font-size: var(--text-sm); line-height: var(--leading-copy); }
+.saveProblem { color: var(--text); background: var(--bg-elev-1); }
+.saveConflict summary { cursor: pointer; min-height: var(--control-touch); display: list-item; align-content: center; font-weight: var(--weight-semibold); }
+.saveConflict p { margin: 0 0 var(--space-2); color: var(--text-muted); }
+.conflictDiff { max-height: 200px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); }
+.conflictActions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+.conflictActions button { min-height: var(--control-touch); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text); font: inherit; cursor: pointer; }
+.conflictActions button:disabled { opacity: 0.5; cursor: default; }
+.saveConflict summary:focus-visible, .conflictActions button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.editWorkspace .editor { flex: 1; min-height: 240px; }
 .editor {
   width: 100%;
   height: 100%;
@@ -442,24 +454,27 @@
   padding: clamp(var(--space-6), 4vw, var(--component-reading-padding));
 }
 :global(html[data-ui-style="trae"]) .editor { padding: var(--space-4); background: var(--trae-canvas); }
-:global(html[data-ui-style="trae"]) .askPi { border-color: transparent; border-radius: var(--radius-pill); background: var(--color-accent); color: var(--color-accent-contrast); }
+:global(html[data-ui-style="trae"]) .askPi { border-color: transparent; border-radius: var(--radius-pill); background: var(--color-accent); color: var(--color-accent-fg); }
 :global(html[data-ui-style="trae"]) .fileInfo > summary { border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .fileInfoPopover { border-color: var(--trae-hairline); background: var(--trae-surface-solid); }
-:global(html[data-ui-style="trae"]) .moreMenu { border-color: var(--trae-hairline); background: var(--trae-surface-solid); }
 :global(html[data-ui-style="trae"]) .sourceTools { border-color: var(--trae-hairline); background: var(--trae-canvas); }
 
 @container (max-width: 720px) {
-  .fileActions {
-    justify-content: flex-end;
-    overflow-x: auto;
-    scrollbar-width: none;
+  .statusBar,
+  :global(html[data-ui-style="trae"]) .statusBar {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-optical);
   }
-
-  .fileActions::-webkit-scrollbar { display: none; }
+  .fileActions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
 }
 
 @container (max-width: 430px) {
-  .statusBar {
+  .statusBar,
+  :global(html[data-ui-style="trae"]) .statusBar {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-1);
     padding: var(--space-1) var(--space-2);
@@ -486,8 +501,6 @@
   .fileActions { order: 2; }
   .askPi { min-height: var(--control-touch); padding-inline: 14px; }
   .moreButton { min-width: var(--control-touch); min-height: var(--control-touch); }
-  .moreMenu { position: fixed; left: 8px; right: 8px; top: auto; bottom: calc(var(--mobile-nav-height, 54px) + var(--safe-area-bottom) + 8px); width: auto; max-height: min(70dvh, 560px); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: 8px; border-radius: var(--radius-sheet); padding: var(--space-2); }
-  .moreMenu button, .moreMenu a { min-height: var(--control-touch); }
   .fileInfoPopover { width: min(240px, calc(100vw - 32px)); }
   .sourceTools { min-height: var(--control-touch); overflow-x: auto; scrollbar-width: none; }
   .sourceTools::-webkit-scrollbar { display: none; }

@@ -67,7 +67,7 @@
 
 .barRow {
   display: grid;
-  grid-template-columns: 70px 1fr 70px 1fr;
+  grid-template-columns: minmax(70px, .8fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2);
   font-size: var(--text-sm);
@@ -141,11 +141,21 @@
 }
 
 .modelName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-weight: var(--weight-medium);
 }
+
+.modelName small { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); font-weight: var(--weight-regular); }
+.cost { display: grid; gap: var(--space-1); overflow-wrap: anywhere; }
+.cost small { color: var(--text-muted); font-size: var(--text-xs); font-weight: var(--weight-regular); }
+.scopeNote { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); color: var(--text-muted); font-size: var(--text-sm); line-height: var(--leading-copy); }
+.scopeNote strong { color: var(--text); }
+.scopeNote summary { cursor: pointer; color: var(--text); padding-block: var(--space-2); }
+.scopeNote p { margin: var(--space-2) 0 0; }
+.stat, .tableRow > span, .providerChip { min-width: 0; overflow-wrap: anywhere; }
 
 .tokenCol {
   font-variant-numeric: tabular-nums;
@@ -191,13 +201,15 @@
   }
 
   .barRow {
-    grid-template-columns: 58px minmax(100px, 1fr) 58px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: var(--space-2);
   }
 
   .barMeta {
     display: none;
   }
+  .barTrack { grid-row: 2; grid-column: 1 / -1; }
+  .barLabel { white-space: normal; }
 
   .table {
     gap: var(--space-2);

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from "react";
+import { readFileSync } from "node:fs";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
@@ -157,6 +158,80 @@ describe("composer controls", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it.each([
+    ["en", "Choose a model", "Model: Choose a model"],
+    ["zh", "選擇模型", "模型: 選擇模型"],
+  ] as const)("offers an honest unselected label for a nonempty ready catalog in %s", async (locale, label, accessibleName) => {
+    setLocale(locale);
+    const options = [
+      { provider: "fixture", modelId: "alpha", name: "Fixture Alpha" },
+      { provider: "fixture", modelId: "alternate", name: "Fixture Alternate" },
+    ];
+    const onModelChange = vi.fn();
+    await render(
+      <ModelSelector modelOptions={options} modelsByProvider={[{ provider: "fixture", options }]}
+        currentName={null} model={null} catalogStatus="ready" isStreaming={false} onModelChange={onModelChange} />,
+    );
+    const trigger = container!.querySelector<HTMLButtonElement>('[data-testid="model-selector-trigger"]')!;
+    expect(trigger.getAttribute("data-catalog-status")).toBe("ready");
+    expect(trigger.textContent).toBe(label);
+    expect(trigger.getAttribute("aria-label")).toBe(accessibleName);
+    expect(trigger.title).toBe(label);
+    await act(async () => trigger.click());
+    expect(container!.querySelectorAll('[role="option"]')).toHaveLength(2);
+    expect(onModelChange).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { status: "loading", nonempty: false, currentName: null, model: null, label: "Loading models…" },
+    { status: "empty", nonempty: false, currentName: null, model: null, label: "No models available" },
+    { status: "error", nonempty: false, currentName: null, model: null, label: "Could not load models" },
+    { status: "ready", nonempty: false, currentName: null, model: null, label: "No models available" },
+    { status: "ready", nonempty: true, currentName: "Known model", model: { provider: "fixture", modelId: "known-id" }, label: "Known model" },
+    { status: "ready", nonempty: true, currentName: null, model: { provider: "fixture", modelId: "known-id" }, label: "known-id" },
+  ] as const)("preserves the existing $status label: $label", async ({ status, nonempty, currentName, model, label }) => {
+    const options = nonempty ? [{ provider: "fixture", modelId: "known-id", name: "Known model" }] : [];
+    await render(
+      <ModelSelector modelOptions={options} modelsByProvider={[{ provider: "fixture", options }]}
+        currentName={currentName} model={model} catalogStatus={status} isStreaming={false} onModelChange={vi.fn()} />,
+    );
+    expect(container!.querySelector('[data-testid="model-selector-trigger"]')?.textContent).toBe(label);
+  });
+
+  it.each(["loading", "empty", "error"] as const)("keeps the model entry and recovery actions accessible for a %s catalog", async (catalogStatus) => {
+    const onRetry = vi.fn();
+    const onOpenModels = vi.fn();
+    await render(
+      <ModelSelector
+        modelOptions={[]}
+        modelsByProvider={[]}
+        currentName={null}
+        isStreaming={false}
+        onModelChange={vi.fn()}
+        catalogStatus={catalogStatus}
+        catalogError={catalogStatus === "error" ? "HTTP 500" : null}
+        onRetry={onRetry}
+        onOpenModels={onOpenModels}
+      />,
+    );
+    const trigger = container!.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
+    expect(trigger).not.toBeNull();
+    await act(async () => trigger!.click());
+    await nextFrame();
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.querySelector('[role="status"]')).not.toBeNull();
+    const retry = dialog.querySelector<HTMLButtonElement>('[data-testid="model-catalog-retry"]')!;
+    expect(retry.disabled).toBe(catalogStatus === "loading");
+    if (catalogStatus !== "loading") {
+      await act(async () => retry.click());
+      expect(onRetry).toHaveBeenCalledOnce();
+    }
+    const configure = dialog.querySelector<HTMLButtonElement>('[data-testid="model-catalog-configure"]')!;
+    await act(async () => configure.click());
+    expect(onOpenModels).toHaveBeenCalledOnce();
+  });
+
   it("selects a model and restores focus to the trigger", async () => {
     const onModelChange = vi.fn();
     const options = [
@@ -185,6 +260,37 @@ describe("composer controls", () => {
     expect(onModelChange).toHaveBeenCalledWith("openai", "gpt-5.6");
     expect(container!.querySelector('[role="listbox"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it("closes the recovery dialog after success and closes live options when streaming begins", async () => {
+    const onModelChange = vi.fn();
+    const options = [{ provider: "test", modelId: "ready-model", name: "Ready model" }];
+    const selector = (catalogStatus: "error" | "ready", isStreaming = false) => (
+      <ModelSelector
+        modelOptions={catalogStatus === "ready" ? options : []}
+        modelsByProvider={catalogStatus === "ready" ? [{ provider: "test", options }] : []}
+        currentName={catalogStatus === "ready" ? "Ready model" : null}
+        isStreaming={isStreaming}
+        onModelChange={onModelChange}
+        catalogStatus={catalogStatus}
+        onRetry={vi.fn()}
+        onOpenModels={vi.fn()}
+      />
+    );
+    await render(selector("error"));
+    await act(async () => container!.querySelector<HTMLButtonElement>('[data-testid="model-selector-trigger"]')!.click());
+    await nextFrame();
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => root?.render(selector("ready")));
+    await nextFrame();
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    const trigger = container!.querySelector<HTMLButtonElement>('[data-testid="model-selector-trigger"]')!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => trigger.click());
+    expect(container!.querySelector('[role="listbox"]')).not.toBeNull();
+    await act(async () => root?.render(selector("ready", true)));
+    expect(container!.querySelector('[role="listbox"]')).toBeNull();
+    expect(trigger.disabled).toBe(true);
   });
 
   it("uses a searchable mobile sheet with model metadata, pinning, and recent history", async () => {
@@ -432,6 +538,7 @@ describe("composer controls", () => {
   });
 
   it("marks the disabled model control separately from active streaming actions", async () => {
+    useMobileViewport();
     await render(
       <ChatInput
         onSend={vi.fn()}
@@ -451,5 +558,11 @@ describe("composer controls", () => {
     expect(modelButton.disabled).toBe(true);
     expect(modelButton.parentElement?.className).toContain("modelControl");
     expect(container!.querySelector('[role="group"][aria-label="Message delivery mode"]')).not.toBeNull();
+  });
+
+  it("keeps the mobile streaming model identity in the layout instead of hiding it", () => {
+    const css = readFileSync("components/chat/ChatInput.module.css", "utf8");
+    expect(/\.bottomBarStreaming\s+\.modelControl\s*\{[^}]*display:\s*none/.test(css)).toBe(false);
+    expect(/\.bottomBarStreaming\s+\.modelControl\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/.test(css)).toBe(true);
   });
 });

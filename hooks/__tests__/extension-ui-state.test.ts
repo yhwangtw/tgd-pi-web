@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extensionUIReducer, initialExtensionUIState } from "../use-extension-ui";
+import { extensionUIReducer, extensionResponseFeedback, initialExtensionUIState } from "../use-extension-ui";
 
 describe("extensionUIReducer", () => {
   it("queues dialog requests once and removes them when closed", () => {
@@ -68,5 +68,38 @@ describe("extensionUIReducer", () => {
       widgets: { old: { lines: ["stale"], placement: "aboveEditor" as const } },
     };
     expect(extensionUIReducer(stale, { type: "reset" })).toEqual(initialExtensionUIState);
+  });
+});
+
+describe("extension response feedback", () => {
+  const response = { type: "extension_ui_response" as const, id: "question-1", value: "Private answer" };
+
+  it("closes a successfully retried answer without an error or answer echo", () => {
+    expect(extensionResponseFeedback(response, { accepted: true, receipt: "already_answered" })).toEqual({
+      closed: { type: "extension_ui_closed", id: "question-1", reason: "answered" },
+    });
+    expect(extensionResponseFeedback({ type: "extension_ui_response", id: "question-1", cancelled: true }, {
+      accepted: true, receipt: "already_cancelled",
+    })).toEqual({ closed: { type: "extension_ui_closed", id: "question-1", reason: "cancelled" } });
+  });
+
+  it.each([
+    ["response_conflict", "extensionUI.responseConflict", "answered"],
+    ["cancelled", "extensionUI.cancelled", "cancelled"],
+    ["expired", "extensionUI.expired", "timeout"],
+    ["not_found", "extensionUI.expired", "timeout"],
+    ["closed", "extensionUI.closed", "session_closed"],
+  ] as const)("closes terminal %s state with distinct feedback", (reason, errorKey, closedReason) => {
+    expect(extensionResponseFeedback(response, { accepted: false, reason })).toEqual({
+      errorKey,
+      closed: { type: "extension_ui_closed", id: "question-1", reason: closedReason },
+    });
+  });
+
+  it("preserves a malformed answer for correction, rather than closing the pending question", () => {
+    expect(extensionResponseFeedback(response, { accepted: false, reason: "invalid_response" })).toEqual({
+      errorKey: "extensionUI.invalidResponse",
+    });
+    expect(extensionResponseFeedback(response, undefined)).toEqual({ errorKey: "extensionUI.invalidResponse" });
   });
 });

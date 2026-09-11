@@ -15,8 +15,9 @@ export function Field({ label, children }: { label: string; children: React.Reac
   );
 }
 
-export function TextInput({ value, onChange, placeholder, mono }: { value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean }) {
+export function TextInput({ value, onChange, placeholder, mono, ariaLabel, ariaInvalid, describedBy }: { value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean; ariaLabel?: string; ariaInvalid?: boolean; describedBy?: string }) {
   return <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+    aria-label={ariaLabel} aria-invalid={ariaInvalid} aria-describedby={describedBy}
     className={`${styles.input} ${mono ? styles.mono : ""}`} />;
 }
 

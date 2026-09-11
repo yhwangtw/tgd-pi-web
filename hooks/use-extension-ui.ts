@@ -3,6 +3,9 @@
 import type {
   WebExtensionUIDialogRequest,
   WebExtensionUIEvent,
+  WebExtensionUIClosedEvent,
+  WebExtensionUIResponse,
+  WebExtensionUIResponseResult,
   WebExtensionUIWidgetPlacement,
 } from "@/lib/web-extension-ui-types";
 import { isWebExtensionUIDialogRequest } from "@/lib/web-extension-ui-types";
@@ -18,6 +21,28 @@ export const initialExtensionUIState: ExtensionUIState = {
   statuses: {},
   widgets: {},
 };
+
+type ExtensionResponseErrorKey = "extensionUI.invalidResponse" | "extensionUI.responseConflict"
+  | "extensionUI.cancelled" | "extensionUI.expired" | "extensionUI.closed";
+
+/** Successful receipts and terminal rejections must clear a stale local dialog. */
+export function extensionResponseFeedback(
+  response: WebExtensionUIResponse,
+  result: WebExtensionUIResponseResult | undefined,
+): { closed?: WebExtensionUIClosedEvent; errorKey?: ExtensionResponseErrorKey } {
+  const closed = (reason: WebExtensionUIClosedEvent["reason"]): WebExtensionUIClosedEvent => ({
+    type: "extension_ui_closed", id: response.id, reason,
+  });
+  if (result?.accepted) return { closed: closed("cancelled" in response ? "cancelled" : "answered") };
+  switch (result?.reason) {
+    case "response_conflict": return { closed: closed("answered"), errorKey: "extensionUI.responseConflict" };
+    case "cancelled": return { closed: closed("cancelled"), errorKey: "extensionUI.cancelled" };
+    case "expired":
+    case "not_found": return { closed: closed("timeout"), errorKey: "extensionUI.expired" };
+    case "closed": return { closed: closed("session_closed"), errorKey: "extensionUI.closed" };
+    default: return { errorKey: "extensionUI.invalidResponse" };
+  }
+}
 
 export type ExtensionUIAction =
   | { type: "event"; event: WebExtensionUIEvent }

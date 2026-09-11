@@ -33,16 +33,25 @@ Appearance panel. **With `PIWEB_ACCESS_PASSWORD` unset the gate is off** (fine
 for localhost-only use). This is a front-door lock, not a substitute for the
 network isolation below — run both.
 
-The port is `30141` (set by the `start` script: `next start -p 30141`). Next
-binds to `0.0.0.0` by default, so once it's running, any device on the **same
-LAN** can already reach `http://<machine-lan-ip>:30141`. The steps below make
-it (a) start on boot and (b) reachable from **outside** the LAN, safely.
+`npm start` and `npm run dev` use the shared launcher and bind only to
+`127.0.0.1:30141` by default. Set `PORT` and `PIWEB_HOST` explicitly to change
+this; an unrelated `HOSTNAME` variable does not change the bind address.
+For private remote access, keep the loopback bind and forward through an
+authenticated local proxy/tunnel. Direct LAN/private-interface binding is an
+explicit operator choice requiring the password gate and network restrictions.
+`npm run preview` uses localhost on `30142` with separate isolated agent data;
+changing a production port alone does not isolate sessions, models or schedules.
 
 ---
 
 ## 1. Auto-start on boot
 
-Build once first (and after every `git pull`):
+For a new or stopped checkout, build before enabling its service. Stop that
+checkout's existing service before any source update, dependency installation,
+or build; never run `git pull`/build in its live working directory. `setup.sh`
+checks Node/npm first, then verifies actual process PID/cwd before any mutation.
+It refuses a running or unverifiable checkout. For managed updates use the
+staging contract below instead of building in place while the service runs.
 
 ```bash
 cd /path/to/tGD-pi-web
@@ -91,43 +100,58 @@ No unit file needed — run with a restart policy:
 
 ```bash
 docker run -d --name pi-web --restart unless-stopped \
-  -p 30141:30141 -e HOSTNAME=0.0.0.0 \
+  -p 127.0.0.1:30141:30141 -e PIWEB_HOST=0.0.0.0 \
+  -e PIWEB_ACCESS_PASSWORD -e PIWEB_SESSION_SECRET \
   -v /path/to/your/projects:/path/to/your/projects \
   your-piweb-image
 ```
 
-(You still need the auth layer below — a container is not a security boundary
-against the network.)
+Set the two credential variables in the launching environment first; the example
+forwards them without putting their values in argv. The application binds inside
+the container, while the published host port stays on loopback for the private
+proxy/tunnel. A container does not replace authentication or network isolation.
 
 ### Managed Update Center actions
 
 The Web Update Center can always compare releases, run preflight checks, and
 create private source backups. Update, restart, and rollback buttons remain
-disabled until the service operator provides explicit helper commands:
+disabled until the service operator provides explicit helper commands and
+verifiable health/staging configuration:
 
 ```bash
 PIWEB_RELEASE_REPOSITORY='yhwangtw/tgd-pi-web'
 PIWEB_UPDATE_BACKUP_DIR='/var/lib/pi-web/update-backups'
+PIWEB_UPDATE_OPERATION_DIR='/var/lib/pi-web/update-operations'
+PIWEB_UPDATE_PROTOCOL='staged-v1'
+PIWEB_UPDATE_HEALTH_URL='http://127.0.0.1:30141/api/runtime/identity'
 PIWEB_UPDATE_COMMAND_JSON='["/usr/local/libexec/pi-web-update"]'
 PIWEB_RESTART_COMMAND_JSON='["/usr/local/libexec/pi-web-restart"]'
 PIWEB_ROLLBACK_COMMAND_JSON='["/usr/local/libexec/pi-web-rollback"]'
 ```
 
 Each command must be a JSON array whose first item is an absolute executable
-path. Pi Web launches that executable directly with no shell interpolation.
+path. A detached supervisor launches it with no shell interpolation and records
+the operation outside the source checkout.
 The helper receives `PIWEB_UPDATE_ACTION`, `PIWEB_UPDATE_TARGET_TAG`,
-`PIWEB_UPDATE_BACKUP_ID`, and `PIWEB_UPDATE_BACKUP_PATH` in its environment.
+`PIWEB_UPDATE_BACKUP_ID`, `PIWEB_UPDATE_BACKUP_PATH`,
+`PIWEB_UPDATE_OPERATION_ROOT`, and `PIWEB_UPDATE_OPERATION_ID` in its environment.
 Keep helper files owned by the service operator and not writable through a
 trusted workspace.
 
-The update helper should download and validate a release in a separate staging
-directory, stop the service, replace the application source atomically, build,
-and then start the service. Do **not** point it directly at `npm run build` or
-`bash setup.sh` inside the checkout while the current Next.js server is still
-running. The rollback helper should stop the service and restore only the
-selected private backup before rebuilding. If managed helpers are not
-configured, stop the service and use the CLI fallback shown in the Update
-Center instead.
+The helper must build a clean, exact-SHA candidate in a separate directory,
+start it with isolated fixture agent data, verify its identity, and stop it
+before stopping and switching the live service. Failed cutover must restore and
+verify the previous running build. New PID, start time, approved version/SHA,
+canonical cwd and original agent-data/environment must match the contract;
+helper exit zero or an updated file is not success. Persistent operation locks
+prevent concurrent actions and survive a lost browser response.
+
+No launchd/systemd adapter is installed automatically. The current contract is
+fixed-canonical-cwd; dirty/dev/archive builds without clean source provenance
+and release-symlink cwd changes fail closed. Interrupted operations or mutexes
+require operator recovery, not blind retries. See [the complete staged-v1,
+health, rollback and recovery contract](../docs/MANAGED-UPDATES.md). Without
+configured adapters, stop the service and use the manual CLI fallback.
 
 ---
 
@@ -141,29 +165,23 @@ curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up            # installs its own auto-start service
 ```
 
-Install Tailscale on your phone/laptop, log in to the **same account**, then
-browse to `http://<machine-name>:30141` (the name shows in `tailscale status`).
-No ports are exposed to the internet, traffic is end-to-end encrypted, and
-scanners can't find it. This is the right default for a no-auth, high-privilege
-service.
+Install Tailscale on your phone/laptop and log in to the same tailnet. Configure
+Tailscale Serve on the pi-web host to forward its private HTTPS address to
+`http://127.0.0.1:30141`, then open that assigned address from an authorized
+device. Keep the application's password gate enabled. The default loopback
+bind does not accept direct connections to `<machine-name>:30141`.
 
-Optional niceties:
-- `tailscale serve https / http://localhost:30141` gives it an HTTPS name
-  inside your tailnet.
-- Do **not** use `tailscale funnel` here — that publishes it to the internet,
-  defeating the point.
+Do **not** use `tailscale funnel` here — that publishes the service to the
+internet, defeating the private-network boundary.
 
 ### Cloudflare Tunnel + Access (when you need a real public URL)
 
-```bash
-# Quick throwaway URL (add Access before real use!):
-cloudflared tunnel --url http://localhost:30141
-```
-
 For a stable `https://pi.yourdomain.com`, create a named tunnel and — this part
-is **mandatory** — put a Cloudflare Access policy in front (free plan supports
-Google/GitHub/email-OTP). A bare tunnel with no Access is the same as pasting a
-shell onto the internet.
+is **mandatory** — configure its Cloudflare Access policy before enabling the
+public hostname. Keep the local upstream at `http://127.0.0.1:30141` and the
+application password gate enabled. Do not expose a throwaway public tunnel
+before authentication is in place. A bare tunnel is a public route to a coding
+agent, not a safe preview.
 
 ### SSH tunnel (temporary, zero install)
 

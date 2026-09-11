@@ -5,15 +5,14 @@ import { consumeSensitiveAction, prepareSensitiveAction } from "@/lib/sensitive-
 import { resolveSkillInstallTarget, SkillInstallValidationError } from "@/lib/skill-install";
 import { redactedErrorMessage, redactSensitiveText } from "@/lib/redaction";
 import { recordSecurityActivity } from "@/lib/security-activity";
+import { requestHasExplicitSameOrigin } from "@/lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
 const ANSI_RE = /\x1B\[[0-9;]*m/g;
 
 function assertSameOrigin(req: Request): void {
-  const origin = req.headers.get("origin");
-  const fetchSite = req.headers.get("sec-fetch-site");
-  if (!origin || (fetchSite && fetchSite !== "same-origin") || new URL(origin).host !== new URL(req.url).host) {
+  if (!requestHasExplicitSameOrigin(req)) {
     throw new SkillInstallValidationError("Skill installation requires a same-origin browser request", 403);
   }
 }

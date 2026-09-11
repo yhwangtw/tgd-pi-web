@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAllowedRoots, isPathAllowed } from "@/lib/file-security";
-import { listWorktrees } from "@/lib/worktrees";
-import { resolveWorkspaceIdentity, type WorkspaceIdentity } from "@/lib/workspace-identity";
+import { readWorktreeState, type Worktree } from "@/lib/worktrees";
+import { pendingWorkspaceIdentity, resolveWorkspaceIdentity, type WorkspaceIdentity } from "@/lib/workspace-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,8 @@ export async function GET(req: Request) {
   }
 
   try {
-    return NextResponse.json({ worktrees: await listWorktrees(cwd) });
+    const { worktrees, identity } = await getWorkspaceData(cwd, true);
+    return NextResponse.json({ worktrees, identity });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
@@ -32,6 +33,7 @@ const IDENTITY_TTL_MS = 20_000;
 interface IdentityCacheEntry {
   expiresAt: number;
   identity: WorkspaceIdentity;
+  worktrees: Worktree[];
 }
 
 declare global {
@@ -56,14 +58,18 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, mapper: (item
   return results;
 }
 
-async function getWorkspaceIdentity(cwd: string): Promise<WorkspaceIdentity> {
+async function getWorkspaceData(cwd: string, fresh = false): Promise<IdentityCacheEntry> {
   const cache = getIdentityCache();
   const cached = cache.get(cwd);
-  if (cached && cached.expiresAt > Date.now()) return cached.identity;
-  const worktrees = await listWorktrees(cwd).catch(() => []);
-  const identity = resolveWorkspaceIdentity(cwd, worktrees);
-  cache.set(cwd, { expiresAt: Date.now() + IDENTITY_TTL_MS, identity });
-  return identity;
+  if (!fresh && cached && cached.expiresAt > Date.now() && cached.worktrees) return cached;
+  const result = await readWorktreeState(cwd);
+  const resolved = resolveWorkspaceIdentity(result.canonicalCwd, result.worktrees);
+  const identity = result.state === "unknown" || (result.state === "ready" && !resolved.isGit)
+    ? pendingWorkspaceIdentity(cwd, "unknown")
+    : { ...resolved, sourceCwd: cwd };
+  const entry = { expiresAt: Date.now() + (identity.state === "unknown" ? 2_000 : IDENTITY_TTL_MS), identity, worktrees: result.worktrees };
+  cache.set(cwd, entry);
+  return entry;
 }
 
 // POST /api/worktrees { cwds: string[] }
@@ -89,6 +95,6 @@ export async function POST(req: Request) {
   if (cwds.some((cwd) => !isPathAllowed(cwd, roots))) {
     return NextResponse.json({ error: "cwd not allowed" }, { status: 403 });
   }
-  const resolved = await mapWithConcurrency(cwds, IDENTITY_CONCURRENCY, async (cwd) => [cwd, await getWorkspaceIdentity(cwd)] as const);
+  const resolved = await mapWithConcurrency(cwds, IDENTITY_CONCURRENCY, async (cwd) => [cwd, (await getWorkspaceData(cwd)).identity] as const);
   return NextResponse.json({ identities: Object.fromEntries(resolved) });
 }

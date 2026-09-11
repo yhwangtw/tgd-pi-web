@@ -347,13 +347,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // is windowed. CSS owns the two row-height estimates so typography and
   // mobile changes stay in sync with the calculation.
   const listRef = useRef<HTMLDivElement>(null);
+  const rowMeasureRef = useRef<HTMLDivElement>(null);
   const virtualContentRef = useRef<HTMLDivElement>(null);
   const [virtualViewport, setVirtualViewport] = useState({ scrollTop: 0, height: 600, rowHeight: 60, groupHeight: 34 });
   const updateVirtualViewport = useCallback(() => {
     const list = listRef.current;
     if (!list) return;
     const styles = getComputedStyle(list);
-    const rowHeight = Number.parseFloat(styles.getPropertyValue("--session-row-height")) || 60;
+    const rowHeight = rowMeasureRef.current?.getBoundingClientRect().height || 84;
     const groupHeight = Number.parseFloat(styles.getPropertyValue("--session-group-height")) || 34;
     const sectionTop = virtualContentRef.current?.offsetTop ?? 0;
     const scrollTop = Math.max(0, list.scrollTop - sectionTop);
@@ -375,6 +376,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     window.addEventListener("resize", onScroll);
     const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(onScroll);
     resizeObserver?.observe(list);
+    if (rowMeasureRef.current) resizeObserver?.observe(rowMeasureRef.current);
     const frame = requestAnimationFrame(onScroll);
     return () => {
       cancelAnimationFrame(frame);
@@ -601,6 +603,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         style={{ flex: showExplorer && explorerOpen && (selectedCwdProp || selectedCwd) ? "1 1 0" : "1 1 auto", outline: "none" }}
       >
         {/* Which project this list is scoped to — makes the picker's filtering visible */}
+        <div ref={rowMeasureRef} className={styles.virtualRowMeasure} aria-hidden="true" />
         {!loading && !error && (
           <div className={styles.projectScopeLabel}>
             <span className={styles.projectScopeName}>

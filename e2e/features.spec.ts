@@ -111,12 +111,8 @@ test.describe("tool-call diff view", () => {
     // the individual edit/write disclosures.
     const workLog = page.locator('section[aria-label="Work log"] > button').first();
     await expect(workLog).toHaveAttribute("aria-label", /Completed/);
-    await workLog.scrollIntoViewIfNeeded();
-    await expect.poll(() => workLog.evaluate((button) => {
-      const rect = button.getBoundingClientRect();
-      const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      return target?.closest("button") === button;
-    })).toBe(true);
+    // click owns scrolling and hit testing, and retries if transcript hydration
+    // replaces the disclosure between layout and the pointer action.
     await workLog.click();
     await expect(workLog).toHaveAttribute("aria-expanded", "true");
 

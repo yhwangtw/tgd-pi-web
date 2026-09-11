@@ -31,4 +31,14 @@ describe("saved search views", () => {
     expect(readSavedSearchViews()).toEqual([]);
     expect(writeSavedSearchViews([])).toEqual([]);
   });
+
+  it("restores file options and content case without dropping old saved views", () => {
+    const views = createSavedSearchView({ name: "Hidden", scope: "files", query: "needle", filters: EMPTY_SESSION_SEARCH_FILTERS,
+      fileOptions: { includeHidden: true, includeIgnored: false, includeWorktrees: true }, caseSensitive: true });
+    expect(readSavedSearchViews()[0]).toMatchObject({ fileOptions: views[0].fileOptions, caseSensitive: true });
+    const { fileOptions: _options, caseSensitive: _case, ...legacy } = views[0];
+    void _options; void _case;
+    localStorage.setItem("pi-saved-search-views:v1", JSON.stringify([legacy]));
+    expect(readSavedSearchViews()[0]).toMatchObject({ name: "Hidden", fileOptions: { includeHidden: false, includeIgnored: false, includeWorktrees: false }, caseSensitive: false });
+  });
 });

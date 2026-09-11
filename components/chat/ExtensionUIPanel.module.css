@@ -43,6 +43,7 @@
 }
 
 .questionForm { min-width: 0; }
+.questionFields { min-width: 0; margin: 0; padding: 0; border: 0; }
 
 .dialogStatus {
   display: flex;
@@ -207,7 +208,6 @@
   color: var(--text-dim);
 }
 .choiceSelected .choiceMark { color: var(--accent); }
-.choiceSelected:focus-visible { outline: none; }
 .choiceCopy { display: flex; min-width: 0; flex-direction: column; gap: var(--space-optical); }
 .choiceLabel { font-size: var(--text-md); font-weight: var(--weight-semibold); line-height: var(--leading-ui); }
 .choiceDescription { color: var(--text-muted); font-size: var(--text-xs); line-height: var(--leading-snug); }
@@ -224,6 +224,73 @@
   color: var(--text);
   font: inherit;
   font-size: var(--text-sm);
+}
+
+/* Inline questions belong to the transcript's single scroll surface. Never
+   inherit a modal height cap, floating shadow, or an inner scroll trap. */
+.card.inlineQuestion,
+:global(html[data-ui-style="trae"]) .card.inlineQuestion {
+  width: 100%;
+  min-width: 0;
+  max-height: none;
+  margin-block: var(--space-3);
+  overflow: visible;
+  box-shadow: none;
+  scroll-margin-block-start: var(--space-3);
+}
+
+.inlineQuestion .cardHeader,
+:global(html[data-ui-style="trae"]) .inlineQuestion .cardHeader {
+  flex-wrap: wrap;
+  min-height: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  gap: var(--space-2);
+}
+
+.inlineQuestion .headingCopy { flex: 1 1 180px; }
+.inlineQuestion .headerActions { margin-left: auto; }
+.inlineQuestionBody[hidden] { display: none; }
+.inlineQuestion .actions { flex-wrap: wrap; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.inlineQuestion .secondaryButton { margin-right: 0; }
+
+.deferButton,
+.questionNotice button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--control-default);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.deferButton:hover,
+.questionNotice button:hover { color: var(--text); background: var(--bg-hover); }
+.deferButton:focus-visible,
+.questionNotice button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.questionNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 700px) {
+  .inlineQuestion .cardHeader,
+  :global(html[data-ui-style="trae"]) .inlineQuestion .cardHeader { padding: var(--space-3); }
+  .deferButton,
+  .questionNotice button { min-height: var(--control-touch); }
 }
 
 .textInput { height: 36px; padding: 0 var(--space-2); }
@@ -413,6 +480,7 @@
 }
 
 :global(html[data-ui-style="trae"]) .choice { background: var(--bg-elev-1); }
+:global(html[data-ui-style="trae"]) .choiceSelected { background: var(--color-accent-bg); }
 :global(html[data-ui-style="trae"]) .textInput,
 :global(html[data-ui-style="trae"]) .editor { background: var(--bg-panel); }
 

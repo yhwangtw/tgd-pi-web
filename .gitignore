@@ -17,6 +17,8 @@
 
 # next.js
 /.next/
+/.piweb-runtime/
+/.pi-web-preview/
 /out/
 
 # production

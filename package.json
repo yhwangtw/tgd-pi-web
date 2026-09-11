@@ -4,6 +4,9 @@
   "version": "2026.09.04",
   "description": "Web interface for Pi Coding Agent with tGD workflow integration",
   "license": "MIT",
+  "engines": {
+    "node": "^22.19.0 || >=23.4.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/yhwangtw/tgd-pi-web.git"
@@ -13,9 +16,10 @@
     "url": "https://github.com/yhwangtw/tgd-pi-web/issues"
   },
   "scripts": {
-    "dev": "next dev -p 30141",
+    "dev": "node scripts/serve.mjs dev",
+    "preview": "node scripts/serve.mjs preview",
     "build": "next build --webpack",
-    "start": "next start -p 30141",
+    "start": "node scripts/serve.mjs start",
     "scheduler:watch": "node scripts/schedule-watchdog.mjs",
     "lint": "eslint .",
     "postinstall": "node scripts/patch-pi-brace-expansion.mjs",
@@ -40,7 +44,7 @@
     },
     "next": {
       "postcss": "^8.5.18",
-      "sharp": "0.35.3"
+      "sharp": "0.35.4"
     }
   },
   "dependencies": {
@@ -48,12 +52,15 @@
     "@earendil-works/pi-coding-agent": "0.84.4",
     "@lobehub/icons": "^5.6.0",
     "@modelcontextprotocol/sdk": "1.30.0",
+    "@radix-ui/react-dropdown-menu": "2.1.24",
     "brace-expansion": "5.0.9",
+    "diff": "8.0.4",
+    "ignore": "7.0.5",
     "katex": "^0.17.0",
     "lucide-react": "^0.562.0",
     "mammoth": "^1.12.0",
     "mermaid": "^11.16.1",
-    "next": "^16.2.11",
+    "next": "^16.3.5",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
@@ -66,7 +73,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@next/bundle-analyzer": "^16.2.11",
+    "@next/bundle-analyzer": "^16.3.5",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^26.0.1",
     "@types/react": "^19",
@@ -75,7 +82,7 @@
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.0.3",
     "eslint": "^9",
-    "eslint-config-next": "^16.2.11",
+    "eslint-config-next": "^16.3.5",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.18",
     "tailwindcss": "^4.2.2",

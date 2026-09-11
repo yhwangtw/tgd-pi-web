@@ -35,6 +35,17 @@ export function ScrollFollowSelector() {
             type="button"
             role="radio"
             aria-checked={active}
+            tabIndex={active ? 0 : -1}
+            onKeyDown={(event) => {
+              const index = SCROLL_FOLLOW_MODES.indexOf(option);
+              const next = event.key === "Home" ? 0 : event.key === "End" ? SCROLL_FOLLOW_MODES.length - 1
+                : ["ArrowRight", "ArrowDown"].includes(event.key) ? (index + 1) % SCROLL_FOLLOW_MODES.length
+                  : ["ArrowLeft", "ArrowUp"].includes(event.key) ? (index + SCROLL_FOLLOW_MODES.length - 1) % SCROLL_FOLLOW_MODES.length : null;
+              if (next === null) return;
+              event.preventDefault();
+              setScrollFollowMode(SCROLL_FOLLOW_MODES[next]);
+              event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+            }}
             className={`${styles.option} ${active ? styles.optionActive : ""}`}
             onClick={() => setScrollFollowMode(option)}
             title={t(DESCRIPTION_KEYS[option])}

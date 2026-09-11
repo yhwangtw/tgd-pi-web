@@ -123,7 +123,7 @@ test.describe("file viewer", () => {
     await openReadme(page);
     await page.getByRole("button", { name: "Raw", exact: true }).click();
     await page.getByRole("button", { name: "More file actions" }).click();
-    await page.getByRole("button", { name: "Edit file", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Edit file", exact: true }).click();
     const editor = page.getByRole("textbox", { name: "File editor" });
     await expect(editor).toBeVisible();
     expect(await editor.inputValue()).toContain("Demo");
@@ -218,6 +218,6 @@ test.describe("file viewer", () => {
     expect(box.y + box.height).toBeLessThanOrEqual(844);
     await inspector.getByRole("button", { name: "Close inspector" }).click();
     await page.getByRole("button", { name: "More file actions" }).click();
-    await expect(page.getByRole("button", { name: "Focus mode", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Focus mode", exact: true })).toBeVisible();
   });
 });

@@ -21,7 +21,8 @@ import {
 import type { AgentMessage, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle, type MessageQuote } from "./ChatInput";
-import { ExtensionUIPanel, ExtensionWidgets } from "./ExtensionUIPanel";
+import { ExtensionUIPanel, ExtensionWidgets, PendingQuestionNotice } from "./ExtensionUIPanel";
+import { UserQuestionCard, type UserQuestionCardHandle } from "./UserQuestionCard";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { BashBlock } from "./BashBlock";
 import { CollapsibleMessage } from "./CollapsibleMessage";
@@ -208,6 +209,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const {
     loading, error, runtimeFailure, messages, entryIds, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, availableTools, customToolNames, thinkingLevel,
+    catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,
@@ -227,6 +229,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   const { t } = useI18n();
   const scrollFollowMode = useScrollFollowMode();
+  const questionCardRef = useRef<UserQuestionCardHandle>(null);
+  const firstDialog = extensionUIState.dialogs[0];
+  const pendingQuestion = firstDialog?.method === "ask_user" ? firstDialog : undefined;
+  const blockingDialog = firstDialog !== undefined && !pendingQuestion;
 
   // ── tGD pipeline: detect which phases have run in this session ──
   const [pipelineHidden, setPipelineHidden] = useState(false);
@@ -997,6 +1003,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       modelNames={modelNames}
       modelList={modelList}
       onModelChange={handleModelChange}
+      modelCatalogStatus={catalogStatus}
+      modelCatalogError={catalogError}
+      modelCatalogDiagnostics={catalogDiagnostics}
+      onRetryModelCatalog={retryModelCatalog}
+      onOpenModels={onOpenModels}
       onCompact={session ? handleCompact : undefined}
       onAbortCompaction={handleAbortCompaction}
       isCompacting={isCompacting}
@@ -1214,7 +1225,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             className={`${styles.transcript} ${wideChat ? styles.transcriptWide : ""} mx-auto px-4`}
             role="log"
             aria-label={t("chat.conversation")}
-            aria-busy={agentRunning}
+            aria-busy={agentRunning && !pendingQuestion}
             aria-live="off"
           >
 
@@ -1421,7 +1432,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               />
             )}
 
-            {agentRunning && (
+            {pendingQuestion && !runtimeFailure && (
+              <UserQuestionCard key={pendingQuestion.id} cardRef={questionCardRef} request={pendingQuestion} pendingCount={extensionUIState.dialogs.length} onRespond={handleExtensionUIResponse} />
+            )}
+
+            {agentRunning && !pendingQuestion && (
               !streamState.streamingMessage
               || runProgress.attention !== "normal"
               || runProgress.connection === "reconnecting"
@@ -1516,13 +1531,15 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               state={extensionUIState}
               onRespond={handleExtensionUIResponse}
               wide={wideChat}
+              questionInTranscript
             />
-            {/* Keep the composer mounted while a blocking decision is visible.
-                Extensions can issue the one-shot setEditorText event before the
-                dialog-close event reaches React; unmounting here loses that draft. */}
+            {pendingQuestion && <PendingQuestionNotice onShow={() => questionCardRef.current?.reveal()} wide={wideChat} />}
+            {/* Ordinary questions leave the composer and navigation available.
+                Actual modal dialogs only hide it; keep the draft mounted for
+                one-shot setEditorText events. */}
             <div
               className={styles.composerMount}
-              hidden={extensionUIState.dialogs.length > 0}
+              hidden={blockingDialog}
             >
               {chatInputElement}
             </div>

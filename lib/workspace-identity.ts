@@ -1,6 +1,7 @@
 import type { Worktree } from "./worktrees";
 
 export interface WorkspaceIdentity {
+  state: "loading" | "unknown" | "not-git" | "branch" | "detached";
   sourceCwd: string;
   repository: string;
   branch: string | null;
@@ -10,6 +11,7 @@ export interface WorkspaceIdentity {
 }
 
 function trimTrailingSlash(value: string): string {
+  value = value.replace(/\\/g, "/");
   return value.length > 1 ? value.replace(/\/+$/, "") : value;
 }
 
@@ -32,6 +34,7 @@ export function resolveWorkspaceIdentity(cwd: string, worktrees: Worktree[]): Wo
   const root = match?.path ?? cwd;
 
   return {
+    state: match ? (match.branch ? "branch" : "detached") : "not-git",
     sourceCwd: cwd,
     repository: basename(root),
     branch: match?.branch ?? (match?.head ? match.head.slice(0, 7) : null),
@@ -39,4 +42,12 @@ export function resolveWorkspaceIdentity(cwd: string, worktrees: Worktree[]): Wo
     isGit: Boolean(match),
     detached: Boolean(match && !match.branch),
   };
+}
+
+export function pendingWorkspaceIdentity(cwd: string, state: "loading" | "unknown" = "loading"): WorkspaceIdentity {
+  return { ...resolveWorkspaceIdentity(cwd, []), state };
+}
+
+export function workspaceStateLabel(identity: WorkspaceIdentity): "topbar.gitLoading" | "topbar.gitUnavailable" | "topbar.notGitRepository" {
+  return identity.state === "loading" ? "topbar.gitLoading" : identity.state === "unknown" ? "topbar.gitUnavailable" : "topbar.notGitRepository";
 }

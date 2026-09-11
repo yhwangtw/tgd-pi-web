@@ -64,9 +64,26 @@ export function buildSessionDisplayTitles(sessions: SessionInfo[], maxLength = 6
 
 /** Last-message preview, excluding a duplicate of the opening message. */
 export function getSessionPreview(session: SessionInfo): string {
-  const preview = session.lastMessage?.replace(/\s+/g, " ").trim() ?? "";
+  const preview = sessionPreviewText(session.lastMessage ?? "");
   if (!preview) return "";
-  return preview === session.firstMessage?.replace(/\s+/g, " ").trim() ? "" : preview;
+  return preview === sessionPreviewText(session.firstMessage ?? "") ? "" : preview;
+}
+
+/** Bounded, display-only Markdown excerpt; never interpreted as HTML. */
+export function sessionPreviewText(text: string): string {
+  const plain = text.slice(0, 8_000)
+    .replace(/^[ \t]*(?:>[ \t]*)+/gm, "")
+    .replace(/^\[![A-Z_-]+\][ \t]*/gm, "")
+    .replace(/^\s*(`{3,}|~{3,})[^\n]*$/gm, "")
+    .replace(/!?\[([^\]\n]*)\]\([^\n)]*\)/g, "$1")
+    .replace(/<(https?:\/\/[^>\s]+)>/g, "$1")
+    .replace(/<\/?[a-zA-Z][a-zA-Z0-9-]*(?:[ \t][^>\n]*)?\/?>/g, "")
+    .replace(/`+([^`\n]+)`+/g, "$1")
+    .replace(/(\*\*|__|~~)([^\n]+?)\1/g, "$2")
+    .replace(/(^|\s)[*_]([^*_\n]+)[*_](?=\s|[.,!?，。！？]|$)/g, "$1$2")
+    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s*|[-+*]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)/gm, "")
+    .replace(/\s+/g, " ").trim();
+  return plain.length > 240 ? `${Array.from(plain).slice(0, 239).join("")}…` : plain;
 }
 
 export function formatRelativeTime(dateStr: string, locale: "en" | "zh" = "en"): string {

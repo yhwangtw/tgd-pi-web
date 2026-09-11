@@ -4,6 +4,8 @@ export interface FileData {
   content: string;
   language: string;
   size: number;
+  /** Exact disk revision required by compare-and-save. Absent on partial reads. */
+  version?: string;
   /** Set when only the file's first chunk was returned (file > preview cap). */
   truncated?: boolean;
 }

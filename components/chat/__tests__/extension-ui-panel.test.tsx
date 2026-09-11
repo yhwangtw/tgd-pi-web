@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ExtensionUIPanel } from "../ExtensionUIPanel";
+import { ExtensionUIPanel, PendingQuestionNotice } from "../ExtensionUIPanel";
 import type { ExtensionUIState } from "@/hooks/use-extension-ui";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -26,6 +26,25 @@ describe("ExtensionUIPanel", () => {
     await act(async () => root?.render(<ExtensionUIPanel state={state} onRespond={onRespond} />));
     return { onRespond };
   }
+
+  it("keeps the question shortcut stable until pointer activation and supports keyboard clicks", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const onShow = vi.fn();
+    await act(async () => root?.render(<PendingQuestionNotice onShow={onShow} />));
+    const button = container.querySelector("button")!;
+    const down = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
+    Object.defineProperty(down, "isPrimary", { value: true });
+    await act(async () => button.dispatchEvent(down));
+    expect(down.defaultPrevented).toBe(true);
+    expect(onShow).not.toHaveBeenCalled();
+    await act(async () => button.click());
+    expect(onShow).toHaveBeenCalledOnce();
+    // Keyboard activation dispatches click without pointerdown.
+    await act(async () => button.click());
+    expect(onShow).toHaveBeenCalledTimes(2);
+  });
 
   it("submits a selected extension option", async () => {
     const state: ExtensionUIState = {
@@ -52,6 +71,30 @@ describe("ExtensionUIPanel", () => {
       id: "select-1",
       value: "Production",
     });
+  });
+
+  it("suppresses rapid double-submit and preserves a failed answer for retry", async () => {
+    let rejectFirst: (error: Error) => void = () => {};
+    const onRespond = vi.fn()
+      .mockImplementationOnce(() => new Promise<void>((_resolve, reject) => { rejectFirst = reject; }))
+      .mockResolvedValue(undefined);
+    await render({
+      dialogs: [{ type: "extension_ui_request", id: "retry-1", method: "select", title: "Pick", options: ["A", "B"] }],
+      statuses: {}, widgets: {},
+    }, onRespond);
+    await act(async () => document.body.querySelector<HTMLButtonElement>('[data-value="B"]')!.click());
+    const form = document.body.querySelector<HTMLFormElement>("form")!;
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(onRespond).toHaveBeenCalledOnce();
+    await act(async () => rejectFirst(new Error("Response transport lost")));
+    expect(document.body.textContent).toContain("Response transport lost");
+    expect(document.body.querySelector<HTMLButtonElement>('[data-value="B"]')!.getAttribute("aria-checked")).toBe("true");
+    await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(onRespond).toHaveBeenCalledTimes(2);
+    expect(onRespond.mock.calls[1][0]).toEqual(onRespond.mock.calls[0][0]);
   });
 
   it("isolates the background, traps focus, cancels with Escape, and restores focus", async () => {
@@ -158,6 +201,44 @@ describe("ExtensionUIPanel", () => {
       id: "ask-1",
       answers: { target: "Production", note: "Roll out after smoke tests" },
     });
+  });
+
+  it("keeps ask_user inline without taking focus or blocking outside controls, and preserves deferred answers", async () => {
+    const outside = document.createElement("button");
+    outside.textContent = "Inspect files";
+    const inspect = vi.fn();
+    outside.onclick = inspect;
+    document.body.appendChild(outside);
+    outside.focus();
+    try {
+      const state: ExtensionUIState = {
+        dialogs: [{ type: "extension_ui_request", id: "inline-question", method: "ask_user", questions: [{ id: "target", question: "Where should it run?", options: [{ label: "Staging" }, { label: "Production" }], allowOther: false }] }],
+        statuses: {}, widgets: {},
+      };
+      const { onRespond } = await render(state);
+      expect(container!.querySelector('[data-testid="inline-user-question"]')).not.toBeNull();
+      expect(document.body.querySelector('[aria-modal="true"]')).toBeNull();
+      expect(Boolean(outside.inert)).toBe(false);
+      expect(Boolean(container!.inert)).toBe(false);
+      expect(document.activeElement).toBe(outside);
+      expect(document.body.style.overflow).not.toBe("hidden");
+      await act(async () => document.body.querySelector<HTMLButtonElement>('[data-value="Production"]')!.click());
+      const toggle = container!.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+      await act(async () => toggle.click());
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      const body = document.getElementById(toggle.getAttribute("aria-controls")!)!;
+      expect(body.hidden).toBe(true);
+      await act(async () => { outside.focus(); outside.click(); });
+      expect(inspect).toHaveBeenCalledOnce();
+      expect(document.activeElement).toBe(outside);
+      await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+      expect(onRespond).not.toHaveBeenCalled();
+      await act(async () => toggle.click());
+      expect(body.hidden).toBe(false);
+      expect(container!.querySelector('[data-value="Production"]')?.getAttribute("aria-checked")).toBe("true");
+      await act(async () => container!.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+      expect(onRespond).toHaveBeenCalledExactlyOnceWith({ type: "extension_ui_response", id: "inline-question", answers: { target: "Production" } });
+    } finally { outside.remove(); }
   });
 
   it("preserves earlier answers when moving back through ask_user questions", async () => {

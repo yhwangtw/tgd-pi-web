@@ -18,17 +18,13 @@ import styles from "./ModelsConfig.module.css";
 
 function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
   name: string; provider: ProviderEntry;
-  onChange: (p: ProviderEntry) => void; onRename: (n: string) => void; onDelete: () => void;
+  onChange: (p: ProviderEntry) => void; onRename: (n: string) => string | null; onDelete: () => void;
 }) {
   const { t } = useI18n();
   const [editingName, setEditingName] = useState(name);
+  const [nameError, setNameError] = useState<string | null>(null);
   useEffect(() => setEditingName(name), [name]);
   const set = <K extends keyof ProviderEntry>(k: K, v: ProviderEntry[K]) => onChange({ ...provider, [k]: v });
-
-  useEffect(() => {
-    if (!provider.api) onChange({ ...provider, api: "openai-completions" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider.api]);
 
   return (
     <div className={styles.detailSection}>
@@ -40,12 +36,14 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
       </div>
 
       <Field label={t("models.providerName")}>
-        <TextInput value={editingName} onChange={setEditingName} placeholder={t("models.providerNamePlaceholder")} mono />
+        <TextInput value={editingName} onChange={value => { setEditingName(value); setNameError(null); }} placeholder={t("models.providerNamePlaceholder")} mono
+          ariaLabel={t("models.providerName")} ariaInvalid={!!nameError} describedBy={nameError ? "provider-rename-error" : undefined} />
         {editingName !== name && editingName.trim() && (
-          <button type="button" onClick={() => onRename(editingName.trim())} className={styles.renameButton}>
+          <button type="button" onClick={() => setNameError(onRename(editingName.trim()))} className={styles.renameButton}>
             {t("models.rename")}
           </button>
         )}
+        {nameError && <span id="provider-rename-error" className={styles.saveErrorText} role="alert">{nameError}</span>}
       </Field>
 
       <Field label={t("models.baseUrl")}>
@@ -62,7 +60,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
       </Field>
 
       <Field label={t("models.api")}>
-        <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
+        <Select value={provider.api ?? ""} onChange={(v) => set("api", v || undefined)} options={provider.api && !API_OPTIONS.some(api => api === provider.api) ? [provider.api, ...API_OPTIONS] : API_OPTIONS} />
       </Field>
     </div>
   );
@@ -214,7 +212,7 @@ function ModelDetail({
   const costVal = (k: keyof NonNullable<ModelEntry["cost"]>) => model.cost?.[k] !== undefined ? String(model.cost[k]) : "";
   const setCost = (k: keyof NonNullable<ModelEntry["cost"]>, v: string) => {
     const n = parseFloat(v);
-    onChange({ ...model, cost: { ...(model.cost ?? {}), [k]: isNaN(n) ? undefined : n } });
+    onChange({ ...model, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, ...(model.cost ?? {}), [k]: isNaN(n) ? 0 : n } });
   };
   const testSummary = (() => {
     if (testState.phase === "idle") return null;
@@ -383,6 +381,10 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [conflict, setConflict] = useState(false);
+  const [revision, setRevision] = useState<string | null>(null);
+  const [configPath, setConfigPath] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
   const [selection, setSelection] = useState<Selection | null>({ type: "health" });
   const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
@@ -390,6 +392,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const savedConfigRef = useRef(JSON.stringify({ providers: {} }));
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectDetail = useCallback((next: Selection) => {
     setSelection(next);
     setMobilePane("detail");
@@ -409,20 +412,37 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       .catch(() => {});
   }, []);
 
+  const loadConfig = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/models-config", { cache: "no-store", signal });
+      const encodedPath = response.headers.get("x-models-config-path");
+      const nextPath = encodedPath ? decodeURIComponent(encodedPath) : null;
+      if (!signal?.aborted) setConfigPath(nextPath);
+      if (!response.ok) throw new Error("Configuration unavailable");
+      const data = await response.json() as ModelsJson;
+      const nextRevision = response.headers.get("etag");
+      if (!nextRevision || !data || typeof data !== "object" || !data.providers || typeof data.providers !== "object" || Array.isArray(data.providers)) throw new Error("Configuration unavailable");
+      if (signal?.aborted) return;
+      setConfig(data);
+      setRevision(nextRevision);
+      setConfigPath(nextPath);
+      savedConfigRef.current = JSON.stringify(data);
+      setSelection({ type: "health" });
+      setLoadError(false); setConflict(false); setSaveError(null); setSavedOk(false);
+    } catch {
+      if (signal?.aborted) return;
+      setLoadError(true); setRevision(null);
+    } finally { if (!signal?.aborted) setLoading(false); }
+  }, []);
+
   useEffect(() => {
-    fetch("/api/models-config")
-      .then((r) => r.json())
-      .then((d: ModelsJson) => {
-        const normalized = d.providers ? d : { ...d, providers: {} };
-        setConfig(normalized);
-        savedConfigRef.current = JSON.stringify(normalized);
-        setSelection({ type: "health" });
-      })
-      .catch(() => setConfig({ providers: {} }))
-      .finally(() => setLoading(false));
+    const controller = new AbortController();
+    void loadConfig(controller.signal);
     loadOAuthProviders();
     loadApiKeyProviders();
-  }, [loadOAuthProviders, loadApiKeyProviders]);
+    return () => { controller.abort(); if (savedTimerRef.current) clearTimeout(savedTimerRef.current); };
+  }, [loadConfig, loadOAuthProviders, loadApiKeyProviders]);
 
   const addCustomProvider = useCallback(() => {
     let finalName = "new-provider";
@@ -438,6 +458,9 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   }, []);
 
   const renameProvider = useCallback((oldName: string, newName: string) => {
+    if (!newName.trim() || newName.length > 256 || ["__proto__", "constructor", "prototype"].includes(newName)) return t("models.renameInvalid");
+    if (oldName !== newName && Object.hasOwn(config.providers ?? {}, newName)) return t("models.renameConflict");
+    if (oldName === newName) return null;
     setConfig((prev) => {
       const entries = Object.entries(prev.providers ?? {});
       const idx = entries.findIndex(([k]) => k === oldName);
@@ -451,34 +474,29 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       if (prev.type === "model" && prev.providerName === oldName) return { ...prev, providerName: newName };
       return prev;
     });
-  }, []);
+    return null;
+  }, [config.providers, t]);
 
   const deleteProvider = useCallback((name: string) => {
+    const remaining = Object.keys(config.providers ?? {}).filter(key => key !== name);
     setConfig((prev) => {
       const providers = { ...(prev.providers ?? {}) };
       delete providers[name];
       return { ...prev, providers };
     });
-    setConfig((prev) => {
-      const remaining = Object.keys(prev.providers ?? {});
-      setSelection(remaining.length > 0 ? { type: "provider", name: remaining[0] } : null);
-      return prev;
-    });
-  }, []);
+    setSelection(remaining.length > 0 ? { type: "provider", name: remaining[0] } : { type: "health" });
+  }, [config.providers]);
 
   const addModel = useCallback((providerName: string) => {
+    const index = config.providers?.[providerName]?.models?.length ?? 0;
     setConfig((prev) => {
       const provider = prev.providers?.[providerName] ?? {};
       const models = [...(provider.models ?? []), { id: "" }];
       return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models } } };
     });
-    setConfig((prev) => {
-      const idx = (prev.providers?.[providerName]?.models?.length ?? 1) - 1;
-      setSelection({ type: "model", providerName, index: idx });
-      return prev;
-    });
+    setSelection({ type: "model", providerName, index });
     setMobilePane("detail");
-  }, []);
+  }, [config.providers]);
 
   const updateModel = useCallback((providerName: string, index: number, m: ModelEntry) => {
     setConfig((prev) => {
@@ -501,28 +519,42 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   }, []);
 
   const handleSave = useCallback(async () => {
+    if (!revision || loadError || conflict || loading || saving) return;
     setSaving(true);
     setSaveError(null);
     setSavedOk(false);
     try {
       const res = await fetch("/api/models-config", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "If-Match": revision },
         body: JSON.stringify(config),
       });
-      const d = await res.json() as { success?: boolean; error?: string };
-      if (!res.ok || d.error) setSaveError(d.error ?? `HTTP ${res.status}`);
-      else {
-        savedConfigRef.current = JSON.stringify(config);
-        setSavedOk(true);
-        setTimeout(() => setSavedOk(false), 2000);
+      const d = await res.json() as { success?: boolean; error?: string; code?: string };
+      if (!res.ok || d.error) {
+        const stale = res.status === 409 || res.status === 428;
+        const uncertain = d.code === "save_outcome_unknown";
+        setConflict(stale || uncertain);
+        setSaveError(t(uncertain ? "models.saveOutcomeUnknown" : stale ? "models.conflict" : "models.saveFailed"));
       }
-    } catch (e) {
-      setSaveError(String(e));
+      else {
+        if (d.success !== true) throw new Error("Unverified save acknowledgement");
+        savedConfigRef.current = JSON.stringify(config);
+        const nextRevision = res.headers.get("etag");
+        setRevision(nextRevision);
+        if (!nextRevision) setSaveError(t("models.savedReloadRequired"));
+        setSavedOk(true);
+        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = setTimeout(() => setSavedOk(false), 2000);
+      }
+    } catch {
+      // A lost/malformed HTTP acknowledgement cannot prove the write failed.
+      // Preserve the draft and require an explicit read before another save.
+      setConflict(true);
+      setSaveError(t("models.saveOutcomeUnknown"));
     } finally {
       setSaving(false);
     }
-  }, [config]);
+  }, [config, revision, loadError, conflict, loading, saving, t]);
 
   const providers = Object.entries(config.providers ?? {});
   const hasUnsavedChanges = JSON.stringify(config) !== savedConfigRef.current;
@@ -532,7 +564,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   // Resolve current detail
   const detailContent = (() => {
     if (!selection) return null;
-    if (selection.type === "health") return <ProviderHealth />;
+    if (selection.type === "health") return <ProviderHealth onAddProvider={() => setPickerOpen(true)} />;
     if (selection.type === "oauth") {
       const p = oauthProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
@@ -577,7 +609,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       <DialogShell
         open
         title={t("models.title")}
-        description="~/.pi/agent/models.json"
+        description={configPath ?? t("models.pathUnavailable")}
         onClose={onClose}
         size="xwide"
         mobileMode="fullscreen"
@@ -586,10 +618,11 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         footer={(
           <div className={styles.footerContent}>
             {saveError && <span className={styles.saveErrorText} role="alert">{saveError}</span>}
+            {(conflict || (!revision && !loading && !loadError)) && <button type="button" onClick={() => void loadConfig()} className={styles.cancelButton}>{t("models.reloadDiscard")}</button>}
             <button type="button" onClick={onClose} className={styles.cancelButton}>
               {t("common.cancel")}
             </button>
-            <button type="button" onClick={handleSave} disabled={saving || savedOk || !hasUnsavedChanges}
+            <button type="button" onClick={handleSave} disabled={loading || loadError || conflict || !revision || saving || savedOk || !hasUnsavedChanges}
               className={`${styles.saveButton} ${savedOk ? styles.saveButtonSaved : saving ? styles.saveButtonSaving : styles.saveButtonReady}`}>
               {savedOk && <CheckCircle2 size={16} strokeWidth={2.4} aria-hidden="true" className={styles.saveCheckIcon} />}
               <span>{savedOk ? t("common.saved") : saving ? t("common.saving") : t("common.save")}</span>
@@ -710,7 +743,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
             {/* Add provider */}
             <div className={styles.addProviderWrapper}>
-              <button type="button" onClick={() => setPickerOpen(true)}
+              <button type="button" onClick={() => setPickerOpen(true)} disabled={loading || loadError}
                 className={`${styles.addProviderButton} hover-border-accent`}
               >
                 <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
@@ -725,7 +758,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
               <ArrowLeft size={16} strokeWidth={1.8} aria-hidden="true" />
               {t("models.back")}
             </button>
-            {loading ? null : detailContent ?? (
+            {loadError ? <div className={styles.emptyState}><span className={styles.saveErrorText} role="alert">{t("models.loadFailed")}</span><button type="button" onClick={() => void loadConfig()}>{t(hasUnsavedChanges ? "models.reloadDiscard" : "common.refresh")}</button></div> : loading ? null : detailContent ?? (
               <div className={styles.emptyState}>
                 <Cpu size={30} strokeWidth={1.6} aria-hidden="true" />
                 <strong>{t("models.noneSelected")}</strong>

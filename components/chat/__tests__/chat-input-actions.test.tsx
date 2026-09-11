@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from "react";
+import { readFileSync } from "node:fs";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatInput } from "../ChatInput";
@@ -75,6 +76,70 @@ describe("ChatInput actions", () => {
     await fill(textarea, "Interrupt now");
     await act(async () => textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", altKey: true, bubbles: true })));
     expect(onSteer).toHaveBeenCalledWith("Interrupt now", undefined);
+  });
+
+  it("keeps a streaming draft and Steer selection across pointer focus changes and parent rerenders", async () => {
+    const props = { onSend: vi.fn().mockResolvedValue(true), onAbort: vi.fn(), onFollowUp: vi.fn().mockResolvedValue(true), onSteer: vi.fn().mockResolvedValue(true), isStreaming: true, persistKey: "test-session" };
+    const textarea = await render(props);
+    const draft = "Fixture draft only — do not send.";
+    await fill(textarea, draft);
+    await act(async () => textarea.focus());
+    const delivery = container!.querySelector('[role="group"][aria-label="Message delivery mode"]')!;
+    const steer = [...delivery.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Steer")!;
+    const followUp = [...delivery.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Follow-up")!;
+    expect(steer.getAttribute("aria-pressed")).toBe("false");
+    await act(async () => {
+      steer.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      textarea.blur(); steer.focus();
+      steer.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      steer.click();
+    });
+    expect(steer.getAttribute("aria-pressed")).toBe("true");
+    expect(followUp.getAttribute("aria-pressed")).toBe("false");
+    expect(textarea.placeholder).toBe("Steer the current run…");
+    expect(textarea.value).toBe(draft);
+    await act(async () => root!.render(<ChatInput {...props} retryInfo={{ attempt: 1, maxAttempts: 3 }} />));
+    expect(steer.getAttribute("aria-pressed")).toBe("true");
+    expect(textarea.placeholder).toBe("Steer the current run…");
+    expect(textarea.value).toBe(draft);
+    expect(props.onSteer).not.toHaveBeenCalled(); expect(props.onFollowUp).not.toHaveBeenCalled();
+    await act(async () => followUp.click());
+    expect(followUp.getAttribute("aria-pressed")).toBe("true");
+    expect(textarea.placeholder).toBe("Queue a follow-up…");
+    expect(textarea.value).toBe(draft);
+  });
+
+  it("keeps mobile editing layout through composer controls but restores it after leaving", async () => {
+    const textarea = await render({ isStreaming: true, onFollowUp: vi.fn(), onSteer: vi.fn() });
+    const composer = textarea.closest('[data-composer-editing]')!;
+    expect(composer).not.toBeNull();
+    const steer = [...container!.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Steer")!;
+    const stop = [...container!.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Stop")!;
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    try {
+      // Entering from outside through a button must not move it before click.
+      await act(async () => steer.focus());
+      expect(composer.getAttribute("data-composer-editing")).toBe("false");
+      await act(async () => textarea.focus());
+      expect(composer.getAttribute("data-composer-editing")).toBe("true");
+      await act(async () => steer.focus());
+      expect(composer.getAttribute("data-composer-editing")).toBe("true");
+      await act(async () => stop.focus());
+      expect(composer.getAttribute("data-composer-editing")).toBe("true");
+      await act(async () => outside.focus());
+      expect(composer.getAttribute("data-composer-editing")).toBe("false");
+      await act(async () => stop.focus());
+      expect(composer.getAttribute("data-composer-editing")).toBe("false");
+    } finally {
+      outside.remove();
+    }
+  });
+
+  it("ties mobile layout to the composer editing session rather than the instantaneous textarea focus", () => {
+    const css = readFileSync("components/layout/AppShell.module.css", "utf8");
+    expect(css.includes(":has(textarea:focus)")).toBe(false);
+    expect(css.match(/:has\(\[data-composer-editing="true"\]\)/g)).toHaveLength(3);
   });
 
   it("renders completed file mentions as removable context chips", async () => {

@@ -1,15 +1,16 @@
 // ============================================================================
 // Content search across a project tree.
 //
-// Prefers ripgrep (fast, respects .gitignore, skips binaries) and falls back
+// Prefers ripgrep (fast, skips binaries) and falls back
 // to a bounded pure-JS scan when `rg` isn't on PATH — so the feature works on
 // any self-host box without assuming ripgrep is installed.
 // ============================================================================
 
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { readdirSync, readFileSync, statSync } from "fs";
+import { lstat } from "fs/promises";
 import path from "path";
+import { readSearchFile, walkSearchFiles, type SearchFile, type SearchWalkOptions } from "./search-files";
 
 const execFileAsync = promisify(execFile);
 
@@ -57,7 +58,8 @@ export function parseRgJson(stdout: string, root: string, maxResults: number): G
       relative: path.relative(root, full),
       full,
       line: e.data.line_number ?? 0,
-      col: (e.data.submatches?.[0]?.start ?? 0) + 1,
+      // rg reports bytes; the viewer/JS fallback use UTF-16 columns.
+      col: Buffer.from(e.data.lines?.text ?? "").subarray(0, e.data.submatches?.[0]?.start ?? 0).toString("utf8").length + 1,
       text: clampLine((e.data.lines?.text ?? "").replace(/\r?\n$/, "")),
     });
   }
@@ -65,18 +67,21 @@ export function parseRgJson(stdout: string, root: string, maxResults: number): G
 }
 
 async function grepWithRg(
-  root: string, query: string, opts: { caseSensitive: boolean; maxResults: number },
+  root: string, query: string, files: SearchFile[],
+  opts: { caseSensitive: boolean; maxResults: number; signal?: AbortSignal; deadline: number },
 ): Promise<GrepMatch[]> {
+  if (!files.length) return [];
   const args = [
-    "--json", "--fixed-strings",
+    "--json", "--fixed-strings", "--no-config", "--no-ignore", "--hidden", "--threads", "1",
     opts.caseSensitive ? "--case-sensitive" : "--ignore-case",
-    "--max-count", "50",       // per-file cap
+    "--max-count", String(opts.maxResults),
     "--max-filesize", "1M",
-    "--", query, root,
+    "--", query, ...files.map((file) => file.full),
   ];
   const { stdout } = await execFileAsync("rg", args, {
-    timeout: 15_000,
-    maxBuffer: 32 * 1024 * 1024,
+    timeout: Math.max(1, opts.deadline - Date.now()),
+    maxBuffer: 8 * 1024 * 1024,
+    signal: opts.signal,
   }).catch((err: NodeJS.ErrnoException & { stdout?: string; code?: number }) => {
     // rg exits 1 when there are simply no matches — that's not an error.
     if (err.code === 1 && typeof err.stdout === "string") return { stdout: err.stdout };
@@ -85,11 +90,6 @@ async function grepWithRg(
   return parseRgJson(stdout, root, opts.maxResults);
 }
 
-const IGNORED_DIRS = new Set([
-  "node_modules", ".git", ".next", "dist", "build", "__pycache__",
-  ".turbo", ".cache", "coverage", ".pytest_cache", ".mypy_cache", "target", "vendor",
-]);
-
 /** Cheap binary sniff: a NUL byte in the first chunk. */
 function looksBinary(buf: Buffer): boolean {
   const n = Math.min(buf.length, 8000);
@@ -97,42 +97,28 @@ function looksBinary(buf: Buffer): boolean {
   return false;
 }
 
-/** Bounded pure-JS scan used when ripgrep isn't available. */
-export function grepWithJs(
-  root: string, query: string,
-  opts: { caseSensitive: boolean; maxResults: number; maxFiles?: number },
-): GrepMatch[] {
+async function scanWithJs(
+  files: SearchFile[], query: string,
+  opts: { caseSensitive: boolean; maxResults: number; signal?: AbortSignal; deadline: number },
+): Promise<{ matches: GrepMatch[]; truncated: boolean }> {
   const needle = opts.caseSensitive ? query : query.toLowerCase();
   const out: GrepMatch[] = [];
-  const maxFiles = opts.maxFiles ?? 5000;
-  let filesScanned = 0;
-  const queue: string[] = [root];
-
-  while (queue.length > 0 && out.length < opts.maxResults && filesScanned < maxFiles) {
-    const dir = queue.shift()!;
-    let entries;
-    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (!IGNORED_DIRS.has(entry.name)) queue.push(full);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      if (out.length >= opts.maxResults || filesScanned >= maxFiles) break;
+  let truncated = false;
+  for (const file of files) {
+      opts.signal?.throwIfAborted();
+      if (Date.now() >= opts.deadline) { truncated = true; break; }
+      if (out.length >= opts.maxResults) break;
       try {
-        if (statSync(full).size > 1024 * 1024) continue; // skip >1MB
-        const buf = readFileSync(full);
-        if (looksBinary(buf)) continue;
-        filesScanned++;
+        const buf = await readSearchFile(file.full);
+        if (!buf || looksBinary(buf)) continue;
         const lines = buf.toString("utf-8").split("\n");
         for (let i = 0; i < lines.length; i++) {
           const hay = opts.caseSensitive ? lines[i] : lines[i].toLowerCase();
           const col = hay.indexOf(needle);
           if (col >= 0) {
             out.push({
-              relative: path.relative(root, full),
-              full,
+              relative: file.relative,
+              full: file.full,
               line: i + 1,
               col: col + 1,
               text: clampLine(lines[i].replace(/\r$/, "")),
@@ -140,10 +126,16 @@ export function grepWithJs(
             if (out.length >= opts.maxResults) break;
           }
         }
-      } catch { /* unreadable — skip */ }
-    }
+      } catch { truncated = true; }
   }
-  return out;
+  return { matches: out, truncated };
+}
+
+type GrepOptions = SearchWalkOptions & { caseSensitive?: boolean; maxResults?: number; maxFiles?: number; engine?: "js" };
+
+/** Public fallback helper shares exactly the same project traversal. */
+export async function grepWithJs(root: string, query: string, opts: GrepOptions): Promise<GrepMatch[]> {
+  return (await grepProject(root, query, { ...opts, engine: "js" })).matches;
 }
 
 /**
@@ -152,15 +144,43 @@ export function grepWithJs(
  */
 export async function grepProject(
   root: string, query: string,
-  opts: { caseSensitive?: boolean; maxResults?: number } = {},
+  opts: GrepOptions = {},
 ): Promise<GrepResult> {
   const caseSensitive = opts.caseSensitive ?? false;
   const maxResults = opts.maxResults ?? 300;
-  try {
-    const matches = await grepWithRg(root, query, { caseSensitive, maxResults });
-    return { matches, truncated: matches.length >= maxResults, engine: "rg" };
-  } catch {
-    const matches = grepWithJs(root, query, { caseSensitive, maxResults });
-    return { matches, truncated: matches.length >= maxResults, engine: "js" };
+  const tree = await walkSearchFiles(root, opts);
+  const files: SearchFile[] = [];
+  let truncated = tree.truncated;
+  let bytes = 0;
+  const deadline = Date.now() + 15_000;
+  for (const entry of tree.entries) {
+    opts.signal?.throwIfAborted();
+    if (entry.isDir) continue;
+    if (files.length >= (opts.maxFiles ?? 5000) || bytes >= 100 * 1024 * 1024 || Date.now() >= deadline) { truncated = true; break; }
+    try {
+      const stat = await lstat(entry.full);
+      if (!stat.isFile() || stat.size > 1024 * 1024) continue;
+      files.push(entry);
+      bytes += stat.size;
+    } catch { truncated = true; }
   }
+  let engine: "rg" | "js" = opts.engine ?? "rg";
+  const matches: GrepMatch[] = [];
+  // Explicit bounded batches prevent argv/buffer blowups. rg never performs
+  // its own traversal or uses machine-specific ignore/config rules.
+  for (let offset = 0; offset < files.length && matches.length <= maxResults; offset += 64) {
+    opts.signal?.throwIfAborted();
+    if (Date.now() >= deadline) { truncated = true; break; }
+    const batch = files.slice(offset, offset + 64);
+    const scanOptions = { caseSensitive, maxResults: maxResults + 1 - matches.length, signal: opts.signal, deadline };
+    if (engine === "rg") {
+      try { matches.push(...await grepWithRg(root, query, batch, scanOptions)); continue; }
+      catch { opts.signal?.throwIfAborted(); engine = "js"; }
+    }
+    const result = await scanWithJs(batch, query, scanOptions);
+    matches.push(...result.matches);
+    truncated ||= result.truncated;
+  }
+  opts.signal?.throwIfAborted();
+  return { matches: matches.slice(0, maxResults), truncated: truncated || matches.length > maxResults, engine };
 }

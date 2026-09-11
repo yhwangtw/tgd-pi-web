@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock("@/lib/mcp", () => ({
+  McpConfigurationError: class extends Error {},
   deleteMcpServer: vi.fn(),
   getMcpStatuses: vi.fn(() => []),
   readMcpServers: vi.fn(async () => [mocks.server]),

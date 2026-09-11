@@ -18,7 +18,7 @@ function StatusBadge({ status }: { status: ProviderHealthEntry["status"] }) {
   return <span className={styles.status} data-status={status}>{labels[status]}</span>;
 }
 
-export function ProviderHealth() {
+export function ProviderHealth({ onAddProvider }: { onAddProvider?: () => void } = {}) {
   const { t } = useI18n();
   const [filter, setFilter] = useState<"attention" | "configured" | "all">("attention");
   const resource = useRequestResource<ProviderHealthReport>(
@@ -27,12 +27,12 @@ export function ProviderHealth() {
     { staleTimeMs: 30_000, retries: 1 },
   );
   const report = resource.data;
+  const noneConfigured = !!report && !report.runtimeError && report.providers.every(provider => provider.status === "needs_auth" && !provider.storedCredential && !provider.configuredSource);
 
   const providers = useMemo(() => {
     const all = report?.providers ?? [];
     if (filter === "attention") {
-      const attention = all.filter((provider) => provider.status !== "ready" && provider.status !== "needs_auth");
-      return attention.length > 0 ? attention : all.filter((provider) => provider.status === "ready");
+      return all.filter((provider) => provider.status === "warning" || provider.status === "invalid");
     }
     if (filter === "configured") return all.filter((provider) => provider.status !== "needs_auth");
     return all;
@@ -62,6 +62,12 @@ export function ProviderHealth() {
             <div><strong>{report.summary.total}</strong><span>{t("providerHealth.total")}</span></div>
           </div>
 
+          {noneConfigured && <div className={styles.emptySetup}>
+            <strong>{t("providerHealth.noConfiguredTitle")}</strong>
+            <p>{t("providerHealth.noConfiguredHint")}</p>
+            {onAddProvider && <button type="button" className={styles.refresh} onClick={onAddProvider}>{t("providers.add")}</button>}
+          </div>}
+
           <section className={styles.coverage} aria-labelledby="provider-health-coverage-title">
             <div className={styles.coverageIntro}>
               <strong id="provider-health-coverage-title">{t("providerHealth.coverageTitle")}</strong>
@@ -87,9 +93,9 @@ export function ProviderHealth() {
             </div>
           </section>
 
-          <div className={styles.toolbar} role="tablist" aria-label={t("providerHealth.filter")}>
+          <div className={styles.toolbar} role="group" aria-label={t("providerHealth.filter")}>
             {(["attention", "configured", "all"] as const).map((value) => (
-              <button key={value} type="button" role="tab" aria-selected={filter === value}
+              <button key={value} type="button" aria-pressed={filter === value}
                 className={filter === value ? styles.filterActive : styles.filter}
                 onClick={() => setFilter(value)}>
                 {t(`providerHealth.filter.${value}`)}
@@ -100,8 +106,8 @@ export function ProviderHealth() {
 
           {report.runtimeError && <div className={styles.runtimeError}>{report.runtimeError}</div>}
 
-          <div className={styles.list}>
-            {providers.length === 0 ? <div className={styles.state}>{t("providerHealth.none")}</div> : providers.map((provider) => (
+          <div className={styles.list} aria-live="polite">
+            {providers.length === 0 ? (noneConfigured ? null : <div className={styles.state}>{t(filter === "attention" ? "providerHealth.noAttention" : "providerHealth.none")}</div>) : providers.map((provider) => (
               <article key={provider.id} className={styles.provider}>
                 <ProviderIcon id={provider.id} size={22} />
                 <div className={styles.providerMain}>
@@ -111,7 +117,7 @@ export function ProviderHealth() {
                   </div>
                   <div className={styles.meta}>
                     <span>{provider.availableModelCount}/{provider.modelCount} {t("providerHealth.models")}</span>
-                    {(provider.authSource || provider.configuredSource) && <span>{provider.authSource ?? provider.configuredSource}</span>}
+                    {(provider.authSource || provider.configuredSource) && (provider.authSource ?? provider.configuredSource)?.toLowerCase() !== (provider.authType === "oauth" ? "oauth" : "api key") && <span>{provider.authSource ?? provider.configuredSource}</span>}
                     {provider.authType && <span>{provider.authType === "oauth" ? "OAuth" : t("apiKey.title")}</span>}
                   </div>
                   {provider.issue && <p className={styles.issue}>{provider.issue}</p>}

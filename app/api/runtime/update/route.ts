@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { redactedErrorMessage } from "@/lib/redaction";
 import { recordSecurityActivity } from "@/lib/security-activity";
+import { requestHasExplicitSameOrigin } from "@/lib/request-origin";
 import {
   consumeSensitiveAction,
   prepareSensitiveAction,
   type SensitiveActionKind,
 } from "@/lib/sensitive-action-confirmation";
 import {
+  beginManagedUpdateOperation,
   createUpdateBackup,
   executeManagedUpdateAction,
+  failReservedUpdateOperation,
   findUpdateBackup,
   getUpdateCenterStatus,
   updateActionFingerprint,
@@ -41,9 +44,7 @@ class UpdateRequestError extends Error {
 }
 
 function assertSameOrigin(req: Request): void {
-  const origin = req.headers.get("origin");
-  const fetchSite = req.headers.get("sec-fetch-site");
-  if (!origin || (fetchSite && fetchSite !== "same-origin") || new URL(origin).host !== new URL(req.url).host) {
+  if (!requestHasExplicitSameOrigin(req)) {
     throw new UpdateRequestError("Update actions require a same-origin browser request", 403);
   }
 }
@@ -84,6 +85,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   let action: UpdateCenterAction | undefined;
+  let operationId: string | undefined;
   try {
     assertSameOrigin(req);
     const body = await req.json() as MutationBody;
@@ -158,12 +160,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, action, backup, status: await getUpdateCenterStatus() });
     }
 
+    // Reserve before the automatic source backup too: another tab must not
+    // replace source while this operation is still capturing its recovery copy.
+    const operation = await beginManagedUpdateOperation(action, {
+      targetTag: status.latest.tag, backup: selectedBackup ?? undefined,
+    });
+    operationId = operation.id;
     if (action === "update") {
       selectedBackup = await createUpdateBackup({ backupRoot: status.backup.root, version: status.current.version });
     }
     const started = await executeManagedUpdateAction(action, {
       targetTag: status.latest.tag,
       backup: selectedBackup ?? undefined,
+      operationId,
     });
     recordSecurityActivity({
       category: "update",
@@ -177,10 +186,12 @@ export async function POST(req: Request) {
       ok: true,
       action,
       started,
+      operationId,
       backup: selectedBackup,
       message: action === "restart" ? "Restart started; this page may disconnect." : `${action} started`,
     });
   } catch (error) {
+    if (operationId) await failReservedUpdateOperation(operationId).catch(() => {});
     if (action) {
       recordSecurityActivity({
         category: "update",
@@ -192,7 +203,7 @@ export async function POST(req: Request) {
     }
     return NextResponse.json(
       { error: redactedErrorMessage(error) },
-      { status: error instanceof UpdateRequestError ? error.status : 500 },
+      { status: error instanceof UpdateRequestError ? error.status : (error as { code?: string })?.code === "UPDATE_OPERATION_CONFLICT" ? 409 : 500 },
     );
   }
 }

@@ -48,7 +48,7 @@ Pi's terminal experience is fast and focused. This project adds the visual conte
 
 ### Requirements
 
-- Node.js 22 or newer
+- Node.js 22.19+ on the 22.x line, or 23.4+ (including 24 and newer). This meets the bundled Pi runtime minimum and provides the built-in SQLite file lock without an extra flag.
 - npm
 - Model credentials/configuration in `~/.pi/agent/` or supported provider environment variables; a global `pi` CLI is not required
 - Git
@@ -68,10 +68,10 @@ cd tGD-pi-web
 bash setup.sh
 ```
 
-The setup script is the supported one-step production path. In a Git checkout it first replaces local source changes with `origin/main`, then checks Node.js and npm, installs dependencies, runs TypeScript validation, creates a production build, and can start the production server. For source archives, known obsolete files are moved to `~/.tgd-pi-web-backups/` (override with `TGD_SETUP_BACKUP_DIR`) before the build. The Web always uses its pinned local Pi runtime; when an installed global `pi` CLI has a different version, interactive setup offers to synchronize it while unattended setup only prints the exact opt-in command.
+The setup script checks Node.js/npm and refuses a running checkout before any source changes. In a stopped Git checkout it fetches `origin/main`, checks local changes before synchronizing, installs dependencies, validates TypeScript, builds, and can start the production server. Source archives move known obsolete files to `~/.tgd-pi-web-backups/` (override with `TGD_SETUP_BACKUP_DIR`). The Web uses its pinned local Pi runtime; interactive setup can synchronize a different global CLI, while unattended setup only prints the opt-in command.
 
 > [!WARNING]
-> `origin/main` is the source of truth for end-user Git installations. Running `bash setup.sh` discards local commits, tracked changes, and non-ignored untracked files with `git reset --hard origin/main` and `git clean -fd`. Ignored runtime state such as `.env`, `node_modules`, and `.next` is retained.
+> Stop the server using this checkout before setup/build. `origin/main` is authoritative for end-user Git installations. If local commits or non-ignored changes exist, setup creates a private recovery backup and asks before replacing source; unattended setup stops unless `TGD_SETUP_FORCE_SYNC=1` explicitly authorizes it. Approved synchronization uses `git reset --hard origin/main` and `git clean -fd`. Ignored runtime state is retained but is not part of this source backup. See [update and rollback boundaries](./docs/RELEASING.md#installation-updates-and-rollback-are-separate).
 
 Manual setup:
 
@@ -91,11 +91,17 @@ bash setup.sh
 
 `setup.sh` stops immediately and prints the complete TypeScript error when validation fails. It never continues into a misleading partial build.
 
+Browser-managed updates require an operator-provided staged adapter and loopback identity check. Durable operations verify the actual running build; a helper PID is not success. See [managed updates and rollback](./docs/MANAGED-UPDATES.md). No launchd/systemd adapter is installed automatically.
+
 For a deliberately offline Git checkout, skip remote synchronization explicitly:
 
 ```bash
 TGD_SETUP_OFFLINE=1 bash setup.sh
 ```
+
+This skips Git synchronization only; npm still needs an internal registry or
+prepared cache. `origin/main` may be newer than the last release. Use a release
+source archive in a new directory when you need an exact released version.
 
 ## tGD Workflow in the Browser
 
@@ -206,6 +212,19 @@ This table is generated from `lib/capabilities.json`; it is the product contract
 - Project trust can be reviewed and changed from the Context inspector. Extension shortcuts can be invoked from the Extensions panel, while TUI-only custom messages receive a safe generic Web rendering.
 - Extensions settings include a Runtime status center and an MCP manager for trusted stdio or Streamable HTTP servers; MCP tools are bridged through Pi's supported Extension API rather than patching Pi core.
 
+### MCP connections
+
+For MCP setup, timeout units, one-time tests, connection cleanup, paginated tools
+and current protocol limits, see [MCP connections](docs/MCP.md). The editor uses
+**1–120 seconds**; stored `timeoutMs` values remain milliseconds. Tests use a
+separate connection and never replace an agent's shared connection. Tool-list
+changes require **Reload Extensions** after the active run; OAuth/PKCE,
+resource/prompt browsing and required-task execution are not yet integrated.
+Saved configurations use revision checks and cross-process locking. Conflicting
+edits keep your draft; reload the latest record explicitly before retrying. New
+records are capped at 50; existing entries are never silently truncated. See the
+MCP guide for API revisions, validation limits and saved-but-reload-failed warnings.
+
 ### Attention and recovery
 
 - A global Attention Center combines failed sessions, background agents, scheduled runs, and agents waiting for a decision; read state stays per device.
@@ -236,6 +255,51 @@ This table is generated from `lib/capabilities.json`; it is the product contract
 - Snapshot restore applies a precise delta and never rewrites the user's index or `HEAD`.
 - The file inspector includes symbols, definition/reference lookup, TypeScript/ESLint/related-test diagnostics, Git history, blame, and agent snapshots.
 
+Text editing requires the revision returned when the file was loaded. If the
+file changes on disk, Save keeps your draft and shows a disk-versus-draft
+comparison. Review or merge the content before choosing **Save this draft**;
+that retry checks the reviewed revision too, so another change cannot silently
+be overwritten. **Discard draft and use disk** explicitly replaces the draft.
+Failed saves and same-file navigation keep the editor open.
+
+Saves recheck the revision before a same-directory atomic replacement. Web
+instances sharing the same local Pi agent directory use a per-file OS-backed
+mutex for saves and hunk restores. A busy file is rejected immediately; a
+process crash releases its lock without a timed takeover. Node's built-in
+SQLite provides the mutex, with no additional CLI or native npm addon. Node 22
+may print an experimental SQLite warning on the server's first file mutation.
+
+Keep `<agent-dir>/file-mutation-locks/` on a local filesystem, private to the
+server account. The Web file API excludes this internal directory from reads,
+search, uploads and creation, and refuses moves/deletions of it or its parents.
+External programs must not read, remove or replace these empty lock database
+files while any instance is running. All instances that modify the same
+workspace must share this directory; separate agent directories and external
+editors do not participate. This is not an OS-level filesystem sandbox and
+does not prevent an external program from racing the final version check.
+Large, partial, binary and invalid UTF-8 previews cannot be saved as text. The
+edit endpoint does not create a deleted file.
+
+HTML previews run embedded scripts in an opaque-origin sandbox. The server
+applies Content Security Policy to raw HTML/SVG responses as well as the viewer,
+so opening a raw URL does not grant access to app cookies, storage or APIs.
+SVG and converted DOCX previews cannot execute scripts. Local/external script
+and asset dependencies, network requests, forms, popups and parent-page
+navigation are blocked; self-contained HTML and embedded data/blob media are
+supported. The viewer's **Isolated preview** disclosure explains these limits.
+This is not an OS sandbox, and a standalone HTML tab can still navigate itself.
+
+API reads also check browser origin metadata, including navigation from an
+opaque-origin preview. Cross-origin API links are refused: open the app first,
+then use its controls. Normal app entry links, address-bar navigation and CLI
+clients remain supported. This is defense in depth, not authentication; remote
+access still needs the password gate or a trusted access proxy.
+
+Downloads use bounded, pull-driven reads, support single byte ranges and release
+their file descriptor on completion, cancellation or disconnect. A file changed
+during transfer aborts the response instead of silently mixing versions; retry
+the download to obtain the current file.
+
 ### Rendering and appearance
 
 - GitHub Flavored Markdown, tables, task lists, KaTeX, Mermaid, and lazy-loaded syntax highlighting.
@@ -262,8 +326,10 @@ This table is generated from `lib/capabilities.json`; it is the product contract
 
 | Command | Purpose |
 |---|---|
-| `bash setup.sh` | Replace local source with `origin/main`, validate, install, build, and optionally start production |
-| `npm run dev` | Optionally start the development server on port `30141` |
+| `bash setup.sh` | Check/backup local changes, synchronize `origin/main` after approval where required, install, validate, build and optionally start |
+| `bash scripts/release.sh` | Read-only release preflight; `--dispatch` explicitly requests the GitHub workflow |
+| `npm run dev` | Development server on `127.0.0.1:30141`, using the selected Pi data directory |
+| `npm run preview` | Independent functional preview on `127.0.0.1:30142`, with its own empty `.pi-web-preview/agent` directory |
 | `node_modules/.bin/tsc --noEmit` | Typecheck |
 | `npx eslint .` | Lint |
 | `npm test` | Run Vitest unit tests |
@@ -289,9 +355,18 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 
 ## Configuration
 
+`dev` and `start` bind to localhost by default. `PORT=30143 npm run dev` changes the port; an explicit `-- -p 30143` takes precedence. Remote binding requires deliberate `PIWEB_HOST=0.0.0.0` or `-- -H 0.0.0.0` and an authenticated access boundary. Preview mode stays localhost-only.
+
+The environment bar identifies development, production, functional preview, or demonstration data and shows the running build and actual model-config path. `npm run preview` does **not** copy credentials, sessions, or schedules. Configure providers in its own Models screen; inherited provider environment variables are excluded, and automatic private `.env` loading is refused. Use a clean checkout for preview if your normal checkout has private `.env` files. This is data separation, not an OS sandbox.
+
+The launcher creates a private provenance marker in a new empty preview directory. Existing non-empty directories must already carry the matching marker; an arbitrary copied agent directory is refused. Fixture generators create their own fixture marker.
+
 | Setting | Behavior |
 |---|---|
 | `PI_CODING_AGENT_DIR` | Overrides the default `~/.pi/agent` directory |
+| `PORT` / `PIWEB_HOST` | Default `30141` / `127.0.0.1`; preview defaults to port `30142` |
+| `PIWEB_PREVIEW_DIR` | Absolute independent agent-data directory for `npm run preview`; cannot be the real Pi data directory or an alias |
+| `PIWEB_ENVIRONMENT` | Explicit `development`, `production`, `preview`, or `fixture` identity; fixture requires isolated agent data |
 | `PIWEB_ACCESS_PASSWORD` | Enables the built-in shared-password gate for every route |
 | `PIWEB_SESSION_SECRET` | Signs access cookies independently from the password; use a random 32-byte-or-longer value for remote deployments |
 | `PIWEB_RELEASE_REPOSITORY` | GitHub `owner/repo` used by the Update Center; defaults to `yhwangtw/tgd-pi-web` |
@@ -299,6 +374,9 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 | `PIWEB_UPDATE_COMMAND_JSON` | Absolute JSON argv array for an operator-managed update helper; no shell parsing |
 | `PIWEB_RESTART_COMMAND_JSON` | Absolute JSON argv array for an operator-managed restart helper |
 | `PIWEB_ROLLBACK_COMMAND_JSON` | Absolute JSON argv array for an operator-managed rollback helper |
+| `PIWEB_UPDATE_PROTOCOL` | `staged-v1` is required for managed update/rollback |
+| `PIWEB_UPDATE_HEALTH_URL` | Loopback `/api/runtime/identity` URL for running-process verification |
+| `PIWEB_UPDATE_OPERATION_DIR` | Private durable directory outside source; shared by instances managing the same service |
 | `TGD_DIR` | Overrides the sibling `<project>-tGD/` artifact directory |
 | `models.json` | Model/provider catalog, including custom `baseUrl` values |
 | `auth.json` | Per-provider API credentials managed by Pi |
@@ -389,13 +467,22 @@ Improve application translations in `lib/i18n.tsx`. New skins must use semantic 
 
 ## Release
 
-After a PR passes CI and is merged, use the fast release path:
+After a PR is merged and CI passes on the exact merged `main`, use a clean,
+up-to-date main checkout:
 
 ```bash
-gh workflow run release.yml -f tag=vYYYY.MM.DD
+bash scripts/release.sh                        # read-only preflight, UTC today
+bash scripts/release.sh vYYYY.MM.DD --dispatch  # explicitly request publication
 ```
 
-Use the current UTC date. For another release on the same day, append a sequence suffix such as `vYYYY.MM.DD-1`; future-dated tags are rejected. One workflow updates `package.json` and `package-lock.json`, creates the release commit and annotated tag, then publishes the GitHub Release. Its authenticated push does not start another CI cycle. Pushing an already-versioned `v*` tag remains supported. The workflow does **not** publish to npm.
+Use today's UTC date, adding `-1`, `-2`, etc. for later releases that day. The
+helper never builds or versions the local checkout. The workflow rechecks the
+reviewed source SHA and all five CI jobs before atomically pushing the version
+commit/tag and publishing a GitHub Release. Only verified version-only commits
+inherit CI; skipped, failed, missing or pending checks block publication. Existing
+tags can be resumed without moving them or replacing a newer Latest release.
+This does **not** publish to npm or deploy production. See the
+[release, recovery and readback guide](./docs/RELEASING.md).
 
 ## License
 

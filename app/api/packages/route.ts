@@ -11,6 +11,7 @@ import {
 } from "@/lib/package-center";
 import { redactedErrorMessage } from "@/lib/redaction";
 import { recordSecurityActivity, type SecurityActivityOutcome } from "@/lib/security-activity";
+import { requestHasExplicitSameOrigin } from "@/lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -21,12 +22,9 @@ class PackageRequestError extends Error {
 }
 
 function assertSameOrigin(req: Request): void {
-  const origin = req.headers.get("origin");
-  const fetchSite = req.headers.get("sec-fetch-site");
-  if (!origin || (fetchSite && fetchSite !== "same-origin")) {
+  if (!requestHasExplicitSameOrigin(req)) {
     throw new PackageRequestError("Package operations require a same-origin browser request", 403);
   }
-  if (new URL(origin).host !== new URL(req.url).host) throw new PackageRequestError("Package operation origin mismatch", 403);
 }
 
 function managerForSession(sessionId: string) {

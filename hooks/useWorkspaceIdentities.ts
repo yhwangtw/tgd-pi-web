@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { resolveWorkspaceIdentity, type WorkspaceIdentity } from "@/lib/workspace-identity";
+import { pendingWorkspaceIdentity, type WorkspaceIdentity } from "@/lib/workspace-identity";
 import { fetchJson, useRequestResource } from "./useRequestResource";
 
 interface IdentityResponse {
@@ -39,6 +39,6 @@ export function useWorkspaceIdentities(cwds: string[], refreshKey = 0): Record<s
     cwd,
     (resource.data ?? EMPTY_IDENTITIES)[cwd]?.sourceCwd === cwd
       ? (resource.data ?? EMPTY_IDENTITIES)[cwd]
-      : resolveWorkspaceIdentity(cwd, []),
-  ])), [resource.data, uniqueCwds]);
+      : pendingWorkspaceIdentity(cwd, resource.error ? "unknown" : "loading"),
+  ])), [resource.data, resource.error, uniqueCwds]);
 }

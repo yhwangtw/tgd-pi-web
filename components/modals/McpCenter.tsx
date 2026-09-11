@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Library, Plus, RefreshCw } from "lucide-react";
 import { DialogShell } from "@/components/ui/DialogShell";
 import { fetchJson, useRequestResource } from "@/hooks/useRequestResource";
@@ -16,30 +16,34 @@ import {
 import styles from "./McpCenter.module.css";
 
 interface Props { cwd: string | null; sessionId: string | null }
-type Draft = Partial<McpServerConfig> & { argsText: string; headersText: string };
+type Draft = Partial<McpServerConfig> & { argsText: string; headersText: string; timeoutSeconds: string };
 type PendingTest = {
   token: string;
   expiresAt: number;
   server: McpServerConfig;
   review: { id: string; name: string; command?: string; args: string[]; cwd: string | null };
 };
-type DraftErrors = Partial<Record<"name" | "endpoint" | "headers", string>>;
+type DraftErrors = Partial<Record<"name" | "endpoint" | "headers" | "timeout", string>>;
 type McpResource = { servers?: McpServerConfig[]; statuses?: McpServerStatus[]; error?: string };
 const EMPTY_SERVERS: McpServerConfig[] = [];
 const EMPTY_STATUSES: McpServerStatus[] = [];
+class McpRequestFailure extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
 
 function blankDraft(cwd: string | null): Draft {
-  return { name: "", enabled: false, scope: cwd ? "project" : "global", projectCwd: cwd ?? undefined, transport: "stdio", timeoutMs: 15_000, argsText: "", headersText: "{}" };
+  return { name: "", enabled: false, scope: cwd ? "project" : "global", projectCwd: cwd ?? undefined, transport: "stdio", timeoutMs: 15_000, timeoutSeconds: "15", argsText: "", headersText: "{}" };
 }
 
 function toDraft(server: McpServerConfig): Draft {
-  return { ...server, argsText: (server.args ?? []).join("\n"), headersText: JSON.stringify(server.headers ?? {}, null, 2) };
+  return { ...server, timeoutSeconds: String(server.timeoutMs / 1000), argsText: (server.args ?? []).join("\n"), headersText: JSON.stringify(server.headers ?? {}, null, 2) };
 }
 
 function templateDraft(id: OfficialMcpTemplateId, cwd: string | null): Draft {
   const seed = createOfficialMcpSeed(id, cwd);
   return {
     ...seed,
+    timeoutSeconds: String((seed.timeoutMs ?? 15_000) / 1000),
     argsText: (seed.args ?? []).join("\n"),
     headersText: JSON.stringify(seed.headers ?? {}, null, 2),
   };
@@ -60,9 +64,21 @@ export function McpCenter({ cwd, sessionId }: Props) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<OfficialMcpTemplateId | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [draftErrors, setDraftErrors] = useState<DraftErrors>({});
+  const [formFailure, setFormFailure] = useState<{ message: string; canReload: boolean } | null>(null);
   const [pendingTest, setPendingTest] = useState<PendingTest | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const endpointInputRef = useRef<HTMLInputElement>(null);
+  const timeoutInputRef = useRef<HTMLInputElement>(null);
+  const headersInputRef = useRef<HTMLTextAreaElement>(null);
+  const focusReloadedDraftRef = useRef(false);
+  useLayoutEffect(() => {
+    if (!draft) { focusReloadedDraftRef.current = false; return; }
+    if (busy || !focusReloadedDraftRef.current) return;
+    // A frame scheduled from the request callback can run before React removes
+    // fieldset.disabled. Focus only after that enabled DOM has been committed.
+    focusReloadedDraftRef.current = false;
+    nameInputRef.current?.focus();
+  }, [busy, draft]);
   const resourceUrl = `/api/mcp${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`;
   const resource = useRequestResource<McpResource>(
     `mcp:${cwd ?? "global"}`,
@@ -74,8 +90,10 @@ export function McpCenter({ cwd, sessionId }: Props) {
   const statusMap = useMemo(() => new Map(statuses.map((status) => [status.id, status])), [statuses]);
   const statusLabels = {
     disabled: t("mcp.status.disabled"),
+    idle: t("mcp.status.idle"),
     connecting: t("mcp.status.connecting"),
     connected: t("mcp.status.connected"),
+    disconnected: t("mcp.status.disconnected"),
     error: t("mcp.status.error"),
   };
 
@@ -87,23 +105,35 @@ export function McpCenter({ cwd, sessionId }: Props) {
     });
     const result = await response.json() as {
       error?: string;
+      cleanupWarning?: string;
+      reloadWarning?: string;
       deferred?: boolean;
       confirmation?: { token: string; expiresAt: number };
       review?: PendingTest["review"];
     };
-    if (!response.ok) throw new Error(result.error ?? `HTTP ${response.status}`);
+    if (!response.ok) throw new McpRequestFailure(result.error ?? `HTTP ${response.status}`, response.status);
     return result;
   };
 
   const mutate = async (body: Record<string, unknown>, key: string) => {
+    if (busy) return false;
     setBusy(key);
     try {
       const result = await request(body);
-      if (result.deferred) showToast(t("mcp.savedDeferred"));
+      const warnings = [result.cleanupWarning, result.reloadWarning].filter(Boolean).join("\n");
+      if (warnings) showToast(warnings, { type: "warning", duration: 8000 });
+      else if (result.deferred) showToast(t("mcp.savedDeferred"));
       else showToast(t("mcp.updated"), { type: "success" });
       await resource.refresh();
       return true;
-    } catch (error) { showToast(error instanceof Error ? error.message : String(error), { type: "error" }); return false; }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const conflict = error instanceof McpRequestFailure && (error.status === 409 || error.status === 428);
+      if (body.action === "save") setFormFailure({ message, canReload: !!draft?.id && conflict });
+      else showToast(message, { type: "error" });
+      if (conflict) await resource.refresh(); // Keep the draft, refresh only the saved list.
+      return false;
+    }
     finally { setBusy(null); }
   };
 
@@ -149,8 +179,13 @@ export function McpCenter({ cwd, sessionId }: Props) {
   };
 
   const save = async () => {
-    if (!draft) return;
+    if (!draft || busy) return;
+    setFormFailure(null);
     const nextErrors: DraftErrors = {};
+    const timeoutSeconds = Number(draft.timeoutSeconds);
+    const timeoutMs = Math.round(timeoutSeconds * 1000);
+    if (!draft.timeoutSeconds.trim() || !Number.isFinite(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 120
+      || Math.abs(timeoutSeconds * 1000 - timeoutMs) > 0.000001) nextErrors.timeout = t("mcp.timeoutInvalid");
     if (!draft.name?.trim()) nextErrors.name = t("mcp.requiredName");
     if (draft.transport === "http" && !draft.url?.trim()) nextErrors.endpoint = t("mcp.requiredUrl");
     if (draft.transport === "stdio" && !draft.command?.trim()) nextErrors.endpoint = t("mcp.requiredCommand");
@@ -162,13 +197,17 @@ export function McpCenter({ cwd, sessionId }: Props) {
     } catch { nextErrors.headers = t("mcp.headersInvalid"); }
     if (Object.keys(nextErrors).length) {
       setDraftErrors(nextErrors);
-      requestAnimationFrame(() => (nextErrors.name ? nameInputRef.current : endpointInputRef.current)?.focus());
+      requestAnimationFrame(() => (nextErrors.name ? nameInputRef.current : nextErrors.endpoint ? endpointInputRef.current : nextErrors.timeout ? timeoutInputRef.current : headersInputRef.current)?.focus());
       return;
     }
     const server = {
       ...draft,
-      projectCwd: draft.scope === "project" ? cwd : undefined,
-      args: draft.argsText.split("\n").map((value) => value.trim()).filter(Boolean),
+      timeoutMs,
+      timeoutSeconds: undefined,
+      projectCwd: draft.scope === "project" ? draft.projectCwd ?? cwd ?? undefined : undefined,
+      // An unrelated edit must preserve empty arguments, padding and embedded
+      // newlines in an existing JSON config. Edited text is one argument/line.
+      args: draft.argsText === (draft.args ?? []).join("\n") ? draft.args ?? [] : draft.argsText ? draft.argsText.split("\n") : [],
       headers,
       argsText: undefined,
       headersText: undefined,
@@ -179,7 +218,23 @@ export function McpCenter({ cwd, sessionId }: Props) {
       setDraft(null);
       setSelectedTemplateId(null);
       setDraftErrors({});
+      setFormFailure(null);
     }
+  };
+
+  const reloadDraft = async () => {
+    if (!draft?.id || busy) return;
+    setBusy("reload-draft");
+    try {
+      const latest = await resource.refresh();
+      if (!latest) { setFormFailure({ message: t("mcp.reloadFailed"), canReload: true }); return; }
+      const saved = latest.servers?.find(server => server.id === draft.id);
+      if (!saved) { setFormFailure({ message: t("mcp.removedDraft"), canReload: false }); return; }
+      focusReloadedDraftRef.current = true;
+      setDraft(toDraft(saved));
+      setDraftErrors({});
+      setFormFailure(null);
+    } finally { setBusy(null); }
   };
 
   if (resource.loading && !servers.length) return <div className={styles.state}>{t("mcp.discovering")}</div>;
@@ -188,35 +243,38 @@ export function McpCenter({ cwd, sessionId }: Props) {
       <div className={styles.intro}>
         <div><h2>{t("mcp.title")}</h2><p>{t("mcp.description")}</p></div>
         <div className={styles.introActions}>
-          <button type="button" className={styles.secondary} onClick={() => void resource.refresh()} disabled={resource.refreshing}>
+          <button type="button" className={styles.secondary} onClick={() => void resource.refresh()} disabled={!!busy || resource.refreshing}>
             <RefreshCw size={15} strokeWidth={1.8} aria-hidden />
             {t("common.refresh")}
           </button>
-          <button type="button" className={styles.primary} onClick={() => setTemplatePickerOpen(true)}>
+          <button type="button" className={styles.primary} disabled={!!busy} onClick={() => setTemplatePickerOpen(true)}>
             <Plus size={16} strokeWidth={1.8} aria-hidden />
             {t("mcp.add")}
           </button>
         </div>
       </div>
+      {servers.length > 0 && <p className={styles.notice}>{t("mcp.statusHint")}</p>}
       {resource.error && <div className={styles.loadError} role="alert"><span>{resource.error}</span><button type="button" onClick={() => void resource.refresh()}>{t("common.retry")}</button></div>}
       {!servers.length ? <div className={styles.empty}><strong>{t("mcp.emptyTitle")}</strong><span>{t("mcp.emptyHint")}</span></div> : (
         <div className={styles.list}>{servers.map((server) => {
-          const status: McpServerStatus = statusMap.get(server.id) ?? { id: server.id, state: server.enabled ? "connecting" : "disabled", toolCount: 0, tools: [] };
+          const status: McpServerStatus = statusMap.get(server.id) ?? { id: server.id, state: server.enabled ? "idle" : "disabled", toolCount: 0, tools: [] };
           return <article key={server.id} className={styles.card}>
             <div className={styles.cardTop}>
               <div className={styles.identity}><span className={styles.dot} data-state={status.state} /><div><strong>{server.name}</strong><small>{server.transport === "stdio" ? `${server.command} ${(server.args ?? []).join(" ")}` : server.url}</small></div></div>
-              <button type="button" role="switch" aria-label={server.name} aria-checked={server.enabled} className={styles.toggle} data-on={server.enabled} disabled={busy === server.id} onClick={() => {
+              <button type="button" role="switch" aria-label={server.name} aria-checked={server.enabled} className={styles.toggle} data-on={server.enabled} disabled={!!busy} onClick={() => {
                 const trustStdio = !server.enabled && server.transport === "stdio" ? window.confirm(`${t("mcp.allowStart")}\n\n${server.name}\n${server.command}`) : true;
-                if (trustStdio) void mutate({ action: "toggle", id: server.id, enabled: !server.enabled, trustStdio }, server.id);
+                if (trustStdio) void mutate({ action: "toggle", id: server.id, revision: server.revision, enabled: !server.enabled, trustStdio }, server.id);
               }}><span /></button>
             </div>
             <div className={styles.meta}><span>{server.scope === "global" ? t("mcp.scopeAll") : t("mcp.scopeProject")}</span><span data-state={status.state}>{statusLabels[status.state]}</span><span>{status.toolCount} {t("mcp.toolsCount")}</span></div>
+            {status.checkedAt && Number.isFinite(Date.parse(status.checkedAt)) && <p className={styles.notice}>{t("mcp.lastChecked")} <time dateTime={status.checkedAt}>{new Date(status.checkedAt).toLocaleString()}</time></p>}
             {status.error && <p className={styles.error}>{status.error}</p>}
+            {status.catalogChanged && <p className={styles.notice}>{t("mcp.catalogChanged")}</p>}
             {status.tools.length > 0 && <div className={styles.tools}>{status.tools.slice(0, 8).map((tool) => <span key={tool.name} title={tool.description}>{tool.title ?? tool.name}</span>)}{status.tools.length > 8 && <span>+{status.tools.length - 8}</span>}</div>}
             <div className={styles.actions}>
-              <button type="button" onClick={() => { setSelectedTemplateId(null); setDraftErrors({}); setDraft(toDraft(server)); }}>{t("mcp.edit")}</button>
-              <button type="button" disabled={busy === `test-${server.id}`} onClick={() => void prepareTest(server)}>{t("mcp.test")}</button>
-              <button type="button" className={styles.danger} onClick={() => { if (window.confirm(`${t("mcp.deleteConfirm")}\n\n${server.name}`)) void mutate({ action: "delete", id: server.id }, server.id); }}>{t("mcp.delete")}</button>
+              <button type="button" disabled={!!busy} onClick={() => { setSelectedTemplateId(null); setDraftErrors({}); setFormFailure(null); setDraft(toDraft(server)); }}>{t("mcp.edit")}</button>
+              <button type="button" disabled={!!busy} onClick={() => void prepareTest(server)}>{t("mcp.test")}</button>
+              <button type="button" disabled={!!busy} className={styles.danger} onClick={() => { if (window.confirm(`${t("mcp.deleteConfirm")}\n\n${server.name}`)) void mutate({ action: "delete", id: server.id, revision: server.revision }, server.id); }}>{t("mcp.delete")}</button>
             </div>
           </article>;
         })}</div>
@@ -252,6 +310,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
               <button type="button" onClick={() => {
                 setSelectedTemplateId(template.id);
                 setDraftErrors({});
+                setFormFailure(null);
                 setDraft(templateDraft(template.id, cwd));
                 setTemplatePickerOpen(false);
               }}>{t("mcp.useTemplate")}</button>
@@ -267,6 +326,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
               <button type="button" onClick={() => {
                 setSelectedTemplateId(null);
                 setDraftErrors({});
+                setFormFailure(null);
                 setDraft(blankDraft(cwd));
                 setTemplatePickerOpen(false);
               }}>{t("mcp.configureCustom")}</button>
@@ -300,17 +360,24 @@ export function McpCenter({ cwd, sessionId }: Props) {
         open={!!draft}
         title={draft?.id ? t("mcp.editTitle") : selectedTemplateId ? t("mcp.configureTemplate") : t("mcp.newTitle")}
         description={selectedTemplateId ? t("mcp.templateEditorHint") : t("mcp.editorHint")}
-        onClose={() => { setDraft(null); setSelectedTemplateId(null); setDraftErrors({}); }}
+        onClose={() => { setDraft(null); setSelectedTemplateId(null); setDraftErrors({}); setFormFailure(null); }}
         canClose={!busy}
         size="default"
         mobileMode="fullscreen"
         initialFocusRef={nameInputRef}
         footer={draft ? <>
-          <button type="button" className={styles.secondary} disabled={!!busy} onClick={() => { setDraft(null); setSelectedTemplateId(null); setDraftErrors({}); }}>{t("common.cancel")}</button>
+          <button type="button" className={styles.secondary} disabled={!!busy} onClick={() => { setDraft(null); setSelectedTemplateId(null); setDraftErrors({}); setFormFailure(null); }}>{t("common.cancel")}</button>
           <button type="button" className={styles.primary} disabled={busy !== null} onClick={() => void save()}>{t("mcp.save")}</button>
         </> : undefined}
       >
-        {draft && <div className={styles.formGrid}>
+        {draft && <fieldset className={styles.formGrid} disabled={!!busy} aria-label={t("mcp.editTitle")}>
+          {formFailure && <div className={`${styles.formFailure} ${styles.full}`}>
+            <p role="alert">{formFailure.message}</p>
+            {formFailure.canReload && <>
+              <p>{t("mcp.draftKept")}</p>
+              <button type="button" className={styles.secondary} onClick={() => void reloadDraft()}>{t("mcp.discardReload")}</button>
+            </>}
+          </div>}
           {selectedTemplateId && (() => {
             const template = getOfficialMcpTemplate(selectedTemplateId);
             return <div className={`${styles.templateSummary} ${styles.full}`}>
@@ -329,7 +396,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
           </label>
           <label><span>{t("mcp.scope")}</span><select value={draft.scope} onChange={(event) => setDraft({ ...draft, scope: event.target.value as "global" | "project" })}><option value="global">{t("mcp.scopeAll")}</option><option value="project" disabled={!cwd}>{t("mcp.scopeProject")}</option></select></label>
           <label><span>{t("mcp.transport")}</span><select value={draft.transport} onChange={(event) => { setDraftErrors((current) => ({ ...current, endpoint: undefined })); setDraft({ ...draft, transport: event.target.value as "stdio" | "http" }); }}><option value="stdio">{t("mcp.transportStdio")}</option><option value="http">{t("mcp.transportHttp")}</option></select></label>
-          <label><span>{t("mcp.timeout")}</span><input type="number" min="1000" max="120000" step="1000" value={draft.timeoutMs ?? 15000} onChange={(event) => setDraft({ ...draft, timeoutMs: Number(event.target.value) })} /></label>
+          <label><span>{t("mcp.timeout")}</span><input ref={timeoutInputRef} type="number" min="1" max="120" step="0.001" value={draft.timeoutSeconds} aria-invalid={!!draftErrors.timeout} aria-describedby="mcp-timeout-hint" onChange={(event) => { setDraftErrors((current) => ({ ...current, timeout: undefined })); setDraft({ ...draft, timeoutSeconds: event.target.value }); }} /><small id="mcp-timeout-hint" className={draftErrors.timeout ? styles.fieldError : undefined}>{draftErrors.timeout ?? t("mcp.timeoutHint")}</small></label>
           {draft.transport === "http" ? <>
             <label className={styles.full}>
               <span>{t("mcp.url")}</span>
@@ -338,7 +405,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
             </label>
             <label className={styles.full}>
               <span>{t("mcp.headers")}</span>
-              <textarea value={draft.headersText} aria-invalid={!!draftErrors.headers} aria-describedby={draftErrors.headers ? "mcp-headers-error" : undefined} onChange={(event) => { setDraftErrors((current) => ({ ...current, headers: undefined })); setDraft({ ...draft, headersText: event.target.value }); }} placeholder={'{"Authorization":"Bearer ${TOKEN}"}'} />
+              <textarea ref={headersInputRef} value={draft.headersText} aria-invalid={!!draftErrors.headers} aria-describedby={draftErrors.headers ? "mcp-headers-error" : undefined} onChange={(event) => { setDraftErrors((current) => ({ ...current, headers: undefined })); setDraft({ ...draft, headersText: event.target.value }); }} placeholder={'{"Authorization":"Bearer ${TOKEN}"}'} />
               {draftErrors.headers && <small id="mcp-headers-error" className={styles.fieldError}>{draftErrors.headers}</small>}
             </label>
           </> : <>
@@ -351,7 +418,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
             <label className={styles.full}><span>{t("mcp.arguments")}</span><textarea value={draft.argsText} onChange={(event) => setDraft({ ...draft, argsText: event.target.value })} placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/path/to/project'} /></label>
           </>}
           <label className={styles.enableRow}><input type="checkbox" checked={draft.enabled ?? false} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} /><span>{t("mcp.enableAfterSave")}</span></label>
-        </div>}
+        </fieldset>}
       </DialogShell>
     </div>
   );

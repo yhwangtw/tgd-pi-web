@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import type { SessionInfo } from "@/lib/types";
-import type { WorkspaceIdentity } from "@/lib/workspace-identity";
+import { workspaceStateLabel, type WorkspaceIdentity } from "@/lib/workspace-identity";
 import { formatRelativeTime, getSessionDisplayTitle, getSessionPreview, getSessionProjectName } from "./session-utils";
 import { getTagStyle } from "@/lib/tag-colors";
 import { useTheme } from "@/hooks/useTheme";
@@ -72,7 +72,7 @@ export function SessionItem({
   const preview = getSessionPreview(session);
   const repository = workspaceIdentity?.repository ?? getSessionProjectName(session.cwd);
   const branch = workspaceIdentity?.branch
-    ?? (workspaceIdentity?.isGit ? "…" : t("topbar.notGitRepository"));
+    ?? t(workspaceIdentity ? workspaceStateLabel(workspaceIdentity) : "topbar.gitLoading");
 
   const startRename = useCallback(() => {
     setRenameValue(session.name ?? "");
@@ -243,14 +243,16 @@ export function SessionItem({
               </div>
             </div>
 
-            {/* Row 2: repo/branch + last-message preview + time */}
+            {/* Keep repository identity separate from the conversational excerpt. */}
             <div className={styles.metaRow}>
-              <span className={styles.workspaceMeta} title={`${session.cwd}${workspaceIdentity?.branch ? ` · ${workspaceIdentity.branch}` : ""}`}>
+              <span className={styles.workspaceMeta} title={`${session.cwd} · ${branch}`}>
                 <span>{repository}</span>
                 <span className={styles.workspaceSlash}>/</span>
                 <span className={styles.workspaceBranch}>{branch}</span>
               </span>
-              <span className={styles.metaDivider}>·</span>
+              <span className={styles.metaTime} title={session.modified}>{formatRelativeTime(session.modified, locale)}</span>
+            </div>
+            <div className={styles.previewRow}>
               <span className={styles.preview} title={preview || `${session.messageCount} ${session.messageCount === 1 ? t("sidebar.msg") : t("sidebar.msgs")}`}>
                 {preview || `${session.messageCount} ${session.messageCount === 1 ? t("sidebar.msg") : t("sidebar.msgs")}`}
               </span>
@@ -277,7 +279,6 @@ export function SessionItem({
                 );
               })}
               {tags.length > 1 && <span className={styles.tagCount} title={tags.slice(1).map((tag) => `#${tag}`).join(" ")}>+{tags.length - 1}</span>}
-              <span className={styles.metaTime} title={session.modified}>{formatRelativeTime(session.modified, locale)}</span>
             </div>
           </div>
         )}

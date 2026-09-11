@@ -309,7 +309,7 @@
 
 /* ── Session list ── */
 .sessionList {
-  --session-row-height: 60px;
+  --session-row-height: calc(84px * var(--font-scale));
   --session-group-height: 42px;
   position: relative;
   overflow-y: auto;
@@ -322,6 +322,9 @@
   height: var(--session-row-height);
   min-height: var(--session-row-height);
 }
+
+/* Resolve calc() to pixels for the virtualizer, including live font changes. */
+.virtualRowMeasure { position: absolute; top: 0; width: 0; height: var(--session-row-height); visibility: hidden; pointer-events: none; }
 
 .sessionRowShell {
   position: relative;
@@ -550,7 +553,7 @@
   }
 
   .sessionList {
-    --session-row-height: 80px;
+    --session-row-height: calc(108px * var(--font-scale));
     --session-group-height: 44px;
     padding-bottom: var(--space-3);
     overscroll-behavior-y: contain;

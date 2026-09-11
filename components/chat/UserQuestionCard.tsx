@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ComponentProps, type RefObject } from "react";
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { DialogShell } from "@/components/ui/DialogShell";
 import { useI18n } from "@/lib/i18n";
 import type { WebExtensionUIDialogRequest, WebExtensionUIResponse } from "@/lib/web-extension-ui-types";
@@ -12,9 +12,12 @@ interface Props {
   request: WebExtensionUIDialogRequest;
   pendingCount: number;
   onRespond: (response: WebExtensionUIResponse) => Promise<void>;
+  cardRef?: RefObject<UserQuestionCardHandle | null>;
 }
 
-export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
+export interface UserQuestionCardHandle { reveal: () => void }
+
+export function UserQuestionCard({ request, pendingCount, onRespond, cardRef }: Props) {
   const { t } = useI18n();
   const formId = useId();
   const firstControlRef = useRef<HTMLButtonElement | null>(null);
@@ -77,9 +80,8 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
   }), [request.id, respond]);
   const closeDialog = useCallback(() => { void cancel(); }, [cancel]);
 
-  // DialogShell owns initial focus and return-focus. Moving between ask_user
-  // steps keeps focus on the newly rendered choice/input without scrolling the
-  // transcript behind the modal.
+  // Initial questions never steal focus. Advancing a step is an explicit user
+  // action, so move to the next choice/input without jumping the transcript.
   useEffect(() => {
     if (request.method !== "ask_user" || activeQuestionIndex === 0) return;
     const frame = requestAnimationFrame(() => {
@@ -154,7 +156,9 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
   };
 
   return (
-    <DialogShell
+    <QuestionSurface
+      inline={request.method === "ask_user"}
+      cardRef={cardRef}
       open
       title={title}
       description={description}
@@ -192,7 +196,7 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
       )}
     >
       <form id={formId} onSubmit={submit} className={styles.questionForm}>
-        <div className={styles.formBody}>
+        <fieldset className={`${styles.formBody} ${styles.questionFields}`} disabled={submitting}>
           {request.method === "select" && (
             <QuestionChoiceList
               ariaLabel={request.title}
@@ -235,9 +239,60 @@ export function UserQuestionCard({ request, pendingCount, onRespond }: Props) {
             />
           )}
           {error && <p className={styles.error} role="alert">{error}</p>}
-        </div>
+        </fieldset>
       </form>
-    </DialogShell>
+    </QuestionSurface>
+  );
+}
+
+/** Only structured questions are non-modal; explicit extension confirmations
+ * retain DialogShell's focus isolation and cancellation contract. */
+function QuestionSurface({ inline, cardRef, ...props }: ComponentProps<typeof DialogShell> & {
+  inline: boolean;
+  cardRef?: RefObject<UserQuestionCardHandle | null>;
+}) {
+  const { t } = useI18n();
+  const titleId = useId();
+  const bodyId = useId();
+  const rootRef = useRef<HTMLElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  useImperativeHandle(cardRef, () => ({
+    reveal: () => {
+      setCollapsed(false);
+      requestAnimationFrame(() => {
+        rootRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+        // Focus the disclosure, not an input that opens the mobile keyboard.
+        toggleRef.current?.focus({ preventScroll: true });
+      });
+    },
+  }), []);
+  if (!inline) return <DialogShell {...props} />;
+  return (
+    <section ref={rootRef} className={`${styles.card} ${styles.inlineQuestion}`} aria-labelledby={titleId} data-testid="inline-user-question">
+      <header className={styles.cardHeader}>
+        <div className={styles.headingCopy}>
+          <h3 id={titleId} className={styles.cardTitle}>{props.title}</h3>
+          {props.description && <p className={styles.cardDescription}>{props.description}</p>}
+        </div>
+        <div className={styles.headerActions}>
+          {props.headerActions}
+          <button ref={toggleRef} type="button" className={styles.deferButton} aria-expanded={!collapsed} aria-controls={bodyId} onClick={() => setCollapsed(value => !value)}>
+            <span>{t(collapsed ? "extensionUI.expandQuestion" : "extensionUI.answerLater")}</span>
+            {collapsed ? <ChevronDown size={15} aria-hidden /> : <ChevronUp size={15} aria-hidden />}
+          </button>
+        </div>
+      </header>
+      {/* Keep fields mounted while deferred: hiding is never an answer or a
+          cancellation and must preserve both the draft and the current step. */}
+      <div id={bodyId} className={styles.inlineQuestionBody} hidden={collapsed}>
+        <div className={props.bodyClassName}>{props.children}</div>
+        <footer className={`${styles.actions} ${styles.questionActions}`}>
+          <button type="button" className={styles.cancelButton} disabled={props.canClose === false} onClick={props.onClose}>{t("extensionUI.cancelQuestion")}</button>
+          {props.footer}
+        </footer>
+      </div>
+    </section>
   );
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # tGD-pi-web — 一鍵安裝 + Production 啟動
-# 需要：Node.js 22+
+# 需要：Node.js 22.19+（22.x）或 23.4+（含 24 以上）
 #
 set -e
 
@@ -15,6 +15,26 @@ NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# Check the runtime before fetch/reset/clean, backups, or dependency changes.
+# Re-exec after synchronization checks the fetched contract again as well.
+if ! command -v node &>/dev/null; then
+  echo -e "${RED}❌ 找不到 Node.js；需要 22.19+（22.x）或 23.4+。${NC}"
+  exit 1
+fi
+TGD_NODE_VERSION=$(node -p 'process.versions.node')
+if ! node "$SCRIPT_DIR/scripts/check-node-version.mjs" "$TGD_NODE_VERSION"; then
+  echo -e "${RED}❌ 不支援的 Node.js 版本 ($TGD_NODE_VERSION)，需要 22.19+（22.x）或 23.4+（含 24 以上）${NC}"
+  exit 1
+fi
+if ! command -v npm &>/dev/null; then
+  echo -e "${RED}❌ 找不到 npm；尚未修改原始碼。${NC}"
+  exit 1
+fi
+
+# Never reset, clean, install, or build a checkout used by a live Next server.
+# A managed deployment must build/health-check a separate staging release first.
+node "$SCRIPT_DIR/scripts/check-running-checkout.mjs" "$SCRIPT_DIR"
 
 # ── 安全同步 origin/main ─────────────────────────────
 # A clean end-user checkout can update itself automatically. If the checkout
@@ -176,28 +196,9 @@ fi
 # ── 檢查 Node.js ──────────────────────────────────────
 echo ""
 echo -e "${BOLD}📦 檢查 Node.js...${NC}"
-if ! command -v node &>/dev/null; then
-  echo -e "  ${RED}❌ 找不到 Node.js${NC}"
-  echo ""
-  echo "  安裝方式："
-  echo "    macOS:   brew install node"
-  echo "    Ubuntu:  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs"
-  echo "    其他:    https://nodejs.org/"
-  exit 1
-fi
-
-NODE_MAJOR=$(node -e "console.log(process.versions.node.split('.')[0])")
-if [ "$NODE_MAJOR" -lt 22 ]; then
-  echo -e "  ${RED}❌ Node.js 版本過舊 ($NODE_MAJOR.x)，需要 22+${NC}"
-  exit 1
-fi
 echo -e "  ${GREEN}✅ Node.js $(node --version)${NC}"
 
 # ── 檢查 npm ──────────────────────────────────────────
-if ! command -v npm &>/dev/null; then
-  echo -e "  ${RED}❌ 找不到 npm${NC}"
-  exit 1
-fi
 echo -e "  ${GREEN}✅ npm $(npm --version)${NC}"
 
 # ── 安裝依賴 ──────────────────────────────────────────
@@ -285,7 +286,7 @@ echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━
 echo ""
 echo -e "  啟動 Production：${BOLD}npm start${NC}"
 echo -e "  重新建置：       ${BOLD}npm run build${NC}"
-echo -e "  更新並重新建置： ${BOLD}git pull && npm install && npm run build${NC}"
+echo -e "  更新並重新建置： ${BOLD}先停止本目錄的伺服器，再執行 bash setup.sh${NC}"
 echo ""
 echo -e "  預設埠號：      ${BOLD}30141${NC}"
 echo ""

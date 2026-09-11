@@ -5,7 +5,8 @@ import type { CommandPaletteApi, PaletteResult } from "@/hooks/useCommandPalette
 import { useUnifiedSearchResults, type SearchScope } from "@/hooks/useUnifiedSearchResults";
 import { useWorkspaceIdentities } from "@/hooks/useWorkspaceIdentities";
 import { useI18n, type MsgKey } from "@/lib/i18n";
-import { countSessionSearchFilters, EMPTY_SESSION_SEARCH_FILTERS, matchesSessionSearchFilters, type SearchDateRange, type SessionSearchFilters } from "@/lib/search-filters";
+import { countSessionSearchFilters, EMPTY_SESSION_SEARCH_FILTERS, matchesSessionSearchFilters, sessionBranchFilterValue, type SearchDateRange, type SessionSearchFilters } from "@/lib/search-filters";
+import { DEFAULT_FILE_SEARCH_OPTIONS, normalizeFileSearchOptions, type FileSearchOptions } from "@/lib/file-search-options";
 import type { SessionSearchStatus } from "@/lib/session-search";
 import { DialogShell } from "@/components/ui/DialogShell";
 import { BookmarkPlus, Search, SlidersHorizontal, X } from "lucide-react";
@@ -34,6 +35,9 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
   const inputRef = useRef<HTMLInputElement>(null);
   const [scope, setScope] = useState<SearchScope>("all");
   const [caseSensitive, setCaseSensitive] = useState(false);
+  const [fileOptions, setFileOptions] = useState(DEFAULT_FILE_SEARCH_OPTIONS);
+  const [fileScopeOpen, setFileScopeOpen] = useState(false);
+  const fileOptionCount = Object.values(fileOptions).filter(Boolean).length + Number(caseSensitive);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sessionFilters, setSessionFilters] = useState<SessionSearchFilters>(EMPTY_SESSION_SEARCH_FILTERS);
   const [savedViews, setSavedViews] = useState<SavedSearchView[]>(() => readSavedSearchViews());
@@ -41,11 +45,12 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
   const [viewName, setViewName] = useState("");
   const query = palette.query;
   const trimmed = query.trim();
-  const { sessionHits, fileHits, contentHits, semanticHits, loading, error } = useUnifiedSearchResults(
+  const { sessionHits, fileHits, contentHits, semanticHits, loading, error, filesTruncated, contentTruncated } = useUnifiedSearchResults(
     cwd,
     trimmed,
     scope,
     caseSensitive,
+    fileOptions,
   );
 
   useEffect(() => {
@@ -74,7 +79,7 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
   );
   const filterCount = countSessionSearchFilters(sessionFilters);
   const repositories = useMemo(() => [...new Set(sessionHits.map((hit) => workspaceIdentities[hit.cwd]?.repository).filter((value): value is string => Boolean(value)))].sort(), [sessionHits, workspaceIdentities]);
-  const branches = useMemo(() => [...new Set(sessionHits.map((hit) => workspaceIdentities[hit.cwd]?.branch ?? "not-git"))].sort(), [sessionHits, workspaceIdentities]);
+  const branches = useMemo(() => [...new Set(sessionHits.map((hit) => sessionBranchFilterValue(workspaceIdentities[hit.cwd])).filter((value): value is string => value !== null))].sort(), [sessionHits, workspaceIdentities]);
   const models = useMemo(() => [...new Set(sessionHits.map((hit) => hit.modelId).filter((value): value is string => Boolean(value)))].sort(), [sessionHits]);
   const statuses = useMemo(() => [...new Set(sessionHits.map((hit) => hit.status))].sort(), [sessionHits]);
 
@@ -99,11 +104,13 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
   const applySavedView = (view: SavedSearchView) => {
     setScope(view.scope);
     setSessionFilters(view.filters);
+    setFileOptions(normalizeFileSearchOptions(view.fileOptions));
+    setCaseSensitive(view.caseSensitive === true);
     palette.setQuery(view.query);
   };
 
   const saveCurrentView = () => {
-    const next = createSavedSearchView({ name: viewName, scope, query: trimmed, filters: sessionFilters }, savedViews);
+    const next = createSavedSearchView({ name: viewName, scope, query: trimmed, filters: sessionFilters, fileOptions, caseSensitive }, savedViews);
     setSavedViews(next);
     setViewName("");
     setSaveViewOpen(false);
@@ -145,7 +152,7 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
             </button>
           )}
         </div>
-        <div className={styles.scopes} aria-label={t("search.scopes")}>
+        <div className={styles.scopes} role="group" aria-label={t("search.scopes")}>
           {SCOPES.map((item) => (
             <button
               key={item}
@@ -157,29 +164,32 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
             </button>
           ))}
         </div>
-        {(scope === "all" || scope === "content") && (
-          <button
-            className={`${styles.caseButton} ${caseSensitive ? styles.caseButtonActive : ""}`}
-            onClick={() => setCaseSensitive((value) => !value)}
-            aria-pressed={caseSensitive}
-            title={t("search.caseSensitive")}
-          >
-            {t("search.caseSensitiveAbbrev")}
-          </button>
-        )}
+        <div className={styles.filterActions}>
         {showSessions && (
           <button
             type="button"
             className={`${styles.filterButton} ${filterCount > 0 ? styles.filterButtonActive : ""}`}
             onClick={() => setFiltersOpen(true)}
             aria-label={t("search.filters")}
+            aria-haspopup="dialog"
           >
             <SlidersHorizontal size={14} strokeWidth={1.8} aria-hidden />
             <span>{t("search.filters")}</span>
             {filterCount > 0 && <strong>{filterCount}</strong>}
           </button>
         )}
-        {filterCount > 0 && (
+        {(showFiles || showContent) && (
+          <button type="button" className={`${styles.filterButton} ${fileOptionCount ? styles.filterButtonActive : ""}`} onClick={() => setFileScopeOpen(true)} aria-haspopup="dialog" disabled={!cwd}>
+            <SlidersHorizontal size={14} aria-hidden />
+            <span>{t("search.fileScope")}</span>
+            {fileOptionCount > 0 && <strong>{fileOptionCount}</strong>}
+          </button>
+        )}
+        </div>
+        {(showFiles || showContent) && <p className={styles.scopeHint} title={cwd ?? undefined}>
+          {cwd ? `${t("search.filesIn")} ${cwd.split(/[\\/]/).filter(Boolean).pop()}` : t("search.chooseWorkspace")}
+        </p>}
+        {showSessions && filterCount > 0 && (
           <div className={styles.activeFilters} aria-label={t("search.activeFilters")}>
             {sessionFilters.repository && <button onClick={() => setSessionFilters((value) => ({ ...value, repository: null }))}>{sessionFilters.repository}<X size={12} aria-hidden /></button>}
             {sessionFilters.branch && <button onClick={() => setSessionFilters((value) => ({ ...value, branch: null }))}>{sessionFilters.branch === "not-git" ? t("topbar.notGitRepository") : sessionFilters.branch}<X size={12} aria-hidden /></button>}
@@ -203,7 +213,7 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
               </button>
             </div>
           ))}
-          <button type="button" className={styles.saveViewButton} onClick={() => setSaveViewOpen(true)} disabled={!trimmed && filterCount === 0}>
+          <button type="button" className={styles.saveViewButton} onClick={() => setSaveViewOpen(true)} disabled={!trimmed && filterCount === 0 && fileOptionCount === 0 && !caseSensitive}>
             <BookmarkPlus size={13} strokeWidth={1.8} aria-hidden />
             {t("search.saveView")}
           </button>
@@ -220,6 +230,7 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
               : trimmed.length >= 2
                 ? `${visibleResultCount} ${t("search.results")}`
                 : t("search.startTyping")}
+        {!loading && (filesTruncated || contentTruncated) && <span className={styles.limitNote}>{t("search.limitedResults")}</span>}
       </div>
 
       <UnifiedSearchResults
@@ -243,6 +254,31 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
         onOpenFile={onOpenFile}
         workspaceIdentities={workspaceIdentities}
       />
+
+      <DialogShell open={fileScopeOpen} title={t("search.fileScope")} description={t("search.fileScopeDescription")} onClose={() => setFileScopeOpen(false)} size="compact" mobileMode="sheet" footer={(
+        <>
+          <button type="button" className={styles.filterSecondary} onClick={() => { setFileOptions(DEFAULT_FILE_SEARCH_OPTIONS); setCaseSensitive(false); }}>{t("search.resetFileScope")}</button>
+          <button type="button" className={styles.filterPrimary} onClick={() => setFileScopeOpen(false)}>{t("common.done")}</button>
+        </>
+      )}>
+        <div className={styles.fileScopeForm}>
+          <div className={styles.workspacePath}><span>{t("search.currentFolder")}</span><code>{cwd}</code></div>
+          <fieldset>
+            <legend>{t("search.includeFiles")}</legend>
+            {(["includeHidden", "includeIgnored", "includeWorktrees"] as (keyof FileSearchOptions)[]).map((option) => (
+              <label key={option}>
+                <input type="checkbox" checked={fileOptions[option]} onChange={(event) => setFileOptions((value) => ({ ...value, [option]: event.target.checked }))} />
+                <span>{t(`search.${option}` as MsgKey)}</span>
+              </label>
+            ))}
+          </fieldset>
+          <label>
+            <input type="checkbox" checked={caseSensitive} onChange={(event) => setCaseSensitive(event.target.checked)} />
+            <span>{t("search.contentMatchCase")}</span>
+          </label>
+          <p className={styles.scopeHint}>{t("search.fileScopeLimits")}</p>
+        </div>
+      </DialogShell>
 
       <DialogShell
         open={filtersOpen}

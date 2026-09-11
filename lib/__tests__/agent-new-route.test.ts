@@ -16,6 +16,13 @@ beforeEach(() => {
 });
 
 describe("POST /api/agent/new", () => {
+  it("can create and configure a session without starting its first prompt", async () => {
+    const response = await POST(new Request("http://localhost/api/agent/new", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd, type: "prompt", message: "instant answer", deferPrompt: true, provider: "test", modelId: "fast" }) }));
+    expect(response.status).toBe(200);
+    expect(harness.send).toHaveBeenCalledExactlyOnceWith({ type: "set_model", provider: "test", modelId: "fast" });
+    await expect(response.json()).resolves.toMatchObject({ sessionId: "memory-1", deferred: true });
+  });
+
   it("creates an in-memory Pi runtime when ephemeral is selected", async () => {
     const response = await POST(new Request("http://localhost/api/agent/new", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd, type: "prompt", message: "hello", ephemeral: true }) }));
     expect(response.status).toBe(200);

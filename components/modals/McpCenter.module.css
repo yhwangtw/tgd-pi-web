@@ -19,10 +19,12 @@
 .dot[data-state="connected"] { background: var(--color-success); box-shadow: 0 0 0 4px var(--color-success-bg); }
 .dot[data-state="error"] { background: var(--color-error); box-shadow: 0 0 0 4px var(--color-error-bg); }
 .dot[data-state="connecting"] { background: var(--color-warning); }
-.toggle { width: 38px; height: 22px; flex: 0 0 auto; padding: var(--space-optical); border: 0; border-radius: var(--radius-pill); background: var(--bg-subtle); cursor: pointer; box-shadow: inset 0 0 0 1px var(--border); }
-.toggle span { display: block; width: 18px; height: 18px; border-radius: var(--radius-pill); background: var(--bg-elev-1); box-shadow: var(--color-shadow-sm); transition: transform var(--motion-fast) var(--ease-standard); }
-.toggle[data-on="true"] { background: var(--accent); box-shadow: none; }
-.toggle[data-on="true"] span { transform: translateX(16px); }
+.toggle { display: grid; width: var(--control-touch); height: var(--control-touch); flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; cursor: pointer; }
+.toggle span { position: relative; display: block; width: 38px; height: 22px; border-radius: var(--radius-pill); background: var(--bg-subtle); box-shadow: inset 0 0 0 1px var(--border); }
+.toggle span::before { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: var(--radius-pill); background: var(--bg-elev-1); box-shadow: var(--color-shadow-sm); transition: transform var(--motion-fast) var(--ease-standard); }
+.toggle[data-on="true"] span { background: var(--accent); box-shadow: none; }
+.toggle[data-on="true"] span::before { transform: translateX(16px); }
+.toggle:disabled { cursor: not-allowed; opacity: .5; }
 .meta { flex-wrap: wrap; gap: var(--space-2); color: var(--text-dim); font-size: var(--text-xs); }
 .meta span { padding: var(--space-optical) var(--space-2); border-radius: var(--radius-pill); background: var(--bg-subtle); }
 .meta span[data-state="connected"] { color: var(--color-success-text); background: var(--color-success-bg); }
@@ -30,14 +32,18 @@
 .tools { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .tools span { max-width: 180px; overflow: hidden; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); text-overflow: ellipsis; white-space: nowrap; }
 .error { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-row); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--text-xs); line-height: var(--leading-copy); }
+.notice { margin: 0; color: var(--text-muted); font-size: var(--text-xs); line-height: var(--leading-copy); overflow-wrap: anywhere; }
 .loadError { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-error-border); border-radius: var(--radius-control); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--text-sm); }
 .loadError button { min-height: var(--control-compact); padding: 0 var(--space-3); border: 1px solid var(--color-error-border); border-radius: var(--radius-control-compact); background: var(--bg-elev-1); color: inherit; cursor: pointer; }
 .actions { justify-content: flex-end; gap: var(--space-2); }
 .actions .danger { margin-left: auto; color: var(--color-error-text); }
 .empty, .state { display: grid; min-height: 240px; place-content: center; gap: var(--space-2); color: var(--text-dim); text-align: center; }
 .empty strong { color: var(--text); }
-.formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
-.formGrid label { display: grid; gap: var(--space-1); color: var(--text-muted); font-size: var(--text-xs); }
+.formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; margin: 0; padding: 0; border: 0; gap: var(--space-3); }
+.formFailure { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-warning-border); border-radius: var(--radius-row); background: var(--bg-elev-2); color: var(--text-muted); font-size: var(--text-sm); line-height: var(--leading-copy); overflow-wrap: anywhere; }
+.formFailure p { margin: 0; }
+.formFailure button { justify-self: start; max-width: 100%; padding-block: var(--space-2); white-space: normal; text-align: start; }
+.formGrid label { display: grid; align-content: start; gap: var(--space-1); color: var(--text-muted); font-size: var(--text-xs); }
 .formGrid input:not([type="checkbox"]), .formGrid select, .formGrid textarea { width: 100%; min-height: var(--control-lg); padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-control); outline: 0; background: var(--bg-elev-1); color: var(--text); font: inherit; }
 .formGrid textarea { min-height: 82px; padding-block: var(--space-2); resize: vertical; font-family: var(--font-mono); font-size: var(--text-xs); }
 .formGrid input:focus, .formGrid select:focus, .formGrid textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--color-accent-bg); }
@@ -77,3 +83,10 @@
 .templateSummary span { color: var(--text-muted); font-size: var(--text-sm); line-height: var(--leading-copy); }
 .templateSummary a { width: fit-content; color: var(--accent); }
 @media (max-width: 680px) { .intro { display: grid; } .introActions { flex-wrap: wrap; } .introActions .primary, .introActions .secondary { width: fit-content; min-height: var(--control-touch); } .formGrid, .templateGrid { grid-template-columns: 1fr; } .full, .formGrid .enableRow, .customTemplate { grid-column: 1; } .actions { flex-wrap: wrap; } .actions button, .templateActions button { min-height: var(--control-touch); } .templateCard dl > div, .templateSummary dl > div { grid-template-columns: 1fr; gap: var(--space-1); } .loadError { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 680px) {
+  .primary, .secondary, .loadError button,
+  .formGrid input:not([type="checkbox"]), .formGrid select,
+  .formGrid .enableRow, .templateActions a, .templateSummary a {
+    min-height: var(--control-touch);
+  }
+}

@@ -9,6 +9,17 @@ const HEALTHY_PROGRESS: RunProgressState = {
   connection: "connected",
 };
 
+export function isDuplicateAgentCursor(previous: string | null, next: string): boolean {
+  if (!previous || !next) return false;
+  const split = (cursor: string) => {
+    const at = cursor.lastIndexOf(":");
+    return { epoch: cursor.slice(0, at), sequence: Number(cursor.slice(at + 1)) };
+  };
+  const before = split(previous);
+  const after = split(next);
+  return before.epoch === after.epoch && Number.isSafeInteger(after.sequence) && after.sequence <= before.sequence;
+}
+
 /**
  * SSE wiring for a live agent run: owns the EventSource, the
  * last-event timestamp, and reconnect-with-backoff. Events are delivered
@@ -20,74 +31,102 @@ export function useAgentEvents(
   handleAgentEventRef: React.RefObject<((event: AgentEvent) => void) | null>,
 ) {
   const eventSourceRef = useRef<EventSource | null>(null);
+  const mountedRef = useRef(true);
   const [mountedAt] = useState(() => Date.now());
   const lastEventAtRef = useRef(mountedAt);
   const reconnectAttemptRef = useRef(0);
   const reconnectStartedAtRef = useRef<number | null>(null);
   const [connectionState, setConnectionState] = useState<RunProgressState["connection"]>("connected");
+  const sessionRef = useRef<string | null>(null);
+  const cursorRef = useRef<string | null>(null);
+  const readyRef = useRef(false);
+  const pendingReadyRef = useRef<Promise<boolean> | null>(null);
+  const generationRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failSafeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settlePendingRef = useRef<((ok: boolean) => void) | null>(null);
 
-  // Resolves `true` once the stream to `sid` is open, `false` when it isn't
+  // Resolves `true` after the authoritative snapshot has been applied, not
+  // merely after HTTP open (an old idle snapshot must precede a new prompt).
+  // Resolves `false` when the stream isn't ready
   // yet (failsafe timeout / connect error) — a broken stream never blocks the
   // caller, but it can tell the difference and log it.
-  const connectEvents = useCallback((sid: string): Promise<boolean> => {
-    const url = `/api/agent/${encodeURIComponent(sid)}/events`;
+  const connectEvents = useCallback((sid: string, forceReconnect = false): Promise<boolean> => {
+    if (!mountedRef.current) return Promise.resolve(false);
     const current = eventSourceRef.current;
-    // Already connected (or connecting) to this session — reuse instead of
-    // tearing down (a recreate right before a prompt POST could drop the
-    // run's first events).
-    if (current && current.url.endsWith(url)) {
-      if (current.readyState === EventSource.OPEN) return Promise.resolve(true);
-      if (current.readyState === EventSource.CONNECTING) {
-        return new Promise<boolean>((resolve) => {
-          let settled = false;
-          const settle = (ok: boolean) => { if (!settled) { settled = true; clearTimeout(failSafe); resolve(ok); } };
-          const failSafe = setTimeout(() => settle(false), 1_500);
-          current.addEventListener("open", () => settle(true), { once: true });
-          current.addEventListener("error", () => settle(false), { once: true });
-        });
-      }
+    if (!forceReconnect && current && sessionRef.current === sid && current.readyState !== EventSource.CLOSED) {
+      return readyRef.current ? Promise.resolve(true) : pendingReadyRef.current ?? Promise.resolve(false);
     }
-    if (current) {
-      current.close();
-      eventSourceRef.current = null;
+    if (sessionRef.current !== sid) {
+      cursorRef.current = null;
+      reconnectAttemptRef.current = 0;
+      reconnectStartedAtRef.current = null;
     }
+    sessionRef.current = sid;
+    const generation = ++generationRef.current;
+    settlePendingRef.current?.(false);
+    if (reconnectTimerRef.current !== null) clearTimeout(reconnectTimerRef.current);
+    if (failSafeRef.current !== null) clearTimeout(failSafeRef.current);
+    reconnectTimerRef.current = null;
+    current?.close();
+    readyRef.current = false;
+    const url = `/api/agent/${encodeURIComponent(sid)}/events${cursorRef.current ? `?cursor=${encodeURIComponent(cursorRef.current)}` : ""}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
-    // Resolves when the stream is open, so callers can await the connection
-    // BEFORE prompting — otherwise the run's first events race the subscribe.
-    // A safety-net timeout keeps a broken stream from ever blocking a send.
-    return new Promise<boolean>((resolve) => {
+    const pending = new Promise<boolean>((resolve) => {
       let settled = false;
-      const settle = (ok: boolean) => { if (!settled) { settled = true; resolve(ok); } };
-      const failSafe = setTimeout(() => settle(false), 1_500);
+      const settle = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        if (failSafeRef.current !== null) clearTimeout(failSafeRef.current);
+        resolve(ok);
+      };
+      settlePendingRef.current = settle;
+      failSafeRef.current = setTimeout(() => settle(false), 1_500);
       es.onopen = () => {
-        reconnectAttemptRef.current = 0;
-        reconnectStartedAtRef.current = null;
+        if (eventSourceRef.current !== es) return;
         setConnectionState("connected");
-        clearTimeout(failSafe);
-        settle(true);
       };
       es.onmessage = (e) => {
-        lastEventAtRef.current = Date.now();
-        // Promote/demote immediately on real progress instead of waiting up to
-        // five seconds for the polling interval to clear delayed UI.
+        if (eventSourceRef.current !== es) return;
         setConnectionState("connected");
         try {
           const event = JSON.parse(e.data) as AgentEvent;
+          const snapshot = event.type === "session_snapshot";
+          const sequenced = event.type !== "connected" && !event.type.startsWith("extension_ui_");
+          if (sequenced && !snapshot && e.lastEventId && isDuplicateAgentCursor(cursorRef.current, e.lastEventId)) return;
           handleAgentEventRef.current?.(event);
+          if (sequenced && e.lastEventId) cursorRef.current = e.lastEventId;
+          if (event.type === "session_closed") {
+            settle(false);
+            readyRef.current = false;
+            es.close();
+            eventSourceRef.current = null;
+            return;
+          }
+          if (snapshot) {
+            readyRef.current = true;
+            reconnectAttemptRef.current = 0;
+            reconnectStartedAtRef.current = null;
+            settle(true);
+          } else if (event.type !== "connected") {
+            // Transport/bootstrap snapshots are not meaningful model progress.
+            lastEventAtRef.current = Date.now();
+          }
         } catch {
-          // ignore
+          // Leave the cursor unchanged so a malformed/unhandled frame is not
+          // acknowledged as delivered; reconnect can recover from a snapshot.
         }
       };
       es.onerror = () => {
         settle(false); // no-op after open — only fails a still-pending await
-        if (eventSourceRef.current === es && agentRunningRef.current) {
+        if (eventSourceRef.current === es) {
           if (reconnectStartedAtRef.current === null) reconnectStartedAtRef.current = Date.now();
           const reconnectingFor = Date.now() - reconnectStartedAtRef.current;
           // Mobile radios and browsers routinely blip during network changes.
           // Keep the first two attempts visually quiet; promote only a
           // sustained transport problem, separate from model latency.
-          if (reconnectAttemptRef.current >= 2 || reconnectingFor >= 10_000) {
+          if (agentRunningRef.current && (reconnectAttemptRef.current >= 2 || reconnectingFor >= 10_000)) {
             setConnectionState("reconnecting");
           }
           es.close();
@@ -96,13 +135,28 @@ export function useAgentEvents(
           // server isn't hammered once per second.
           const delay = Math.min(1000 * 2 ** reconnectAttemptRef.current, 15_000);
           reconnectAttemptRef.current++;
-          setTimeout(() => {
-            if (agentRunningRef.current) void connectEvents(sid);
+          reconnectTimerRef.current = setTimeout(() => {
+            if (generationRef.current === generation && sessionRef.current === sid) void connectEvents(sid);
           }, delay);
         }
       };
     });
+    pendingReadyRef.current = pending;
+    return pending;
   }, [agentRunningRef, handleAgentEventRef]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      generationRef.current += 1;
+      settlePendingRef.current?.(false);
+      if (reconnectTimerRef.current !== null) clearTimeout(reconnectTimerRef.current);
+      if (failSafeRef.current !== null) clearTimeout(failSafeRef.current);
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+    };
+  }, []);
 
   return { eventSourceRef, lastEventAtRef, connectionState, connectEvents };
 }

@@ -55,10 +55,10 @@ import { setSkin } from "@/lib/skin";
 import { setUiStyle } from "@/lib/ui-style";
 import { resolveAppShellCenterView } from "./app-shell-view";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { resolveWorkspaceIdentity, type WorkspaceIdentity } from "@/lib/workspace-identity";
+import { RuntimeIdentityBar } from './RuntimeIdentityBar';
+import { pendingWorkspaceIdentity, workspaceStateLabel, type WorkspaceIdentity } from "@/lib/workspace-identity";
 import { requestOpenProjectSwitcher } from "@/lib/project-switcher-events";
 import { publishSessionReplacement } from "@/lib/session-replacement-channel";
-import type { Worktree } from "@/lib/worktrees";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ChatInputHandle } from "../chat/ChatInput";
 import { getSessionDisplayTitle } from "../sidebar/session-utils";
@@ -134,7 +134,7 @@ export function AppShell() {
   const workspaceCwd = state.selectedSession?.cwd ?? state.newSessionCwd ?? state.activeCwd;
   const [workspaceIdentity, setWorkspaceIdentity] = useState<WorkspaceIdentity | null>(null);
   const fallbackWorkspaceIdentity = workspaceCwd
-    ? resolveWorkspaceIdentity(workspaceCwd, [])
+    ? pendingWorkspaceIdentity(workspaceCwd)
     : null;
   const visibleWorkspaceIdentity = workspaceIdentity?.sourceCwd === workspaceCwd
     ? workspaceIdentity
@@ -149,13 +149,13 @@ export function AppShell() {
     const controller = new AbortController();
     fetch(`/api/worktrees?cwd=${encodeURIComponent(workspaceCwd)}`, { signal: controller.signal })
       .then((response) => response.ok ? response.json() : null)
-      .then((data: { worktrees?: Worktree[] } | null) => {
+      .then((data: { identity?: WorkspaceIdentity } | null) => {
         if (!controller.signal.aborted) {
-          setWorkspaceIdentity(resolveWorkspaceIdentity(workspaceCwd, data?.worktrees ?? []));
+          setWorkspaceIdentity(data?.identity?.sourceCwd === workspaceCwd ? data.identity : pendingWorkspaceIdentity(workspaceCwd, "unknown"));
         }
       })
       .catch(() => {
-        // The cwd label remains useful outside git or during a transient fetch failure.
+        if (!controller.signal.aborted) setWorkspaceIdentity(pendingWorkspaceIdentity(workspaceCwd, "unknown"));
       });
     return () => controller.abort();
   }, [workspaceCwd]);
@@ -822,6 +822,7 @@ export function AppShell() {
 
       {/* Center: chat */}
       <div className={s.centerPanel}>
+        <RuntimeIdentityBar />
         {/* Top bar with sidebar toggle */}
         <div ref={topBarRef} className={s.topBar} data-testid="top-bar">
           <button
@@ -850,17 +851,17 @@ export function AppShell() {
                   data-testid="workspace-branch"
                   title={visibleWorkspaceIdentity.detached && visibleWorkspaceIdentity.branch
                     ? `${t("topbar.detached")} · ${visibleWorkspaceIdentity.branch}`
-                    : visibleWorkspaceIdentity.branch ?? t("topbar.notGitRepository")}
+                    : visibleWorkspaceIdentity.branch ?? t(workspaceStateLabel(visibleWorkspaceIdentity))}
                 >
                   {visibleWorkspaceIdentity.detached && visibleWorkspaceIdentity.branch
                     ? <>{visibleWorkspaceIdentity.branch}<span className={s.detachedLabel}> · {t("topbar.detached")}</span></>
                     : visibleWorkspaceIdentity.branch
-                    ?? (workspaceIdentity?.sourceCwd === workspaceCwd
+                    ?? (visibleWorkspaceIdentity.state === "not-git"
                       ? <>
                           <span className={s.workspaceBranchLong}>{t("topbar.notGitRepository")}</span>
                           <span className={s.workspaceBranchShort}>{t("topbar.notGitShort")}</span>
                         </>
-                      : "…")}
+                      : t(workspaceStateLabel(visibleWorkspaceIdentity)))}
                 </span>
               </button>
             )}
@@ -1293,7 +1294,7 @@ export function AppShell() {
           />
         )}
         {/* Right panel tab bar */}
-        <div className={s.rightPanelTabBar} data-testid="right-panel-tab-bar">
+        {!(diffFile && panelCwd) && <div className={s.rightPanelTabBar} data-testid="right-panel-tab-bar">
           <div className={s.rightPanelTabBarInner}>
             <TabBar
               tabs={fileTabs}
@@ -1336,10 +1337,11 @@ export function AppShell() {
           </button>
         </div>
 
+        }
         {/* File content */}
         <div className={s.rightPanelContent}>
           {diffFile && panelCwd ? (
-            <DiffPanel cwd={panelCwd} path={diffFile} onClose={() => setDiffFile(null)} onAnnotate={handleDiffAnnotation} />
+            <DiffPanel key={`${panelCwd}:${diffFile}`} cwd={panelCwd} path={diffFile} onClose={() => setDiffFile(null)} onAnnotate={handleDiffAnnotation} />
           ) : activeFileTab?.filePath ? (
             <div className={`${s.fileWorkspace} ${splitFileTab ? s.fileWorkspaceSplit : ""}`}>
               <div className={s.fileWorkspacePane}>

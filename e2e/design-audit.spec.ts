@@ -238,6 +238,9 @@ async function auditTypography(root: Locator, context: string) {
 }
 
 async function openPrimaryView(page: Page, name: string, mobile: boolean) {
+  // Completion notifications can be produced by earlier real fixture flows.
+  // Keep the exact control identity while allowing its announced unread count.
+  const accessibleName = name === "Attention" ? /^Attention(?:\s+(?:·\s*)?\d+)?$/ : name;
   if (mobile) {
     const backdrop = page.locator("button[class*='mobileSheetBackdrop']");
     if (await backdrop.isVisible()) {
@@ -246,25 +249,25 @@ async function openPrimaryView(page: Page, name: string, mobile: boolean) {
     }
   }
   if (!mobile) {
-    const trigger = page.getByRole("button", { name, exact: true }).last();
+    const trigger = page.getByRole("button", { name: accessibleName, exact: true }).last();
     if (await trigger.getAttribute("aria-pressed") === "true") return;
   }
   if (mobile && ["Sessions", "Files", "Search"].includes(name)) {
-    const trigger = page.locator("nav[class*='mobileNav']").getByRole("button", { name, exact: true });
+    const trigger = page.locator("nav[class*='mobileNav']").getByRole("button", { name: accessibleName, exact: true });
     if (await trigger.getAttribute("aria-current") === "page") return;
   }
   if (mobile && !["Sessions", "Files", "Search"].includes(name)) {
     await page.getByRole("button", { name: "More", exact: true }).click();
     const sheet = page.locator("section[class*='mobileMoreSheet']");
     await expect(sheet).toBeVisible();
-    await sheet.getByRole("button", { name, exact: true }).click();
+    await sheet.getByRole("button", { name: accessibleName, exact: true }).click();
     await expect(sheet).toHaveCount(0);
     return;
   }
   if (mobile) {
-    await page.locator("nav[class*='mobileNav']").getByRole("button", { name, exact: true }).click();
+    await page.locator("nav[class*='mobileNav']").getByRole("button", { name: accessibleName, exact: true }).click();
   } else {
-    await page.getByRole("button", { name, exact: true }).last().click();
+    await page.getByRole("button", { name: accessibleName, exact: true }).last().click();
   }
 }
 

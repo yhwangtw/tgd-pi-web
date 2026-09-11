@@ -1,5 +1,7 @@
 import path from "path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { listAllSessions } from "@/lib/session-reader";
+import { isFileMutationLockPath } from "./file-mutation-lock";
 
 const IGNORED_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
@@ -74,6 +76,7 @@ export async function getAllowedRoots(): Promise<Set<string>> {
 }
 
 export function isPathAllowed(target: string, allowedRoots: Set<string>): boolean {
+  if (isFileMutationLockPath(target, getAgentDir())) return false;
   for (const root of allowedRoots) {
     const useWindowsRules = isWindowsAbsolutePath(target) || isWindowsAbsolutePath(root);
     const resolver = useWindowsRules ? path.win32 : path;

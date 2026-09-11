@@ -34,6 +34,11 @@ export function countSessionSearchFilters(filters: SessionSearchFilters): number
     + Number(filters.date !== "any");
 }
 
+export function sessionBranchFilterValue(identity: WorkspaceIdentity | undefined): string | null {
+  if (!identity || identity.state === "loading" || identity.state === "unknown") return null;
+  return identity.state === "not-git" ? "not-git" : identity.branch;
+}
+
 export function matchesSessionSearchFilters(
   hit: FilterableSessionHit,
   identity: WorkspaceIdentity | undefined,
@@ -41,7 +46,7 @@ export function matchesSessionSearchFilters(
   now = Date.now(),
 ): boolean {
   if (filters.repository && identity?.repository !== filters.repository) return false;
-  const branch = identity?.branch ?? "not-git";
+  const branch = sessionBranchFilterValue(identity);
   if (filters.branch && branch !== filters.branch) return false;
   if (filters.model && hit.modelId !== filters.model) return false;
   if (filters.status && hit.status !== filters.status) return false;

@@ -148,6 +148,11 @@ test.describe("file explorer", () => {
   });
 
   test("context menu: copy relative path / mention / diff entries", async ({ page }) => {
+    // Open the menu before Git metadata arrives. It must react to the current
+    // status, not keep the empty snapshot captured by the right-click.
+    let releaseGit!: () => void;
+    const gitReady = new Promise<void>(resolve => { releaseGit = resolve; });
+    await page.route("**/api/git/changes?**", async route => { await gitReady; await route.continue(); });
     await openMain(page);
     await openFiles(page);
     await page.getByText("src", { exact: true }).first().click();
@@ -158,6 +163,8 @@ test.describe("file explorer", () => {
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
     await expect(menu.getByRole("menuitem", { name: "Insert @ mention" })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "View diff" })).toHaveCount(0);
+    releaseGit();
     await expect(menu.getByRole("menuitem", { name: "View diff" })).toBeVisible();
 
     await menu.getByRole("menuitem", { name: "Copy relative path" }).click();

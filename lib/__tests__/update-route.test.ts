@@ -46,6 +46,8 @@ const mocks = vi.hoisted(() => {
     backup,
     status,
     createUpdateBackup: vi.fn(async () => backup),
+    beginManagedUpdateOperation: vi.fn(async () => ({ id: "update-fixture" })),
+    failReservedUpdateOperation: vi.fn(async () => {}),
     executeManagedUpdateAction: vi.fn(async () => ({ pid: 42, label: "pi-web-update" })),
     recordSecurityActivity: vi.fn(),
   };
@@ -53,6 +55,8 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@/lib/security-activity", () => ({ recordSecurityActivity: mocks.recordSecurityActivity }));
 vi.mock("@/lib/update-center", () => ({
+  beginManagedUpdateOperation: mocks.beginManagedUpdateOperation,
+  failReservedUpdateOperation: mocks.failReservedUpdateOperation,
   createUpdateBackup: mocks.createUpdateBackup,
   executeManagedUpdateAction: mocks.executeManagedUpdateAction,
   findUpdateBackup: vi.fn(async (_root: string, id: string) => id === mocks.backup.id ? mocks.backup : null),
@@ -87,6 +91,8 @@ function request(body: Record<string, unknown>, sameOrigin = true) {
 afterEach(() => {
   mocks.status.current.sourceFingerprint = "source-a";
   mocks.createUpdateBackup.mockClear();
+  mocks.beginManagedUpdateOperation.mockReset().mockResolvedValue({ id: "update-fixture" });
+  mocks.failReservedUpdateOperation.mockClear();
   mocks.executeManagedUpdateAction.mockClear();
   mocks.recordSecurityActivity.mockClear();
   resetSensitiveActionConfirmationsForTests();
@@ -120,11 +126,22 @@ describe("Update Center route", () => {
     expect(mocks.executeManagedUpdateAction).toHaveBeenCalledWith("update", {
       targetTag: "v2026.08.31",
       backup: mocks.backup,
+      operationId: "update-fixture",
     });
 
     const replay = await POST(request({ phase: "execute", action: "update", token: next.confirmation.token }));
     expect(replay.status).toBe(409);
     expect(mocks.createUpdateBackup).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a concurrent operation before creating another source backup", async () => {
+    const prepared = await POST(request({ phase: "prepare", action: "update" }));
+    const next = await prepared.json() as { confirmation: { token: string } };
+    mocks.beginManagedUpdateOperation.mockRejectedValueOnce(Object.assign(new Error("Another update is active"), { code: "UPDATE_OPERATION_CONFLICT" }));
+    const response = await POST(request({ phase: "execute", action: "update", token: next.confirmation.token }));
+    expect(response.status).toBe(409);
+    expect(mocks.createUpdateBackup).not.toHaveBeenCalled();
+    expect(mocks.executeManagedUpdateAction).not.toHaveBeenCalled();
   });
 
   it("requires an existing private backup before rollback review", async () => {

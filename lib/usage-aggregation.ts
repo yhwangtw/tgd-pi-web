@@ -26,13 +26,14 @@ export function emptyUsage(): AssistantUsage {
 
 export function addUsage(target: AssistantUsage, src: PartialUsage | null | undefined): void {
   if (!src) return;
-  target.input += src.input ?? 0;
-  target.output += src.output ?? 0;
-  target.cacheRead += src.cacheRead ?? 0;
-  target.cacheWrite += src.cacheWrite ?? 0;
-  target.cost.input += src.cost?.input ?? 0;
-  target.cost.output += src.cost?.output ?? 0;
-  target.cost.cacheRead += src.cost?.cacheRead ?? 0;
-  target.cost.cacheWrite += src.cost?.cacheWrite ?? 0;
-  target.cost.total += src.cost?.total ?? 0;
+  const finite = (v: unknown): number => typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0;
+  target.input += finite(src.input);
+  target.output += finite(src.output);
+  target.cacheRead += finite(src.cacheRead);
+  target.cacheWrite += finite(src.cacheWrite);
+  target.cost.input += finite(src.cost?.input);
+  target.cost.output += finite(src.cost?.output);
+  target.cost.cacheRead += finite(src.cost?.cacheRead);
+  target.cost.cacheWrite += finite(src.cost?.cacheWrite);
+  target.cost.total += finite(src.cost?.total);
 }
