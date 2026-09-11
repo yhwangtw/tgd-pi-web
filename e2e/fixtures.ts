@@ -218,7 +218,7 @@ export default function reconnectFixture(pi) {
     execSync(`git -c user.email=e2e@test -c user.name=e2e ${args}`, { cwd, stdio: "pipe" });
   const diffLines = Array.from({ length: 20_000 }, (_, i) => `review line ${i + 1}`);
   writeFileSync(path.join(cwd, "diff-navigation.txt"), diffLines.join("\n") + "\n");
-  git("init -q");
+  git("init -q -b main");
   git("add -A");
   git('commit -qm "initial"');
   // Linked worktree — drives the CwdPicker worktree rows

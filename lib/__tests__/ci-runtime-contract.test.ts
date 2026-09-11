@@ -8,7 +8,7 @@ describe("runtime and installation CI contract", () => {
   it("runs real minimum/runtime Node versions on Linux and macOS", () => {
     const runtime = job("runtime-tests");
     expect(runtime).toContain("os: [ubuntu-latest, macos-latest]");
-    expect(runtime).toContain("node: ['22.19.0', '23.4.0', '24']");
+    expect(runtime).toContain("node: ['22.19.0', '23.4.0', '24', '26']");
     expect(runtime).toContain("node-version: ${{ matrix.node }}");
     expect(runtime).toContain("runs-on: ${{ matrix.os }}");
     expect(runtime).toContain("run: npm ci");

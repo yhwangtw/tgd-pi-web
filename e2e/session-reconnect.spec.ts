@@ -2,6 +2,12 @@ import { expect, test as base, type Page } from "@playwright/test";
 import { createServer, request as httpRequest, type ClientRequest, type ServerResponse } from "node:http";
 import { StringDecoder } from "node:string_decoder";
 import type { Socket } from "node:net";
+import { execFileSync, spawn } from "node:child_process";
+import { readdirSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const MAIN_ID = "aaaa1111-2222-3333-4444-555566667777";
 const PROVIDER = "e2e-reconnect-fixture";
@@ -65,7 +71,10 @@ async function reconnectRelay(baseURL: string) {
       const stream = STREAM_PATH.test(url.pathname);
       if (stream && blockStreams) { outgoing.writeHead(503).end("Deterministic SSE outage"); return; }
       const loseThisReply = dropForkReply && body?.type === "fork";
-      if (loseThisReply) { dropForkReply = false; cutStreams(); }
+      // Chromium may retransmit a POST when a reused connection closes before
+      // response headers. Keep every transport retry's ACK blocked as well;
+      // the application's request key must prevent duplicate native forks.
+      if (loseThisReply && droppedFork === null) cutStreams();
       const upstream = httpRequest(url, {
         method: incoming.method,
         headers: { ...incoming.headers, "accept-encoding": stream ? "identity" : incoming.headers["accept-encoding"] ?? "identity" },
@@ -152,6 +161,67 @@ const test = base.extend<{ relay: Relay }>({
   },
 });
 
+// Playwright's normal Chromium connection enables focus emulation, which keeps
+// visibilityState="visible" even after the native window is minimized. This
+// one test uses a fresh, loopback-only browser with those overrides disabled.
+// It still observes native visibility events; no application events are faked.
+function nativeBrowserExecutable() {
+  if (process.env.PW_CHROMIUM_PATH) return process.env.PW_CHROMIUM_PATH;
+  // Use the same headless runtime as normal Playwright tests. The full desktop
+  // Chrome app can trigger OS network/keychain prompts even with --headless.
+  // Ask the installed CLI for its managed location rather than pin a revision
+  // or depend on Playwright's private browser-registry API. This installs nothing.
+  const require = createRequire(join(process.cwd(), "package.json"));
+  const plan = execFileSync(process.execPath, [require.resolve("@playwright/test/cli"), "install", "--dry-run", "chromium-headless-shell"], { encoding: "utf8", timeout: 10_000 });
+  const root = plan.match(/Install location:\s+([^\r\n]*chromium_headless_shell-[^\r\n]+)/)?.[1].trim();
+  if (!root) throw new Error("Could not resolve the managed Chromium headless shell");
+  const executable = (readdirSync(root, { recursive: true }) as string[]).find(path => /(?:^|[/\\])(?:chrome-headless-shell|headless_shell)(?:\.exe)?$/.test(path));
+  if (!executable) throw new Error("Install Playwright chromium before running the native visibility test");
+  return join(root, executable);
+}
+
+const nativeVisibilityTest = test.extend({
+  context: async ({ playwright }, use) => {
+    const executable = nativeBrowserExecutable();
+    const profile = await mkdtemp(join(tmpdir(), "piweb-native-visibility-"));
+    const child = spawn(executable, [
+      "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+      "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--disable-extensions",
+      "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=0",
+      `--user-data-dir=${profile}`, "about:blank",
+    ], { stdio: ["ignore", "ignore", "pipe"] });
+    const stopped = new Promise<void>(resolve => child.once("close", () => resolve()));
+    let browser: Awaited<ReturnType<typeof playwright.chromium.connectOverCDP>> | undefined;
+    try {
+      const endpoint = await new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("Native fixture browser did not start")), 10_000);
+        const finish = (error?: Error, endpoint?: string) => {
+          clearTimeout(timer);
+          if (error) reject(error); else resolve(endpoint!);
+        };
+        let output = "";
+        child.stderr!.on("data", chunk => {
+          output = (output + chunk.toString()).slice(-4096);
+          const match = output.match(/DevTools listening on (ws:\/\/127\.0\.0\.1:[^\s]+)/);
+          if (match) finish(undefined, match[1]);
+        });
+        child.once("error", error => finish(error));
+        child.once("exit", () => finish(new Error("Native fixture browser exited before connecting")));
+      });
+      browser = await playwright.chromium.connectOverCDP(endpoint, { noDefaults: true });
+      await use(browser.contexts()[0]);
+    } finally {
+      await browser?.close().catch(() => {});
+      child.kill("SIGTERM");
+      const forceStop = setTimeout(() => child.kill("SIGKILL"), 5000);
+      forceStop.unref();
+      await stopped;
+      clearTimeout(forceStop);
+      await rm(profile, { recursive: true, force: true });
+    }
+  },
+});
+
 function probe(page: Page) { return page.evaluate(() => (window as unknown as { __reconnectProbe: Probe }).__reconnectProbe); }
 function id(page: Page) { return new URL(page.url()).searchParams.get("session"); }
 async function live(page: Page, relay: Relay, sessionId = id(page)) {
@@ -225,7 +295,8 @@ test("transport-only SSE loss replays the missing final events exactly once with
   expect(recovered.some(frame => frame.event.type === "session_snapshot" && frame.event.state.isStreaming === false)).toBe(true);
 });
 
-test("returning from a native background window reconciles a completed disconnected run", async ({ page, relay }) => {
+nativeVisibilityTest("returning from a native background window reconciles a completed disconnected run", async ({ page, relay }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   const token = "native-background";
   await begin(page, relay, "delayed", token);
   await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture progress ${token}` })).toHaveCount(1);
@@ -257,15 +328,21 @@ test("returning from a native background window reconciles a completed disconnec
 });
 
 test("lost replacement SSE and POST ACK recover the final runtime from the old native cursor", async ({ page, relay }) => {
-  const token = "replacement-before";
-  await begin(page, relay, "complete", token);
+  await begin(page, relay, "complete", "replacement-before");
+  await completedOnce(page, relay, "replacement-before");
+  // The UI intentionally offers no fork before the very first user message.
+  // Fork a later turn so the replacement retains real prior conversation.
+  const token = "replacement-target";
+  await page.getByRole("textbox", { name: "Message…", exact: true }).fill(`/e2e-reconnect-complete ${token}`);
+  await page.getByRole("button", { name: "Send", exact: true }).click();
   await completedOnce(page, relay, token);
   const previous = id(page)!;
   const cutAt = relay.frames.length;
   relay.loseNextForkReply();
   const user = page.locator('[data-message-role="user"]').filter({ hasText: `E2E_RECONNECT:complete:${token}` });
   await user.scrollIntoViewIfNeeded();
-  await user.getByRole("button", { name: "New session", exact: true }).click();
+  await user.getByRole("button", { name: "More message actions", exact: true }).click();
+  await user.getByTestId("user-message-actions").getByRole("button", { name: "New session", exact: true }).click();
   await expect.poll(() => relay.droppedFork()).toMatchObject({ success: true, data: { cancelled: false, newSessionId: expect.any(String) } });
   const next = relay.droppedFork()!.data.newSessionId as string;
   expect(next).not.toBe(previous);
@@ -279,7 +356,8 @@ test("lost replacement SSE and POST ACK recover the final runtime from the old n
   expect(recovered.some(frame => frame.event.type === "session_snapshot" && frame.event.sessionId === next && frame.event.state.isStreaming === false)).toBe(true);
   expect((await live(page, relay, previous)).running, "Cursor recovery must not reopen the old runtime").toBe(false);
   expect((await live(page, relay, next)).running).toBe(true);
-  // Native fork is before the selected user entry: the old answer must not be
-  // replayed into the replacement's empty transcript.
+  // Native fork is before the selected user entry: retain the prior turn,
+  // but never replay the removed answer into the replacement transcript.
   await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture completed ${token}` })).toHaveCount(0);
+  await expect(page.getByTestId("assistant-message").filter({ hasText: "Fixture completed replacement-before" })).toHaveCount(1);
 });

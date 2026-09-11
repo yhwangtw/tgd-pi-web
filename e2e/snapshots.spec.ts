@@ -13,8 +13,9 @@ const SAME_ORIGIN_HEADERS = { Origin: ORIGIN, "Sec-Fetch-Site": "same-origin" };
 test.describe("file snapshots", () => {
   test("create restore point → mutate a file → restore reverts it", async ({ request }) => {
     // Original content
-    const before = await (await request.get(READ_URL)).json() as { content: string };
+    const before = await (await request.get(READ_URL)).json() as { content: string; version: string };
     expect(before.content).toBeTruthy();
+    expect(before.version).toBeTruthy();
 
     // Capture a restore point
     const snapRes = await request.post("/api/git/snapshots", {
@@ -26,7 +27,7 @@ test.describe("file snapshots", () => {
 
     // Mutate the file
     const mutated = `${before.content}\n// CORRUPTED BY TEST\n`;
-    const putRes = await request.put(FILE_URL, { data: { content: mutated } });
+    const putRes = await request.put(FILE_URL, { data: { content: mutated, expectedVersion: before.version } });
     expect(putRes.ok()).toBeTruthy();
     const afterMutate = await (await request.get(READ_URL)).json() as { content: string };
     expect(afterMutate.content).toContain("CORRUPTED BY TEST");

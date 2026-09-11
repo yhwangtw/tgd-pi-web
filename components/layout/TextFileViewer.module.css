@@ -78,7 +78,7 @@
   cursor: pointer;
 }
 
-.moreWrap { position: relative; flex: 0 0 auto; }
+.moreWrap { position: relative; display: flex; align-items: center; flex: 0 0 auto; }
 .moreButton { min-width: 30px; min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); cursor: pointer; }
 
 .sourceTools {
@@ -460,7 +460,11 @@
 :global(html[data-ui-style="trae"]) .sourceTools { border-color: var(--trae-hairline); background: var(--trae-canvas); }
 
 @container (max-width: 720px) {
-  .statusBar { grid-template-columns: minmax(0, 1fr); }
+  .statusBar,
+  :global(html[data-ui-style="trae"]) .statusBar {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-optical);
+  }
   .fileActions {
     justify-content: flex-start;
     flex-wrap: wrap;
@@ -469,7 +473,8 @@
 }
 
 @container (max-width: 430px) {
-  .statusBar {
+  .statusBar,
+  :global(html[data-ui-style="trae"]) .statusBar {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-1);
     padding: var(--space-1) var(--space-2);

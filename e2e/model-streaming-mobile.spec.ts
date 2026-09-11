@@ -176,9 +176,13 @@ for (const style of ["original", "trae"] as const) {
       await expect(editingRoot).toHaveAttribute("data-composer-editing", "false");
       await expect(primaryNav).toBeInViewport();
       await identity.click();
-      await expect(page.getByRole("listbox", { name: "Model", exact: true })).toBeVisible();
+      const modelSheet = page.getByRole("dialog", { name: "Choose a model", exact: true });
+      await expectInsideViewport(page, modelSheet);
+      await expect(modelSheet.getByRole("searchbox", { name: "Search models", exact: true })).toBeFocused();
+      await expect(modelSheet.getByRole("button", { name: `${MODEL_NAME} anthropic Available 200k ctx`, exact: true })).toBeVisible();
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("listbox", { name: "Model", exact: true })).not.toBeVisible();
+      await expect(modelSheet).not.toBeVisible();
+      await expect(identity).toBeFocused();
       await expect(primaryNav).toBeInViewport();
     });
   }

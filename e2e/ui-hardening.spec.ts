@@ -5,7 +5,10 @@ const MAIN = `/?session=${SID}`;
 
 async function openSession(page: Page) {
   await page.goto(MAIN);
-  await expect(page.getByText("專案架構分析").first()).toBeVisible();
+  await expect(page.getByTestId("app-shell")).toHaveAttribute("data-hydrated", "true");
+  // The compact mobile header intentionally hides the secondary session title.
+  await expect(page.getByText("專案架構分析").first()).toBeAttached();
+  await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeVisible();
 }
 
 for (const style of ["original", "trae"]) {
