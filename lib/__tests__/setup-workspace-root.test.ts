@@ -1,7 +1,7 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { dirname, join, resolve } from "path";
-import { spawnSync } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import { afterEach, describe, expect, it } from "vitest";
 import nextConfig from "../../next.config";
 
@@ -31,6 +31,8 @@ function runSetupFixture(
     piVersion?: string;
     tscExit?: number;
     nodeVersion?: string;
+    runningCheckout?: boolean;
+    legacyRunningCheckout?: boolean;
   } = {},
 ) {
   const sandbox = mkdtempSync(join(tmpdir(), "tgd-pi-web-setup-"));
@@ -49,6 +51,10 @@ function runSetupFixture(
   mkdirSync(join(project, "node_modules", ".bin"), { recursive: true });
   mkdirSync(join(project, "node_modules", "@earendil-works", "pi-coding-agent"), { recursive: true });
   copyFileSync(resolve("setup.sh"), join(project, "setup.sh"));
+  for (const file of ["lib/node-support.mjs", "scripts/check-node-version.mjs", "scripts/runtime-guard.mjs", "scripts/check-running-checkout.mjs"]) {
+    mkdirSync(dirname(join(project, file)), { recursive: true });
+    copyFileSync(resolve(file), join(project, file));
+  }
   writeFileSync(join(project, "package-lock.json"), "{}\n");
   writeFileSync(
     join(project, "node_modules", "@earendil-works", "pi-coding-agent", "package.json"),
@@ -57,6 +63,24 @@ function runSetupFixture(
   writeFileSync(ancestorLockfile, "{}\n");
   writeFileSync(gitLog, "");
   writeFileSync(npmLog, "");
+
+  const runningFixture = options.runningCheckout || options.legacyRunningCheckout
+    ? spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { cwd: project, stdio: "ignore" })
+    : null;
+  if (runningFixture && !options.legacyRunningCheckout) {
+    mkdirSync(join(project, ".piweb-runtime"));
+    writeFileSync(join(project, ".piweb-runtime", `${runningFixture.pid}.json`), JSON.stringify({
+      pid: runningFixture.pid, childPid: runningFixture.pid, cwd: project,
+      startedAt: new Date().toISOString(), mode: "start", host: "127.0.0.1", port: 30141,
+    }));
+  }
+
+  // The guard fixture must not inspect unrelated developer/CI Next processes.
+  // Legacy coverage emits only our disposable timer PID; cwd is still verified
+  // by the real platform process reader, not trusted from this fake ps output.
+  const fakePs = join(fakeBin, "ps");
+  writeFileSync(fakePs, `#!/usr/bin/env bash\n${options.legacyRunningCheckout ? `echo '${runningFixture!.pid} next-server (fixture)'` : "exit 0"}\n`);
+  chmodSync(fakePs, 0o755);
 
   if (options.gitCheckout) {
     mkdirSync(join(project, ".git"));
@@ -140,6 +164,8 @@ exit ${options.tscExit ?? 0}
   const result = spawnSync("bash", [join(project, "setup.sh")], {
     cwd: dirname(project),
     encoding: "utf8",
+    timeout: 10_000,
+    killSignal: "SIGKILL",
     env: {
       ...process.env,
       FAKE_GIT_LOG: gitLog,
@@ -152,6 +178,7 @@ exit ${options.tscExit ?? 0}
       TGD_SETUP_SOURCE_SYNCED: "0",
     },
   });
+  runningFixture?.kill("SIGTERM");
 
   return {
     ancestorLockfile,
@@ -164,16 +191,38 @@ exit ${options.tscExit ?? 0}
 }
 
 describe("workspace root setup", () => {
-  it("rejects Node without the bundled runtime and unflagged SQLite before installing dependencies", () => {
-    for (const nodeVersion of ["20.19.0", "22.18.0", "23.3.0"]) {
-      const { npmCalls, result } = runSetupFixture({ nodeVersion });
-      expect(result.status).toBe(1);
-      expect(result.stdout).toContain("22.19+");
-      expect(npmCalls).not.toContain("ci");
-    }
-    for (const nodeVersion of ["22.19.0", "23.4.0", "24.0.0"]) {
-      expect(runSetupFixture({ nodeVersion }).result.status).toBe(0);
-    }
+  it("rejects a legacy unmarked running checkout before any mutation", () => {
+    const { result, gitCalls, npmCalls } = runSetupFixture({ gitCheckout: true, legacyRunningCheckout: true });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("checkout is running");
+    expect(gitCalls).not.toContain("fetch");
+    expect(npmCalls).not.toContain("ci");
+  });
+  it("refuses a running checkout before fetch, backup, dependency install, or build", () => {
+    const { gitCalls, npmCalls, result, backupRoot } = runSetupFixture({ gitCheckout: true, dirty: true, forceSync: true, runningCheckout: true });
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("checkout is running");
+    expect(gitCalls).toBe("");
+    expect(npmCalls).toBe("");
+    expect(existsSync(backupRoot)).toBe(false);
+  });
+  it("rejects unsupported Node before any Git source replacement", () => {
+    const { gitCalls, npmCalls, result } = runSetupFixture({ gitCheckout: true, nodeVersion: "22.18.0" });
+    expect(result.status).toBe(1);
+    expect(gitCalls).toBe("");
+    expect(npmCalls).toBe("");
+  });
+
+  // Each installation is its own test, not six shell fixtures competing for
+  // one five-second deadline when the full suite runs concurrently.
+  it.each(["20.19.0", "22.18.0", "23.3.0"])("rejects unsupported Node %s before installing dependencies", nodeVersion => {
+    const { npmCalls, result } = runSetupFixture({ nodeVersion });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("22.19+");
+    expect(npmCalls).not.toContain("ci");
+  });
+  it.each(["22.19.0", "23.4.0", "24.0.0"])("accepts supported Node version declaration %s", nodeVersion => {
+    expect(runSetupFixture({ nodeVersion }).result.status).toBe(0);
   });
 
   it("pins Next.js tracing and Turbopack to the repository root", () => {

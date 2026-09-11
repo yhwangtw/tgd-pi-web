@@ -20,7 +20,7 @@ import { useAgentEvents, useRunProgress } from "./use-agent-connection";
 import { useTranscriptScroll } from "./use-transcript-scroll";
 import { shouldResyncOnVisible } from "@/lib/wake-resync";
 import { useModelCatalog } from "./use-model-catalog";
-import { extensionUIReducer, initialExtensionUIState } from "./use-extension-ui";
+import { extensionUIReducer, extensionResponseFeedback, initialExtensionUIState } from "./use-extension-ui";
 import {
   isWebExtensionUIEvent,
   type WebExtensionUIResponse,
@@ -109,8 +109,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // Streaming-update throttle (see the message_update case)
   const pendingStreamMsgRef = useRef<AgentMessage | null>(null);
   const streamFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const authReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
+  const pendingPromptMessageRef = useRef<AgentMessage | null>(null);
   const agentRunningRef = useRef(false);
   const agentPhaseRef = useRef<AgentPhase>(null);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
@@ -138,6 +140,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps,
     newSessionModel, setNewSessionModel,
+    catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
   } = useModelCatalog(
     isNew,
     modelsRefreshKey,
@@ -178,7 +181,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as SessionData & { agentState?: AgentStateEnvelope };
       if (!shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
-        return d.agentState ?? null;
+        // Callers also reconcile running/thinking state from this return
+        // value. Do not let an obsolete fetch resurrect a completed run.
+        return null;
       }
       setData(d);
       const info = (d as { info?: { name?: string } }).info;
@@ -254,6 +259,56 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       dispatchExtensionUI({ type: "reset" });
       return;
     }
+    if (event.type === "session_snapshot") {
+      if (event.sessionId !== sessionIdRef.current) return;
+      // A checkpoint wins over fetches begun before replay, including loads
+      // scheduled by replayed agent_start/end events.
+      sessionLoadRequestRef.current += 1;
+      pendingStreamMsgRef.current = null;
+      if (streamFlushTimerRef.current !== null) clearTimeout(streamFlushTimerRef.current);
+      streamFlushTimerRef.current = null;
+      const state = event.state as LiveAgentState | undefined;
+      const restored = event.sessionData as SessionData | undefined;
+      if (restored?.context && Array.isArray(restored.context.messages)) {
+        setData(restored);
+        setActiveLeafId(restored.leafId);
+        setMessages(pendingPromptMessageRef.current ? [...restored.context.messages, pendingPromptMessageRef.current] : restored.context.messages);
+        setEntryIds(restored.context.entryIds ?? []);
+        setLoading(false);
+        setError(null);
+      }
+      const pendingPrompt = pendingPromptMessageRef.current !== null;
+      const wasRunning = agentRunningRef.current;
+      const running = state?.isStreaming === true || pendingPrompt;
+      agentRunningRef.current = running;
+      setAgentRunning(running);
+      setAgentPhase(running ? (event.phase as AgentPhase) ?? { kind: "waiting_model" } : null);
+      setAgentStartedAt((current) => running ? current ?? Date.now() : null);
+      if (state?.isCompacting !== undefined) setIsCompacting(state.isCompacting);
+      if (state?.autoCompactionEnabled !== undefined) setAutoCompactionEnabled(state.autoCompactionEnabled);
+      if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage);
+      if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt);
+      if (state?.thinkingLevel !== undefined) setThinkingLevel(state.thinkingLevel as ThinkingLevelOption);
+      const model = (event.state as { model?: { provider: string; id: string } } | undefined)?.model;
+      if (model) setCurrentModelOverride({ provider: model.provider, modelId: model.id });
+      setBashRun((event.bashRun as { command: string; output: string; running: boolean } | null) ?? null);
+      if (running && event.streamingMessage) dispatch({ type: "update", message: normalizeToolCalls(event.streamingMessage as AgentMessage) });
+      else dispatch({ type: running ? "start" : "end" });
+      if (!running) {
+        setRetryInfo(null);
+        setQueuedFollowUps([]);
+        resetRunProgress();
+        if (typeof event.lastRunError === "string" && event.lastRunError) {
+          const classified = classifyProviderError(event.lastRunError);
+          setProviderRecovery({ message: event.lastRunError, kind: classified.kind, retryAfterSeconds: classified.retryAfterSeconds, candidate: null, automatic: false });
+          setErrorTitle(sessionNameRef.current);
+        } else {
+          setProviderRecovery(null);
+          if (wasRunning) setDoneTitle(sessionNameRef.current);
+        }
+      }
+      return;
+    }
     if (isWebExtensionUIEvent(event)) {
       dispatchExtensionUI({ type: "event", event });
       resetRunProgress();
@@ -272,6 +327,22 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return;
     }
     switch (event.type) {
+      case "session_closed":
+        agentRunningRef.current = false;
+        pendingStreamMsgRef.current = null;
+        if (streamFlushTimerRef.current !== null) clearTimeout(streamFlushTimerRef.current);
+        streamFlushTimerRef.current = null;
+        // The terminal event is authoritative even if an individual question
+        // close frame was lost before disconnect.
+        dispatchExtensionUI({ type: "reset" });
+        setAgentRunning(false);
+        setAgentStartedAt(null);
+        setAgentPhase(null);
+        setBashRun(null);
+        setRetryInfo(null);
+        setQueuedFollowUps([]);
+        dispatch({ type: "end" });
+        break;
       case "session_replaced": {
         const previousSessionId = typeof event.previousSessionId === "string" ? event.previousSessionId : sessionIdRef.current ?? "";
         const nextSessionId = typeof event.newSessionId === "string" ? event.newSessionId : "";
@@ -339,7 +410,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         eventSourceRef.current = null;
         const sid = sessionIdRef.current;
         if (!sid) break;
-        setTimeout(() => {
+        if (authReconnectTimerRef.current !== null) clearTimeout(authReconnectTimerRef.current);
+        authReconnectTimerRef.current = setTimeout(() => {
+          authReconnectTimerRef.current = null;
+          if (sessionIdRef.current !== sid) return;
           void connectEvents(sid).then(async (connected) => {
             if (!connected) {
               showToast(translate("toast.authReconnectFailed"), { type: "warning", duration: 8000 });
@@ -352,6 +426,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       }
       case "agent_start":
+        agentRunningRef.current = true;
         setAgentRunning(true);
         setAgentPhase({ kind: "waiting_model" });
         setAgentStartedAt(Date.now());
@@ -364,6 +439,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (sessionIdRef.current) loadSession(sessionIdRef.current);
         break;
       case "agent_end":
+        agentRunningRef.current = false;
         // Cancel any throttled streaming frame (aborted runs may end without
         // a message_end).
         pendingStreamMsgRef.current = null;
@@ -464,6 +540,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       }
       case "message_end": {
+        sessionLoadRequestRef.current += 1;
         // Drop any pending throttled frame — the completed message wins, and
         // a late flush after the reset would resurrect the streaming bubble.
         pendingStreamMsgRef.current = null;
@@ -589,19 +666,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current;
     if (!sid) throw new Error(translate("extensionUI.noSession"));
     const result = await sendAgentCommand<WebExtensionUIResponseResult>(sid, response);
-    if (!result?.accepted) {
-      throw new Error(result?.reason === "not_found"
-        ? translate("extensionUI.expired")
-        : translate("extensionUI.invalidResponse"));
+    const feedback = extensionResponseFeedback(response, result);
+    if (feedback.closed) dispatchExtensionUI({ type: "event", event: feedback.closed });
+    if (feedback.errorKey) {
+      // Another tab may already have completed/cancelled this question. Close
+      // the stale card and explain the terminal result outside that card.
+      if (feedback.closed) showToast(translate(feedback.errorKey), { type: "warning" });
+      else throw new Error(translate(feedback.errorKey));
     }
-    dispatchExtensionUI({
-      type: "event",
-      event: {
-        type: "extension_ui_closed",
-        id: response.id,
-        reason: "cancelled" in response ? "cancelled" : "answered",
-      },
-    });
   }, []);
 
   // Shared by the tGD-command and plain-prompt paths of handleSend: create a
@@ -613,6 +685,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   ): Promise<string> => {
     if (!newSessionCwd) throw new Error("No cwd for new session");
     const selectedModel = newSessionModel;
+    if (catalogStatus !== "ready" || !selectedModel) throw new Error(translate("model.catalogRequired"));
     if (selectedModel) setPendingModel(selectedModel);
     const toolNames = namesForToolSelection(toolPreset, customToolNames);
     const res = await fetch("/api/agent/new", {
@@ -620,6 +693,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         cwd: newSessionCwd,
+        deferPrompt: true,
         type: "prompt",
         message,
         toolMode: toolPreset,
@@ -633,7 +707,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const result = await res.json() as { sessionId: string };
     sessionIdRef.current = result.sessionId;
-    connectEvents(result.sessionId);
+    if (!(await connectEvents(result.sessionId))) throw new Error(translate("connection.streamNotReady"));
+    pendingPromptMessageRef.current = null;
+    await sendAgentCommand(result.sessionId, { type: "prompt", message, ...(piImages?.length ? { images: piImages } : {}) });
     onSessionCreated?.({
       id: result.sessionId,
       path: "",
@@ -646,11 +722,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       ephemeral: ephemeralNewSession,
     });
     return result.sessionId;
-  }, [newSessionCwd, newSessionModel, toolPreset, customToolNames, thinkingLevel, ephemeralNewSession, connectEvents, onSessionCreated]);
+  }, [newSessionCwd, newSessionModel, catalogStatus, toolPreset, customToolNames, thinkingLevel, ephemeralNewSession, connectEvents, onSessionCreated]);
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]): Promise<boolean> => {
     if (!message.trim() && !images?.length) return false;
     if (agentRunning) return false;
+    if (isNew && (catalogStatus !== "ready" || !newSessionModel)) {
+      showToast(translate("model.catalogRequired"), { type: "warning" });
+      return false;
+    }
     const fallbackRetry = autoFallbackInFlightRef.current;
     autoFallbackInFlightRef.current = false;
     if (!fallbackRetry) {
@@ -671,7 +751,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const bashCommand = trimmedForBash.replace(/^!+/, "").trim();
       if (!bashCommand) return false;
       if (!(await connectEvents(session.id))) {
-        console.warn("SSE stream not open before bash send — early output may be missed");
+        showToast(translate("connection.streamNotReady"), { type: "error" });
+        return false;
       }
       setBashRun({ command: bashCommand, output: "", running: true });
       try {
@@ -708,6 +789,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // or a slow connection can inherit the previous run's stale idle time.
     lastEventAtRef.current = Date.now();
     resetRunProgress();
+    pendingPromptMessageRef.current = userMsg;
     setMessages((prev) => [...prev, userMsg]);
     setAgentRunning(true);
     setAgentPhase({ kind: "waiting_model" });
@@ -724,8 +806,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // Wait for the SSE stream to be open before prompting, so the run's
         // first events aren't emitted before we're subscribed.
         if (!(await connectEvents(session.id))) {
-          console.warn("SSE stream not open before prompt — early events may be missed");
+          throw new Error(translate("connection.streamNotReady"));
         }
+        pendingPromptMessageRef.current = null;
         await sendAgentCommand(session.id, {
           type: "prompt",
           message,
@@ -736,6 +819,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       return true;
     } catch (e) {
+      pendingPromptMessageRef.current = null;
       console.error("Failed to send message:", e);
       showToast(`${translate("toast.messageNotSent")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
       setMessages((prev) => {
@@ -747,7 +831,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       dispatch({ type: "end" });
       return false;
     }
-  }, [isNew, newSessionCwd, session, agentRunning, connectEvents, createNewSession, loadSession, lastEventAtRef, pendingScrollToUserRef, resetRunProgress]);
+  }, [isNew, newSessionCwd, newSessionModel, catalogStatus, session, agentRunning, connectEvents, createNewSession, loadSession, lastEventAtRef, pendingScrollToUserRef, resetRunProgress]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -1116,9 +1200,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (session.ephemeral) {
         setLoading(false);
         void loadTools(session.id);
-        return;
-      }
-      loadSession(session.id, true, true).then((agentState) => {
+        // In-memory sessions have no JSONL to reload; the runtime snapshot is
+        // their authoritative transcript, including an already-finished run.
+        void connectEvents(session.id);
+      } else loadSession(session.id, true, true).then((agentState) => {
         if (agentState?.running) {
           loadTools(session.id);
           if (agentState.state?.isStreaming) {
@@ -1127,8 +1212,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             setAgentStartedAt(Date.now());
             lastEventAtRef.current = Date.now();
             resetRunProgress();
-            connectEvents(session.id);
           }
+          // An alive idle wrapper may have completed before this view mounted
+          // or still own pending extension UI. Reconcile it too.
+          void connectEvents(session.id);
         }
         if (agentState?.state) {
           if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
@@ -1140,6 +1227,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       });
     }
     return () => {
+      if (authReconnectTimerRef.current !== null) clearTimeout(authReconnectTimerRef.current);
+      authReconnectTimerRef.current = null;
       eventSourceRef.current?.close();
       eventSourceRef.current = null;
     };
@@ -1155,6 +1244,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current;
     if (!sid) return;
     loadSession(sid, false, true).then((agentState) => {
+      if (!agentState || sessionIdRef.current !== sid) return;
       if (agentState?.state) {
         if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
         if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
@@ -1166,14 +1256,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (!agentStartedAt) setAgentStartedAt(Date.now());
         lastEventAtRef.current = Date.now();
         resetRunProgress();
-        void connectEvents(sid);
-      } else if (agentRunningRef.current && !agentState?.running) {
+      } else if (agentRunningRef.current && !agentState.state?.isStreaming) {
         // The run finished while we were away — the "end" event was lost, so
         // reflect idle now instead of showing a stuck spinner.
         setAgentRunning(false);
+        agentRunningRef.current = false;
         setAgentPhase(null);
+        setAgentStartedAt(null);
         dispatch({ type: "end" });
       }
+      // Even an alive but idle wrapper may have emitted the final events while
+      // hidden. Reopen with the cursor to recover them and reconcile a snapshot.
+      if (agentState.running) void connectEvents(sid, true);
     });
   }, [agentStartedAt, connectEvents, lastEventAtRef, loadSession, resetRunProgress]);
 
@@ -1215,6 +1309,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // State
     data, loading, error, runtimeFailure, activeLeafId, messages, entryIds, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, availableTools, customToolNames, thinkingLevel,
+    catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, currentModel, displayModel, sessionStats,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,

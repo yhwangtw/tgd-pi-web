@@ -66,7 +66,7 @@ cd tGD-pi-web
 bash setup.sh
 ```
 
-セットアップは Git checkout の `origin/main` を取得してローカル変更を確認した後、同期、Node.js と npm の確認、依存関係のインストール、TypeScript 検証、production build、必要に応じた起動を行います。ソースアーカイブの既知の古いファイルは `~/.tgd-pi-web-backups/` へ退避します（`TGD_SETUP_BACKUP_DIR` で変更可能）。
+セットアップは最初に Node.js と npm を確認し、この checkout を使うサーバーが停止していることを実際の PID/cwd で検証します。稼働中または検証不能なら、Git・依存関係・build を変更する前に停止します。その後、Git checkout の `origin/main` を取得してローカル変更を確認し、承認された同期、依存関係のインストール、TypeScript 検証、production build、必要に応じた起動を行います。ソースアーカイブの既知の古いファイルは `~/.tgd-pi-web-backups/` へ退避します（`TGD_SETUP_BACKUP_DIR` で変更可能）。
 
 > [!WARNING]
 > setup/build 前に、このディレクトリを使うサーバーを停止してください。ローカル commit や ignore されていない変更がある場合、非公開のソース復元バックアップを作成し、置き換え前に確認します。非対話モードは `TGD_SETUP_FORCE_SYNC=1` の明示指定がなければ停止します。承認後の同期は `git reset --hard origin/main` と `git clean -fd` を実行します。ignore 済みの runtime データは保持されますが、このソースバックアップには含まれません。[更新・ロールバックの境界](./docs/RELEASING.md#installation-updates-and-rollback-are-separate)を参照してください。
@@ -81,7 +81,11 @@ npm start
 
 [http://localhost:30141](http://localhost:30141) を開きます。
 
+`npm run dev` と `npm start` はデフォルトで `127.0.0.1:30141` にのみ bind します。`PORT` と `PIWEB_HOST` で明示的に変更できますが、リモート bind には上記の認証・ネットワーク境界が必要です。`npm run preview` は localhost の `30142` と別の隔離 agent ディレクトリを使います。ポート変更だけでは、本番の session・model・schedule データは隔離されません。
+
 ### 既存 checkout の更新
+
+この checkout のサービスを停止してから実行してください。稼働中のソースをその場で更新するコマンドではありません。
 
 ```bash
 bash setup.sh
@@ -92,6 +96,8 @@ bash setup.sh
 これは Git 同期だけを省略します。npm には内部 registry または準備済み cache が必要です。
 `origin/main` は最新 release より新しい場合があります。正確な release を使うには、
 そのソースアーカイブを新しいディレクトリに展開してください。
+
+Managed Update Center は、明示的な `staged-v1` adapter、localhost の実行 build identity 検証、永続 operation lock を必要とします。候補を別ディレクトリで build・検証してから切り替え、失敗時は rollback を検証します。PID の発行やディスク上の version 変更だけでは成功と判定しません。実際の launchd/systemd adapter は自動設定されません。[管理された更新の契約と制限](./docs/MANAGED-UPDATES.md)を参照してください。
 
 ## ブラウザ内の tGD ワークフロー
 
@@ -179,6 +185,9 @@ artifacts が別の場所にある場合は `TGD_DIR` を設定してくださ�
 ツール一覧は全ページを取得し、変更時は実行終了後に **Reload Extensions** を行います。
 接続状態は最終確認の結果であり、常時監視ではありません。OAuth/PKCE、resource/prompt の閲覧、
 required-task 実行は未対応です。詳細は [MCP 接続の契約と制限](docs/MCP.md) を参照してください。
+保存時はリビジョン検証とプロセス間ロックを使用します。競合時は下書きを保持し、最新設定を
+明示的に再読み込みします。新規追加は 50 件までで、既存項目を黙って切り捨てません。
+API リビジョン、入力制限、保存後の再読み込み失敗の警告についても上記ガイドを参照してください。
 
 ### スケジュール Agent
 
@@ -229,15 +238,16 @@ required-task 実行は未対応です。詳細は [MCP 接続の契約と制限
 
 | コマンド | 用途 |
 |---|---|
-| `bash setup.sh` | ローカル変更を確認・バックアップし、必要な承認後に同期、install、検証、build、任意の起動 |
+| `bash setup.sh` | Node/npm・サーバー停止を先に検証し、変更をバックアップ、承認後に同期、install、検証、build、任意の起動 |
 | `bash scripts/release.sh` | 読み取り専用のリリース確認。`--dispatch` で明示的に workflow を要求 |
-| `npm run dev` | 必要に応じてポート `30141` で開発サーバーを起動 |
+| `npm run dev` | デフォルトで `127.0.0.1:30141` に開発サーバーを起動 |
+| `npm run preview` | デフォルトで localhost の `30142`、別の隔離 agent ディレクトリを使用 |
 | `node_modules/.bin/tsc --noEmit` | Typecheck |
 | `npx eslint .` | Lint |
 | `npm test` | Vitest unit tests を実行 |
 | `npm run test:e2e` | Build 後、ポート `30177` で Playwright E2E を実行 |
 | `npm run build` | Production build を作成 |
-| `npm run start` | Production server を起動 |
+| `npm run start` | デフォルトで `127.0.0.1:30141` に production server を起動 |
 
 > [!WARNING]
 > `npm run build` または `npm run test:e2e` の前に `npm run dev` を停止してください。同時に Next.js build を実行すると、開発サーバーが使用中の `.next/` が破損します。

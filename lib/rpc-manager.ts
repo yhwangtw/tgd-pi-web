@@ -8,7 +8,9 @@ import {
   type ExtensionError,
   type ModelRegistry,
 } from "@earendil-works/pi-coding-agent";
-import { cacheSessionPath } from "./session-reader";
+import { buildSessionContext, buildTree, cacheSessionPath, getLeafId } from "./session-reader";
+import { AgentEventLog, type AgentStreamRecord, type ReplayStatus } from "./agent-event-log";
+import type { SessionEntry } from "./types";
 import { createSnapshot } from "./git-snapshot";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 import { bindWebExtensions, createTrackedAgentServices, emitWebBeforeFork, type ExtensionProviderTracker } from "./pi-runtime";
@@ -110,6 +112,17 @@ export class SessionRuntimeConflictError extends Error {
 
 export class AgentSessionWrapper {
   private listeners: EventListener[] = [];
+  private streamListeners = new Set<(record: AgentStreamRecord) => void>();
+  private readonly eventLog = new AgentEventLog();
+  // Resume-only aliases belong to this live epoch, never ordinary session
+  // reads/commands. Keep them finite even for long-running replacement chains.
+  private readonly streamAliases = new Map<string, number>();
+  private streamingMessage: unknown = null;
+  private runActive: boolean | null = null;
+  private lastRunError: string | null = null;
+  private lastAgentEndCursor: string | null = null;
+  private activeTools = new Map<string, { id: string; name: string; label?: string }>();
+  private streamBash: { command: string; output: string; running: boolean } | null = null;
   private unsubscribe: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private onDestroyCallback: (() => void) | null = null;
@@ -153,7 +166,7 @@ export class AgentSessionWrapper {
     this.extensionDiagnostics = this.normalizeDiagnostics(initialDiagnostics);
     this.webExtensionUI?.setEmitter((event) => {
       this.resetIdleTimer();
-      const deliveredLive = this.listeners.length > 0;
+      const deliveredLive = this.listeners.length + this.streamListeners.size > 0;
       this.emitEvent(event);
       if (deliveredLive) this.webExtensionUI?.acknowledgeDelivery(event.id);
     });
@@ -231,6 +244,11 @@ export class AgentSessionWrapper {
   }
 
   private prepareForSessionReplacement(): void {
+    this.runActive = null;
+    this.streamingMessage = null;
+    this.activeTools.clear();
+    this.streamBash = null;
+    this.lastRunError = null;
     this.webExtensionUI?.resetForSessionReplacement();
     this.unsubscribe?.();
     this.unsubscribe = null;
@@ -383,6 +401,12 @@ export class AgentSessionWrapper {
       // publish the replacement after the complete operation succeeds, or the
       // browser can navigate to a transient session that recovery immediately
       // rolls back.
+      if (previous.sessionId !== next.sessionId) {
+        this.pruneStreamAliases();
+        this.streamAliases.delete(previous.sessionId);
+        this.streamAliases.set(previous.sessionId, Date.now() + 10 * 60_000);
+        this.pruneStreamAliases();
+      }
       this.emitEvent({
         type: "session_replaced",
         previousSessionId: previous.sessionId,
@@ -456,7 +480,7 @@ export class AgentSessionWrapper {
       sessionId: this.sessionId,
       sessionFile: this.sessionFile,
       cwd: this.cwd,
-      connectedClients: this.listeners.length,
+      connectedClients: this.listeners.length + this.streamListeners.size,
       replacementCount: this.replacementCount,
       ...(this.pendingReplacement ? { pendingReplacement: { ...this.pendingReplacement } } : {}),
       ...(this.lastReplacement ? { lastReplacement: { ...this.lastReplacement } } : {}),
@@ -495,8 +519,115 @@ export class AgentSessionWrapper {
     };
   }
 
+  /** Register and replay synchronously: no event can fall between replay and live. */
+  onStreamEvent(listener: (record: AgentStreamRecord) => void, cursor: string | null): () => void {
+    this.streamListeners.add(listener);
+    try {
+      const replay = this.eventLog.replay(cursor);
+      for (const record of replay.records) listener(record);
+      listener({ id: this.eventLog.cursor, data: JSON.stringify(this.getStreamSnapshot(replay.status)) });
+      // The bridge owns reconnect policy for dialogs and one-shot editor text.
+      // Do not retain/replay UI commands in the agent event log.
+      for (const event of this.webExtensionUI?.snapshot() ?? []) listener({ data: JSON.stringify(event) });
+    } catch (error) {
+      this.streamListeners.delete(listener);
+      throw error;
+    }
+    return () => { this.streamListeners.delete(listener); };
+  }
+
+  private pruneStreamAliases(): void {
+    for (const [id, expiresAt] of this.streamAliases) if (expiresAt <= Date.now()) this.streamAliases.delete(id);
+    while (this.streamAliases.size > 64) this.streamAliases.delete(this.streamAliases.keys().next().value!);
+  }
+
+  isReplacementPending(): boolean { return this.pendingReplacement !== undefined; }
+
+  canResumeStream(sessionId: string, cursor: string): boolean {
+    if (!this._alive) return false;
+    const separator = cursor.lastIndexOf(":");
+    const sequenceText = cursor.slice(separator + 1);
+    const current = this.eventLog.cursor;
+    const currentSeparator = current.lastIndexOf(":");
+    const sequence = Number(sequenceText);
+    if (separator < 0 || cursor.slice(0, separator) !== current.slice(0, currentSeparator)
+      || !/^\d+$/.test(sequenceText) || !Number.isSafeInteger(sequence)
+      || sequence > Number(current.slice(currentSeparator + 1))) return false;
+    this.pruneStreamAliases();
+    return sessionId === this.sessionId || sessionId === this.pendingReplacement?.previousSessionId || this.streamAliases.has(sessionId);
+  }
+
+  private getLiveState() {
+    const model = this.inner.model;
+    const contextUsage = this.inner.getContextUsage?.();
+    return {
+      sessionId: this.inner.sessionId,
+      sessionFile: this.inner.sessionFile ?? "",
+      isStreaming: this.runActive ?? this.inner.isStreaming,
+      isCompacting: this.inner.isCompacting,
+      autoCompactionEnabled: this.inner.autoCompactionEnabled,
+      autoRetryEnabled: this.inner.autoRetryEnabled,
+      model: model ? { id: model.id, provider: model.provider } : undefined,
+      messageCount: 0, pendingMessageCount: 0,
+      contextUsage: contextUsage ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens } : null,
+      systemPrompt: this.inner.agent?.state?.systemPrompt ?? "",
+      thinkingLevel: this.inner.agent?.state?.thinkingLevel ?? "off",
+    };
+  }
+
+  getStreamSnapshot(replayStatus: ReplayStatus = "initial"): AgentEvent {
+    const entries = (this.inner.sessionManager?.getEntries?.() ?? []) as unknown as SessionEntry[];
+    const leafId = this.inner.sessionManager?.getLeafId ? this.inner.sessionManager.getLeafId() : getLeafId(entries);
+    return {
+      type: "session_snapshot", protocolVersion: 1, sessionId: this.sessionId,
+      cursor: this.eventLog.cursor, replayStatus, state: this.getLiveState(),
+      sessionData: {
+        sessionId: this.sessionId, filePath: this.sessionFile, leafId,
+        tree: buildTree(entries), context: buildSessionContext(entries, leafId),
+      },
+      streamingMessage: this.streamingMessage,
+      phase: this.activeTools.size ? { kind: "running_tools", tools: [...this.activeTools.values()] } : null,
+      bashRun: this.streamBash,
+      lastRunError: this.lastRunError,
+    };
+  }
+
   private emitEvent(event: AgentEvent | WebExtensionUIEvent): void {
+    const message = "message" in event ? event.message : undefined;
+    if (event.type === "agent_start") {
+      this.runActive = true;
+      this.lastRunError = null;
+      this.streamingMessage = null;
+      this.activeTools.clear();
+    } else if (event.type === "message_start" || event.type === "message_update") {
+      if (message && (message as { role?: string }).role !== "user") this.streamingMessage = message;
+    } else if (event.type === "message_end") {
+      this.streamingMessage = null;
+    } else if (event.type === "agent_end") {
+      this.runActive = false;
+      this.streamingMessage = null;
+      this.activeTools.clear();
+      const messages = "messages" in event && Array.isArray(event.messages) ? event.messages : [];
+      const last = [...messages].reverse().find((item: { role?: string }) => item?.role === "assistant");
+      this.lastRunError = last?.stopReason === "error" ? last.errorMessage || "Model call failed" : null;
+    } else if (event.type === "tool_execution_start") {
+      const tool = event as AgentEvent;
+      this.activeTools.set(String(tool.toolCallId), { id: String(tool.toolCallId), name: String(tool.toolName), ...(typeof tool.toolLabel === "string" ? { label: tool.toolLabel } : {}) });
+    } else if (event.type === "tool_execution_end") {
+      this.activeTools.delete(String((event as AgentEvent).toolCallId));
+    } else if (event.type === "bash_start") {
+      this.streamBash = { command: String((event as AgentEvent).command), output: "", running: true };
+    } else if (event.type === "bash_chunk" && this.streamBash) {
+      this.streamBash.output = (this.streamBash.output + String((event as AgentEvent).chunk)).slice(-1024 * 1024);
+    } else if (event.type === "bash_end") {
+      this.streamBash = null;
+    }
+    const record: AgentStreamRecord = event.type.startsWith("extension_ui_")
+      ? { data: JSON.stringify(event) }
+      : this.eventLog.append(event);
+    if (event.type === "agent_end") this.lastAgentEndCursor = record.id ?? null;
     for (const listener of this.listeners) listener(event);
+    for (const listener of this.streamListeners) listener(record);
   }
 
   onDestroy(cb: () => void): void {
@@ -558,9 +689,15 @@ export class AgentSessionWrapper {
         // Background schedulers can opt into awaiting the underlying Promise
         // so an immediate setup/model rejection cannot leave a run stuck.
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
+        const previousEnd = this.lastAgentEndCursor;
         const prompt = this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined);
         if (command.awaitCompletion === true) await prompt;
-        else prompt.catch(() => {});
+        else prompt.catch((error: unknown) => {
+          // Setup/model errors can reject before Pi emits any run events.
+          if (this.lastAgentEndCursor === previousEnd) this.emitEvent({
+            type: "agent_end", messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage: this.errorMessage(error) }],
+          });
+        });
         return null;
       }
 
@@ -569,24 +706,7 @@ export class AgentSessionWrapper {
         return null;
 
       case "get_state": {
-        const model = this.inner.model;
-        const contextUsage = this.inner.getContextUsage();
-        return {
-          sessionId: this.inner.sessionId,
-          sessionFile: this.inner.sessionFile ?? "",
-          isStreaming: this.inner.isStreaming,
-          isCompacting: this.inner.isCompacting,
-          autoCompactionEnabled: this.inner.autoCompactionEnabled,
-          autoRetryEnabled: this.inner.autoRetryEnabled,
-          model: model ? { id: model.id, provider: model.provider } : undefined,
-          messageCount: 0,
-          pendingMessageCount: 0,
-          contextUsage: contextUsage
-            ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
-            : null,
-          systemPrompt: this.inner.agent.state?.systemPrompt ?? "",
-          thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
-        };
+        return this.getLiveState();
       }
 
       case "set_model": {
@@ -798,8 +918,14 @@ export class AgentSessionWrapper {
   destroy(): void {
     if (!this._alive) return;
     this._alive = false;
+    this.streamAliases.clear();
     this.runtimeState = "disposed";
+    // Flush pending question closures before the terminal frame makes the
+    // browser close its EventSource. Otherwise the UI is left waiting forever.
     this.webExtensionUI?.resetForSessionReplacement();
+    const closed = this.eventLog.append({ type: "session_closed", sessionId: this.sessionId });
+    for (const listener of this.streamListeners) listener(closed);
+    this.streamListeners.clear();
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.unsubscribe?.();
     this.unsubscribe = null;
@@ -879,6 +1005,14 @@ function getLocks(): Map<string, Promise<{ session: AgentSessionWrapper; realSes
 
 export function getRpcSession(sessionId: string): AgentSessionWrapper | undefined {
   return getRegistry().get(sessionId);
+}
+
+/** Resolve only a live, epoch-matched SSE resume; never redirect ordinary RPC. */
+export function getResumableRpcSession(sessionId: string, cursor: string): AgentSessionWrapper | undefined {
+  for (const wrapper of getRegistry().values()) {
+    if (wrapper.canResumeStream(sessionId, cursor)) return wrapper;
+  }
+  return undefined;
 }
 
 /**

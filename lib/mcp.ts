@@ -1,6 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { createHash } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { isAbsolute } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
 import {
   defineTool,
   getAgentDir,
@@ -9,12 +9,16 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { McpConnectionManager, mcpSignature } from "./mcp-client";
+import { FileOperationError, readFileSnapshot, replaceFileSnapshot, withFileMutation, type FileSnapshot } from "./versioned-file";
+import { redactedErrorMessage } from "./redaction";
 
 export type McpTransportKind = "stdio" | "http";
 export type McpScope = "global" | "project";
 
 export interface McpServerConfig {
   id: string;
+  /** Opaque read revision. Send it back when editing, toggling or deleting. */
+  revision?: string;
   name: string;
   enabled: boolean;
   scope: McpScope;
@@ -40,113 +44,203 @@ export interface McpServerStatus {
   checkedAt?: string;
 }
 
-interface McpFile { version: 1; servers: McpServerConfig[] }
+const MCP_FILENAME = "mcp-servers.json";
+const MAX_MCP_SERVERS = 50;
+const MAX_MCP_CONFIG_BYTES = 4 * 1024 * 1024;
 
-const MCP_PATH = () => join(getAgentDir(), "mcp-servers.json");
-
-export class McpConfigurationError extends Error {}
+export class McpConfigurationError extends Error {
+  constructor(message: string, readonly status = 400) { super(message); }
+}
 
 function safeId(value: string): string {
   const normalized = value.toLowerCase().trim().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
-  return normalized || `mcp-${Date.now().toString(36)}`;
+  return normalized || `mcp-${createHash("sha256").update(value).digest("hex").slice(0, 24)}`;
 }
 
 function sanitizeArgs(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string").slice(0, 64);
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 64 || value.some(item => typeof item !== "string" || item.length > 8192 || item.includes("\0"))) {
+    throw new McpConfigurationError("MCP arguments must contain at most 64 strings of up to 8192 characters each");
+  }
+  return [...value];
 }
 
 function sanitizeHeaders(value: unknown): Record<string, string> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-    .filter((entry): entry is [string, string] => Boolean(entry[0]) && typeof entry[1] === "string")
-    .slice(0, 32));
+  if (value === undefined) return {};
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length > 32) {
+    throw new McpConfigurationError("MCP headers must be an object with at most 32 entries");
+  }
+  const names = new Set<string>();
+  for (const [key, item] of Object.entries(value)) {
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(key) || key.length > 256 || names.has(key.toLowerCase())
+      || typeof item !== "string" || item.length > 8192 || /[\r\n\0]/.test(item)) {
+      throw new McpConfigurationError("MCP headers require unique valid names and string values without line breaks");
+    }
+    names.add(key.toLowerCase());
+  }
+  return Object.fromEntries(Object.entries(value)) as Record<string, string>;
 }
 
 export function validateMcpServer(input: Partial<McpServerConfig>, existing?: McpServerConfig, touchUpdated = true): McpServerConfig {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new McpConfigurationError("MCP server must be an object");
+  const allowed = new Set(["id", "revision", "name", "enabled", "scope", "projectCwd", "transport", "command", "args", "cwd", "url", "headers", "timeoutMs", "createdAt", "updatedAt"]);
+  if (Object.keys(input).some(key => !allowed.has(key))) throw new McpConfigurationError("Unknown MCP configuration field");
+  const field = (key: keyof McpServerConfig, max: number) => {
+    const value = input[key] === undefined ? existing?.[key] : input[key];
+    if (value === undefined) return undefined;
+    if (typeof value !== "string" || value.length > max || value.includes("\0")) throw new McpConfigurationError(`Invalid MCP ${key}`);
+    return value.trim() || undefined;
+  };
   const now = new Date().toISOString();
-  const transport = input.transport ?? existing?.transport ?? "stdio";
-  const scope = input.scope ?? existing?.scope ?? "global";
+  const transport = input.transport === undefined ? existing?.transport ?? "stdio" : input.transport;
+  const scope = input.scope === undefined ? existing?.scope ?? "global" : input.scope;
   if (transport !== "stdio" && transport !== "http") throw new McpConfigurationError("Unknown MCP transport");
   if (scope !== "global" && scope !== "project") throw new McpConfigurationError("Unknown MCP scope");
   const timeoutMs = input.timeoutMs === undefined ? existing?.timeoutMs ?? 15_000 : input.timeoutMs;
   if (typeof timeoutMs !== "number" || !Number.isInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 120_000) {
     throw new McpConfigurationError("MCP timeout must be between 1000 and 120000 milliseconds");
   }
-  const name = String(input.name ?? existing?.name ?? "").trim().slice(0, 80);
-  if (!name) throw new Error("MCP server name is required");
-  const id = safeId(String(input.id ?? existing?.id ?? name));
-  const projectCwd = String(input.projectCwd ?? existing?.projectCwd ?? "").trim() || undefined;
-  if (scope === "project" && !projectCwd) throw new Error("Project MCP server requires a project path");
-  const command = String(input.command ?? existing?.command ?? "").trim() || undefined;
-  const url = String(input.url ?? existing?.url ?? "").trim() || undefined;
-  if (transport === "stdio" && !command) throw new Error("stdio MCP server requires a command");
+  const name = field("name", 80);
+  if (!name) throw new McpConfigurationError("MCP server name is required");
+  const id = field("id", 128) ?? safeId(name);
+  if (!/^[a-z0-9][a-z0-9_-]{0,127}$/.test(id)) throw new McpConfigurationError("Invalid MCP server id");
+  const revision = field("revision", 128);
+  const enabled = input.enabled === undefined ? existing?.enabled ?? false : input.enabled;
+  if (typeof enabled !== "boolean") throw new McpConfigurationError("MCP enabled must be a boolean");
+  const projectCwd = field("projectCwd", 8192);
+  const cwd = field("cwd", 8192);
+  if ((projectCwd && !isAbsolute(projectCwd)) || (cwd && !isAbsolute(cwd))) throw new McpConfigurationError("MCP working directories must be absolute paths");
+  if (scope === "project" && !projectCwd) throw new McpConfigurationError("Project MCP server requires a project path");
+  const command = field("command", 8192);
+  const url = field("url", 8192);
+  if (transport === "stdio" && !command) throw new McpConfigurationError("stdio MCP server requires a command");
   if (transport === "http") {
-    if (!url) throw new Error("HTTP MCP server requires a URL");
-    const parsed = new URL(url);
-    if (!/^https?:$/.test(parsed.protocol)) throw new Error("MCP URL must use HTTP or HTTPS");
+    if (!url) throw new McpConfigurationError("HTTP MCP server requires a URL");
+    let parsed: URL;
+    try { parsed = new URL(url); } catch { throw new McpConfigurationError("MCP URL must be a valid HTTP or HTTPS URL"); }
+    if (!/^https?:$/.test(parsed.protocol)) throw new McpConfigurationError("MCP URL must use HTTP or HTTPS");
+    if (parsed.username || parsed.password) throw new McpConfigurationError("MCP URL must not contain credentials; use environment-backed headers");
   }
-  const headers = sanitizeHeaders(input.headers ?? existing?.headers);
+  const headers = sanitizeHeaders(input.headers === undefined ? existing?.headers : input.headers);
   for (const [key, value] of Object.entries(headers)) {
-    if (/(authorization|api[-_]?key|token|secret)/i.test(key) && !/\$\{[A-Z_][A-Z0-9_]*\}/i.test(value)) {
-      throw new Error(`Sensitive header ${key} must reference an environment variable such as \${MCP_TOKEN}`);
+    if (/(authorization|api[-_]?key|token|secret|cookie|password)/i.test(key) && !/^(?:[A-Za-z][A-Za-z0-9_-]*[ \t]+)?\$\{[A-Z_][A-Z0-9_]*\}$/i.test(value)) {
+      throw new McpConfigurationError(`Sensitive header ${key} must reference an environment variable such as \${MCP_TOKEN}`);
     }
   }
+  for (const key of ["createdAt", "updatedAt"] as const) {
+    const value = field(key, 64);
+    if (value && !Number.isFinite(Date.parse(value))) throw new McpConfigurationError(`Invalid MCP ${key}`);
+  }
+  const createdAt = existing?.createdAt ?? (touchUpdated ? now : input.createdAt ?? new Date(0).toISOString());
   return {
     id,
+    ...(revision ? { revision } : {}),
     name,
-    enabled: input.enabled ?? existing?.enabled ?? false,
+    enabled,
     scope,
     ...(projectCwd ? { projectCwd } : {}),
     transport,
     ...(command ? { command } : {}),
-    args: sanitizeArgs(input.args ?? existing?.args),
-    ...(String(input.cwd ?? existing?.cwd ?? "").trim() ? { cwd: String(input.cwd ?? existing?.cwd).trim() } : {}),
+    args: sanitizeArgs(input.args === undefined ? existing?.args : input.args),
+    ...(cwd ? { cwd } : {}),
     ...(url ? { url } : {}),
     headers,
     timeoutMs,
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: touchUpdated ? now : (input.updatedAt ?? existing?.updatedAt ?? now),
+    createdAt,
+    updatedAt: touchUpdated ? now : (input.updatedAt ?? existing?.updatedAt ?? createdAt),
   };
 }
 
+function withReadRevision(server: McpServerConfig): McpServerConfig {
+  // Keep the stored nonce AND every normalized field in the read token. Manual
+  // edits are detected even if they leave the nonce/timestamps untouched.
+  return { ...server, revision: createHash("sha256").update(JSON.stringify([server.revision ?? null, { ...server, revision: undefined }])).digest("hex") };
+}
+
+function parseMcpFile(snapshot: FileSnapshot): McpServerConfig[] {
+  if (!snapshot.exists) return [];
+  let parsed: { version?: unknown; servers?: unknown };
+  try { parsed = JSON.parse(snapshot.text); } catch { throw new McpConfigurationError("MCP configuration is not valid JSON; no changes were made", 503); }
+  if (!parsed || typeof parsed !== "object" || parsed.version !== 1 || !Array.isArray(parsed.servers)
+    || Object.keys(parsed).some(key => key !== "version" && key !== "servers")) {
+    throw new McpConfigurationError("Unsupported MCP configuration format; no changes were made", 503);
+  }
+  const servers = parsed.servers.map(server => validateMcpServer(server, undefined, false));
+  if (new Set(servers.map(server => server.id)).size !== servers.length) throw new McpConfigurationError("MCP configuration contains duplicate server ids", 503);
+  return servers; // Never silently drop existing records above the creation cap.
+}
+
+function configurationError(error: unknown): never {
+  if (error instanceof FileOperationError) throw new McpConfigurationError(error.message, error.status);
+  throw error;
+}
+
 export async function readMcpServers(): Promise<McpServerConfig[]> {
-  try {
-    const parsed = JSON.parse(await readFile(MCP_PATH(), "utf8")) as Partial<McpFile>;
-    if (!Array.isArray(parsed.servers)) return [];
-    return parsed.servers.slice(0, 50).map((server) => validateMcpServer(server, server, false));
-  } catch (error) {
+  try { return parseMcpFile(await readFileSnapshot(getAgentDir(), MCP_FILENAME, MAX_MCP_CONFIG_BYTES)).map(withReadRevision); }
+  catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
+    configurationError(error);
   }
 }
 
-async function writeMcpServers(servers: McpServerConfig[]): Promise<void> {
-  const path = MCP_PATH();
-  await mkdir(dirname(path), { recursive: true });
-  const temp = `${path}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(temp, `${JSON.stringify({ version: 1, servers }, null, 2)}\n`, { mode: 0o600 });
-  await rename(temp, path);
+function assertRevision(existing: McpServerConfig | undefined, revision: unknown): void {
+  if (!existing) {
+    if (revision !== undefined) throw new McpConfigurationError("MCP configuration was removed; reload before making changes", 409);
+    return;
+  }
+  if (typeof revision !== "string" || !revision) throw new McpConfigurationError("MCP changes require the latest revision; refresh and try again", 428);
+  if (withReadRevision(existing).revision !== revision) throw new McpConfigurationError("MCP configuration changed; your draft was not saved. Reload before making changes", 409);
 }
 
-export async function saveMcpServer(input: Partial<McpServerConfig>): Promise<McpServerConfig> {
-  const servers = await readMcpServers();
-  const existing = input.id ? servers.find((server) => server.id === input.id) : undefined;
-  const server = validateMcpServer(input, existing);
-  if (!existing && servers.some((item) => item.id === server.id)) throw new Error(`MCP server id already exists: ${server.id}`);
-  const next = existing ? servers.map((item) => item.id === server.id ? server : item) : [...servers, server];
-  await writeMcpServers(next);
-  await invalidateMcpClient(server.id);
-  return server;
+type MutationOptions = { trustStdio?: boolean; onCleanupError?: (message: string) => void };
+
+async function mutateMcpFile<T>(change: (servers: McpServerConfig[]) => { next: McpServerConfig[] | null; result: T }): Promise<T> {
+  const root = getAgentDir();
+  try {
+    await mkdir(root, { recursive: true, mode: 0o700 });
+    return await withFileMutation(root, MCP_FILENAME, async () => {
+      const snapshot = await readFileSnapshot(root, MCP_FILENAME, MAX_MCP_CONFIG_BYTES);
+      const { next, result } = change(parseMcpFile(snapshot));
+      if (next) await replaceFileSnapshot(root, MCP_FILENAME, { ...snapshot, mode: 0o600 }, `${JSON.stringify({ version: 1, servers: next }, null, 2)}\n`, MAX_MCP_CONFIG_BYTES);
+      return result;
+    });
+  } catch (error) { configurationError(error); }
 }
 
-export async function deleteMcpServer(id: string): Promise<boolean> {
-  const servers = await readMcpServers();
-  const next = servers.filter((server) => server.id !== id);
-  if (next.length === servers.length) return false;
-  await writeMcpServers(next);
-  await invalidateMcpClient(id);
-  return true;
+async function invalidateAfterSave(id: string, options: MutationOptions): Promise<void> {
+  try { await invalidateMcpClient(id); }
+  catch (error) {
+    const message = `MCP configuration was saved, but connection cleanup could not be confirmed: ${redactedErrorMessage(error)}`;
+    if (options.onCleanupError) options.onCleanupError(message);
+    else throw new McpConfigurationError(message, 503);
+  }
+}
+
+export async function saveMcpServer(input: Partial<McpServerConfig>, options: MutationOptions = {}): Promise<McpServerConfig> {
+  const saved = await mutateMcpFile(servers => {
+    if (!input || typeof input !== "object" || Array.isArray(input)) throw new McpConfigurationError("MCP server must be an object");
+    const existing = input.id ? servers.find(server => server.id === input.id) : undefined;
+    const validated = validateMcpServer(input, existing);
+    assertRevision(existing, input.revision);
+    const server = { ...validated, revision: randomUUID() };
+    if (server.enabled && server.transport === "stdio" && options.trustStdio !== true) throw new McpConfigurationError("Enabling a local MCP command requires confirmation");
+    if (!existing && servers.some(item => item.id === server.id)) throw new McpConfigurationError("MCP server id already exists", 409);
+    if (!existing && servers.length >= MAX_MCP_SERVERS) throw new McpConfigurationError("MCP supports at most 50 saved servers; remove one before adding another", 409);
+    return { next: existing ? servers.map(item => item.id === server.id ? server : item) : [...servers, server], result: withReadRevision(server) };
+  });
+  await invalidateAfterSave(saved.id, options);
+  return saved;
+}
+
+export async function deleteMcpServer(id: string, revision?: string, options: MutationOptions = {}): Promise<boolean> {
+  if (typeof id !== "string" || !/^[a-z0-9][a-z0-9_-]{0,127}$/.test(id)) throw new McpConfigurationError("Invalid MCP server id");
+  const deleted = await mutateMcpFile(servers => {
+    const existing = servers.find(server => server.id === id);
+    assertRevision(existing, revision);
+    return { next: existing ? servers.filter(server => server.id !== id) : null, result: !!existing };
+  });
+  if (deleted) await invalidateAfterSave(id, options);
+  return deleted;
 }
 
 function registeredToolName(serverId: string, toolName: string): string {

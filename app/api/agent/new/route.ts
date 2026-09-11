@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "fs";
+import { randomUUID } from "node:crypto";
 import { startRpcSession } from "@/lib/rpc-manager";
 import type { ToolSelectionMode } from "@/lib/tool-selection";
 
 // POST /api/agent/new  body: { cwd: string; type: string; message: string; ... }
-// Spawns a brand-new pi session and immediately sends the first command.
+// Creates a Pi session. The Web client uses deferPrompt to subscribe before
+// the first prompt; legacy callers can still send their first command here.
 // Returns { sessionId, data } where sessionId is pi's real session id.
 export async function POST(req: Request) {
   try {
@@ -19,9 +21,9 @@ export async function POST(req: Request) {
     }
 
     // Use a one-time key so startRpcSession's lock doesn't conflict with real session ids
-    const { provider, modelId, toolNames, toolMode, thinkingLevel, ephemeral, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; toolMode?: ToolSelectionMode; thinkingLevel?: string; ephemeral?: boolean; [key: string]: unknown };
+    const { provider, modelId, toolNames, toolMode, thinkingLevel, ephemeral, deferPrompt, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; toolMode?: ToolSelectionMode; thinkingLevel?: string; ephemeral?: boolean; deferPrompt?: boolean; [key: string]: unknown };
 
-    const tempKey = `__new__${Date.now()}`;
+    const tempKey = `__new__${randomUUID()}`;
     const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames, { ephemeral: ephemeral === true, toolMode });
 
     // Keep the files-route allowed-roots cache (see app/api/files/[...path]/route.ts)
@@ -39,9 +41,9 @@ export async function POST(req: Request) {
       await session.send({ type: "set_thinking_level", level: thinkingLevel });
     }
 
-    const result = await session.send(promptCommand);
+    const result = deferPrompt === true ? null : await session.send(promptCommand);
 
-    return NextResponse.json({ success: true, sessionId: realSessionId, ephemeral: ephemeral === true, data: result });
+    return NextResponse.json({ success: true, sessionId: realSessionId, ephemeral: ephemeral === true, deferred: deferPrompt === true, data: result });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

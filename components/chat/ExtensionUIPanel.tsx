@@ -2,6 +2,8 @@
 
 import type { ExtensionUIState } from "@/hooks/use-extension-ui";
 import type { WebExtensionUIResponse, WebExtensionUIWidgetPlacement } from "@/lib/web-extension-ui-types";
+import { ArrowUp } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 import { UserQuestionCard } from "./UserQuestionCard";
 import styles from "./ExtensionUIPanel.module.css";
 
@@ -9,6 +11,8 @@ interface Props {
   state: ExtensionUIState;
   onRespond: (response: WebExtensionUIResponse) => Promise<void>;
   wide?: boolean;
+  /** ChatWindow renders ask_user in its transcript, not in the composer dock. */
+  questionInTranscript?: boolean;
 }
 
 /** Strip ANSI SGR sequences, including fragments persisted without the ESC byte. */
@@ -32,8 +36,9 @@ function visibleStatuses(statuses: ExtensionUIState["statuses"]) {
   });
 }
 
-export function ExtensionUIPanel({ state, onRespond, wide = false }: Props) {
-  const dialog = state.dialogs[0];
+export function ExtensionUIPanel({ state, onRespond, wide = false, questionInTranscript = false }: Props) {
+  const first = state.dialogs[0];
+  const dialog = questionInTranscript && first?.method === "ask_user" ? undefined : first;
   const hasAboveWidgets = Object.values(state.widgets).some((widget) => widget.placement === "aboveEditor");
   const statuses = visibleStatuses(state.statuses);
   const hasStatuses = statuses.length > 0;
@@ -61,10 +66,30 @@ export function ExtensionUIPanel({ state, onRespond, wide = false }: Props) {
       )}
       {dialog && (
         <div data-testid="extension-question">
-          <UserQuestionCard request={dialog} pendingCount={state.dialogs.length} onRespond={onRespond} />
+          <UserQuestionCard key={dialog.id} request={dialog} pendingCount={state.dialogs.length} onRespond={onRespond} />
         </div>
       )}
     </>
+  );
+}
+
+export function PendingQuestionNotice({ onShow, wide = false }: { onShow: () => void; wide?: boolean }) {
+  const { t } = useI18n();
+  return (
+    <div className={styles.outer} data-testid="pending-question-notice">
+      <div className={`${styles.inner} ${wide ? styles.innerWide : ""} ${styles.questionNotice}`}>
+        <span role="status">{t("extensionUI.pendingAnswer")}</span>
+        <button type="button" onPointerDown={(event) => {
+          // Keep the composer focused until click is delivered. Blurring it on
+          // pointerdown restores the mobile nav and moves this button before
+          // pointerup, swallowing the user's first click. onShow then moves
+          // focus to the revealed question; keyboard activation is unchanged.
+          if (event.isPrimary && event.button === 0) event.preventDefault();
+        }} onClick={onShow}>
+          {t("extensionUI.viewQuestion")}<ArrowUp size={14} aria-hidden />
+        </button>
+      </div>
+    </div>
   );
 }
 

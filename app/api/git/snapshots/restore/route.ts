@@ -4,6 +4,7 @@ import { inspectSnapshotRestore, restoreSnapshot } from "@/lib/git-snapshot";
 import { redactedErrorMessage } from "@/lib/redaction";
 import { recordSecurityActivity } from "@/lib/security-activity";
 import { consumeSensitiveAction, prepareSensitiveAction } from "@/lib/sensitive-action-confirmation";
+import { requestHasExplicitSameOrigin } from "@/lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,7 @@ class SnapshotRequestError extends Error {
 }
 
 function assertSameOrigin(req: Request): void {
-  const origin = req.headers.get("origin");
-  const fetchSite = req.headers.get("sec-fetch-site");
-  if (!origin || (fetchSite && fetchSite !== "same-origin") || new URL(origin).host !== new URL(req.url).host) {
+  if (!requestHasExplicitSameOrigin(req)) {
     throw new SnapshotRequestError("Restore requires a same-origin browser request", 403);
   }
 }

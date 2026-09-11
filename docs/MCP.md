@@ -42,6 +42,56 @@ The DELETE has a bounded wait. A server may reject or ignore it, in which case
 server-side expiration is still the server's responsibility; closing the browser
 connection is not proof that remote state has been deleted.
 
+## Saving safely across tabs and processes
+
+Configuration lives in `<agent-dir>/mcp-servers.json` (normally
+`~/.pi/agent/mcp-servers.json`). The version-1 document contains `servers` and
+`version`; the reader refuses malformed, unknown-field or future formats instead
+of treating them as an empty list and overwriting them. Back up and repair an
+invalid file explicitly; deleting it is not an automatic recovery step.
+
+Each returned server has an opaque `revision`. Edits, toggles and deletes must
+send the revision that was displayed, not one silently fetched immediately before
+writing. The UI does this automatically. API clients send `server.revision` for
+`save`, and top-level `revision` for `toggle`/`delete`. New records omit revision.
+The on-disk nonce is not the API read revision; always read through `GET /api/mcp`.
+
+- **428** means an existing record's revision is missing. **409** means a stale
+  revision, removed record, concurrent writer or creation limit. Neither response
+  saves a partial change. A deleted editor cannot silently recreate the record.
+- The editor keeps the draft and displays the error inside the form. **Discard
+  draft and reload** is explicit: copy any changes you want to keep first. Failed
+  reloads and deleted records retain the draft for reference. Inputs are disabled
+  during save, so edits cannot be discarded by an older request finishing.
+- A committed save remains successful if connection cleanup or Extensions reload
+  subsequently fails. The response includes `cleanupWarning` / `reloadWarning`;
+  the UI shows the warning. Check the connection and reload Extensions after the
+  active run instead of blindly submitting the stale revision again.
+- Read-modify-write uses the shared cross-process SQLite mutation lock and an
+  atomic replacement with private file permissions. Readers detect manual edits
+  to normalized fields even when timestamps and the stored nonce are retained.
+  Revisions for unrelated records do not change when another server is edited.
+
+New records are capped at **50**. Existing valid documents with more than 50 are
+read in full and can be edited/deleted; entries are never silently truncated.
+The configuration document is capped at **4 MiB**. Inputs reject invalid types,
+unknown fields, relative working directories, overlong values, more than **64
+arguments** or **32 headers**, duplicate header names (case-insensitive), and
+header line breaks. Sensitive headers must contain an environment reference,
+optionally preceded by an authentication scheme, not a literal secret with a
+placeholder appended. Credentials embedded in an HTTP URL are rejected.
+
+The editor uses one argument per line without trimming whitespace. When arguments
+are untouched, exact existing strings (including empty strings or embedded
+newlines) are preserved; use the JSON file for arguments with embedded newlines.
+Stop writers before manual file maintenance and back up the file first.
+
+The lock coordinates this application's cooperating processes on the same local
+filesystem. It is not distributed locking, an OS sandbox or protection against a
+malicious process replacing parent directories. Do not share the file with an
+older running version that ignores the lock/revisions. Unsupported filesystems
+or lock failures are surfaced rather than silently falling back to unsafe writes.
+
 ## Tool discovery and changes
 
 All `tools/list` cursor pages are collected before publishing the catalog. Limits
@@ -85,5 +135,6 @@ shared connection needed by other sessions.
   not imply a complete resources client.
 
 These contracts are checked with mock lifecycle tests, actual SDK/stdio child
-processes, loopback HTTP/SSE servers, and the timeout form's regression tests.
+processes, loopback HTTP/SSE servers, versioned persistence/API tests, and the
+timeout/conflict forms' regression tests.
 They do not certify a third-party server, its permissions, availability or billing.

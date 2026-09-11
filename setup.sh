@@ -16,6 +16,26 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Check the runtime before fetch/reset/clean, backups, or dependency changes.
+# Re-exec after synchronization checks the fetched contract again as well.
+if ! command -v node &>/dev/null; then
+  echo -e "${RED}❌ 找不到 Node.js；需要 22.19+（22.x）或 23.4+。${NC}"
+  exit 1
+fi
+TGD_NODE_VERSION=$(node -p 'process.versions.node')
+if ! node "$SCRIPT_DIR/scripts/check-node-version.mjs" "$TGD_NODE_VERSION"; then
+  echo -e "${RED}❌ 不支援的 Node.js 版本 ($TGD_NODE_VERSION)，需要 22.19+（22.x）或 23.4+（含 24 以上）${NC}"
+  exit 1
+fi
+if ! command -v npm &>/dev/null; then
+  echo -e "${RED}❌ 找不到 npm；尚未修改原始碼。${NC}"
+  exit 1
+fi
+
+# Never reset, clean, install, or build a checkout used by a live Next server.
+# A managed deployment must build/health-check a separate staging release first.
+node "$SCRIPT_DIR/scripts/check-running-checkout.mjs" "$SCRIPT_DIR"
+
 # ── 安全同步 origin/main ─────────────────────────────
 # A clean end-user checkout can update itself automatically. If the checkout
 # contains local commits or working-tree changes, create a private recovery
@@ -176,28 +196,9 @@ fi
 # ── 檢查 Node.js ──────────────────────────────────────
 echo ""
 echo -e "${BOLD}📦 檢查 Node.js...${NC}"
-if ! command -v node &>/dev/null; then
-  echo -e "  ${RED}❌ 找不到 Node.js${NC}"
-  echo ""
-  echo "  安裝方式："
-  echo "    macOS:   brew install node"
-  echo "    Ubuntu:  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs"
-  echo "    其他:    https://nodejs.org/"
-  exit 1
-fi
-
-TGD_NODE_VERSION=$(node -p 'process.versions.node')
-if ! node -e 'const [major, minor] = process.argv[1].split(".").map(Number); process.exit(major > 23 || (major === 23 && minor >= 4) || (major === 22 && minor >= 19) ? 0 : 1)' "$TGD_NODE_VERSION"; then
-  echo -e "  ${RED}❌ 不支援的 Node.js 版本 ($TGD_NODE_VERSION)，需要 22.19+（22.x）或 23.4+（含 24 以上）${NC}"
-  exit 1
-fi
 echo -e "  ${GREEN}✅ Node.js $(node --version)${NC}"
 
 # ── 檢查 npm ──────────────────────────────────────────
-if ! command -v npm &>/dev/null; then
-  echo -e "  ${RED}❌ 找不到 npm${NC}"
-  exit 1
-fi
 echo -e "  ${GREEN}✅ npm $(npm --version)${NC}"
 
 # ── 安裝依賴 ──────────────────────────────────────────

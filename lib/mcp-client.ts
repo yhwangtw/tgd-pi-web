@@ -13,7 +13,7 @@ const MAX_CATALOG_BYTES = 2 * 1024 * 1024;
 const HEALTH_INTERVAL_MS = 30_000;
 
 export function mcpSignature(server: McpServerConfig): string {
-  return JSON.stringify({ ...server, createdAt: undefined, updatedAt: undefined });
+  return JSON.stringify({ ...server, revision: undefined, createdAt: undefined, updatedAt: undefined });
 }
 
 function interpolate(value: string): string {

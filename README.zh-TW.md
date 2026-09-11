@@ -68,7 +68,7 @@ cd tGD-pi-web
 bash setup.sh
 ```
 
-安裝腳本是正式支援的一步式 production 流程。Git checkout 會先取得 `origin/main` 並檢查本地修改，再同步原始碼、檢查 Node.js 與 npm、安裝相依套件、執行 TypeScript 驗證、建立 production build，並可選擇啟動 production server。若使用原始碼壓縮檔，已知的舊版殘留會先移至 `~/.tgd-pi-web-backups/`（可用 `TGD_SETUP_BACKUP_DIR` 覆寫）。
+安裝腳本在任何來源變更前先檢查 Node.js/npm，並拒絕更新仍在運行的 checkout。已停止的 Git checkout 才取得 `origin/main`、檢查本地修改、同步原始碼、安裝相依套件、驗證 TypeScript、建置，並可選擇啟動 production server。原始碼壓縮檔的已知舊版殘留會先移至 `~/.tgd-pi-web-backups/`（可用 `TGD_SETUP_BACKUP_DIR` 覆寫）。
 
 > [!WARNING]
 > setup/build 前請停止使用這個目錄的伺服器。Git 安裝以 `origin/main` 為準；若有本地 commit 或未被 ignore 的修改，先建立私人原始碼復原備份並詢問，再決定是否替換。非互動模式會停止，除非明確設定 `TGD_SETUP_FORCE_SYNC=1`。核准同步後仍會執行 `git reset --hard origin/main` 與 `git clean -fd`；ignored runtime 狀態保留，但不包含在這份原始碼備份裡。詳見[更新與回滾邊界](./docs/RELEASING.md#installation-updates-and-rollback-are-separate)。
@@ -90,6 +90,8 @@ bash setup.sh
 ```
 
 TypeScript 驗證失敗時，`setup.sh` 會顯示完整錯誤並立即停止，不會繼續產生容易誤判的部分 build。
+
+瀏覽器更新需由管理者設定 staged adapter 和本機運行身分驗證。系統會保存操作結果並核對真正運行的版本，不把 helper PID 當成功。詳見[受管更新與回滾](./docs/MANAGED-UPDATES.md)；不會自動安裝 launchd/systemd adapter。
 
 若 Git checkout 必須刻意離線使用，可明確跳過遠端同步：
 
@@ -212,6 +214,8 @@ parent/
 結束即清理，不會替換 Agent 共用的連線。工具清單會讀取全部分頁；清單變更後，請等目前執行
 結束再 **Reload Extensions**。連線狀態代表最近一次檢查，不是持續監控。
 OAuth/PKCE、resource/prompt 瀏覽與 required-task 執行尚未整合；詳見 [MCP 連線契約與限制](docs/MCP.md)。
+設定保存有版本核對與跨程序鎖；衝突時保留草稿，需明確重新載入最新設定。新增上限 50 筆，
+既有項目不會被靜默截斷。API 版本、驗證上限及「已保存但重載失敗」警告亦見上述文件。
 
 ### Agent 排程
 
@@ -264,7 +268,8 @@ OAuth/PKCE、resource/prompt 瀏覽與 required-task 執行尚未整合；詳見
 |---|---|
 | `bash setup.sh` | 檢查／備份本地修改，必要時核准後同步 `origin/main`，安裝、驗證、build 與可選啟動 |
 | `bash scripts/release.sh` | 唯讀發版檢查；加上 `--dispatch` 才送出 GitHub 發版請求 |
-| `npm run dev` | 視需要在 `30141` port 啟動開發環境 |
+| `npm run dev` | 在 `127.0.0.1:30141` 啟動開發環境，使用所選 Pi 資料目錄 |
+| `npm run preview` | 在 `127.0.0.1:30142` 啟動獨立功能預覽，使用自己的空白 `.pi-web-preview/agent` 目錄 |
 | `node_modules/.bin/tsc --noEmit` | Typecheck |
 | `npx eslint .` | Lint |
 | `npm test` | 執行 Vitest unit tests |
@@ -290,9 +295,18 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 
 ## 設定
 
+`dev` 與 `start` 預設只綁定 localhost。可用 `PORT=30143 npm run dev` 改 port；明確傳入 `-- -p 30143` 時優先採用。遠端綁定必須明確設定 `PIWEB_HOST=0.0.0.0` 或 `-- -H 0.0.0.0`，並加上認證邊界。預覽模式只允許 localhost。
+
+環境列會區分開發、正式、獨立功能預覽與展示資料，並顯示運行建置及實際模型設定路徑。`npm run preview` **不會**複製憑證、對話或排程；請在預覽自己的 Models 畫面設定供應商。預覽不繼承供應商環境變數，若 checkout 有會被自動載入的私人 `.env` 檔案也會拒絕啟動，請改用乾淨 checkout。這是資料隔離，不是 OS sandbox。
+
+啟動器會在新的空白預覽目錄建立私人來源標記。既有非空目錄必須已有相符標記，不能直接指向任意複製的 agent 資料；fixture 產生器也會建立自己的 fixture 標記。
+
 | 設定 | 行為 |
 |---|---|
 | `PI_CODING_AGENT_DIR` | 覆寫預設的 `~/.pi/agent` 目錄 |
+| `PORT` / `PIWEB_HOST` | 預設 `30141` / `127.0.0.1`；預覽預設 port 為 `30142` |
+| `PIWEB_PREVIEW_DIR` | `npm run preview` 的獨立 agent 資料目錄絕對路徑；不可指向正式資料目錄或其別名 |
+| `PIWEB_ENVIRONMENT` | 明確標示 `development`、`production`、`preview` 或 `fixture`；fixture 必須提供獨立資料目錄 |
 | `PIWEB_ACCESS_PASSWORD` | 啟用套用於所有 route 的內建共用密碼閘門 |
 | `PIWEB_SESSION_SECRET` | 獨立簽署存取 Cookie；遠端部署請使用至少 32 bytes 的隨機值 |
 | `PIWEB_RELEASE_REPOSITORY` | 更新中心使用的 GitHub `owner/repo`；預設為 `yhwangtw/tgd-pi-web` |
@@ -300,6 +314,9 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 | `PIWEB_UPDATE_COMMAND_JSON` | 管理者更新 helper 的絕對路徑 JSON argv 陣列；不經 shell 解析 |
 | `PIWEB_RESTART_COMMAND_JSON` | 管理者重新啟動 helper 的絕對路徑 JSON argv 陣列 |
 | `PIWEB_ROLLBACK_COMMAND_JSON` | 管理者回復 helper 的絕對路徑 JSON argv 陣列 |
+| `PIWEB_UPDATE_PROTOCOL` | 受管更新／回滾必須使用 `staged-v1` |
+| `PIWEB_UPDATE_HEALTH_URL` | 以 loopback `/api/runtime/identity` 驗證操作後運行的程序 |
+| `PIWEB_UPDATE_OPERATION_DIR` | checkout 外私人持久操作目錄；管理同一服務的實例必須共用 |
 | `TGD_DIR` | 覆寫相鄰的 `<project>-tGD/` artifact 目錄 |
 | `models.json` | 模型與 provider 清單，包含自訂 `baseUrl` |
 | `auth.json` | 由 Pi 管理的各 provider API credential |

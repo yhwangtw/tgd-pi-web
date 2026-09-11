@@ -14,6 +14,23 @@ let container: HTMLDivElement;
 afterEach(async () => { await act(async () => root?.unmount()); container?.remove(); });
 
 describe("provider health filters", () => {
+  it("offers Add provider instead of a healthy empty state when none is configured", async () => {
+    state.report = {
+      checkedAt: "2026-09-05T00:00:00Z", summary: { ready: 0, total: 1, warning: 0, invalid: 0, needsAuth: 1 },
+      coverage: { credentialReadiness: "checked", localCatalog: "checked", quotaAndBilling: "not_checked", upstreamAvailability: "not_checked" },
+      providers: [{ id: "empty", name: "Unconfigured", status: "needs_auth", storedCredential: false, modelCount: 1, availableModelCount: 0 }],
+    };
+    const add = vi.fn();
+    container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => root.render(<ProviderHealth onAddProvider={add} />));
+    expect(container.textContent).not.toContain("No providers need attention");
+    const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Add provider")!;
+    expect(button).toBeTruthy();
+    await act(async () => button.click()); expect(add).toHaveBeenCalledOnce();
+    const all = [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')][2];
+    await act(async () => all.click());
+    expect([...container.querySelectorAll("button")].some(item => item.textContent === "Add provider")).toBe(true);
+  });
   it("shows a true empty attention state and one OAuth label after switching filters", async () => {
     state.report = {
       checkedAt: "2026-09-05T00:00:00Z",

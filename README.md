@@ -68,7 +68,7 @@ cd tGD-pi-web
 bash setup.sh
 ```
 
-The setup script is the supported one-step production path. In a Git checkout it fetches `origin/main` and checks local changes before synchronizing, then checks Node.js and npm, installs dependencies, runs TypeScript validation, creates a production build, and can start the production server. For source archives, known obsolete files are moved to `~/.tgd-pi-web-backups/` (override with `TGD_SETUP_BACKUP_DIR`) before the build. The Web always uses its pinned local Pi runtime; when an installed global `pi` CLI has a different version, interactive setup offers to synchronize it while unattended setup only prints the exact opt-in command.
+The setup script checks Node.js/npm and refuses a running checkout before any source changes. In a stopped Git checkout it fetches `origin/main`, checks local changes before synchronizing, installs dependencies, validates TypeScript, builds, and can start the production server. Source archives move known obsolete files to `~/.tgd-pi-web-backups/` (override with `TGD_SETUP_BACKUP_DIR`). The Web uses its pinned local Pi runtime; interactive setup can synchronize a different global CLI, while unattended setup only prints the opt-in command.
 
 > [!WARNING]
 > Stop the server using this checkout before setup/build. `origin/main` is authoritative for end-user Git installations. If local commits or non-ignored changes exist, setup creates a private recovery backup and asks before replacing source; unattended setup stops unless `TGD_SETUP_FORCE_SYNC=1` explicitly authorizes it. Approved synchronization uses `git reset --hard origin/main` and `git clean -fd`. Ignored runtime state is retained but is not part of this source backup. See [update and rollback boundaries](./docs/RELEASING.md#installation-updates-and-rollback-are-separate).
@@ -90,6 +90,8 @@ bash setup.sh
 ```
 
 `setup.sh` stops immediately and prints the complete TypeScript error when validation fails. It never continues into a misleading partial build.
+
+Browser-managed updates require an operator-provided staged adapter and loopback identity check. Durable operations verify the actual running build; a helper PID is not success. See [managed updates and rollback](./docs/MANAGED-UPDATES.md). No launchd/systemd adapter is installed automatically.
 
 For a deliberately offline Git checkout, skip remote synchronization explicitly:
 
@@ -218,6 +220,10 @@ and current protocol limits, see [MCP connections](docs/MCP.md). The editor uses
 separate connection and never replace an agent's shared connection. Tool-list
 changes require **Reload Extensions** after the active run; OAuth/PKCE,
 resource/prompt browsing and required-task execution are not yet integrated.
+Saved configurations use revision checks and cross-process locking. Conflicting
+edits keep your draft; reload the latest record explicitly before retrying. New
+records are capped at 50; existing entries are never silently truncated. See the
+MCP guide for API revisions, validation limits and saved-but-reload-failed warnings.
 
 ### Attention and recovery
 
@@ -322,7 +328,8 @@ the download to obtain the current file.
 |---|---|
 | `bash setup.sh` | Check/backup local changes, synchronize `origin/main` after approval where required, install, validate, build and optionally start |
 | `bash scripts/release.sh` | Read-only release preflight; `--dispatch` explicitly requests the GitHub workflow |
-| `npm run dev` | Optionally start the development server on port `30141` |
+| `npm run dev` | Development server on `127.0.0.1:30141`, using the selected Pi data directory |
+| `npm run preview` | Independent functional preview on `127.0.0.1:30142`, with its own empty `.pi-web-preview/agent` directory |
 | `node_modules/.bin/tsc --noEmit` | Typecheck |
 | `npx eslint .` | Lint |
 | `npm test` | Run Vitest unit tests |
@@ -348,9 +355,18 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 
 ## Configuration
 
+`dev` and `start` bind to localhost by default. `PORT=30143 npm run dev` changes the port; an explicit `-- -p 30143` takes precedence. Remote binding requires deliberate `PIWEB_HOST=0.0.0.0` or `-- -H 0.0.0.0` and an authenticated access boundary. Preview mode stays localhost-only.
+
+The environment bar identifies development, production, functional preview, or demonstration data and shows the running build and actual model-config path. `npm run preview` does **not** copy credentials, sessions, or schedules. Configure providers in its own Models screen; inherited provider environment variables are excluded, and automatic private `.env` loading is refused. Use a clean checkout for preview if your normal checkout has private `.env` files. This is data separation, not an OS sandbox.
+
+The launcher creates a private provenance marker in a new empty preview directory. Existing non-empty directories must already carry the matching marker; an arbitrary copied agent directory is refused. Fixture generators create their own fixture marker.
+
 | Setting | Behavior |
 |---|---|
 | `PI_CODING_AGENT_DIR` | Overrides the default `~/.pi/agent` directory |
+| `PORT` / `PIWEB_HOST` | Default `30141` / `127.0.0.1`; preview defaults to port `30142` |
+| `PIWEB_PREVIEW_DIR` | Absolute independent agent-data directory for `npm run preview`; cannot be the real Pi data directory or an alias |
+| `PIWEB_ENVIRONMENT` | Explicit `development`, `production`, `preview`, or `fixture` identity; fixture requires isolated agent data |
 | `PIWEB_ACCESS_PASSWORD` | Enables the built-in shared-password gate for every route |
 | `PIWEB_SESSION_SECRET` | Signs access cookies independently from the password; use a random 32-byte-or-longer value for remote deployments |
 | `PIWEB_RELEASE_REPOSITORY` | GitHub `owner/repo` used by the Update Center; defaults to `yhwangtw/tgd-pi-web` |
@@ -358,6 +374,9 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 | `PIWEB_UPDATE_COMMAND_JSON` | Absolute JSON argv array for an operator-managed update helper; no shell parsing |
 | `PIWEB_RESTART_COMMAND_JSON` | Absolute JSON argv array for an operator-managed restart helper |
 | `PIWEB_ROLLBACK_COMMAND_JSON` | Absolute JSON argv array for an operator-managed rollback helper |
+| `PIWEB_UPDATE_PROTOCOL` | `staged-v1` is required for managed update/rollback |
+| `PIWEB_UPDATE_HEALTH_URL` | Loopback `/api/runtime/identity` URL for running-process verification |
+| `PIWEB_UPDATE_OPERATION_DIR` | Private durable directory outside source; shared by instances managing the same service |
 | `TGD_DIR` | Overrides the sibling `<project>-tGD/` artifact directory |
 | `models.json` | Model/provider catalog, including custom `baseUrl` values |
 | `auth.json` | Per-provider API credentials managed by Pi |

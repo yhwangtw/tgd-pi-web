@@ -18,6 +18,11 @@ import { constants as fsConstants } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { isSupportedNodeVersion, NODE_SUPPORT_DESCRIPTION } from "./node-support.mjs";
+import { AUTH_COOKIE, gateEnabled, issueAccessToken } from "./access-gate";
+import { createRuntimeIdentity, type RuntimeIdentity } from "./runtime-identity";
+import { finishUpdateOperation, listUpdateOperations, readUpdateOperation, reserveUpdateOperation } from "../scripts/update-operation-store.mjs";
+import { validateIdentityUrl } from "../scripts/managed-update-runner.mjs";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_RELEASE_REPOSITORY = "yhwangtw/tgd-pi-web";
@@ -43,7 +48,22 @@ export interface ManagedActionStatus {
   configured: boolean;
   ready: boolean;
   label?: string;
-  reason?: "not_configured" | "invalid_config" | "not_executable";
+  reason?: "not_configured" | "invalid_config" | "not_executable" | "health_not_configured" | "staging_not_configured";
+}
+
+export interface UpdateOperation {
+  id: string;
+  action: ManagedUpdateAction;
+  status: "reserved" | "running" | "verifying" | "succeeded" | "failed" | "verification_failed" | "interrupted";
+  pid: number;
+  cwd: string;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+  message?: string;
+  requiresRecovery?: boolean;
+  rollbackVerified?: boolean;
+  verified?: { pid: number; startedAt: string; build: RuntimeIdentity["build"] };
 }
 
 export interface UpdateBackup {
@@ -66,6 +86,8 @@ export interface UpdatePreflightCheck {
 
 export interface UpdateCenterStatus {
   checkedAt: string;
+  running?: RuntimeIdentity;
+  operations?: { active: UpdateOperation | null; recent: UpdateOperation[] };
   current: {
     version: string;
     source: "git" | "archive";
@@ -143,6 +165,25 @@ interface CreateBackupOptions {
 
 declare global {
   var __piWebLatestReleaseCache: LatestReleaseCache | undefined;
+  var __piWebRuntimeStartedAt: string | undefined;
+}
+
+function operationRoot(env: NodeJS.ProcessEnv = process.env): string {
+  return env.PIWEB_UPDATE_OPERATION_DIR ?? join(getAgentDir(), "updates", "operations");
+}
+
+function runningIdentity(): RuntimeIdentity {
+  // Keep literal env accesses: Next inlines build metadata at compile time.
+  // Disk package.json/HEAD may already belong to a staged/newer source tree.
+  return createRuntimeIdentity(process.env, {
+    agentDir: getAgentDir(), cwd: process.cwd(), pid: process.pid,
+    startedAt: globalThis.__piWebRuntimeStartedAt ??= new Date(Date.now() - process.uptime() * 1000).toISOString(),
+  }, {
+    version: process.env.NEXT_PUBLIC_APP_VERSION || "unknown",
+    sourceSha: process.env.PIWEB_BUILD_SHA || null,
+    dirty: process.env.PIWEB_BUILD_DIRTY ? process.env.PIWEB_BUILD_DIRTY === "true" : null,
+    builtAt: process.env.PIWEB_BUILD_TIME || null,
+  });
 }
 
 function errorText(error: unknown): string {
@@ -293,6 +334,11 @@ async function managedActionStatus(action: ManagedUpdateAction, env: NodeJS.Proc
     } catch {
       return { configured: true, ready: false, label: basename(command.executable), reason: "not_executable" };
     }
+    try { validateIdentityUrl(env.PIWEB_UPDATE_HEALTH_URL); }
+    catch { return { configured: true, ready: false, label: basename(command.executable), reason: "health_not_configured" }; }
+    if (action !== "restart" && env.PIWEB_UPDATE_PROTOCOL !== "staged-v1") {
+      return { configured: true, ready: false, label: basename(command.executable), reason: "staging_not_configured" };
+    }
     return { configured: true, ready: true, label: basename(command.executable) };
   } catch {
     return { configured: true, ready: false, reason: "invalid_config" };
@@ -363,10 +409,10 @@ export async function getUpdateCenterStatus(options: UpdateCenterOptions = {}): 
   ]);
   const backup = await prepareBackupRoot(options.backupRoot ?? env.PIWEB_UPDATE_BACKUP_DIR ?? defaultBackupRoot(), cwd);
   const recent = backup.writable ? await listUpdateBackups(backup.root) : [];
+  const operations = await listUpdateOperations(operationRoot(env)) as UpdateCenterStatus["operations"];
   const updateAvailable = release.version ? compareCalendarVersions(version, release.version) < 0 : null;
-  const nodeMajor = Number(process.versions.node.split(".")[0]);
   const checks: UpdatePreflightCheck[] = [
-    { id: "node", state: nodeMajor >= 22 ? "pass" : "fail", detail: `Node ${process.versions.node}` },
+    { id: "node", state: isSupportedNodeVersion(process.versions.node) ? "pass" : "fail", detail: `Node ${process.versions.node} · ${NODE_SUPPORT_DESCRIPTION}` },
     {
       id: "release",
       state: release.version ? "pass" : "warning",
@@ -400,6 +446,8 @@ export async function getUpdateCenterStatus(options: UpdateCenterOptions = {}): 
   ];
   return {
     checkedAt: new Date().toISOString(),
+    running: runningIdentity(),
+    operations,
     current: {
       version,
       source: checkout.source,
@@ -413,7 +461,7 @@ export async function getUpdateCenterStatus(options: UpdateCenterOptions = {}): 
     latest: release,
     updateAvailable,
     preflight: {
-      ready: checks.every((check) => check.state !== "fail") && Boolean(release.version) && updateAction.ready && restartAction.ready,
+      ready: !operations?.active && checks.every((check) => check.state !== "fail") && Boolean(release.version) && updateAction.ready && restartAction.ready,
       checks,
     },
     backup: {
@@ -556,6 +604,7 @@ export function updateActionFingerprint(
 }
 
 export function validateUpdateAction(status: UpdateCenterStatus, action: UpdateCenterAction, backupId?: string): string | null {
+  if (status.operations?.active) return "Another managed update operation is active; wait for its recorded result";
   if (action === "backup") return status.actions.backup.ready ? null : "Private backup is unavailable";
   const managed = status.actions[action];
   if (!managed.ready) return `Managed ${action} action is not configured`;
@@ -565,15 +614,52 @@ export function validateUpdateAction(status: UpdateCenterStatus, action: UpdateC
   return null;
 }
 
-export async function executeManagedUpdateAction(
+export async function beginManagedUpdateOperation(
   action: ManagedUpdateAction,
   context: { targetTag?: string; backup?: UpdateBackup },
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ pid: number; label: string }> {
+): Promise<UpdateOperation> {
+  if (!(await managedActionStatus(action, env)).ready) throw new Error(`Managed ${action} verification/staging contract is not configured`);
+  const before = runningIdentity();
+  if (!/^[a-f0-9]{40,64}$/.test(before.build.sourceSha ?? "") || before.build.dirty !== false) {
+    throw new Error("Managed updates require verifiable clean running-build provenance; source archives and development builds need operator recovery");
+  }
+  const root = operationRoot(env);
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  if (pathInside(await realpath(process.cwd()), await realpath(root))) throw new Error("Update operation records must be outside the application checkout");
+  const expected = action === "update"
+    ? { version: context.targetTag?.replace(/^v/, "") }
+    : action === "rollback"
+      ? { version: context.backup?.version, sourceSha: context.backup?.head }
+      : { version: before.build.version, sourceSha: before.build.sourceSha };
+  if (!/^\d{4}\.\d{2}\.\d{2}(?:-[1-9]\d*)?$/.test(expected.version ?? "")
+    || (action !== "update" && !/^[a-f0-9]{40,64}$/.test(expected.sourceSha ?? ""))
+    || (action === "rollback" && context.backup?.dirty)) {
+    throw new Error("Managed action requires an exact clean target; review changed/archive backups manually");
+  }
+  return await reserveUpdateOperation(root, { action, cwd: process.cwd(), before, expected }) as UpdateOperation;
+}
+
+export async function failReservedUpdateOperation(id: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  const root = operationRoot(env);
+  const operation = await readUpdateOperation(root, id);
+  if (operation.status === "reserved") await finishUpdateOperation(root, id, "failed", "Update could not start; no verified update was recorded");
+}
+
+export async function executeManagedUpdateAction(
+  action: ManagedUpdateAction,
+  context: { targetTag?: string; backup?: UpdateBackup; operationId?: string },
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ pid: number; label: string; operationId: string }> {
   const command = parseManagedUpdateCommand(env[MANAGED_ACTION_ENV[action]]);
   if (!command) throw new Error(`Managed ${action} action is not configured`);
   await access(command.executable, fsConstants.X_OK);
-  const child = spawn(command.executable, command.args, {
+  const root = operationRoot(env);
+  const operation = context.operationId ? await readUpdateOperation(root, context.operationId)
+    : await beginManagedUpdateOperation(action, context, env);
+  if (operation.action !== action || operation.status !== "reserved" || operation.cwd !== process.cwd()) throw new Error("Update reservation no longer matches this action");
+  const cookie = gateEnabled() ? `${AUTH_COOKIE}=${await issueAccessToken()}` : "";
+  const child = spawn(process.execPath, [join(process.cwd(), "scripts", "managed-update-runner.mjs")], {
     cwd: process.cwd(),
     detached: true,
     stdio: "ignore",
@@ -584,11 +670,25 @@ export async function executeManagedUpdateAction(
       PIWEB_UPDATE_TARGET_TAG: context.targetTag ?? "",
       PIWEB_UPDATE_BACKUP_ID: context.backup?.id ?? "",
       PIWEB_UPDATE_BACKUP_PATH: context.backup?.path ?? "",
+      PIWEB_UPDATE_OPERATION_ROOT: root,
+      PIWEB_UPDATE_OPERATION_ID: operation.id,
+      PIWEB_MANAGED_OPERATION_COMMAND: JSON.stringify(command),
+      PIWEB_UPDATE_HEALTH_COOKIE: cookie,
     },
   });
-  child.unref();
-  if (!child.pid) throw new Error(`Managed ${action} action did not start`);
-  return { pid: child.pid, label: basename(command.executable) };
+  try {
+    await new Promise<void>((resolveStarted, reject) => {
+      child.once("spawn", resolveStarted);
+      child.once("error", reject);
+    });
+    child.once("exit", () => { void failReservedUpdateOperation(operation.id, env).catch(() => {}); });
+    child.unref();
+    if (!child.pid) throw new Error(`Managed ${action} action did not start`);
+    return { pid: child.pid, label: basename(command.executable), operationId: operation.id };
+  } catch (error) {
+    await failReservedUpdateOperation(operation.id, env);
+    throw error;
+  }
 }
 
 export function resetUpdateCenterCacheForTests(): void {

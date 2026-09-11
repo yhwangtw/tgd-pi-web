@@ -12,7 +12,9 @@ export class FileMutationLockError extends Error {
   }
 }
 
-/** Ordinary file reads must not open/close SQLite's process-locked inode. */
+/** Reserve lock inodes and secret-bearing configuration backups from ordinary
+ * file/search APIs, including aliases and destructive ancestor paths.
+ * The historical name is kept for existing callers. */
 export function isFileMutationLockPath(target: string, agentDirectory: string, options: { includeAncestors?: boolean } = {}): boolean {
   const canonical = (value: string) => {
     const original = resolve(value);
@@ -41,7 +43,7 @@ export function isFileMutationLockPath(target: string, agentDirectory: string, o
     const rel = relative(root, candidate);
     return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
   };
-  const roots = [join(resolve(agentDirectory), "file-mutation-locks"), join(canonical(agentDirectory), "file-mutation-locks")];
+  const roots = ["file-mutation-locks", "models-config-backups"].flatMap(name => [join(resolve(agentDirectory), name), join(canonical(agentDirectory), name)]);
   return [resolve(target), canonical(target)].some(candidate => roots.some(root =>
     contains(root, candidate) || (options.includeAncestors === true && contains(candidate, root))));
 }

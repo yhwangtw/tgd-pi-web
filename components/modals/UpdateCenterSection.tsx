@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -72,7 +72,11 @@ function formatBytes(bytes: number | undefined): string {
 function ActionAvailability({ status }: { status: ManagedActionStatus }) {
   const { t } = useI18n();
   if (status.ready) return <span className={styles.actionReady}>{t("updateCenter.managedReady")}{status.label ? ` · ${status.label}` : ""}</span>;
-  const key: MsgKey = status.reason === "invalid_config"
+  const key: MsgKey = status.reason === "health_not_configured"
+    ? "updateCenter.managedHealthMissing"
+    : status.reason === "staging_not_configured"
+      ? "updateCenter.managedStagingMissing"
+      : status.reason === "invalid_config"
     ? "updateCenter.managedInvalid"
     : status.reason === "not_executable"
       ? "updateCenter.managedUnavailable"
@@ -90,6 +94,8 @@ function managedDetail(status: ManagedActionStatus, t: (key: MsgKey) => string):
   if (status.ready) return status.label ? `${t("updateCenter.managedReady")} · ${status.label}` : t("updateCenter.managedReady");
   if (status.reason === "invalid_config") return t("updateCenter.managedInvalid");
   if (status.reason === "not_executable") return t("updateCenter.managedUnavailable");
+  if (status.reason === "health_not_configured") return t("updateCenter.managedHealthMissing");
+  if (status.reason === "staging_not_configured") return t("updateCenter.managedStagingMissing");
   return t("updateCenter.managedMissing");
 }
 
@@ -127,12 +133,33 @@ export function UpdateCenterSection() {
   const [confirmation, setConfirmation] = useState<UpdateConfirmation | null>(null);
   const [busyAction, setBusyAction] = useState<UpdateCenterAction | null>(null);
   const [forceRefreshing, setForceRefreshing] = useState(false);
+  const [awaitingReadback, setAwaitingReadback] = useState(false);
+  const [pendingOperationId, setPendingOperationId] = useState<string | null>(null);
   const updateCenter = useRequestResource<UpdateCenterStatus>(
     "runtime:update-center",
     (signal) => fetchJson("/api/runtime/update", { cache: "no-store" }, signal),
     { staleTimeMs: 60_000, retries: 1 },
   );
   const status = updateCenter.data;
+  const activeOperationId = status?.operations?.active?.id;
+  const refreshStatus = updateCenter.refresh;
+
+  useEffect(() => {
+    if (!activeOperationId && !awaitingReadback && !pendingOperationId) return;
+    let disposed = false;
+    let refreshing = false;
+    const timer = setInterval(() => {
+      if (refreshing) return;
+      refreshing = true;
+      void refreshStatus().then((next) => {
+        if (!disposed && next && (!pendingOperationId || next.operations?.recent.some(item => item.id === pendingOperationId))) {
+          setAwaitingReadback(false);
+          setPendingOperationId(null);
+        }
+      }).finally(() => { refreshing = false; });
+    }, 3000);
+    return () => { disposed = true; clearInterval(timer); };
+  }, [activeOperationId, awaitingReadback, pendingOperationId, refreshStatus]);
 
   const dateFormatter = useMemo(() => new Intl.DateTimeFormat(locale === "zh" ? "zh-TW" : "en", {
     year: "numeric",
@@ -157,7 +184,7 @@ export function UpdateCenterSection() {
   };
 
   const prepare = async (action: UpdateCenterAction, backupId?: string) => {
-    if (busyAction) return;
+    if (busyAction || activeOperationId || awaitingReadback || pendingOperationId) return;
     setBusyAction(action);
     try {
       const response = await fetchJson<PrepareResponse>("/api/runtime/update", {
@@ -178,7 +205,7 @@ export function UpdateCenterSection() {
     const current = confirmation;
     setBusyAction(current.action);
     try {
-      await fetchJson<{ ok: boolean }>("/api/runtime/update", {
+      const response = await fetchJson<{ ok: boolean; operationId?: string }>("/api/runtime/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -189,13 +216,29 @@ export function UpdateCenterSection() {
         }),
       });
       setConfirmation(null);
-      showToast(t(`updateCenter.success.${current.action}` as MsgKey), { type: "success" });
       if (current.action === "backup") {
+        showToast(t("updateCenter.success.backup"), { type: "success" });
         updateCenter.invalidate(true);
         await updateCenter.refresh();
+      } else {
+        setPendingOperationId(response.operationId ?? null);
+        setAwaitingReadback(true);
+        const next = await refreshStatus();
+        if (next && (!response.operationId || next.operations?.recent.some(item => item.id === response.operationId))) {
+          setAwaitingReadback(false);
+          setPendingOperationId(null);
+        }
       }
     } catch {
-      showToast(t("updateCenter.error.execute"), { type: "error" });
+      // A consumed token must never be retried as if a lost response proved no
+      // mutation. Close it and recover the durable receipt before a new action.
+      setConfirmation(null);
+      if (current.action === "backup") showToast(t("updateCenter.error.execute"), { type: "error" });
+      else {
+        setAwaitingReadback(true);
+        showToast(t("updateCenter.operationUnconfirmed"), { type: "warning" });
+        if (await refreshStatus()) setAwaitingReadback(false);
+      }
     } finally {
       setBusyAction(null);
     }
@@ -209,9 +252,10 @@ export function UpdateCenterSection() {
   }
   if (!status) return null;
 
-  const updateButtonDisabled = busyAction !== null || !status.actions.update.ready || status.updateAvailable !== true;
-  const restartButtonDisabled = busyAction !== null || !status.actions.restart.ready;
-  const rollbackButtonDisabled = busyAction !== null || !status.actions.rollback.ready || !status.backup.latest;
+  const operationBusy = Boolean(activeOperationId || awaitingReadback || pendingOperationId);
+  const updateButtonDisabled = busyAction !== null || operationBusy || !status.actions.update.ready || status.updateAvailable !== true;
+  const restartButtonDisabled = busyAction !== null || operationBusy || !status.actions.restart.ready;
+  const rollbackButtonDisabled = busyAction !== null || operationBusy || !status.actions.rollback.ready || !status.backup.latest;
   const hasManagedActions = status.actions.update.configured || status.actions.restart.configured || status.actions.rollback.configured;
 
   return (
@@ -230,7 +274,12 @@ export function UpdateCenterSection() {
 
       <div className={styles.versionGrid}>
         <article className={styles.versionCard}>
-          <span>{t("updateCenter.current")}</span>
+          <span>{t("updateCenter.runningBuild")}</span>
+          <strong>{status.running?.build.version ?? t("updateCenter.unknown")}</strong>
+          <small>{status.running?.build.sourceSha?.slice(0, 7) ?? t("updateCenter.unknown")}{status.running ? ` · PID ${status.running.pid}` : ""}</small>
+        </article>
+        <article className={styles.versionCard}>
+          <span>{t("updateCenter.sourceCheckout")}</span>
           <strong>{status.current.version}</strong>
           <small>{status.current.source === "git" ? `${status.current.branch} · ${status.current.head?.slice(0, 7)}` : t("updateCenter.releaseArchive")}</small>
         </article>
@@ -245,6 +294,22 @@ export function UpdateCenterSection() {
           <small>{t("updateCenter.freeSpace").replace("{size}", formatBytes(status.backup.freeBytes))}</small>
         </article>
       </div>
+
+      {(status.operations?.recent.length || awaitingReadback || pendingOperationId) ? (
+        <section className={styles.recovery} aria-live="polite" data-testid="update-operations">
+          <h4>{t("updateCenter.operation")}</h4>
+          {awaitingReadback && <p>{t(pendingOperationId ? "updateCenter.operationStatus.reserved" : "updateCenter.operationUnconfirmed")}</p>}
+          {pendingOperationId && !status.operations?.recent.some(item => item.id === pendingOperationId) && <code>{pendingOperationId}</code>}
+          {status.operations?.recent.slice(0, 5).map(item => (
+            <div className={styles.operationRow} key={item.id}>
+              <strong>{t(`updateCenter.operationStatus.${item.status}` as MsgKey)} · {t(ACTION_LABELS[item.action])}</strong>
+              <code>{item.id}</code>
+              <small>{item.message}</small>
+              {item.verified && <small>{`${item.verified.build.version} · ${item.verified.build.sourceSha?.slice(0, 7) ?? "—"} · PID ${item.verified.pid}`}</small>}
+            </div>
+          ))}
+        </section>
+      ) : null}
 
       <div className={styles.contentGrid}>
         <section className={styles.preflight}>
@@ -285,7 +350,7 @@ export function UpdateCenterSection() {
             <h4>{t("updateCenter.backups")}</h4>
             <span>{t("updateCenter.backupDescription")}</span>
           </div>
-          <button type="button" className={styles.secondaryAction} onClick={() => void prepare("backup")} disabled={busyAction !== null || !status.actions.backup.ready}>
+          <button type="button" className={styles.secondaryAction} onClick={() => void prepare("backup")} disabled={busyAction !== null || operationBusy || !status.actions.backup.ready}>
             <Archive size={16} strokeWidth={1.8} aria-hidden />
             {busyAction === "backup" ? t("updateCenter.preparing") : t("updateCenter.createBackup")}
           </button>

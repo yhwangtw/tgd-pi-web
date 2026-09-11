@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { redactedErrorMessage } from "@/lib/redaction";
+import { requestHasExplicitSameOrigin } from "@/lib/request-origin";
 import {
   clearSecurityActivity,
   readSecurityActivityStore,
@@ -15,9 +16,7 @@ const CATEGORIES = new Set<SecurityActivityCategory>(["package", "mcp", "skill",
 const OUTCOMES = new Set<SecurityActivityOutcome>(["reviewed", "success", "denied", "failure"]);
 
 function assertSameOrigin(req: Request): void {
-  const origin = req.headers.get("origin");
-  const fetchSite = req.headers.get("sec-fetch-site");
-  if (!origin || (fetchSite && fetchSite !== "same-origin") || new URL(origin).host !== new URL(req.url).host) {
+  if (!requestHasExplicitSameOrigin(req)) {
     throw new Error("Security activity changes require a same-origin browser request");
   }
 }

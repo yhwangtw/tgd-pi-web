@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  beginManagedUpdateOperation,
   compareCalendarVersions,
   createUpdateBackup,
   findUpdateBackup,
@@ -61,9 +62,41 @@ afterEach(() => {
   resetUpdateCenterCacheForTests();
   for (const directory of tempDirs.splice(0)) rmSync(directory, { recursive: true, force: true });
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe("Update Center", () => {
+  it("reserves a durable operation before execution and refuses unverifiable builds", async () => {
+    const { root } = fixture();
+    const env: NodeJS.ProcessEnv = { NODE_ENV: "test", PIWEB_RESTART_COMMAND_JSON: JSON.stringify([process.execPath]),
+      PIWEB_UPDATE_HEALTH_URL: "http://127.0.0.1:30178/api/runtime/identity", PIWEB_UPDATE_OPERATION_DIR: join(root, "operations") };
+    vi.stubEnv("PIWEB_BUILD_SHA", "");
+    vi.stubEnv("PIWEB_BUILD_DIRTY", "false");
+    await expect(beginManagedUpdateOperation("restart", {}, env)).rejects.toThrow(/provenance/);
+    expect(existsSync(env.PIWEB_UPDATE_OPERATION_DIR!)).toBe(false);
+    vi.stubEnv("PIWEB_BUILD_SHA", "a".repeat(40));
+    vi.stubEnv("NEXT_PUBLIC_APP_VERSION", "2026.09.07");
+    const operation = await beginManagedUpdateOperation("restart", {}, env);
+    expect(operation).toMatchObject({ action: "restart", status: "reserved" });
+    expect(existsSync(join(env.PIWEB_UPDATE_OPERATION_DIR!, "active.lock"))).toBe(true);
+    await expect(beginManagedUpdateOperation("restart", {}, env)).rejects.toMatchObject({ code: "UPDATE_OPERATION_CONFLICT" });
+  });
+  it.each([
+    ["22.18.0", "fail"], ["23.3.0", "fail"],
+    ["22.19.0", "pass"], ["23.4.0", "pass"], ["24.0.0", "pass"],
+  ])("uses the installation Node support contract for %s", async (nodeVersion, expected) => {
+    const { cwd, backupRoot } = fixture();
+    release();
+    const descriptor = Object.getOwnPropertyDescriptor(process.versions, "node")!;
+    try {
+      Object.defineProperty(process.versions, "node", { ...descriptor, value: nodeVersion });
+      const status = await getUpdateCenterStatus({ cwd, backupRoot, env: { NODE_ENV: "test" } });
+      expect(status.preflight.checks.find(check => check.id === "node")?.state).toBe(expected);
+    } finally {
+      Object.defineProperty(process.versions, "node", descriptor);
+    }
+  });
+
   it("compares calendar release tags including same-day sequences", () => {
     expect(compareCalendarVersions("2026.08.31", "v2026.08.31")).toBe(0);
     expect(compareCalendarVersions("2026.08.31", "2026.08.31-1")).toBeLessThan(0);
@@ -125,6 +158,8 @@ describe("Update Center", () => {
         PIWEB_UPDATE_COMMAND_JSON: JSON.stringify([helper]),
         PIWEB_RESTART_COMMAND_JSON: JSON.stringify([helper]),
         PIWEB_ROLLBACK_COMMAND_JSON: JSON.stringify([helper]),
+        PIWEB_UPDATE_HEALTH_URL: "http://127.0.0.1:30178/api/runtime/identity",
+        PIWEB_UPDATE_PROTOCOL: "staged-v1",
       },
     });
 

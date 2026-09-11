@@ -91,8 +91,8 @@ export type WebExtensionUIResponse =
   | { type: "extension_ui_response"; id: string; cancelled: true };
 
 export type WebExtensionUIResponseResult =
-  | { accepted: true }
-  | { accepted: false; reason: "invalid_response" | "not_found" };
+  | { accepted: true; receipt?: "already_answered" | "already_cancelled" }
+  | { accepted: false; reason: "invalid_response" | "not_found" | "response_conflict" | "cancelled" | "expired" | "closed" };
 
 export interface WebExtensionUIDecisionRecord {
   request: WebExtensionUIDialogRequest;

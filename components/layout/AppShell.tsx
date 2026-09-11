@@ -55,6 +55,7 @@ import { setSkin } from "@/lib/skin";
 import { setUiStyle } from "@/lib/ui-style";
 import { resolveAppShellCenterView } from "./app-shell-view";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { RuntimeIdentityBar } from './RuntimeIdentityBar';
 import { pendingWorkspaceIdentity, workspaceStateLabel, type WorkspaceIdentity } from "@/lib/workspace-identity";
 import { requestOpenProjectSwitcher } from "@/lib/project-switcher-events";
 import { publishSessionReplacement } from "@/lib/session-replacement-channel";
@@ -821,6 +822,7 @@ export function AppShell() {
 
       {/* Center: chat */}
       <div className={s.centerPanel}>
+        <RuntimeIdentityBar />
         {/* Top bar with sidebar toggle */}
         <div ref={topBarRef} className={s.topBar} data-testid="top-bar">
           <button

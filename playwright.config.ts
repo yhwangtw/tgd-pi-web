@@ -39,11 +39,12 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: `npm run build && npx next start -H 127.0.0.1 -p ${E2E_PORT}`,
+    command: `npm run build && npm run start -- -p ${E2E_PORT}`,
     port: E2E_PORT,
     timeout: 300_000,
     reuseExistingServer: false,
     env: {
+      PIWEB_ENVIRONMENT: 'fixture',
       PI_CODING_AGENT_DIR: path.join(E2E_ROOT, "agent"),
     },
   },

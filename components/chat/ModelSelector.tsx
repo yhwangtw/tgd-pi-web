@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useId, useMemo, useCallback } from "react";
-import { BadgeCheck, Check, ChevronDown, Cpu, Pin, Search } from "lucide-react";
+import { BadgeCheck, Check, ChevronDown, Cpu, Pin, Search, RefreshCw, Settings2, TriangleAlert } from "lucide-react";
 import { DialogShell } from "@/components/ui/DialogShell";
 import { useI18n } from "@/lib/i18n";
 import type { ModelCatalogCost } from "@/lib/model-catalog-types";
+import type { ModelCatalogDiagnostic, ModelCatalogStatus } from "@/hooks/use-model-catalog";
 import {
   loadModelPreferenceRefs,
   MODEL_PINNED_STORAGE_KEY,
@@ -34,6 +35,11 @@ interface ModelSelectorProps {
   model?: { provider: string; modelId: string } | null;
   isStreaming: boolean;
   onModelChange?: (provider: string, modelId: string) => void;
+  catalogStatus?: ModelCatalogStatus;
+  catalogError?: string | null;
+  catalogDiagnostics?: ModelCatalogDiagnostic[];
+  onRetry?: () => void;
+  onOpenModels?: () => void;
   className?: string;
 }
 
@@ -44,6 +50,11 @@ export function ModelSelector({
   model,
   isStreaming,
   onModelChange,
+  catalogStatus,
+  catalogError,
+  catalogDiagnostics = [],
+  onRetry,
+  onOpenModels,
   className,
 }: ModelSelectorProps) {
   const { t } = useI18n();
@@ -60,6 +71,9 @@ export function ModelSelector({
   const searchRef = useRef<HTMLInputElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const panelId = useId();
+  const status = catalogStatus ?? (modelOptions.length ? "ready" : "empty");
+  const needsRecovery = status !== "ready" || !modelOptions.length;
+  const useDialog = isMobile || needsRecovery;
   const flatOptions = useMemo(
     () => modelsByProvider.flatMap((group) => group.options),
     [modelsByProvider],
@@ -90,7 +104,7 @@ export function ModelSelector({
   };
 
   const openMenu = (button: HTMLButtonElement, preferredIndex = selectedIndex, moveFocus = false) => {
-    if (isMobile) {
+    if (useDialog) {
       // Keep an explicit launcher focus target so DialogShell can always return
       // focus after pointer, keyboard, or programmatic opens.
       button.focus();
@@ -100,7 +114,7 @@ export function ModelSelector({
     }
     setQuery("");
     setOpen(true);
-    if (!isMobile) focusOption(preferredIndex, moveFocus);
+    if (!useDialog) focusOption(preferredIndex, moveFocus);
   };
 
   const closeMenu = useCallback((restoreFocus = false) => {
@@ -108,6 +122,13 @@ export function ModelSelector({
     setQuery("");
     if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
+
+  useEffect(() => {
+    // A recovered catalog changes dialog into a listbox. Close the old surface
+    // first, and never leave live options clickable after a run starts.
+    setOpen(false);
+    setQuery("");
+  }, [needsRecovery, isStreaming]);
 
   const rememberModel = useCallback((option: ModelOption) => {
     setRecentRefs((current) => {
@@ -236,7 +257,8 @@ export function ModelSelector({
     );
   };
 
-  if (!modelOptions.length || !currentName || !onModelChange) return null;
+  const statusLabel = t(status === "loading" ? "model.catalogLoading" : status === "error" ? "model.catalogError" : "model.catalogEmpty");
+  const triggerLabel = currentName || model?.modelId || (needsRecovery ? statusLabel : t("model.choose"));
 
   return (
     <div ref={dropdownRef} className={`${styles.root} ${className ?? ""}`}>
@@ -244,8 +266,12 @@ export function ModelSelector({
         ref={triggerRef}
         type="button"
         aria-expanded={open}
-        aria-haspopup={isMobile ? "dialog" : "listbox"}
-        aria-controls={open ? panelId : undefined}
+        aria-haspopup={useDialog ? "dialog" : "listbox"}
+        aria-controls={open && !useDialog ? panelId : undefined}
+        aria-label={`${t("model.selectorLabel")}: ${triggerLabel}${needsRecovery && triggerLabel !== statusLabel ? ` — ${statusLabel}` : ""}`}
+        title={needsRecovery ? `${triggerLabel} — ${statusLabel}` : triggerLabel}
+        data-testid="model-selector-trigger"
+        data-catalog-status={status}
         onClick={(e) => {
           if (open) closeMenu();
           else openMenu(e.currentTarget);
@@ -259,14 +285,39 @@ export function ModelSelector({
             true,
           );
         }}
-        disabled={isStreaming}
+        disabled={isStreaming || (!needsRecovery && !onModelChange)}
         className={`${styles.trigger} ${open ? styles.triggerOpen : ""}`}
       >
-        <Cpu size={13} strokeWidth={1.8} aria-hidden />
-        <span className={styles.triggerLabel}>{currentName}</span>
+        {status === "loading"
+          ? <RefreshCw size={13} strokeWidth={1.8} aria-hidden />
+          : needsRecovery ? <TriangleAlert size={13} strokeWidth={1.8} aria-hidden /> : <Cpu size={13} strokeWidth={1.8} aria-hidden />}
+        <span className={styles.triggerLabel}>{triggerLabel}</span>
         <ChevronDown className={styles.chevron} size={13} strokeWidth={1.8} aria-hidden />
       </button>
-      {open && isMobile && (
+      {open && needsRecovery && (
+        <DialogShell
+          open
+          title={t("model.choose")}
+          description={status === "loading" ? undefined : t(status === "error" ? "model.catalogErrorHint" : "model.catalogEmptyHint")}
+          onClose={() => closeMenu(false)}
+          mobileMode="sheet"
+        >
+          <div id={panelId} className={styles.catalogRecovery}>
+            <p role="status" aria-live="polite" className={styles.catalogStatus}>{statusLabel}</p>
+            {catalogError && <p className={styles.catalogDetail}>{catalogError}</p>}
+            {catalogDiagnostics.length > 0 && (
+              <ul className={styles.catalogDiagnostics}>
+                {catalogDiagnostics.map((diagnostic, index) => <li key={`${diagnostic.type}:${index}`}>{diagnostic.message}</li>)}
+              </ul>
+            )}
+            <div className={styles.catalogActions}>
+              {onRetry && <button type="button" className={styles.catalogAction} disabled={status === "loading"} onClick={onRetry} data-testid="model-catalog-retry"><RefreshCw size={16} aria-hidden />{t("model.catalogRetry")}</button>}
+              {onOpenModels && <button type="button" className={styles.catalogAction} onClick={() => { closeMenu(); onOpenModels(); }} data-testid="model-catalog-configure"><Settings2 size={16} aria-hidden />{t("model.configure")}</button>}
+            </div>
+          </div>
+        </DialogShell>
+      )}
+      {open && !needsRecovery && isMobile && (
         <DialogShell
           open
           title={t("model.choose")}
@@ -309,7 +360,7 @@ export function ModelSelector({
           {!hasMobileResults && <p className={styles.modelNoResults}>{t("model.noResults")}</p>}
         </DialogShell>
       )}
-      {open && !isMobile && rect && (() => {
+      {open && !needsRecovery && !isMobile && rect && (() => {
         const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
         const bottom = viewportHeight - rect.top + 6;
         const maxH = Math.max(120, Math.min(rect.top - 8, viewportHeight * 0.6));

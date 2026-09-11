@@ -539,6 +539,7 @@
 
 .footerContent {
   display: flex;
+  flex-wrap: wrap;
   width: 100%;
   align-items: center;
   justify-content: flex-end;
@@ -549,6 +550,7 @@
   font-size: var(--text-sm);
   color: var(--color-error-text);
   flex: 1;
+  overflow-wrap: anywhere;
 }
 
 .cancelButton {

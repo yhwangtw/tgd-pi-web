@@ -1,6 +1,7 @@
 import { resolveSessionPath } from "@/lib/session-reader";
-import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
+import { getRpcSession, getResumableRpcSession, startRpcSession } from "@/lib/rpc-manager";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { encodeAgentStreamRecord, type AgentStreamRecord } from "@/lib/agent-event-log";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +11,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const cursor = req.headers.get("last-event-id") || new URL(req.url).searchParams.get("cursor");
+  const resumed = cursor ? getResumableRpcSession(id, cursor) : undefined;
+  // withSession/recovery must finish before exposing any replacement target.
+  if (resumed?.isReplacementPending()) return new Response("Session replacement is in progress", { status: 503 });
+  const moved = resumed && resumed.sessionId !== id;
 
   // Fast path: already-running session
-  let session = getRpcSession(id);
+  let session = resumed ?? getRpcSession(id);
   if (!session || !session.isAlive()) {
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
@@ -26,30 +32,36 @@ export async function GET(
     }
   }
 
+  let cleanup = () => {};
   const stream = new ReadableStream({
     start(controller) {
       let closed = false;
-      const encode = (data: unknown) => {
+      const encode = (record: AgentStreamRecord) => {
         if (closed) return;
-        const text = `data: ${JSON.stringify(data)}\n\n`;
-        controller.enqueue(new TextEncoder().encode(text));
+        controller.enqueue(new TextEncoder().encode(encodeAgentStreamRecord(record)));
       };
 
       // Send initial connected event
-      encode({ type: "connected", sessionId: id });
+      encode({ data: JSON.stringify({ type: "connected", sessionId: id }) });
+      if (moved) {
+        // Both the original POST result and SSE replacement event may be lost.
+        // Route to the final live identity before its authoritative snapshot;
+        // never replay old-session messages into the replacement transcript.
+        encode({ data: JSON.stringify({ type: "session_replaced", previousSessionId: id, newSessionId: session.sessionId, cwd: session.cwd, sessionFile: session.sessionFile }) });
+      }
 
-      let cleanup = () => {};
-      const unsubscribe = session.onEvent((event) => {
-        encode(event);
-        if (event.type === "session_restart") queueMicrotask(cleanup);
-      });
+      const unsubscribe = session.onStreamEvent((record) => {
+        encode(record);
+        const type = JSON.parse(record.data).type;
+        if (type === "session_restart" || type === "session_closed") queueMicrotask(() => cleanup());
+      }, moved ? null : cursor);
 
       // Heartbeat every 30s to prevent server/proxy timeout (Next.js default ~120-150s)
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(new TextEncoder().encode(":\n\n"));
         } catch {
-          // controller already closed
+          cleanup();
         }
       }, 30_000);
 
@@ -64,7 +76,9 @@ export async function GET(
 
       // Detect client disconnect via abort signal
       req.signal?.addEventListener("abort", cleanup, { once: true });
+      if (req.signal?.aborted) cleanup();
     },
+    cancel() { cleanup(); },
   });
 
   return new Response(stream, {

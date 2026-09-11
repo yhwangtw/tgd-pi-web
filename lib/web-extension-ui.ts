@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import {
   defineTool,
   type ExtensionUIDialogOptions,
@@ -40,6 +40,12 @@ interface PendingDialog {
   abortHandler?: () => void;
 }
 
+interface ResponseReceipt {
+  outcome: WebExtensionUIDecisionRecord["outcome"];
+  fingerprint?: string;
+  expiresAt: number;
+}
+
 interface WebExtensionUIBridgeOptions {
   theme?: ExtensionUIContext["theme"];
   emit?: (event: WebExtensionUIEvent) => void;
@@ -48,6 +54,8 @@ interface WebExtensionUIBridgeOptions {
 }
 
 const MAX_TEXT_RESPONSE_LENGTH = 200_000;
+const RESPONSE_RECEIPT_TTL_MS = 10 * 60_000;
+const MAX_RESPONSE_RECEIPTS = 256;
 export const ASK_USER_TOOL_NAME = "ask_user";
 
 const EXTENSION_UI_METHODS = [
@@ -119,6 +127,29 @@ function responseWithoutEnvelope(
   if ("confirmed" in response) return { confirmed: response.confirmed };
   if ("answers" in response) return { answers: response.answers };
   return { cancelled: true };
+}
+
+/** Validate the RPC payload before parsing or hashing; never retain raw input. */
+function normalizeResponse(response: WebExtensionUIResponse): WebExtensionUIResponse | null {
+  if (!response || typeof response !== "object" || Array.isArray(response)
+    || response.type !== "extension_ui_response" || typeof response.id !== "string"
+    || response.id.length === 0 || response.id.length > 256) return null;
+  const payloadKeys = ["value", "confirmed", "answers", "cancelled"]
+    .filter(key => Object.prototype.hasOwnProperty.call(response, key));
+  if (payloadKeys.length !== 1) return null;
+  const envelope = { type: "extension_ui_response" as const, id: response.id };
+  if ("cancelled" in response) return response.cancelled === true ? { ...envelope, cancelled: true } : null;
+  if ("confirmed" in response) return typeof response.confirmed === "boolean" ? { ...envelope, confirmed: response.confirmed } : null;
+  if ("value" in response) {
+    return typeof response.value === "string" && response.value.length <= MAX_TEXT_RESPONSE_LENGTH
+      ? { ...envelope, value: response.value } : null;
+  }
+  if (!response.answers || typeof response.answers !== "object" || Array.isArray(response.answers)) return null;
+  const answers = Object.entries(response.answers);
+  if (answers.length === 0 || answers.length > 3
+    || answers.some(([key, value]) => key.length > 64 || typeof value !== "string" || value.length > MAX_TEXT_RESPONSE_LENGTH)) return null;
+  // Equivalent JSON objects need the same fingerprint regardless of key order.
+  return { ...envelope, answers: Object.fromEntries(answers.sort(([a], [b]) => a.localeCompare(b))) };
 }
 
 function normalizedAskQuestions(questions: Array<{
@@ -208,6 +239,10 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
   private themeValue?: ExtensionUIContext["theme"];
   private acceptDialogs: boolean;
   private readonly pending = new Map<string, PendingDialog>();
+  // In-memory and session-scoped only. HMACs avoid retaining answer text or
+  // exposing a dictionary-testable digest; no receipt is included in snapshots.
+  private readonly receipts = new Map<string, ResponseReceipt>();
+  private readonly receiptKey = randomBytes(32);
   private readonly statuses = new Map<string, Extract<WebExtensionUIRequest, { method: "setStatus" }>>();
   private readonly widgets = new Map<string, Extract<WebExtensionUIRequest, { method: "setWidget" }>>();
   private titleEvent?: Extract<WebExtensionUIRequest, { method: "setTitle" }>;
@@ -237,6 +272,7 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
   }
 
   snapshot(): WebExtensionUIEvent[] {
+    this.pruneReceipts();
     const editorTextEvent = this.editorTextEvent;
     // setEditorText is a one-shot command. Keep it only until the first SSE
     // listener can receive it; replaying it on every reconnect would overwrite
@@ -256,11 +292,22 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
   }
 
   respond(response: WebExtensionUIResponse): WebExtensionUIResponseResult {
-    if (!response || response.type !== "extension_ui_response" || typeof response.id !== "string") {
-      return { accepted: false, reason: "invalid_response" };
-    }
+    const normalized = normalizeResponse(response);
+    if (!normalized) return { accepted: false, reason: "invalid_response" };
+    response = normalized;
+    this.pruneReceipts();
     const pending = this.pending.get(response.id);
-    if (!pending) return { accepted: false, reason: "not_found" };
+    if (!pending) {
+      const receipt = this.receipts.get(response.id);
+      if (!receipt) return { accepted: false, reason: "not_found" };
+      if (receipt.fingerprint === this.responseFingerprint(response)) {
+        return { accepted: true, receipt: receipt.outcome === "cancelled" ? "already_cancelled" : "already_answered" };
+      }
+      const reason = receipt.outcome === "answered" ? "response_conflict"
+        : receipt.outcome === "cancelled" ? "cancelled"
+          : receipt.outcome === "timeout" ? "expired" : "closed";
+      return { accepted: false, reason };
+    }
     const parsed = parseResponse(pending.request, response);
     if (!parsed.valid) return { accepted: false, reason: "invalid_response" };
 
@@ -281,6 +328,7 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
    */
   resetForSessionReplacement(): void {
     this.closeAll();
+    this.receipts.clear();
     this.statuses.clear();
     this.widgets.clear();
     this.titleEvent = undefined;
@@ -414,6 +462,20 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
     this.emitter(event);
   }
 
+  private responseFingerprint(response: WebExtensionUIResponse): string {
+    return createHmac("sha256", this.receiptKey)
+      .update(JSON.stringify(responseWithoutEnvelope(response))).digest("hex");
+  }
+
+  private pruneReceipts(now = Date.now()): void {
+    for (const [id, receipt] of this.receipts) {
+      if (receipt.expiresAt <= now) this.receipts.delete(id);
+    }
+    while (this.receipts.size > MAX_RESPONSE_RECEIPTS) {
+      this.receipts.delete(this.receipts.keys().next().value!);
+    }
+  }
+
   private openDialog<T extends DialogValue>(
     request: WebExtensionUIDialogRequest,
     defaultValue: T,
@@ -447,6 +509,14 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
     response?: WebExtensionUIResponse,
   ): void {
     if (!this.pending.delete(pending.request.id)) return;
+    // Commit the receipt before emitting close: a second tab or even a
+    // synchronous listener retry must observe completion, never re-resolve it.
+    this.receipts.set(pending.request.id, {
+      outcome,
+      ...(response ? { fingerprint: this.responseFingerprint(response) } : {}),
+      expiresAt: Date.now() + RESPONSE_RECEIPT_TTL_MS,
+    });
+    this.pruneReceipts();
     if (pending.timer) clearTimeout(pending.timer);
     if (pending.signal && pending.abortHandler) {
       pending.signal.removeEventListener("abort", pending.abortHandler);

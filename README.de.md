@@ -66,7 +66,7 @@ cd tGD-pi-web
 bash setup.sh
 ```
 
-In einem Git-Checkout lädt Setup zuerst `origin/main` und prüft lokale Änderungen, bevor es synchronisiert. Danach folgen Node.js/npm-Prüfung, Installation, TypeScript-Validierung, Production-Build und optionaler Start. Bekannte veraltete Dateien aus Quellarchiven werden nach `~/.tgd-pi-web-backups/` verschoben (`TGD_SETUP_BACKUP_DIR` überschreibt den Pfad).
+Setup prüft zuerst Node.js/npm und anhand tatsächlicher PIDs und Arbeitsverzeichnisse, ob der Server dieses Checkouts gestoppt ist. Bei einem laufenden oder nicht überprüfbaren Prozess stoppt es vor Änderungen an Git, Abhängigkeiten oder Build. Erst danach lädt ein Git-Checkout `origin/main`, prüft lokale Änderungen und führt die genehmigte Synchronisierung, Installation, TypeScript-Validierung, den Production-Build und optionalen Start aus. Bekannte veraltete Dateien aus Quellarchiven werden nach `~/.tgd-pi-web-backups/` verschoben (`TGD_SETUP_BACKUP_DIR` überschreibt den Pfad).
 
 > [!WARNING]
 > Vor Setup/Build den Server dieses Verzeichnisses stoppen. Bei lokalen Commits oder nicht ignorierten Änderungen erstellt Setup zuerst ein privates Quell-Backup und fragt vor dem Ersetzen nach. Unbeaufsichtigt stoppt es ohne ausdrückliches `TGD_SETUP_FORCE_SYNC=1`. Die genehmigte Synchronisierung führt weiterhin `git reset --hard origin/main` und `git clean -fd` aus. Ignorierte Laufzeitdaten bleiben erhalten, sind aber nicht Teil dieses Quell-Backups. Siehe [Update- und Rollback-Grenzen](./docs/RELEASING.md#installation-updates-and-rollback-are-separate).
@@ -81,7 +81,11 @@ npm start
 
 Öffne [http://localhost:30141](http://localhost:30141).
 
+`npm run dev` und `npm start` binden standardmäßig nur an `127.0.0.1:30141`. `PORT` und `PIWEB_HOST` erlauben eine ausdrückliche Änderung; eine Remote-Bindung benötigt die oben genannten Authentifizierungs- und Netzwerkgrenzen. `npm run preview` verwendet localhost auf `30142` und ein separates, isoliertes Agent-Verzeichnis. Nur den Port zu ändern isoliert keine produktiven Session-, Modell- oder Zeitplandaten.
+
 ### Vorhandenen Checkout aktualisieren
+
+Zuerst den Dienst dieses Checkouts stoppen. Der Befehl aktualisiert keinen laufenden Checkout im Betrieb.
 
 ```bash
 bash setup.sh
@@ -92,6 +96,8 @@ Für einen bewusst offline verwendeten Git-Checkout überspringt `TGD_SETUP_OFFL
 Das überspringt nur Git; npm benötigt weiterhin eine interne Registry oder einen
 vorbereiteten Cache. `origin/main` kann neuer sein als das letzte Release. Für
 eine exakte Version deren Quellarchiv in ein neues Verzeichnis entpacken.
+
+Das verwaltete Update Center benötigt einen ausdrücklich konfigurierten `staged-v1`-Adapter, eine lokale Prüfung der laufenden Build-Identität und eine dauerhafte Operationssperre. Der Kandidat wird separat gebaut und geprüft, bevor die Umschaltung erfolgt; bei Fehlern wird auch das Rollback verifiziert. Eine PID oder eine geänderte Versionsdatei allein gilt nicht als Erfolg. Ein echter launchd/systemd-Adapter wird nicht automatisch eingerichtet. Siehe [Vertrag und Grenzen verwalteter Updates](./docs/MANAGED-UPDATES.md).
 
 ## tGD-Workflow im Browser
 
@@ -181,6 +187,10 @@ Alle Seiten der Werkzeugliste werden geladen. Nach Änderungen erst den aktiven 
 **Reload Extensions** ausführen. Der Status zeigt die letzte Prüfung, keine permanente Überwachung.
 OAuth/PKCE, Resource-/Prompt-Browsing und Required-Task-Ausführung sind noch nicht integriert.
 Details: [MCP-Verbindungen und Grenzen](docs/MCP.md).
+Revisionsprüfung und prozessübergreifende Sperren schützen gespeicherte Einstellungen.
+Bei Konflikten bleibt der Entwurf erhalten; die aktuelle Version wird ausdrücklich neu geladen.
+Neue Einträge sind auf 50 begrenzt, vorhandene werden nicht stillschweigend abgeschnitten.
+API-Revisionen, Validierungsgrenzen und Warnungen nach erfolgreichem Speichern stehen im MCP-Leitfaden.
 
 ### Geplante Agenten
 
@@ -231,15 +241,16 @@ Details: [MCP-Verbindungen und Grenzen](docs/MCP.md).
 
 | Befehl | Zweck |
 |---|---|
-| `bash setup.sh` | Lokale Änderungen prüfen/sichern, gegebenenfalls nach Zustimmung synchronisieren, installieren, prüfen, bauen und optional starten |
+| `bash setup.sh` | Zuerst Node/npm und gestoppten Server prüfen, Änderungen sichern, nach Zustimmung synchronisieren, installieren, prüfen, bauen und optional starten |
 | `bash scripts/release.sh` | Nur lesende Release-Prüfung; `--dispatch` fordert ausdrücklich den GitHub-Workflow an |
-| `npm run dev` | Optional den Entwicklungsserver auf Port `30141` starten |
+| `npm run dev` | Entwicklungsserver standardmäßig auf `127.0.0.1:30141` starten |
+| `npm run preview` | localhost auf `30142` mit separatem, isoliertem Agent-Verzeichnis |
 | `node_modules/.bin/tsc --noEmit` | Typecheck |
 | `npx eslint .` | Lint |
 | `npm test` | Vitest Unit Tests ausführen |
 | `npm run test:e2e` | Build erstellen und Playwright E2E auf Port `30177` ausführen |
 | `npm run build` | Production Build erstellen |
-| `npm run start` | Production Server starten |
+| `npm run start` | Production Server standardmäßig auf `127.0.0.1:30141` starten |
 
 > [!WARNING]
 > Beende `npm run dev`, bevor du `npm run build` oder `npm run test:e2e` ausführst. Ein gleichzeitiger Next.js Build beschädigt das vom Entwicklungsserver verwendete `.next/`-Verzeichnis.

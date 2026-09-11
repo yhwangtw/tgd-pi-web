@@ -1287,15 +1287,17 @@
     color: var(--accent);
   }
 
-  .container:has(textarea:focus) {
+  /* Text editing owns this layout until focus leaves the whole composer.
+     Instantaneous textarea blur would shift toolbar targets mid-click. */
+  .container:has([data-composer-editing="true"]) {
     padding-bottom: var(--safe-area-bottom);
   }
 
-  .container:has(textarea:focus) .mobileNav {
+  .container:has([data-composer-editing="true"]) .mobileNav {
     transform: translateY(110%);
   }
 
-  .container:has(textarea:focus) .sidebarContainer {
+  .container:has([data-composer-editing="true"]) .sidebarContainer {
     bottom: var(--safe-area-bottom) !important;
   }
 }

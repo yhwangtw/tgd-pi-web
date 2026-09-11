@@ -436,11 +436,15 @@ modal's open state; its outside-click handler is inert (dropdownRef is no
 longer attached) — the modal closes itself via overlay mousedown/Esc.
 
 ### SSE connect-before-prompt
-`connectEvents(sid)` returns a promise that resolves on `onopen` (1.5s
-safety-net timeout) and **reuses** an already-open EventSource for the same
-session instead of tearing it down. The prompt/bash send paths `await` it —
-POSTing before the stream is open loses the run's first events. Keep that
-ordering.
+`connectEvents(sid)` resolves only after the server's authoritative
+`session_snapshot` has been reconciled, not merely on `onopen`. New sessions
+use `deferPrompt` to create first, connect and reconcile, then send the prompt.
+An unready stream rejects and preserves the draft instead of sending blindly.
+Same-session connections are reused; epoch/sequence cursors deduplicate replay
+(up to 512 events / 4 MiB per runtime), with snapshot fallback after eviction or
+restart. Extension one-shot editor text never enters the replay log. Prompt and
+bash paths both await readiness. Closed/idle-disposed streams are recreated;
+stale fetches must not overwrite a newer snapshot or resurrect a finished run.
 
 ### Two kinds of branching — don't confuse them
 - **Fork**: new independent `.jsonl` file; shown as a child via

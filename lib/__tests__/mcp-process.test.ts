@@ -18,7 +18,7 @@ async function events(): Promise<Event[]> {
 const server = (mode = "normal", timeoutMs = 2000) => validateMcpServer({ id: "fixture", name: "Fixture", enabled: true,
   command: process.execPath, args: [fixturePath, mode, join(root, "events.jsonl")], timeoutMs });
 async function registered(mode = "normal") {
-  const configured = await saveMcpServer(server(mode));
+  const configured = await saveMcpServer(server(mode), { trustStdio: true });
   const tools: ToolDefinition[] = [];
   const extension = createMcpExtension(root);
   const factory = typeof extension === "function" ? extension : extension.factory;
@@ -54,7 +54,7 @@ describe("MCP with real SDK and stdio processes", () => {
   it("registers stable bounded tool names without punctuation, truncation or server-prefix collisions", async () => {
     const configurations = [];
     for (const separator of ["-", "_"]) {
-      configurations.push(await saveMcpServer({ ...server("names"), id: `server${separator}${"long".repeat(25)}`, name: `Server ${separator}` }));
+      configurations.push(await saveMcpServer({ ...server("names"), id: `server${separator}${"long".repeat(25)}`, name: `Server ${separator}` }, { trustStdio: true }));
     }
     const load = async () => {
       const tools: ToolDefinition[] = [];

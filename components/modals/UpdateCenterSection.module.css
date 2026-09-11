@@ -49,7 +49,10 @@
 .dialogSecondary:disabled,
 .dialogPrimary:disabled { cursor: default; opacity: .45; }
 
-.versionGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.versionGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
+.operationRow { display: grid; gap: var(--space-1); min-width: 0; font-size: var(--text-sm); }
+.operationRow code { overflow-wrap: anywhere; color: var(--text-muted); font-size: var(--text-xs); }
+.operationRow small { color: var(--text-muted); font-size: var(--text-xs); }
 .versionCard { display: grid; min-width: 0; gap: var(--space-1); padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--bg-elev-2); }
 .versionCard[data-update="true"] { border-color: var(--color-warning-border); background: var(--color-warning-bg); }
 .versionCard > span { color: var(--text-dim); font-size: var(--text-xs); }

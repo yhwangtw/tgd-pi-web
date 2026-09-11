@@ -1,6 +1,8 @@
 import { mkdirSync, readdirSync, writeFileSync } from "fs";
 import { execSync } from "child_process";
 import path from "path";
+import { homedir } from "os";
+import { prepareIsolatedAgentDir } from "../scripts/preview-data.mjs";
 
 /**
  * Generates the E2E world under `root`:
@@ -19,6 +21,9 @@ export function createFixtures(root: string): { cwd: string } {
   // files and makes accidental cross-run fixture sharing fail visibly.
   if (readdirSync(root).length) throw new Error("E2E fixtures require a fresh, empty run directory");
   const cwd = path.join(root, "demo-project");
+  // Claim the fresh fixture data directory before populating it. The normal
+  // launcher can then verify fixture provenance without adopting old data.
+  prepareIsolatedAgentDir("fixture", { PI_CODING_AGENT_DIR: path.join(root, "agent") }, cwd, homedir());
   mkdirSync(path.join(cwd, "src"), { recursive: true });
 
   // ── Demo git project ──────────────────────────────────────────────────
@@ -28,6 +33,110 @@ export function createFixtures(root: string): { cwd: string } {
   writeFileSync(path.join(cwd, "table.csv"), "name,status,count\nAlpha,active,2\nBeta,paused,10\n");
   writeFileSync(path.join(cwd, "sample.bin"), Buffer.from([0x50, 0x69, 0x00, 0x57, 0x65, 0x62]));
   mkdirSync(path.join(cwd, ".pi", "extensions"), { recursive: true });
+  // A deterministic, in-memory provider drives the real Pi agent loop for
+  // reconnect tests. It never performs HTTP, reads credentials, or calls a
+  // paid model. Keep this separate from the existing interactive UI fixture.
+  writeFileSync(path.join(cwd, ".pi", "extensions", "reconnect-fixture.js"), String.raw`
+import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
+
+export default function reconnectFixture(pi) {
+  if (process.env.PIWEB_ENVIRONMENT !== "fixture") throw new Error("Reconnect provider is fixture-only");
+  // Defense in depth for accidental provider fallback in this generated
+  // fixture process. Provider SDKs use fetch; reject remote I/O before it can
+  // leave the machine. The symbol avoids wrapper stacking on runtime reload.
+  const guard = Symbol.for("piweb.e2e.reconnect.offline-fetch");
+  if (!globalThis[guard]) {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (input, init) => {
+      const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+      if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
+        throw new Error("Offline fixture blocked remote fetch: " + url.origin);
+      }
+      return originalFetch(input, init);
+    };
+    globalThis[guard] = true;
+  }
+  const provider = "e2e-reconnect-fixture";
+  const baseUrl = "https://reconnect-fixture.invalid";
+  pi.registerProvider(provider, {
+    name: "E2E reconnect fixture (offline)", baseUrl,
+    api: "e2e-reconnect-fixture", apiKey: "E2E_ONLY_NOT_A_REAL_CREDENTIAL", authHeader: false,
+    models: [{ id: "deterministic", name: "E2E deterministic offline model", reasoning: false,
+      input: ["text"], contextWindow: 32768, maxTokens: 1024,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }],
+    streamSimple(model, context, options) {
+      const stream = createAssistantMessageEventStream();
+      // No network implementation exists here. A fallback/mismatched model is
+      // rejected, rather than delegated to any built-in provider.
+      if (model.provider !== provider || model.baseUrl !== baseUrl) throw new Error("Unexpected fixture provider");
+      const user = [...context.messages].reverse().find(message => message.role === "user");
+      const text = typeof user?.content === "string" ? user.content : (user?.content ?? []).map(part => part.text ?? "").join("");
+      const match = /^E2E_RECONNECT:(complete|delayed|error|question):([a-z0-9-]{1,80})$/.exec(text);
+      const message = { role: "assistant", api: model.api, provider, model: model.id,
+        content: [], stopReason: "stop", timestamp: Date.now(),
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
+      queueMicrotask(async () => {
+        try {
+          if (!match) throw new Error("Only named reconnect fixture prompts are accepted");
+          const [, mode, token] = match;
+          if (mode === "question") {
+            if (context.messages.at(-1)?.role === "toolResult" && context.messages.at(-1)?.toolName === "ask_user") {
+              message.content = [{ type: "text", text: "Fixture answer received " + token + "." }];
+              stream.push({ type: "start", partial: message });
+              stream.push({ type: "done", reason: "stop", message });
+            } else {
+              const toolCall = { type: "toolCall", id: "fixture-ask-" + token, name: "ask_user", arguments: { questions: [
+                { id: "target", header: "Preview", question: "Which environment should we review?", options: [{ label: "Staging", description: "Review the isolated preview" }, { label: "Production", description: "Discuss the live environment only" }] },
+                { id: "note", header: "Context", question: "What should we check first?", options: [], allowOther: true },
+              ] } };
+              message.content = [toolCall]; message.stopReason = "toolUse";
+              stream.push({ type: "start", partial: message });
+              stream.push({ type: "toolcall_start", contentIndex: 0, partial: message });
+              stream.push({ type: "toolcall_end", contentIndex: 0, toolCall, partial: message });
+              stream.push({ type: "done", reason: "toolUse", message });
+            }
+            return;
+          }
+          if (mode === "error") throw new Error("Fixture reconnect failure " + token);
+          message.content = [{ type: "text", text: "Fixture progress " + token + ". " }];
+          stream.push({ type: "start", partial: message });
+          stream.push({ type: "text_start", contentIndex: 0, partial: message });
+          stream.push({ type: "text_delta", contentIndex: 0, delta: message.content[0].text, partial: message });
+          if (mode === "delayed") await new Promise((resolve, reject) => {
+            const abort = () => { clearTimeout(timer); reject(new Error("Fixture run aborted")); };
+            const timer = setTimeout(() => { options?.signal?.removeEventListener("abort", abort); resolve(); }, 5000);
+            if (options?.signal?.aborted) abort();
+            else options?.signal?.addEventListener("abort", abort, { once: true });
+          });
+          const ending = "Fixture completed " + token + ".";
+          message.content[0].text += ending;
+          stream.push({ type: "text_delta", contentIndex: 0, delta: ending, partial: message });
+          stream.push({ type: "text_end", contentIndex: 0, content: message.content[0].text, partial: message });
+          stream.push({ type: "done", reason: "stop", message });
+        } catch (error) {
+          message.stopReason = "error";
+          message.errorMessage = error instanceof Error ? error.message : String(error);
+          stream.push({ type: "error", reason: "error", error: message });
+        } finally { stream.end(); }
+      });
+      return stream;
+    },
+  });
+  for (const mode of ["complete", "delayed", "error", "question"]) {
+    pi.registerCommand("e2e-reconnect-" + mode, {
+      description: "Run the offline reconnect fixture (" + mode + ")",
+      handler: async (args, ctx) => {
+        const token = args.trim();
+        if (!/^[a-z0-9-]{1,80}$/.test(token)) throw new Error("Invalid reconnect fixture token");
+        const model = ctx.modelRegistry.find(provider, "deterministic");
+        if (!model || !(await pi.setModel(model))) throw new Error("Offline fixture model unavailable");
+        pi.sendUserMessage("E2E_RECONNECT:" + mode + ":" + token, { expandPromptTemplates: false });
+      },
+    });
+  }
+}
+`);
   writeFileSync(
     path.join(cwd, ".pi", "extensions", "web-ui.js"),
     [

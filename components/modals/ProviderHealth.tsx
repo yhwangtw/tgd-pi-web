@@ -18,7 +18,7 @@ function StatusBadge({ status }: { status: ProviderHealthEntry["status"] }) {
   return <span className={styles.status} data-status={status}>{labels[status]}</span>;
 }
 
-export function ProviderHealth() {
+export function ProviderHealth({ onAddProvider }: { onAddProvider?: () => void } = {}) {
   const { t } = useI18n();
   const [filter, setFilter] = useState<"attention" | "configured" | "all">("attention");
   const resource = useRequestResource<ProviderHealthReport>(
@@ -27,6 +27,7 @@ export function ProviderHealth() {
     { staleTimeMs: 30_000, retries: 1 },
   );
   const report = resource.data;
+  const noneConfigured = !!report && !report.runtimeError && report.providers.every(provider => provider.status === "needs_auth" && !provider.storedCredential && !provider.configuredSource);
 
   const providers = useMemo(() => {
     const all = report?.providers ?? [];
@@ -60,6 +61,12 @@ export function ProviderHealth() {
             <div><strong>{report.summary.needsAuth}</strong><span>{t("providerHealth.notConfigured")}</span></div>
             <div><strong>{report.summary.total}</strong><span>{t("providerHealth.total")}</span></div>
           </div>
+
+          {noneConfigured && <div className={styles.emptySetup}>
+            <strong>{t("providerHealth.noConfiguredTitle")}</strong>
+            <p>{t("providerHealth.noConfiguredHint")}</p>
+            {onAddProvider && <button type="button" className={styles.refresh} onClick={onAddProvider}>{t("providers.add")}</button>}
+          </div>}
 
           <section className={styles.coverage} aria-labelledby="provider-health-coverage-title">
             <div className={styles.coverageIntro}>
@@ -100,7 +107,7 @@ export function ProviderHealth() {
           {report.runtimeError && <div className={styles.runtimeError}>{report.runtimeError}</div>}
 
           <div className={styles.list} aria-live="polite">
-            {providers.length === 0 ? <div className={styles.state}>{t(filter === "attention" ? "providerHealth.noAttention" : "providerHealth.none")}</div> : providers.map((provider) => (
+            {providers.length === 0 ? (noneConfigured ? null : <div className={styles.state}>{t(filter === "attention" ? "providerHealth.noAttention" : "providerHealth.none")}</div>) : providers.map((provider) => (
               <article key={provider.id} className={styles.provider}>
                 <ProviderIcon id={provider.id} size={22} />
                 <div className={styles.providerMain}>

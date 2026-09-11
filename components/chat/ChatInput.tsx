@@ -36,6 +36,7 @@ import { extractComposerMentions, removeComposerMention, type ComposerMention } 
 import { loadStreamingSendMode, resolveStreamingSendMode, saveStreamingSendMode, type StreamingSendMode } from "@/lib/composer-mode";
 import { requestOpenFile } from "@/lib/file-links";
 import type { ModelCatalogEntry } from "@/lib/model-catalog-types";
+import type { ModelCatalogDiagnostic, ModelCatalogStatus } from "@/hooks/use-model-catalog";
 import { DialogShell } from "@/components/ui/DialogShell";
 
 export interface AttachedImage {
@@ -60,6 +61,11 @@ interface Props {
   modelNames?: Record<string, string>;
   modelList?: ModelCatalogEntry[];
   onModelChange?: (provider: string, modelId: string) => void;
+  modelCatalogStatus?: ModelCatalogStatus;
+  modelCatalogError?: string | null;
+  modelCatalogDiagnostics?: ModelCatalogDiagnostic[];
+  onRetryModelCatalog?: () => void;
+  onOpenModels?: () => void;
   onCompact?: () => void;
   onAbortCompaction?: () => void;
   isCompacting?: boolean;
@@ -187,6 +193,7 @@ function ResponsiveComposerControls({
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
+  modelCatalogStatus, modelCatalogError, modelCatalogDiagnostics, onRetryModelCatalog, onOpenModels,
   onCompact, onAbortCompaction, isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, availableTools, customToolNames, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
@@ -211,6 +218,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [expanded, setExpanded] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [composerEditing, setComposerEditing] = useState(false);
   const [streamingSendMode, setStreamingSendMode] = useState<StreamingSendMode>(() => loadStreamingSendMode());
   const contextMentions = useMemo(() => extractComposerMentions(value), [value]);
 
@@ -818,6 +826,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     <div
       ref={containerRef}
       className={expanded ? `${styles.container} ${styles.containerExpanded}` : styles.container}
+      data-composer-editing={composerEditing}
+      onFocusCapture={(event) => {
+        // Only text editing enters the keyboard layout. A first click on a
+        // toolbar button must not move that button between down and up.
+        const target = event.nativeEvent.target;
+        if (target instanceof HTMLTextAreaElement && target === textareaRef.current) setComposerEditing(true);
+      }}
+      onBlurCapture={(event) => {
+        // Keep the layout while focus moves to a composer control; restoring
+        // the mobile nav here would move its click target before pointerup.
+        if (!event.currentTarget.contains(event.relatedTarget)) setComposerEditing(false);
+      }}
       role={expanded ? "dialog" : undefined}
       aria-modal={expanded ? true : undefined}
       aria-label={expanded ? t("input.expandedTitle") : undefined}
@@ -1064,6 +1084,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               model={model}
               isStreaming={isStreaming}
               onModelChange={onModelChange}
+              catalogStatus={modelCatalogStatus}
+              catalogError={modelCatalogError}
+              catalogDiagnostics={modelCatalogDiagnostics}
+              onRetry={onRetryModelCatalog}
+              onOpenModels={onOpenModels}
               className={styles.modelControl}
             />
           </div>
