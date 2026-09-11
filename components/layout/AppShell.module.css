@@ -73,8 +73,8 @@
   top: 1px;
   right: 0;
   display: grid;
-  min-width: 13px;
-  height: 13px;
+  min-width: calc(18px * var(--font-scale));
+  min-height: calc(18px * var(--font-scale));
   padding: 0 var(--space-1);
   place-items: center;
   border: 2px solid var(--bg-panel);
@@ -83,7 +83,7 @@
   color: var(--color-error-fg);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  line-height: var(--leading-none);
+  line-height: var(--leading-compact);
 }
 .railButton:hover:not(:disabled) {
   background: var(--bg-hover);

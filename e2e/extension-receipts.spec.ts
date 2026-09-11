@@ -64,7 +64,7 @@ test("two tabs acknowledge a committed answer after a lost HTTP reply without an
       await expect(tab.getByRole("heading", { name: "Confirm release" })).toBeVisible();
       await expect(tab.getByRole("heading", { name: "Choose a release target" })).toBeHidden();
     }
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("button", { name: "Not now", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Confirm release" })).toBeHidden();
     await expect(otherTab.getByRole("heading", { name: "Confirm release" })).toBeHidden();
     expect(decisions(requestId)).toHaveLength(1);
