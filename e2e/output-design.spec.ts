@@ -13,10 +13,35 @@ test.describe("Output Design System", () => {
     await expect(result).toHaveAttribute("data-output-kind", "result");
     await expect(result.getByText("開發伺服器運行中", { exact: true })).toBeVisible();
     const evidence = result.getByText(/確認服務回傳 HTTP 200/);
+    const details = result.locator("details");
+    await expect(details).toHaveJSProperty("open", false);
     await expect(evidence).toBeHidden();
 
     await result.getByText("技術細節", { exact: true }).click();
+    await expect(details).toHaveJSProperty("open", true);
     await expect(evidence).toBeVisible();
+
+    await workLog.getByRole("button", { name: /^Work log/ }).click();
+    await expect(workLog).toHaveAttribute("data-work-log-expanded", "true");
+
+    // Opening the action menu updates state in AssistantMessageView. Its children must
+    // retain their identities and the reader's disclosure state.
+    const message = page.locator(".msg-item").filter({ has: result });
+    const actions = message.getByRole("button", { name: "More message actions", exact: true });
+    await actions.click();
+    await expect(message.getByRole("button", { name: "Copy", exact: true })).toBeVisible();
+    await expect(details).toHaveJSProperty("open", true);
+    await expect(evidence).toBeVisible();
+    await expect(workLog).toHaveAttribute("data-work-log-expanded", "true");
+    await actions.click();
+    await expect(message.getByRole("button", { name: "Copy", exact: true })).toBeHidden();
+    await expect(details).toHaveJSProperty("open", true);
+    await expect(workLog).toHaveAttribute("data-work-log-expanded", "true");
+
+    await details.locator("summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(details).toHaveJSProperty("open", false);
+    await expect(evidence).toBeHidden();
   });
 
   test("fits the result and disclosure on a narrow phone viewport", async ({ page }) => {

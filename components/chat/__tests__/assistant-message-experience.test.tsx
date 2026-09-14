@@ -180,6 +180,80 @@ describe("AssistantMessageView conversation chrome", () => {
     expect(details.querySelector("summary")?.textContent).toContain("Technical details");
   });
 
+  const disclosureCases: { name: string; content: AssistantMessage["content"] }[] = [
+    {
+      name: "Markdown result",
+      content: [{ type: "text", text: "> [!RESULT] Server running\n> Verified.\n> [!DETAILS] Technical details\n> HTTP 200 received." }],
+    },
+    {
+      name: "structured tool result",
+      content: [{ type: "toolCall", toolCallId: "result-1", toolName: "structured_output", input: { headline: "Server running", summary: "Verified.", details: "HTTP 200 received.", kind: "result" } }],
+    },
+  ];
+
+  it.each(disclosureCases)("preserves open $name details across parent updates", async ({ content }) => {
+    const message = { ...baseMessage, content };
+    await render(message);
+    const details = container!.querySelector<HTMLDetailsElement>('[data-testid="structured-output-card"] details')!;
+    await act(async () => details.querySelector("summary")!.click());
+    expect(details.open).toBe(true);
+
+    // A refreshed model catalog or session snapshot must not replace the
+    // user's disclosure DOM, even when the message object is recreated.
+    await act(async () => root!.render(
+      <AssistantMessageView message={{ ...message }} modelNames={{ "gpt-test": "Updated model label" }} />,
+    ));
+    expect(container!.querySelector('[data-testid="structured-output-card"] details')).toBe(details);
+    expect(details.open).toBe(true);
+    await act(async () => details.querySelector("summary")!.click());
+    expect(details.open).toBe(false);
+  });
+
+  it("preserves an expanded work log and its tool across parent updates", async () => {
+    const message: AssistantMessage = { ...baseMessage, content: [{ type: "text", text: "Inspection complete." }] };
+    const activity: AssistantMessage[] = [{
+      ...baseMessage,
+      content: [{ type: "toolCall", toolCallId: "read-persistent", toolName: "read", input: { path: "src/persistent.ts" } }],
+    }];
+    const props = { turnActivityMessages: activity };
+    await render(message, props);
+    const workLog = container!.querySelector<HTMLElement>('section[aria-label="Work log"]')!;
+    const toggle = workLog.querySelector<HTMLButtonElement>("button")!;
+    await act(async () => toggle.click());
+    const tool = Array.from(workLog.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.includes("read") && button !== toggle)!;
+    await act(async () => tool.click());
+    expect(tool.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => root!.render(
+      <AssistantMessageView message={{ ...message }} {...props} modelNames={{ "gpt-test": "Updated model label" }} />,
+    ));
+    expect(container!.querySelector('section[aria-label="Work log"]')).toBe(workLog);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(tool.isConnected).toBe(true);
+    expect(tool.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("preserves expanded reasoning while streaming text is appended", async () => {
+    const message: AssistantMessage = {
+      ...baseMessage,
+      content: [{ type: "thinking", thinking: "Inspect the request." }, { type: "text", text: "Checking" }],
+    };
+    await render(message, { isStreaming: true });
+    const toggle = Array.from(container!.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.includes("Thinking"))!;
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => root!.render(<AssistantMessageView isStreaming message={{
+      ...message,
+      content: [message.content[0], { type: "text", text: "Checking the updated response." }],
+    }} />));
+    expect(toggle.isConnected).toBe(true);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(container!.textContent).toContain("Checking the updated response.");
+  });
+
   it("places the work log between prose and a structured result", async () => {
     const activity: AssistantMessage[] = [{
       ...baseMessage,

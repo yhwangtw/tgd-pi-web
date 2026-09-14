@@ -482,7 +482,10 @@ export function AssistantMessageView({
       </div>}
     </div>
   );
+}
 
+// Keep component identities stable across message/catalog updates so open
+// disclosures, work logs, and streaming tool state are not remounted.
 function TurnWorkLog({
   messages,
   toolResults,
@@ -914,5 +917,4 @@ function formatUsage(usage: {
   if (usage.cacheRead) parts.push(`${usage.cacheRead.toLocaleString(language)} ${locale === "zh" ? "快取" : "cache"}`);
   if (usage.cost?.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
   return parts.join(" · ");
-}
 }
