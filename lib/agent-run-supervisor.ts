@@ -21,11 +21,15 @@ import { isWebExtensionUIDialogRequest, isWebExtensionUIEvent } from "./web-exte
 import { isTrustedAgentRunWorkspace } from "./agent-run-workspace";
 import { buildAgentRunReport } from "./agent-run-report";
 import type { AgentMessage } from "./types";
+import { approachingRunLimit, isAgentRunLimits } from "./agent-run-limits";
+import type { AgentRunLimits } from "./agent-run-types";
 
-const KEEP_ALIVE_MS = 4 * 60_000;
+const KEEP_ALIVE_MS = 30_000;
 const MAX_RUN_MS = 24 * 60 * 60_000;
 
 interface ActiveRun {
+  run: AgentRun;
+  messages: AgentMessage[];
   session: AgentSessionWrapper | null;
   unsubscribe: (() => void) | null;
   keepAlive: ReturnType<typeof setInterval> | null;
@@ -84,6 +88,50 @@ export class AgentRunSupervisor {
 
   get maxConcurrency(): number {
     return this.maxConcurrencyValue;
+  }
+
+  setSubagentLimits(limits: AgentRunLimits): void {
+    if (!isAgentRunLimits(limits)) throw new RangeError("Invalid subagent limits");
+    mutateAgentRunStore((store) => { store.subagentLimits = { ...limits }; });
+  }
+
+  extend(runId: string): AgentRun {
+    const active = this.active.get(runId);
+    if (!active) throw new AgentRunConflictError("Only active runs can be extended");
+    const current = active.run.limits ?? {};
+    const limits = {
+      ...current,
+      ...(current.maxTurns ? { maxTurns: Math.min(Number.MAX_SAFE_INTEGER, Math.max(current.maxTurns * 2, active.turns + 24)) } : {}),
+      ...(current.maxCostUsd ? { maxCostUsd: Math.min(Number.MAX_VALUE, Math.max(current.maxCostUsd * 2, active.costUsd + 5)) } : {}),
+      timeoutMs: current.timeoutMs === 0 ? 0 : Math.min(2_147_483_647, (current.timeoutMs ?? MAX_RUN_MS) + 30 * 60_000),
+    };
+    const updated = this.updateRun(runId, active.pendingDialogs.size ? "waiting_for_input" : "running", { limits, limitWarning: false });
+    if (!updated) throw new AgentRunConflictError("Run has already finished");
+    active.run.limits = limits;
+    active.run.limitWarning = false;
+    this.armDeadline(active);
+    return updated;
+  }
+
+  private publishProgress(active: ActiveRun): void {
+    const warning = approachingRunLimit(active.run.limits, active.turns, active.costUsd, Date.now() - Date.parse(active.run.startedAt!));
+    if (warning !== !!active.run.limitWarning || active.run.progress?.turns !== active.turns) {
+      active.run.limitWarning = warning;
+      active.run.progress = { turns: active.turns, costUsd: active.costUsd };
+      this.updateRun(active.run.id, active.pendingDialogs.size ? "waiting_for_input" : "running", { limitWarning: warning, progress: active.run.progress });
+    }
+  }
+
+  private armDeadline(active: ActiveRun): void {
+    if (active.timeout) clearTimeout(active.timeout);
+    const timeoutMs = active.run.limits?.timeoutMs ?? MAX_RUN_MS;
+    if (timeoutMs === 0) { active.timeout = null; return; }
+    const remaining = Math.max(1, timeoutMs - (Date.now() - Date.parse(active.run.startedAt!)));
+    active.timeout = setTimeout(() => {
+      void active.session?.send({ type: "abort" }).catch(() => {});
+      this.finish(active.run.id, "failed", "Agent run reached its time limit; results remain in the session", active.messages);
+    }, remaining);
+    active.timeout.unref?.();
   }
 
   setMaxConcurrency(value: number): number {
@@ -227,6 +275,8 @@ export class AgentRunSupervisor {
         });
         if (!reserved) break;
         this.active.set(reserved.id, {
+          run: reserved,
+          messages: [],
           session: null,
           unsubscribe: null,
           keepAlive: null,
@@ -310,17 +360,19 @@ export class AgentRunSupervisor {
         }
         if (event.type === "message_end") {
           const message = event.message as AgentMessage | undefined;
+          if (message) active.messages.push(message);
           if (message?.role !== "assistant") return;
           active.turns += 1;
           active.costUsd += message.usage?.cost.total ?? 0;
-          const turnsExceeded = run.limits?.maxTurns !== undefined && active.turns > run.limits.maxTurns;
-          const costExceeded = run.limits?.maxCostUsd !== undefined && active.costUsd > run.limits.maxCostUsd;
+          this.publishProgress(active);
+          const turnsExceeded = !!run.limits?.maxTurns && active.turns > run.limits.maxTurns;
+          const costExceeded = !!run.limits?.maxCostUsd && active.costUsd > run.limits.maxCostUsd;
           if (!turnsExceeded && !costExceeded) return;
           const reason = turnsExceeded
             ? `Subagent exceeded the ${run.limits?.maxTurns}-turn limit`
             : `Subagent exceeded the $${run.limits?.maxCostUsd?.toFixed(2)} cost limit`;
           void started.session.send({ type: "abort" }).catch(() => {});
-          this.finish(run.id, "failed", reason, [message]);
+          this.finish(run.id, "failed", reason, active.messages);
         }
       });
 
@@ -336,6 +388,7 @@ export class AgentRunSupervisor {
       }
 
       active.keepAlive = setInterval(() => {
+        this.publishProgress(active);
         if (!started.session.isAlive()) {
           this.finish(run.id, "failed", "The agent session closed before the run completed");
           return;
@@ -345,13 +398,7 @@ export class AgentRunSupervisor {
       }, KEEP_ALIVE_MS);
       active.keepAlive.unref?.();
 
-      const timeoutMs = run.limits?.timeoutMs ?? MAX_RUN_MS;
-      active.timeout = setTimeout(() => {
-        void started.session.send({ type: "abort" }).catch(() => {});
-        const label = run.limits?.timeoutMs ? "Subagent exceeded its time limit" : "Agent run exceeded the 24-hour limit";
-        this.finish(run.id, "failed", label);
-      }, timeoutMs);
-      active.timeout.unref?.();
+      this.armDeadline(active);
 
       await started.session.send({
         type: "prompt",

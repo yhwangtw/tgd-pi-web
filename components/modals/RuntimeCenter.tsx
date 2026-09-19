@@ -193,8 +193,7 @@ export function RuntimeCenter() {
         </div>
         <div className={styles.safetyChecks}>
           <span data-ready={report.deployment.webCliIndependent}><strong>{t("runtime.ready")}</strong>{t("runtime.embeddedReady")}</span>
-          <span data-ready={report.deployment.safetyGuard}><strong>{t("runtime.ready")}</strong>{t("runtime.safetyGuardReady")}</span>
-          <span data-ready={report.deployment.scopedAuthorizationTtlSeconds > 0}><strong>{t("runtime.ready")}</strong>{t("runtime.scopedApproval")} · {Math.round(report.deployment.scopedAuthorizationTtlSeconds / 60)} {t("runtime.minutes")}</span>
+          <span><strong>{t("runtime.toolExecution")}</strong>{t("runtime.directExecution")}</span>
           <span data-ready={false}><strong>{t("runtime.hostBoundary")}</strong>{t("runtime.toolIsolation")}</span>
           <span data-ready={report.deployment.accessGate}><strong>{report.deployment.accessGate ? t("runtime.ready") : t("runtime.needsAttention")}</strong>{t("runtime.accessGate")} · {report.deployment.accessGate ? t("runtime.enabled") : t("runtime.disabled")}</span>
           <span data-ready={report.deployment.independentSessionSecret}><strong>{report.deployment.independentSessionSecret ? t("runtime.ready") : t("runtime.needsAttention")}</strong>{t("runtime.sessionSecret")} · {report.deployment.independentSessionSecret ? t("runtime.configured") : t("runtime.missing")}</span>

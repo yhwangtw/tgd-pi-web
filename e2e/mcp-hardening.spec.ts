@@ -27,7 +27,7 @@ for (const style of ["original", "trae"]) {
       const card = center.locator("article").filter({ has: page.getByText(id, { exact: true }) });
       await expect(card.getByText("Disabled", { exact: true })).toBeVisible();
       await card.getByRole("button", { name: "Edit", exact: true }).click();
-      const editor = page.getByRole("dialog", { name: "Edit MCP server", exact: true });
+      const editor = page.getByRole("region", { name: "Edit MCP server", exact: true });
       const timeout = editor.getByRole("spinbutton", { name: "Timeout (seconds)" });
       const transport = editor.getByRole("combobox", { name: "Transport", exact: true });
       const assertFormGeometry = async () => {

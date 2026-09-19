@@ -12,20 +12,20 @@ export type SensitiveActionKind =
 interface PendingSensitiveAction {
   kind: SensitiveActionKind;
   fingerprint: string;
-  expiresAt: number;
+  expiresAt?: number;
 }
 
 declare global {
   var __piSensitiveActionConfirmations: Map<string, PendingSensitiveAction> | undefined;
 }
 
-const CONFIRMATION_TTL_MS = 60_000;
+const MAX_PENDING_REVIEWS = 256;
 
 function store(): Map<string, PendingSensitiveAction> {
   globalThis.__piSensitiveActionConfirmations ??= new Map();
   const now = Date.now();
   for (const [token, pending] of globalThis.__piSensitiveActionConfirmations) {
-    if (pending.expiresAt <= now) globalThis.__piSensitiveActionConfirmations.delete(token);
+    if (pending.expiresAt !== undefined && pending.expiresAt <= now) globalThis.__piSensitiveActionConfirmations.delete(token);
   }
   return globalThis.__piSensitiveActionConfirmations;
 }
@@ -33,11 +33,14 @@ function store(): Map<string, PendingSensitiveAction> {
 export function prepareSensitiveAction(
   kind: SensitiveActionKind,
   fingerprint: string,
-): { token: string; expiresAt: number } {
+): { token: string; expiresAt?: number } {
   const token = randomBytes(24).toString("base64url");
-  const expiresAt = Date.now() + CONFIRMATION_TTL_MS;
-  store().set(token, { kind, fingerprint, expiresAt });
-  return { token, expiresAt };
+  const pending = store();
+  // Review remains valid until used, changed, evicted or the server restarts.
+  // Fingerprints are revalidated by each route before an action executes.
+  while (pending.size >= MAX_PENDING_REVIEWS) pending.delete(pending.keys().next().value!);
+  pending.set(token, { kind, fingerprint });
+  return { token };
 }
 
 export function consumeSensitiveAction(
@@ -48,7 +51,7 @@ export function consumeSensitiveAction(
   const pending = store().get(token);
   store().delete(token);
   return !!pending
-    && pending.expiresAt > Date.now()
+    && (pending.expiresAt === undefined || pending.expiresAt > Date.now())
     && pending.kind === kind
     && pending.fingerprint === fingerprint;
 }

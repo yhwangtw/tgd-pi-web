@@ -18,6 +18,7 @@
   "scripts": {
     "dev": "node scripts/serve.mjs dev",
     "preview": "node scripts/serve.mjs preview",
+    "preview:configure": "node scripts/configure-preview-models.mjs",
     "build": "next build --webpack",
     "start": "node scripts/serve.mjs start",
     "scheduler:watch": "node scripts/schedule-watchdog.mjs",

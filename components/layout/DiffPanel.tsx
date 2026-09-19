@@ -6,6 +6,7 @@ import { DiffViewMode } from "./text-viewer/DiffViewMode";
 import type { DiffAnnotation } from "./DiffView";
 import { getLanguage } from "@/lib/file-mime";
 import { useI18n } from "@/lib/i18n";
+import { useInlineConfirm } from "@/hooks/useInlineConfirm";
 import s from "./DiffPanel.module.css";
 
 interface Props {
@@ -21,6 +22,7 @@ interface Props {
  */
 export function DiffPanel({ cwd, path, onClose, onAnnotate }: Props) {
   const { t } = useI18n();
+  const { confirm, confirmation } = useInlineConfirm(`${cwd}:${path}`);
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "error"; message: string }
@@ -78,7 +80,7 @@ export function DiffPanel({ cwd, path, onClose, onAnnotate }: Props) {
   const revertHunk = useCallback(async () => {
     const hunk = hunks[hunkPos];
     if (!hunk || reverting || state.kind !== "ready") return;
-    if (!window.confirm(`${t("files.diff.revertConfirm")} ${hunkPos + 1}/${hunks.length}\n${path}`)) return;
+    if (!await confirm(`${t("files.diff.revertConfirm")} ${hunkPos + 1}/${hunks.length}\n${path}`)) return;
     setReverting(true);
     try {
       const response = await fetch("/api/git/file-hunks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd, path, index: hunk.index, version: state.version, hunkId: hunk.id }) });
@@ -88,10 +90,11 @@ export function DiffPanel({ cwd, path, onClose, onAnnotate }: Props) {
       load();
     } catch (reason) { setState({ kind: "error", message: reason instanceof Error ? reason.message : String(reason) }); }
     finally { setReverting(false); }
-  }, [cwd, hunkPos, hunks, load, path, reverting, state, t]);
+  }, [cwd, hunkPos, hunks, load, path, reverting, state, t, confirm]);
 
   return (
     <div className={s.container}>
+      {confirmation}
       <div className={`${s.header} chrome-mono`}>
         <span className={s.badge}>diff</span>
         <span className={s.path} title={path}>{path}</span>

@@ -136,13 +136,18 @@
 
 /* Partial-preview banner for files above the preview cap */
 .truncatedNotice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   padding: var(--space-1) var(--space-4);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-xs);
-  color: var(--color-warning-text);
-  background: var(--color-warning-bg);
+  color: var(--text-muted);
+  background: var(--bg-elev-1);
   flex-shrink: 0;
 }
+.truncatedNotice button { color: var(--accent); font: inherit; padding: var(--space-2); border-radius: var(--radius-control); }
 
 .truncatedNotice a {
   color: inherit;

@@ -13,7 +13,9 @@ async function openFiles(page: Page) {
 
 async function openReadme(page: Page) {
   await page.goto(MAIN);
-  await expect(page.getByText("專案架構分析").first()).toBeVisible({ timeout: 20_000 });
+  // The narrow header intentionally hides the title; wait for the usable
+  // session composer rather than asserting desktop-only chrome on a phone.
+  await expect(page.getByTestId("composer-shell").locator("textarea")).toBeVisible({ timeout: 20_000 });
   await openFiles(page);
   await page.getByRole("treeitem", { name: "README.md" }).click();
   await expect(page.locator(".right-panel-container.right-panel-open")).toBeVisible({ timeout: 10_000 });

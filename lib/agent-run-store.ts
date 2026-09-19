@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { isAgentRunLimits } from "./agent-run-limits";
 import {
   ACTIVE_AGENT_RUN_STATUSES,
   isAgentRunConcurrency,
@@ -50,12 +51,7 @@ function isReport(value: unknown): boolean {
 }
 
 function isLimits(value: unknown): boolean {
-  if (value === undefined) return true;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const limits = value as Record<string, unknown>;
-  return (limits.maxTurns === undefined || (Number.isInteger(limits.maxTurns) && Number(limits.maxTurns) > 0))
-    && (limits.maxCostUsd === undefined || (typeof limits.maxCostUsd === "number" && limits.maxCostUsd > 0))
-    && (limits.timeoutMs === undefined || (Number.isInteger(limits.timeoutMs) && Number(limits.timeoutMs) > 0));
+  return value === undefined || isAgentRunLimits(value);
 }
 
 function isAgentRun(value: unknown): value is AgentRun {
@@ -98,6 +94,7 @@ export function readAgentRunStore(path = agentRunStorePath()): AgentRunStore {
     const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<AgentRunStore>;
     return {
       version: 1,
+      ...(isAgentRunLimits(raw.subagentLimits) ? { subagentLimits: raw.subagentLimits } : {}),
       runs: Array.isArray(raw.runs) ? raw.runs.filter(isAgentRun).slice(0, MAX_RUNS) : [],
       ...(isAgentRunConcurrency(raw.maxConcurrency)
         ? { maxConcurrency: raw.maxConcurrency }
@@ -112,6 +109,7 @@ export function writeAgentRunStore(store: AgentRunStore, path = agentRunStorePat
   mkdirSync(dirname(path), { recursive: true });
   const normalized: AgentRunStore = {
     version: 1,
+    ...(isAgentRunLimits(store.subagentLimits) ? { subagentLimits: store.subagentLimits } : {}),
     runs: store.runs.slice(0, MAX_RUNS),
     ...(isAgentRunConcurrency(store.maxConcurrency)
       ? { maxConcurrency: store.maxConcurrency }

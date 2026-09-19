@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import { getScrollFollowMode } from "@/lib/prefs";
 import { AT_BOTTOM, loadScrollPosition, saveScrollPosition } from "@/lib/scroll-memory";
 
@@ -68,7 +68,7 @@ export function useTranscriptScroll(
     container.scrollTo({ top: elAbsTop - 16, behavior: "auto" });
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (messagesLength > 0) {
       if (pendingScrollToUserRef.current) {
         pendingScrollToUserRef.current = false;
@@ -85,14 +85,19 @@ export function useTranscriptScroll(
           // assignment can clamp to a smaller scrollHeight. Re-apply after
           // layout settles.
           container.scrollTop = saved;
-          requestAnimationFrame(() => {
-            const c = scrollContainerRef.current;
-            if (c) c.scrollTop = saved;
-          });
-          setTimeout(() => {
-            const c = scrollContainerRef.current;
-            if (c && Math.abs(c.scrollTop - saved) > 4) c.scrollTop = saved;
-          }, 80);
+          let cancelled = false;
+          const cancel = () => { cancelled = true; };
+          const apply = () => {
+            if (!cancelled && scrollContainerRef.current === container) container.scrollTop = saved;
+          };
+          const frame = requestAnimationFrame(apply);
+          const timer = setTimeout(apply, 80);
+          const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+          events.forEach((event) => container.addEventListener(event, cancel, { passive: true }));
+          return () => {
+            cancel(); cancelAnimationFrame(frame); clearTimeout(timer);
+            events.forEach((event) => container.removeEventListener(event, cancel));
+          };
         } else {
           scrollToBottom("instant");
         }
@@ -123,7 +128,9 @@ export function useTranscriptScroll(
       saveScrollPosition(
         memoryKey,
         container.scrollTop,
-        container.scrollHeight - container.scrollTop - container.clientHeight,
+        messagesEndRef.current
+          ? messagesEndRef.current.getBoundingClientRect().top - container.getBoundingClientRect().bottom
+          : container.scrollHeight - container.scrollTop - container.clientHeight,
       );
     };
     const onScroll = () => {

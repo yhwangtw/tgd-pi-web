@@ -46,6 +46,8 @@ export interface AgentRunReport {
 }
 
 export interface AgentRun extends AgentRunInput {
+  limitWarning?: boolean;
+  progress?: { turns: number; costUsd: number };
   id: string;
   trigger: AgentRunTrigger;
   status: AgentRunStatus;
@@ -62,6 +64,7 @@ export interface AgentRunStore {
   version: 1;
   runs: AgentRun[];
   maxConcurrency?: number;
+  subagentLimits?: AgentRunLimits;
 }
 
 export interface AgentRunCompletion {
@@ -70,6 +73,7 @@ export interface AgentRunCompletion {
 }
 
 export interface AgentRunsResponse {
+  subagentLimits?: AgentRunLimits;
   runs: AgentRun[];
   counts: Record<AgentRunStatus, number>;
   maxConcurrency: number;

@@ -26,10 +26,11 @@ interface Props {
   onToggleSelect?: (run: AgentRun) => void;
   onCancel: (run: AgentRun) => void;
   onRetry: (run: AgentRun) => void;
+  onExtend?: (run: AgentRun) => void;
   onOpenSession: (sessionId: string) => void | Promise<void>;
 }
 
-export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCancel, onRetry, onOpenSession }: Props) {
+export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCancel, onRetry, onExtend, onOpenSession }: Props) {
   const { locale, t } = useI18n();
   const [reportOpen, setReportOpen] = useState(false);
   const active = run.status === "queued" || ACTIVE_AGENT_RUN_STATUSES.has(run.status);
@@ -67,6 +68,8 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
         <p className={s.promptPreview}>{run.prompt}</p>
         <div className={`${s.path} chrome-mono`} title={run.cwd}>{run.cwd}</div>
         {run.error && <div className={s.runError} role="status">{run.error}</div>}
+        {active && run.limitWarning && <p role="status">{t("agents.limitNear")}</p>}
+        {run.progress && <p>{t("agents.turns")}: {run.progress.turns} · {new Intl.NumberFormat(locale === "zh" ? "zh-TW" : "en", { style: "currency", currency: "USD" }).format(run.progress.costUsd)}</p>}
         {run.report && (
           <div className={s.runReport}>
             <button type="button" className={s.reportToggle} aria-expanded={reportOpen} onClick={() => setReportOpen((open) => !open)}>
@@ -84,6 +87,7 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
         )}
       </div>
       <div className={s.cardActions}>
+        {ACTIVE_AGENT_RUN_STATUSES.has(run.status) && onExtend && <button type="button" disabled={busy} onClick={() => onExtend(run)}>{t("agents.extend")}</button>}
         {run.sessionId && (
           <button type="button" onClick={() => void onOpenSession(run.sessionId as string)}>
             {t("agents.openSession")}

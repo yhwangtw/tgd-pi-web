@@ -1,6 +1,8 @@
 import { stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import type { AgentRunInput } from "./agent-run-types";
+import { isAgentRunLimits } from "./agent-run-limits";
+import type { AgentRunLimits } from "./agent-run-types";
 import {
   isAgentRunConcurrency,
   MAX_AGENT_RUN_CONCURRENCY,
@@ -17,6 +19,7 @@ export class AgentRunValidationError extends Error {}
 
 export interface AgentRunConfigInput {
   maxConcurrency: number;
+  subagentLimits?: AgentRunLimits;
 }
 
 function requiredString(value: unknown, field: string, maxLength: number): string {
@@ -100,5 +103,7 @@ export function validateAgentRunConfigInput(value: unknown): AgentRunConfigInput
       `maxConcurrency must be an integer between ${MIN_AGENT_RUN_CONCURRENCY} and ${MAX_AGENT_RUN_CONCURRENCY}`,
     );
   }
-  return { maxConcurrency };
+  const subagentLimits = (value as Record<string, unknown>).subagentLimits;
+  if (subagentLimits !== undefined && !isAgentRunLimits(subagentLimits)) throw new AgentRunValidationError("Invalid subagent limits");
+  return { maxConcurrency, ...(subagentLimits !== undefined ? { subagentLimits: subagentLimits as AgentRunLimits } : {}) };
 }

@@ -36,7 +36,7 @@ interface Props {
   onPick: (cwd: string) => void;
   /** Validate-and-pick for typed paths (returns an error message or null). */
   onPickPath: (path: string) => Promise<string | null>;
-  onDefaultCwd: () => void;
+  onDefaultCwd: () => void | Promise<string | null | void>;
   projects: ProjectEntry[];
   selectedCwd: string | null;
   homeDir: string;
@@ -86,6 +86,10 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
   const [pins, setPins] = useState<string[]>([]);
   const [hidden, setHidden] = useState<string[]>([]);
   const [pathError, setPathError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const selectionEpoch = useRef(0);
+  const invalidateSelection = useCallback(() => { selectionEpoch.current++; }, []);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -133,6 +137,9 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
 
   // ── Data loading on open ──────────────────────────────────────────────────
   useEffect(() => {
+    invalidateSelection();
+    submittingRef.current = false;
+    setSubmitting(false);
     if (!open) return;
     setQuery("");
     setIdx(0);
@@ -140,8 +147,8 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
     setPins(loadList(PINS_KEY));
     setHidden(loadList(HIDDEN_KEY));
     const frame = requestAnimationFrame(() => inputRef.current?.focus());
-    return () => cancelAnimationFrame(frame);
-  }, [open]);
+    return () => { cancelAnimationFrame(frame); invalidateSelection(); };
+  }, [open, invalidateSelection]);
 
   // ── Result rows (flat, grouped by kind for labels) ───────────────────────
   const { rows, groups } = useMemo(() => {
@@ -218,11 +225,27 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
     onClose();
   }, [onPick, onClose]);
 
-  const commitTypedPath = useCallback(async () => {
-    const err = await onPickPath(query.trim().replace(/\/$/, "") || "/");
-    if (err) setPathError(err);
-    else onClose();
-  }, [query, onPickPath, onClose]);
+  const submitSelection = useCallback(async (choose: () => void | Promise<string | null | void>) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setPathError(null);
+    const epoch = selectionEpoch.current;
+    try {
+      const error = await choose();
+      if (epoch !== selectionEpoch.current) return;
+      if (error) setPathError(error);
+      else onClose();
+    } catch (error) {
+      if (epoch === selectionEpoch.current) setPathError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (epoch === selectionEpoch.current) { submittingRef.current = false; setSubmitting(false); }
+    }
+  }, [onClose]);
+
+  const commitTypedPath = useCallback(() => submitSelection(
+    () => onPickPath(query.trim().replace(/\/$/, "") || "/"),
+  ), [query, onPickPath, submitSelection]);
 
   const togglePin = useCallback((path: string) => {
     setPins((prev) => {
@@ -282,6 +305,7 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
             ref={inputRef}
             value={query}
             onChange={(e) => { setQuery(e.target.value); setPathError(null); }}
+            readOnly={submitting}
             onKeyDown={onKeyDown}
             placeholder={t("cwd.switcherPlaceholder")}
             aria-label={t("cwd.switcherTitle")}
@@ -291,7 +315,7 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
         </div>
 
         <div className={s.body} ref={listRef} role="listbox" aria-label={t("cwd.switcherTitle")}>
-          {pathError && <div className={s.error}>{pathError}</div>}
+          {pathError && <div className={s.error} role="alert">{pathError}</div>}
           {rows.length === 0 && !pathError && (
             <div className={s.emptyNote} data-error={Boolean(resourceError)}>
               {resourceLoading
@@ -385,7 +409,7 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
               <span className={s.footHint}>{t("cwd.footPathHint")}</span>
             </>
           )}
-          <button type="button" className={s.defaultBtn} onClick={() => { onDefaultCwd(); onClose(); }}>
+          <button type="button" className={s.defaultBtn} disabled={submitting} aria-busy={submitting} onClick={() => void submitSelection(onDefaultCwd)}>
             {t("cwd.default")}
           </button>
         </div>

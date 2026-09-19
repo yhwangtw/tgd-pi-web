@@ -32,6 +32,33 @@ describe("useFileTabs", () => {
     api = null;
   });
 
+  it.each([true, false])("restores panel visibility (%s) without losing tabs or reading position", async (open) => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => root?.render(<Harness />));
+    await act(async () => api?.handleOpenFile("/workspace/notes.md", "notes.md"));
+    await act(async () => api?.handleUpdateViewState("file:/workspace/notes.md", { scrollTop: 640, selection: null }));
+    await act(async () => api?.setRightPanelOpen(open));
+    await act(async () => root?.unmount());
+    root = createRoot(container);
+    await act(async () => root?.render(<Harness />));
+    expect(api?.rightPanelOpen).toBe(open);
+    expect(api?.activeFileTabId).toBe("file:/workspace/notes.md");
+    expect(api?.fileTabs[0].viewState?.scrollTop).toBe(640);
+  });
+
+  it("keeps legacy saved tabs without reopening the panel uninvited", async () => {
+    localStorage.setItem("pi-file-workspace-v1", JSON.stringify({ tabs: [{ id: "file:/a.md", filePath: "/a.md", label: "a.md" }], active: "file:/a.md" }));
+    container = document.createElement("div");
+    root = createRoot(container);
+    await act(async () => root?.render(<Harness />));
+    expect(api?.fileTabs).toHaveLength(1);
+    expect(api?.rightPanelOpen).toBe(false);
+    await act(async () => api?.handleOpenFile("/a.md", "a.md"));
+    expect(api?.rightPanelOpen).toBe(true);
+  });
+
   it("keeps one canonical open intent and per-tab reading state", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);

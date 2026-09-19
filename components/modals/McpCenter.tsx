@@ -2,7 +2,8 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Library, Plus, RefreshCw } from "lucide-react";
-import { DialogShell } from "@/components/ui/DialogShell";
+import { InlinePanel as DialogShell } from "@/components/ui/InlinePanel";
+import { useInlineConfirm } from "@/hooks/useInlineConfirm";
 import { fetchJson, useRequestResource } from "@/hooks/useRequestResource";
 import { showToast } from "@/hooks/useToast";
 import { useI18n } from "@/lib/i18n";
@@ -19,7 +20,7 @@ interface Props { cwd: string | null; sessionId: string | null }
 type Draft = Partial<McpServerConfig> & { argsText: string; headersText: string; timeoutSeconds: string };
 type PendingTest = {
   token: string;
-  expiresAt: number;
+  expiresAt?: number;
   server: McpServerConfig;
   review: { id: string; name: string; command?: string; args: string[]; cwd: string | null };
 };
@@ -59,10 +60,13 @@ function environmentReferences(review: PendingTest["review"]): string[] {
 
 export function McpCenter({ cwd, sessionId }: Props) {
   const { t } = useI18n();
+  const { confirm, confirmation } = useInlineConfirm(cwd);
   const [busy, setBusy] = useState<string | null>(null);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<OfficialMcpTemplateId | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const [draftErrors, setDraftErrors] = useState<DraftErrors>({});
   const [formFailure, setFormFailure] = useState<{ message: string; canReload: boolean } | null>(null);
   const [pendingTest, setPendingTest] = useState<PendingTest | null>(null);
@@ -108,7 +112,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
       cleanupWarning?: string;
       reloadWarning?: string;
       deferred?: boolean;
-      confirmation?: { token: string; expiresAt: number };
+      confirmation?: { token: string; expiresAt?: number };
       review?: PendingTest["review"];
     };
     if (!response.ok) throw new McpRequestFailure(result.error ?? `HTTP ${response.status}`, response.status);
@@ -212,8 +216,8 @@ export function McpCenter({ cwd, sessionId }: Props) {
       argsText: undefined,
       headersText: undefined,
     };
-    const trustStdio = server.transport !== "stdio" || !server.enabled || window.confirm(`${t("mcp.allowStart")}\n\n${server.name}\n${server.command}`);
-    if (!trustStdio) return;
+    const trustStdio = server.transport !== "stdio" || !server.enabled || await confirm(`${t("mcp.allowStart")}\n\n${server.name}\n${server.command}`);
+    if (!trustStdio || draftRef.current !== draft) return;
     if (await mutate({ action: "save", server, trustStdio }, draft.id ?? "new")) {
       setDraft(null);
       setSelectedTemplateId(null);
@@ -240,6 +244,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
   if (resource.loading && !servers.length) return <div className={styles.state}>{t("mcp.discovering")}</div>;
   return (
     <div className={styles.root}>
+      {confirmation}
       <div className={styles.intro}>
         <div><h2>{t("mcp.title")}</h2><p>{t("mcp.description")}</p></div>
         <div className={styles.introActions}>
@@ -255,14 +260,14 @@ export function McpCenter({ cwd, sessionId }: Props) {
       </div>
       {servers.length > 0 && <p className={styles.notice}>{t("mcp.statusHint")}</p>}
       {resource.error && <div className={styles.loadError} role="alert"><span>{resource.error}</span><button type="button" onClick={() => void resource.refresh()}>{t("common.retry")}</button></div>}
-      {!servers.length ? <div className={styles.empty}><strong>{t("mcp.emptyTitle")}</strong><span>{t("mcp.emptyHint")}</span></div> : (
+      {!draft && !templatePickerOpen && !pendingTest && (!servers.length ? <div className={styles.empty}><strong>{t("mcp.emptyTitle")}</strong><span>{t("mcp.emptyHint")}</span></div> : (
         <div className={styles.list}>{servers.map((server) => {
           const status: McpServerStatus = statusMap.get(server.id) ?? { id: server.id, state: server.enabled ? "idle" : "disabled", toolCount: 0, tools: [] };
           return <article key={server.id} className={styles.card}>
             <div className={styles.cardTop}>
               <div className={styles.identity}><span className={styles.dot} data-state={status.state} /><div><strong>{server.name}</strong><small>{server.transport === "stdio" ? `${server.command} ${(server.args ?? []).join(" ")}` : server.url}</small></div></div>
-              <button type="button" role="switch" aria-label={server.name} aria-checked={server.enabled} className={styles.toggle} data-on={server.enabled} disabled={!!busy} onClick={() => {
-                const trustStdio = !server.enabled && server.transport === "stdio" ? window.confirm(`${t("mcp.allowStart")}\n\n${server.name}\n${server.command}`) : true;
+              <button type="button" role="switch" aria-label={server.name} aria-checked={server.enabled} className={styles.toggle} data-on={server.enabled} disabled={!!busy} onClick={async () => {
+                const trustStdio = !server.enabled && server.transport === "stdio" ? await confirm(`${t("mcp.allowStart")}\n\n${server.name}\n${server.command}`) : true;
                 if (trustStdio) void mutate({ action: "toggle", id: server.id, revision: server.revision, enabled: !server.enabled, trustStdio }, server.id);
               }}><span /></button>
             </div>
@@ -274,11 +279,11 @@ export function McpCenter({ cwd, sessionId }: Props) {
             <div className={styles.actions}>
               <button type="button" disabled={!!busy} onClick={() => { setSelectedTemplateId(null); setDraftErrors({}); setFormFailure(null); setDraft(toDraft(server)); }}>{t("mcp.edit")}</button>
               <button type="button" disabled={!!busy} onClick={() => void prepareTest(server)}>{t("mcp.test")}</button>
-              <button type="button" disabled={!!busy} className={styles.danger} onClick={() => { if (window.confirm(`${t("mcp.deleteConfirm")}\n\n${server.name}`)) void mutate({ action: "delete", id: server.id, revision: server.revision }, server.id); }}>{t("mcp.delete")}</button>
+              <button type="button" disabled={!!busy} className={styles.danger} onClick={async () => { if (await confirm(`${t("mcp.deleteConfirm")}\n\n${server.name}`)) void mutate({ action: "delete", id: server.id, revision: server.revision }, server.id); }}>{t("mcp.delete")}</button>
             </div>
           </article>;
         })}</div>
-      )}
+      ))}
 
       <DialogShell
         open={templatePickerOpen}
@@ -345,7 +350,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
         mobileMode="sheet"
         footer={pendingTest ? <>
           <button type="button" className={styles.secondary} disabled={!!busy} onClick={() => setPendingTest(null)}>{t("common.cancel")}</button>
-          <button type="button" className={styles.primary} disabled={!!busy || Date.now() >= pendingTest.expiresAt} onClick={() => void executeTest()}>{t("mcp.runTest")}</button>
+          <button type="button" className={styles.primary} disabled={!!busy} onClick={() => void executeTest()}>{t("mcp.runTest")}</button>
         </> : undefined}
       >
         {pendingTest && <div className={styles.reviewList}>

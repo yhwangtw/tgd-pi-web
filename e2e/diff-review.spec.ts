@@ -38,8 +38,11 @@ for (const style of ["original", "trae"]) {
     const previous = await readFile(path, "utf8");
     try {
       await writeFile(path, previous + "external edit after opening the review\n");
-      page.once("dialog", dialog => dialog.accept());
       await panel.getByRole("button", { name: "Revert hunk", exact: true }).click();
+      const confirmation = panel.getByTestId("inline-action-confirmation");
+      await expect(confirmation).toBeVisible();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await confirmation.getByRole("button", { name: "Confirm", exact: true }).click();
       await expect(panel.getByRole("alert")).toContainText("File changed");
       expect(await readFile(path, "utf8")).toBe(previous + "external edit after opening the review\n");
       await panel.getByRole("button", { name: "Refresh", exact: true }).click();

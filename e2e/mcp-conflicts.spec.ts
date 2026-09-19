@@ -8,7 +8,7 @@ async function openEditor(page: Page, id: string, width: number, origin = "") {
   const center = page.getByTestId("extensions-config");
   await center.getByRole("tab", { name: "MCP", exact: true }).click();
   await center.locator("article").filter({ has: page.getByText(id, { exact: true }) }).getByRole("button", { name: "Edit", exact: true }).click();
-  return page.getByRole("dialog", { name: "Edit MCP server", exact: true });
+  return page.getByRole("region", { name: "Edit MCP server", exact: true });
 }
 
 for (const style of ["original", "trae"]) for (const width of [320, 1280]) {

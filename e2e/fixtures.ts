@@ -25,6 +25,12 @@ export function createFixtures(root: string): { cwd: string } {
   // launcher can then verify fixture provenance without adopting old data.
   prepareIsolatedAgentDir("fixture", { PI_CODING_AGENT_DIR: path.join(root, "agent") }, cwd, homedir());
   mkdirSync(path.join(cwd, "src"), { recursive: true });
+  const skillDir = path.join(root, "agent", "skills", "e2e-reading");
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: e2e-reading\ndescription: Long, inert content for reading and scroll tests.\n---\n\n# Reading fixture\n\n" + "This is inert test content, not an instruction.\n\n".repeat(100));
+  // Harmless fixture outside the workspace: tool execution must not inject a
+  // Web-only approval prompt, while the browser file API stays root-gated.
+  writeFileSync(path.join(root, "outside-read.txt"), "Outside-workspace fixture read succeeded.\n");
 
   // ── Demo git project ──────────────────────────────────────────────────
   writeFileSync(path.join(cwd, "README.md"), "# Demo project\n\nE2E fixture.\n");
@@ -38,6 +44,7 @@ export function createFixtures(root: string): { cwd: string } {
   // paid model. Keep this separate from the existing interactive UI fixture.
   writeFileSync(path.join(cwd, ".pi", "extensions", "reconnect-fixture.js"), String.raw`
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
+import path from "node:path";
 
 export default function reconnectFixture(pi) {
   if (process.env.PIWEB_ENVIRONMENT !== "fixture") throw new Error("Reconnect provider is fixture-only");
@@ -57,6 +64,7 @@ export default function reconnectFixture(pi) {
     globalThis[guard] = true;
   }
   const provider = "e2e-reconnect-fixture";
+  let outsideReadPath;
   const baseUrl = "https://reconnect-fixture.invalid";
   pi.registerProvider(provider, {
     name: "E2E reconnect fixture (offline)", baseUrl,
@@ -71,7 +79,7 @@ export default function reconnectFixture(pi) {
       if (model.provider !== provider || model.baseUrl !== baseUrl) throw new Error("Unexpected fixture provider");
       const user = [...context.messages].reverse().find(message => message.role === "user");
       const text = typeof user?.content === "string" ? user.content : (user?.content ?? []).map(part => part.text ?? "").join("");
-      const match = /^E2E_RECONNECT:(complete|delayed|error|question):([a-z0-9-]{1,80})$/.exec(text);
+      const match = /^E2E_RECONNECT:(complete|delayed|error|question|outside):([a-z0-9-]{1,80})$/.exec(text);
       const message = { role: "assistant", api: model.api, provider, model: model.id,
         content: [], stopReason: "stop", timestamp: Date.now(),
         usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
@@ -80,6 +88,25 @@ export default function reconnectFixture(pi) {
         try {
           if (!match) throw new Error("Only named reconnect fixture prompts are accepted");
           const [, mode, token] = match;
+          if (mode === "outside") {
+            const result = context.messages.at(-1);
+            if (result?.role === "toolResult" && result.toolName === "read") {
+              const output = (result.content ?? []).map(part => part.text ?? "").join("");
+              if (!output.includes("Outside-workspace fixture read succeeded.")) throw new Error("Fixture read was not executed");
+              message.content = [{ type: "text", text: "Direct tool completed " + token + "." }];
+              stream.push({ type: "start", partial: message });
+              stream.push({ type: "done", reason: "stop", message });
+            } else {
+              if (!outsideReadPath) throw new Error("Outside-read fixture not initialized");
+              const toolCall = { type: "toolCall", id: "fixture-read-" + token, name: "read", arguments: { path: outsideReadPath } };
+              message.content = [toolCall]; message.stopReason = "toolUse";
+              stream.push({ type: "start", partial: message });
+              stream.push({ type: "toolcall_start", contentIndex: 0, partial: message });
+              stream.push({ type: "toolcall_end", contentIndex: 0, toolCall, partial: message });
+              stream.push({ type: "done", reason: "toolUse", message });
+            }
+            return;
+          }
           if (mode === "question") {
             if (context.messages.at(-1)?.role === "toolResult" && context.messages.at(-1)?.toolName === "ask_user") {
               message.content = [{ type: "text", text: "Fixture answer received " + token + "." }];
@@ -123,12 +150,13 @@ export default function reconnectFixture(pi) {
       return stream;
     },
   });
-  for (const mode of ["complete", "delayed", "error", "question"]) {
+  for (const mode of ["complete", "delayed", "error", "question", "outside"]) {
     pi.registerCommand("e2e-reconnect-" + mode, {
       description: "Run the offline reconnect fixture (" + mode + ")",
       handler: async (args, ctx) => {
         const token = args.trim();
         if (!/^[a-z0-9-]{1,80}$/.test(token)) throw new Error("Invalid reconnect fixture token");
+        if (mode === "outside") outsideReadPath = path.resolve(ctx.cwd, "..", "outside-read.txt");
         const model = ctx.modelRegistry.find(provider, "deterministic");
         if (!model || !(await pi.setModel(model))) throw new Error("Offline fixture model unavailable");
         pi.sendUserMessage("E2E_RECONNECT:" + mode + ":" + token, { expandPromptTemplates: false });
@@ -235,6 +263,8 @@ export default function reconnectFixture(pi) {
     bigLines.push(`export const item${i} = { id: ${i}, value: ${(i * 7) % 997} };`);
   }
   writeFileSync(path.join(cwd, "big-file.ts"), bigLines.join("\n") + "\n");
+  // More than two preview chunks, with multibyte text at chunk boundaries.
+  writeFileSync(path.join(cwd, "large-preview.txt"), "Large UTF-8 preview 中文測試\n".repeat(20_000));
 
   // ── tGD artifacts sibling dir (`<project>-tGD/`) ──────────────────────
   const tgdDir = path.join(root, "demo-project-tGD");

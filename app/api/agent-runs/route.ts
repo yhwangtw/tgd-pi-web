@@ -77,6 +77,7 @@ export async function GET(req: Request): Promise<Response> {
     runs,
     counts,
     maxConcurrency: supervisor.maxConcurrency,
+    subagentLimits: readAgentRunStore().subagentLimits,
     serverTime: new Date().toISOString(),
     nextCursor: nextOffset < filtered.length ? encodeCursor(nextOffset) : null,
   }, {
@@ -109,8 +110,9 @@ export async function PATCH(req: Request): Promise<Response> {
   const invalidType = requiresJson(req);
   if (invalidType) return invalidType;
   try {
-    const { maxConcurrency } = validateAgentRunConfigInput(await req.json());
+    const { maxConcurrency, subagentLimits } = validateAgentRunConfigInput(await req.json());
     const applied = ensureAgentRunSupervisor().setMaxConcurrency(maxConcurrency);
+    if (subagentLimits !== undefined) ensureAgentRunSupervisor().setSubagentLimits(subagentLimits);
     return Response.json({ maxConcurrency: applied }, {
       headers: { "Cache-Control": "no-store" },
     });

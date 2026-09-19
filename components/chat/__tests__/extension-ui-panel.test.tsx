@@ -97,7 +97,7 @@ describe("ExtensionUIPanel", () => {
     expect(onRespond.mock.calls[1][0]).toEqual(onRespond.mock.calls[0][0]);
   });
 
-  it("isolates the background, traps focus, cancels with Escape, and restores focus", async () => {
+  it.each(["confirm", "select", "input", "editor"] as const)("keeps %s inline without blocking, stealing focus, or answering on deferral", async (method) => {
     const launcher = document.createElement("button");
     launcher.textContent = "Open question";
     document.body.appendChild(launcher);
@@ -107,9 +107,11 @@ describe("ExtensionUIPanel", () => {
       dialogs: [{
         type: "extension_ui_request",
         id: "confirm-modal",
-        method: "confirm",
+        method,
         title: "Confirm release",
         message: "Continue?",
+        options: ["Staging", "Production"],
+        prefill: "Draft notes",
       }],
       statuses: {},
       widgets: {},
@@ -117,30 +119,36 @@ describe("ExtensionUIPanel", () => {
     await render(state, onRespond);
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 
-    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
-    expect(dialog.getAttribute("aria-modal")).toBe("true");
-    expect(container!.inert).toBe(true);
-    expect(launcher.inert).toBe(true);
-
-    const controls = [...dialog.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
-    const first = controls[0];
-    const last = controls.at(-1)!;
-    last.focus();
-    await act(async () => last.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })));
-    expect(document.activeElement).toBe(first);
-
-    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-    expect(onRespond).toHaveBeenCalledWith({
-      type: "extension_ui_response",
-      id: "confirm-modal",
-      cancelled: true,
-    });
-
-    await act(async () => root?.render(<ExtensionUIPanel state={{ dialogs: [], statuses: {}, widgets: {} }} onRespond={onRespond} />));
+    const card = container!.querySelector<HTMLElement>('[data-testid="inline-user-question"]')!;
+    expect(card).not.toBeNull();
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
     expect(Boolean(container!.inert)).toBe(false);
     expect(Boolean(launcher.inert)).toBe(false);
     expect(document.activeElement).toBe(launcher);
+    expect(document.body.style.overflow).not.toBe("hidden");
+    const toggle = card.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+    await act(async () => toggle.click());
+    expect(document.getElementById(toggle.getAttribute("aria-controls")!)!.hidden).toBe(true);
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(onRespond).not.toHaveBeenCalled();
+    launcher.focus();
+    expect(document.activeElement).toBe(launcher);
+    // The transcript owns every request type; no duplicate appears above input.
+    await act(async () => root?.render(<ExtensionUIPanel state={state} onRespond={onRespond} questionInTranscript />));
+    expect(container!.querySelector('[data-testid="inline-user-question"]')).toBeNull();
+    expect(onRespond).not.toHaveBeenCalled();
     launcher.remove();
+  });
+
+  it.each([true, false])("only answers a confirmation after an explicit choice (%s)", async (confirmed) => {
+    const { onRespond } = await render({
+      dialogs: [{ type: "extension_ui_request", id: "decision", method: "confirm", title: "Proceed?", message: "Choose explicitly" }],
+      statuses: {}, widgets: {},
+    });
+    const button = [...container!.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === (confirmed ? "Confirm" : "Decline"))!;
+    await act(async () => button.click());
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith({ type: "extension_ui_response", id: "decision", confirmed });
   });
 
   it("collects structured ask_user answers and renders extension chrome", async () => {

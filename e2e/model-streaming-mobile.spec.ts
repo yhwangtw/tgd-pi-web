@@ -168,7 +168,7 @@ for (const style of ["original", "trae"] as const) {
       await expect(identity).toHaveAttribute("data-catalog-status", "ready");
       await expect(editingRoot).toHaveAttribute("data-composer-editing", "false");
       await expect(primaryNav).toBeInViewport();
-      const attach = page.getByRole("button", { name: "Attach image", exact: true });
+      const attach = page.getByRole("button", { name: "Attach files", exact: true });
       const chooserPromise = page.waitForEvent("filechooser");
       await attach.click();
       const chooser = await chooserPromise;

@@ -43,15 +43,22 @@ export async function GET(req: Request) {
   try {
     const [branchOut, statusOut, numstatOut] = await Promise.all([
       git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).catch(() => ""),
-      git(cwd, ["status", "--porcelain=v1"]),
-      git(cwd, ["diff", "--numstat", "HEAD"]).catch(() => ""),
+      git(cwd, ["status", "--porcelain=v1", "-z"]),
+      git(cwd, ["diff", "--numstat", "-z", "HEAD"]).catch(() => ""),
     ]);
 
     const stats = new Map<string, { additions: number | null; deletions: number | null }>();
-    for (const line of numstatOut.split("\n")) {
-      if (!line.trim()) continue;
+    // NUL-separated output preserves Unicode, whitespace and literal arrows.
+    // Git's quoted format uses octal byte escapes, which are not JSON.
+    const numstatRecords = numstatOut.split("\0");
+    for (let i = 0; i < numstatRecords.length; i++) {
+      const line = numstatRecords[i];
+      if (!line) continue;
       const [a, d, ...rest] = line.split("\t");
-      const p = rest.join("\t");
+      let p = rest.join("\t");
+      // Renames/copies have an empty path followed by old and new paths.
+      if (!p) { i += 2; p = numstatRecords[i]; }
+      if (!p) continue;
       stats.set(p, {
         additions: a === "-" ? null : Number(a),
         deletions: d === "-" ? null : Number(d),
@@ -59,15 +66,14 @@ export async function GET(req: Request) {
     }
 
     const files: ChangedFile[] = [];
-    for (const line of statusOut.split("\n")) {
-      if (!line.trim()) continue;
+    const statusRecords = statusOut.split("\0");
+    for (let i = 0; i < statusRecords.length; i++) {
+      const line = statusRecords[i];
+      if (!line) continue;
       const status = line.slice(0, 2).trim();
-      let path = line.slice(3);
-      // Renames come as "old -> new"; show the new path
-      const arrow = path.indexOf(" -> ");
-      if (arrow !== -1) path = path.slice(arrow + 4);
-      // Porcelain quotes paths containing special chars
-      if (path.startsWith('"') && path.endsWith('"')) path = JSON.parse(path);
+      const path = line.slice(3);
+      // In -z porcelain, the destination is first and the source follows.
+      if (/[RC]/.test(line.slice(0, 2))) i++;
       const s = stats.get(path);
       files.push({ path, status, additions: s?.additions ?? null, deletions: s?.deletions ?? null });
     }

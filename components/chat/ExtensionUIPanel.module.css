@@ -252,7 +252,11 @@
 .inlineQuestion .headerActions { margin-left: auto; }
 .inlineQuestionBody[hidden] { display: none; }
 .inlineQuestion .actions { flex-wrap: wrap; border-radius: 0 0 var(--radius-card) var(--radius-card); }
-.inlineQuestion .secondaryButton { margin-right: 0; }
+.inlineQuestion .questionActions .secondaryButton { margin-right: 0; }
+.inlineQuestion .textInput,
+.inlineQuestion .editor { width: calc(100% - 2 * var(--space-4)); max-width: calc(100% - 2 * var(--space-4)); }
+.inlineQuestion .questionGroup > .textInput { width: 100%; max-width: 100%; }
+.inlineQuestion .message { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .deferButton,
 .questionNotice button {

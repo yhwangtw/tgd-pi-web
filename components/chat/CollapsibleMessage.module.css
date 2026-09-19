@@ -37,7 +37,7 @@
 :global(html[data-ui-style="trae"]) .toggleBtn { min-height: var(--control-lg); border-color: transparent; border-radius: var(--radius-pill); background: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .fade { background: linear-gradient(transparent, var(--trae-canvas)); }
 
-@media (pointer: coarse) {
+@media (max-width: 700px), (pointer: coarse) {
   .toggleBtn,
   :global(html[data-ui-style="trae"]) .toggleBtn { min-height: var(--control-touch); }
 }

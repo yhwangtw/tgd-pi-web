@@ -16,6 +16,7 @@ import {
 } from "@/lib/agent-run-types";
 import { setRequestData } from "@/lib/request-state";
 import { AgentRunCard } from "./AgentRunCard";
+import { AgentBudgetSettings } from "./AgentBudgetSettings";
 import { AgentRunForm } from "./AgentRunForm";
 import s from "./AgentDashboardPanel.module.css";
 
@@ -87,7 +88,7 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
     return [...grouped.entries()];
   }, [visibleRuns]);
 
-  const act = async (run: AgentRun, action: "cancel" | "retry") => {
+  const act = async (run: AgentRun, action: "cancel" | "retry" | "extend") => {
     setBusyId(run.id);
     try {
       const response = await fetch(`/api/agent-runs/${encodeURIComponent(run.id)}/${action}`, {
@@ -244,6 +245,7 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
           </select>
         </label>
       </div>
+      {agentRuns.data && <AgentBudgetSettings limits={agentRuns.data.subagentLimits} maxConcurrency={maxConcurrency} onSaved={() => void refreshRuns()} />}
       <div className={s.filterBar}>
         <Search size={13} strokeWidth={2} aria-hidden="true" />
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("agents.search")} aria-label={t("agents.search")} />
@@ -279,6 +281,7 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
                       onToggleSelect={onCompareSessions ? toggleCompare : undefined}
                       onCancel={(item) => void act(item, "cancel")}
                       onRetry={(item) => void act(item, "retry")}
+                      onExtend={(item) => void act(item, "extend")}
                       onOpenSession={onOpenSession}
                     />
                   ))}

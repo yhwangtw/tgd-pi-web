@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { statSync, type Stats } from "fs";
 import { homedir } from "os";
 import { isAbsolute, resolve } from "path";
+import { registerSelectedWorkspace } from "@/lib/file-security";
 
 function normalizeCwd(cwd: string): string {
   if (cwd === "~") return homedir();
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Path is not a directory: ${cwd}` }, { status: 400 });
     }
 
+    registerSelectedWorkspace(normalizedCwd);
     return NextResponse.json({ success: true, cwd: normalizedCwd });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

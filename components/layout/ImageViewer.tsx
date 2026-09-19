@@ -97,7 +97,10 @@ export function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string 
         style={{ cursor: zoom > 1 ? (panRef.current ? "grabbing" : "grab") : "default" }}
       >
         {error ? (
-          <div className={styles.error}>{error}</div>
+          <div className={styles.error}>{error}<p>
+            <a href={`/api/files/${encoded}?type=raw`} target="_blank" rel="noopener noreferrer">{t("files.openFull")}</a>{" · "}
+            <a href={`/api/files/${encoded}?type=download`} download>{t("files.downloadFull")}</a>
+          </p></div>
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img

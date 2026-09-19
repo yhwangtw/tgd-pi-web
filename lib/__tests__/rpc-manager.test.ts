@@ -4,6 +4,23 @@ import { AgentSessionWrapper } from "../rpc-manager";
 import type { AgentSessionLike } from "../pi-types";
 import { WebExtensionUIBridge } from "../web-extension-ui";
 
+describe("active-session idle protection", () => {
+  it("does not dispose a silent working model, but still reclaims an idle session", async () => {
+    vi.useFakeTimers();
+    const inner = { sessionId: "silent", sessionFile: "", isStreaming: true, subscribe: vi.fn(() => vi.fn()), dispose: vi.fn() } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner);
+    try {
+      wrapper.start();
+      await vi.advanceTimersByTimeAsync(30 * 60_000);
+      expect(wrapper.isAlive()).toBe(true);
+      expect(inner.dispose).not.toHaveBeenCalled();
+      Object.assign(inner, { isStreaming: false });
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(wrapper.isAlive()).toBe(false);
+    } finally { wrapper.destroy(); vi.useRealTimers(); }
+  });
+});
+
 describe("AgentSessionWrapper prompt command", () => {
   it("lets background callers observe an immediate prompt rejection", async () => {
     const failure = new Error("No model configured");

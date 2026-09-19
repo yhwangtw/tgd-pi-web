@@ -153,6 +153,25 @@ describe("AssistantMessageView conversation chrome", () => {
     expect(container!.textContent).toContain("Reasoning steps");
   });
 
+  it("preserves work log and tool expansion when the parent renders again", async () => {
+    const activity: AssistantMessage[] = [{ ...baseMessage, content: [
+      { type: "toolCall", toolCallId: "read-stable", toolName: "read", input: { path: "stable.ts" } },
+    ] }];
+    const message: AssistantMessage = { ...baseMessage, content: [{ type: "text", text: "Done" }] };
+    await render(message, { turnActivityMessages: activity });
+    const summary = container!.querySelector<HTMLButtonElement>('section[aria-label="Work log"] > button')!;
+    await act(async () => summary.click());
+    const tool = Array.from(container!.querySelectorAll<HTMLButtonElement>("button"))
+      .find(button => button.textContent?.includes("stable.ts"))!;
+    await act(async () => tool.click());
+    expect(tool.getAttribute("aria-expanded")).toBe("true");
+    await act(async () => root!.render(<AssistantMessageView message={{ ...message }} turnActivityMessages={[...activity]} />));
+    expect(container!.querySelector('section[aria-label="Work log"] > button')).toBe(summary);
+    expect(summary.getAttribute("aria-expanded")).toBe("true");
+    expect(container!.contains(tool)).toBe(true);
+    expect(tool.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("keeps prose as Markdown and progressively enhances one verified result", async () => {
     await render({
       ...baseMessage,

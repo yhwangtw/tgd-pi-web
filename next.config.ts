@@ -33,6 +33,9 @@ const nextConfig: NextConfig = {
   // The dev-tools badge floats bottom-left, exactly over the icon rail's
   // bottom buttons (Models/Theme) — disable it.
   devIndicators: false,
+  // Match the existing 50 MiB file API limit plus multipart overhead. Upload
+  // clients send one file per request; Next's default proxy cap is only 10 MiB.
+  experimental: { proxyClientMaxBodySize: "52mb" },
   serverExternalPackages: ["@earendil-works/pi-coding-agent", "@earendil-works/pi-ai"],
   allowedDevOrigins: ['192.168.*.*'],
   env: {

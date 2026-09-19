@@ -9,7 +9,7 @@ import styles from "./AddSkillPanel.module.css";
 
 type PendingInstall = {
   token: string;
-  expiresAt: number;
+  expiresAt?: number;
   review: {
     source: string;
     scope: "global" | "project";
@@ -81,7 +81,7 @@ export function AddSkillPanel({
         });
         const d = (await res.json()) as {
           error?: string;
-          confirmation?: { token: string; expiresAt: number };
+          confirmation?: { token: string; expiresAt?: number };
           review?: PendingInstall["review"];
         };
         if (!res.ok || d.error) {
@@ -226,7 +226,7 @@ export function AddSkillPanel({
               <button
                 type="button"
                 className={styles.confirmInstallBtn}
-                disabled={installing !== null || Date.now() >= pendingInstall.expiresAt}
+                disabled={installing !== null}
                 onClick={() => void executeInstall()}
               >
                 {t("skills.add.confirm")}

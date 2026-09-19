@@ -27,6 +27,22 @@ describe("versioned file editor API", () => {
   });
   afterEach(async () => { allowed.clear(); await rm(root, { recursive: true, force: true }); });
 
+  it("loads large UTF-8 files incrementally without allowing a partial edit", async () => {
+    await writeFile(file, "字".repeat(220_000));
+    const first = await (await load()).json();
+    expect(first.truncated).toBe(true);
+    expect(first.content).not.toContain("\uFFFD");
+    const more = await GET(new NextRequest(`http://localhost/api/files/${file}?type=read&previewBytes=524288`), params());
+    const expanded = await more.json();
+    expect(expanded.content.length).toBeGreaterThan(first.content.length);
+    expect(expanded.version).toBeUndefined();
+    expect(expanded.content).not.toContain("\uFFFD");
+    const oversized = await GET(new NextRequest(`http://localhost/api/files/${file}?type=read&previewBytes=90000000`), params());
+    expect(oversized.status).toBe(400);
+    expect((await save(expanded.content)).status).toBe(413);
+    expect((await save("partial content")).status).toBe(428);
+  });
+
   it("requires the loaded version and returns a fresh version after saving", async () => {
     const loaded = await (await load()).json();
     expect(loaded.version).toMatch(/^[a-f0-9]{64}$/);

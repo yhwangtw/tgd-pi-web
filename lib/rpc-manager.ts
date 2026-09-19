@@ -11,6 +11,7 @@ import {
 import { buildSessionContext, buildTree, cacheSessionPath, getLeafId } from "./session-reader";
 import { AgentEventLog, type AgentStreamRecord, type ReplayStatus } from "./agent-event-log";
 import type { SessionEntry } from "./types";
+import { isWebExtensionUIDialogRequest } from "./web-extension-ui-types";
 import { createSnapshot } from "./git-snapshot";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 import { bindWebExtensions, createTrackedAgentServices, emitWebBeforeFork, type ExtensionProviderTracker } from "./pi-runtime";
@@ -507,7 +508,17 @@ export class AgentSessionWrapper {
 
   private resetIdleTimer(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => void this.shutdown("quit"), 10 * 60 * 1000);
+    this.idleTimer = setTimeout(() => {
+      // Silence is not idleness: a model/tool may be working without events.
+      // Pending decisions also need to survive while the user works elsewhere.
+      if (this.runActive || this.inner.isStreaming || this.inner.isCompacting || this.bashRunning
+        || this.webExtensionUI?.snapshot().some(isWebExtensionUIDialogRequest)) {
+        this.resetIdleTimer();
+        return;
+      }
+      void this.shutdown("quit");
+    }, 10 * 60 * 1000);
+    this.idleTimer.unref?.();
   }
 
   onEvent(listener: EventListener): () => void {

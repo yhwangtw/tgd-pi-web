@@ -41,6 +41,11 @@ authenticated local proxy/tunnel. Direct LAN/private-interface binding is an
 explicit operator choice requiring the password gate and network restrictions.
 `npm run preview` uses localhost on `30142` with separate isolated agent data;
 changing a production port alone does not isolate sessions, models or schedules.
+For an interactive preview using the same model accounts, stop the preview and
+run `npm run preview:configure`, then restart. Model definitions/defaults are
+copied, while the login store is explicitly shared (login/logout affects both).
+Sessions, schedules and extensions remain separate; automated fixtures never
+run this opt-in setup. Configuration backups stay private in the preview directory.
 
 ---
 
@@ -75,9 +80,10 @@ journalctl -u pi-web.service -f      # follow logs
 Run it as a **normal user**, not root — the agent's shell/file access inherits
 that user's permissions.
 
-Pi Web's Safety Guard is an application-level authorization layer: it confirms
-high-impact operations and can remember only an exact action in the same
-workspace for five minutes. It is **not** an OS sandbox. For stronger tool
+Pi Web executes agent tools directly, like Pi CLI, without a built-in per-action
+approval gate or five-minute grants. Only give trusted users access to the Web
+interface: tools can access everything the server account can. Login protection
+and file/Git API workspace checks remain enabled. Pi Web is **not** an OS sandbox. For stronger tool
 isolation, run the service under a dedicated account and put the entire service
 inside a container or VM with only the required workspace and credentials
 mounted. Extensions inherit the same boundary as the server process.

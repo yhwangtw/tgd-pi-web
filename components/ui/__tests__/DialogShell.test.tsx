@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, useState } from "react";
+import { act, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { DialogShell } from "../DialogShell";
@@ -12,7 +12,7 @@ function Harness() {
   return (
     <>
       <button type="button" onClick={() => setOpen(true)}>Open filters</button>
-      <DialogShell open={open} title="Filters" onClose={() => setOpen(false)}>
+      <DialogShell modal open={open} title="Filters" onClose={() => setOpen(false)}>
         <button type="button">First field</button>
         <button type="button">Last field</button>
       </DialogShell>
@@ -26,10 +26,10 @@ function StackedHarness() {
   return (
     <>
       <button type="button">Background action</button>
-      <DialogShell open={parentOpen} title="Parent" onClose={() => setParentOpen(false)}>
+      <DialogShell modal open={parentOpen} title="Parent" onClose={() => setParentOpen(false)}>
         <button type="button" onClick={() => setChildOpen(true)}>Open child</button>
       </DialogShell>
-      <DialogShell open={childOpen} title="Child" onClose={() => setChildOpen(false)}>
+      <DialogShell modal open={childOpen} title="Child" onClose={() => setChildOpen(false)}>
         <button type="button" onClick={() => setParentOpen(false)}>Close parent first</button>
         <button type="button" onClick={() => setChildOpen(false)}>Close child</button>
       </DialogShell>
@@ -49,6 +49,20 @@ describe("DialogShell", () => {
     document.querySelectorAll("[data-dialog-root]").forEach((element) => element.remove());
   });
 
+  it("defaults to a modeless, collapsible panel without losing a form draft", async () => {
+    container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => root?.render(<><button id="outside">Keep working</button><DialogShell open title="Settings" onClose={() => {}}><input defaultValue="unfinished" /></DialogShell></>));
+    const outside = container.querySelector<HTMLButtonElement>("#outside")!;
+    outside.focus();
+    expect(container.inert).not.toBe(true);
+    expect(document.querySelector('[aria-modal="true"]')).toBeNull();
+    const collapse = document.querySelector<HTMLButtonElement>('[aria-label="Minimize panel"]')!;
+    await act(async () => collapse.click());
+    expect(document.querySelector<HTMLInputElement>('[role="dialog"] input')?.value).toBe("unfinished");
+    expect(document.querySelector('[role="dialog"] [hidden]')).not.toBeNull();
+    expect(document.activeElement).toBe(outside);
+  });
+
   it("isolates the background, closes with Escape, and restores focus", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -66,6 +80,40 @@ describe("DialogShell", () => {
     expect(document.body.querySelector('[role="dialog"]')).toBeNull();
     expect(container.inert).not.toBe(true);
     expect(container.getAttribute("aria-hidden")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("does not restore focus over ongoing background typing when a panel closes", async () => {
+    container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
+    const view = (open: boolean) => <><input aria-label="Composer" /><DialogShell open={open} title="Review" onClose={() => {}}><input aria-label="Review notes" /></DialogShell></>;
+    await act(async () => root?.render(view(false)));
+    const composer = container.querySelector("input")!; composer.focus();
+    await act(async () => root?.render(view(true)));
+    expect(document.activeElement).toBe(composer);
+    document.querySelector<HTMLInputElement>('[aria-label="Review notes"]')!.focus();
+    composer.focus();
+    await act(async () => root?.render(view(false)));
+    expect(document.activeElement).toBe(composer);
+  });
+
+  it("honors an explicit initial field without trapping focus in a modeless panel", async () => {
+    function SearchHarness() {
+      const [open, setOpen] = useState(false);
+      const inputRef = useRef<HTMLInputElement>(null);
+      return <><button onClick={() => setOpen(true)}>Open search</button>
+        <DialogShell open={open} title="Search" initialFocusRef={inputRef} onClose={() => setOpen(false)}>
+          <input ref={inputRef} aria-label="Search items" />
+        </DialogShell></>;
+    }
+    container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => root!.render(<SearchHarness />));
+    const trigger = container.querySelector("button")!; trigger.focus();
+    await act(async () => trigger.click());
+    const input = document.querySelector<HTMLInputElement>('[aria-label="Search items"]')!;
+    expect(document.activeElement).toBe(input);
+    expect(container.inert).not.toBe(true);
+    await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 

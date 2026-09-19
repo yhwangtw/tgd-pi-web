@@ -13,20 +13,22 @@ export function useFileTabs() {
 
   useEffect(() => {
     try {
-      const restored = JSON.parse(localStorage.getItem("pi-file-workspace-v1") ?? "null") as { tabs?: Tab[]; active?: string | null; split?: string | null } | null;
+      const restored = JSON.parse(localStorage.getItem("pi-file-workspace-v1") ?? "null") as { tabs?: Tab[]; active?: string | null; split?: string | null; open?: boolean } | null;
       const tabs = restored?.tabs?.filter((tab) => typeof tab?.filePath === "string").slice(0, 30) ?? [];
       setFileTabs(tabs);
       setActiveFileTabId(restored?.active && tabs.some((tab) => tab.id === restored.active) ? restored.active : tabs[0]?.id ?? null);
       setSplitFileTabId(restored?.split && tabs.some((tab) => tab.id === restored.split) ? restored.split : null);
-      if (tabs.length > 0) setRightPanelOpen(true);
+      // Legacy saves have no visibility preference: retain their tabs, but
+      // never infer permission to reopen the panel from the presence of a tab.
+      setRightPanelOpen(restored?.open === true);
     } catch { /* start with an empty workspace */ }
     setRestored(true);
   }, []);
 
   useEffect(() => {
     if (!restored) return;
-    localStorage.setItem("pi-file-workspace-v1", JSON.stringify({ tabs: fileTabs, active: activeFileTabId, split: splitFileTabId }));
-  }, [activeFileTabId, fileTabs, restored, splitFileTabId]);
+    localStorage.setItem("pi-file-workspace-v1", JSON.stringify({ tabs: fileTabs, active: activeFileTabId, split: splitFileTabId, open: rightPanelOpen }));
+  }, [activeFileTabId, fileTabs, restored, splitFileTabId, rightPanelOpen]);
 
   const handleOpenFile = useCallback((filePathOrIntent: string | FileOpenIntent, fileName?: string, gotoLine?: number) => {
     const intent: FileOpenIntent = typeof filePathOrIntent === "string"

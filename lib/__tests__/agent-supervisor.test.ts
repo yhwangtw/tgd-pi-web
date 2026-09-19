@@ -65,6 +65,30 @@ beforeEach(() => {
 });
 
 describe("AgentRunSupervisor", () => {
+  it("warns near the budget and extends an active run without replacing its session", async () => {
+    const child = fakeSession();
+    harness.startRpcSession.mockResolvedValue({ session: child.session, realSessionId: "extend-session" });
+    const supervisor = new AgentRunSupervisor({ maxConcurrency: 1 });
+    const run = supervisor.enqueue({ ...input("Extend"), limits: { maxTurns: 10, maxCostUsd: 5, timeoutMs: 60_000 } });
+    await vi.waitFor(() => expect(harness.store.runs[0]?.sessionId).toBe("extend-session"));
+    for (let index = 0; index < 8; index++) child.emit({ type: "message_end", message: { role: "assistant", usage: { cost: { total: .5 } } } });
+    expect(harness.store.runs[0].limitWarning).toBe(true);
+    const extended = supervisor.extend(run.id);
+    expect(extended.limits?.maxTurns).toBe(32);
+    expect(extended.limits?.maxCostUsd).toBe(10);
+    expect(extended.limits?.timeoutMs).toBe(31 * 60_000);
+    expect(extended.limitWarning).toBe(false);
+    expect(harness.startRpcSession).toHaveBeenCalledTimes(1);
+    expect(child.session.send).not.toHaveBeenCalledWith({ type: "abort" });
+    await supervisor.cancel(run.id);
+  });
+
+  it("persists user-chosen subagent budgets including explicit unlimited values", () => {
+    const supervisor = new AgentRunSupervisor({ maxConcurrency: 0 });
+    supervisor.setSubagentLimits({ maxTurns: 0, maxCostUsd: 0, timeoutMs: 0 });
+    expect(harness.store.subagentLimits).toEqual({ maxTurns: 0, maxCostUsd: 0, timeoutMs: 0 });
+    expect(() => supervisor.setSubagentLimits({ maxCostUsd: Infinity })).toThrow();
+  });
   it("AC-2.1: keeps excess work queued until an active run finishes", async () => {
     const first = fakeSession();
     const second = fakeSession();

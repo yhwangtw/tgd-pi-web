@@ -4,7 +4,7 @@ import React, { useRef, useState, useCallback, useEffect, useMemo, useImperative
 import {
   ArrowRight,
   FileText,
-  Image as ImageIcon,
+  Paperclip,
   Maximize2,
   Minimize2,
   RefreshCw,
@@ -18,7 +18,9 @@ import {
 } from "lucide-react";
 import { COMPOSITION_END_ENTER_GRACE_MS, buildSlashItems } from "./chat-input-constants";
 import { SlashMenu, filterSlashItems } from "./SlashMenu";
-import { loadDraft, saveDraft, clearDraft, loadHistory, saveHistory } from "@/lib/composer-persistence";
+import { clearDraft, loadHistory, saveHistory } from "@/lib/composer-persistence";
+import { useComposerDraft } from "@/hooks/useComposerDraft";
+import { useFileAttachments } from "@/hooks/useFileAttachments";
 import { shouldFencePaste, fencePaste } from "@/lib/paste-fence";
 import { showToast } from "@/hooks/useToast";
 import { FileMentionMenu, type FileMentionItem } from "./FileMentionMenu";
@@ -123,6 +125,7 @@ export interface ChatInputHandle {
   /** Forcefully replace the entire input value (no-op on identical value). */
   setText: (text: string) => void;
   addImages: (files: File[]) => void;
+  addFiles: (files: File[]) => void;
 }
 
 function resizeTextarea(textarea: HTMLTextAreaElement, expanded: boolean): void {
@@ -209,7 +212,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const { t } = useI18n();
   const { prompts } = usePrompts();
   const slashItems = useMemo(() => buildSlashItems(prompts), [prompts]);
-  const [value, setValue] = useState("");
+  const [value, setValue] = useComposerDraft(persistKey ?? null);
+  const onFilesUploaded = useCallback((names: string[]) => {
+    const references = names.map(name => /\s/.test(name) ? `@"${name}"` : `@${name}`).join(" ");
+    setValue(previous => `${previous}${previous && !/\s$/.test(previous) ? "\n" : ""}${references} `);
+  }, [setValue]);
+  const fileUploads = useFileAttachments(cwd, persistKey, onFilesUploaded);
+  // Failed uploads must be retried or dismissed, not silently omitted on send.
+  const uploadsPending = fileUploads.items.length > 0;
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashFilter, setSlashFilter] = useState("");
@@ -291,6 +301,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     addImages(files: File[]) {
       processImageFiles(files);
     },
+    addFiles(files: File[]) {
+      processFiles(files);
+    },
   }));
 
   const processImageFiles = useCallback(async (files: File[]) => {
@@ -314,6 +327,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     );
     setAttachedImages((prev) => [...prev, ...newImages]);
   }, []);
+
+  const processFiles = (files: File[]) => {
+    if (isSubmitting) return;
+    void processImageFiles(files).catch(() => showToast(t("input.imageReadFailed"), { type: "error" }));
+    void fileUploads.addFiles(files.filter(file => !file.type.startsWith("image/")));
+  };
 
   const removeImage = useCallback((index: number) => {
     setAttachedImages((prev) => {
@@ -398,7 +417,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       ta.setSelectionRange(pos, pos);
       ta.focus();
     });
-  }, [mention]);
+  }, [mention, setValue]);
 
   // Sent-message history — ArrowUp in an empty input recalls previous
   // messages, ArrowDown walks back toward the blank prompt (CLI muscle memory).
@@ -419,7 +438,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // (debounced) as it's typed. A refresh or session switch no longer eats
   // whatever was mid-composition.
   useEffect(() => {
-    setValue(loadDraft(persistKey ?? null));
     historyRef.current = loadHistory(persistKey ?? null);
     historyPosRef.current = -1;
     requestAnimationFrame(() => {
@@ -435,7 +453,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       const textarea = textareaRef.current;
       if (textarea) resizeTextarea(textarea, expanded);
     });
-  }, [expanded]);
+  }, [expanded, value]);
 
   const closeMobileTools = useCallback((restoreFocus = false) => {
     setMobileToolsOpen(false);
@@ -499,14 +517,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     return () => document.removeEventListener("keydown", handleExpandedKeys);
   }, [expanded, mention, showSlashMenu]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => saveDraft(persistKey ?? null, value), 300);
-    return () => clearTimeout(timer);
-  }, [value, persistKey]);
-
   const handleSend = useCallback(async () => {
     const msg = value.trim();
-    if ((!msg && !attachedImages.length) || isStreaming || isSubmitting) return;
+    if ((!msg && !attachedImages.length) || isStreaming || isSubmitting || uploadsPending) return;
     const submittedValue = value;
     const submittedImages = [...attachedImages];
     setIsSubmitting(true);
@@ -525,11 +538,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     } finally {
       setIsSubmitting(false);
     }
-  }, [value, attachedImages, isStreaming, isSubmitting, onSend, clearImages, pushHistory, persistKey, quote, onClearQuote]);
+  }, [value, attachedImages, isStreaming, isSubmitting, uploadsPending, onSend, clearImages, pushHistory, persistKey, quote, onClearQuote, setValue]);
 
   const sendQueued = useCallback(async (mode: StreamingSendMode) => {
     const msg = value.trim();
-    if ((!msg && !attachedImages.length) || isSubmitting) return;
+    if ((!msg && !attachedImages.length) || isSubmitting || uploadsPending) return;
     const submittedValue = value;
     const submittedImages = [...attachedImages];
     setIsSubmitting(true);
@@ -554,7 +567,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     } finally {
       setIsSubmitting(false);
     }
-  }, [value, attachedImages, isSubmitting, onSteer, onFollowUp, clearImages, pushHistory, persistKey, quote, onClearQuote]);
+  }, [value, attachedImages, isSubmitting, uploadsPending, onSteer, onFollowUp, clearImages, pushHistory, persistKey, quote, onClearQuote, setValue]);
 
   const chooseStreamingSendMode = useCallback((mode: StreamingSendMode) => {
     setStreamingSendMode(mode);
@@ -697,7 +710,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
     },
-    [isStreaming, onSteer, onFollowUp, sendQueued, handleSend, showSlashMenu, slashFilter, slashSelectedIndex, slashItems, value, mention, mentionItems, mentionIndex, applyMention, onAbort, t, expanded, streamingSendMode]
+    [isStreaming, onSteer, onFollowUp, sendQueued, handleSend, showSlashMenu, slashFilter, slashSelectedIndex, slashItems, value, mention, mentionItems, mentionIndex, applyMention, onAbort, t, expanded, streamingSendMode, setValue]
   );
 
   const handleInput = useCallback(() => {
@@ -766,7 +779,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         resizeTextarea(ta, expanded);
       });
     }
-  }, [processImageFiles, expanded]);
+  }, [processImageFiles, expanded, setValue]);
 
   const removeContextMention = useCallback((item: ComposerMention) => {
     setValue((current) => removeComposerMention(current, item));
@@ -776,7 +789,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       textarea.focus();
       resizeTextarea(textarea, expandedRef.current);
     });
-  }, []);
+  }, [setValue]);
 
   const toggleExpanded = useCallback(() => {
     setExpanded((current) => !current);
@@ -846,12 +859,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        aria-label={t("input.attachFiles")}
         multiple
         style={{ display: "none" }}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
-          processImageFiles(files);
+          processFiles(files);
           e.target.value = "";
         }}
       />
@@ -918,6 +931,25 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             </div>
           </div>
         )}
+        {fileUploads.items.length > 0 && (
+          <div className={styles.uploadList} aria-live="polite" aria-label={t("input.fileUploads")}>
+            <span className={styles.uploadHint}>{t("input.uploadHint")}</span>
+            {fileUploads.items.map(item => (
+              <div key={item.id} className={styles.uploadItem}>
+                <FileText size={14} aria-hidden="true" />
+                <div className={styles.uploadInfo}>
+                  <strong title={item.file.name}>{item.file.name}</strong>
+                  <span role={item.error ? "alert" : "status"}>{item.error ?? t("input.uploading")}</span>
+                </div>
+                {item.error &&
+                  <button type="button" onClick={() => fileUploads.retry(item)} aria-label={`${t("input.retryUpload")} ${item.file.name}`}><RefreshCw size={14} aria-hidden="true" /></button>
+                }
+                <button type="button" onClick={() => fileUploads.dismiss(item.id)} aria-label={`${t(item.error ? "input.dismissUpload" : "input.cancelUpload")} ${item.file.name}`}><X size={14} aria-hidden="true" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+        {contextMentions.length > 0 && <p className={styles.uploadHint}>{t("input.fileReferenceHint")}</p>}
         {/* Image previews */}
         {attachedImages.length > 0 && (
           <div className={styles.imagePreviewRow}>
@@ -1008,13 +1040,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <button
                 type="button"
                 onClick={() => void sendQueued(streamingSendMode)}
-                disabled={isSubmitting || (!value.trim() && !attachedImages.length)}
+                disabled={isSubmitting || uploadsPending || (!value.trim() && !attachedImages.length)}
                 title={streamingSendMode === "steer" ? t("input.steerActionTitle") : t("input.followUpActionTitle")}
                 aria-label={streamingSendMode === "steer" ? t("input.steerActionTitle") : t("input.followUpActionTitle")}
                 className={
                   streamingSendMode === "steer"
-                    ? ((value.trim() || attachedImages.length) && !isSubmitting ? styles.steerButtonActive : styles.steerButtonDisabled)
-                    : ((value.trim() || attachedImages.length) && !isSubmitting ? styles.followUpButtonActive : styles.followUpButtonDisabled)
+                    ? ((value.trim() || attachedImages.length) && !isSubmitting && !uploadsPending ? styles.steerButtonActive : styles.steerButtonDisabled)
+                    : ((value.trim() || attachedImages.length) && !isSubmitting && !uploadsPending ? styles.followUpButtonActive : styles.followUpButtonDisabled)
                 }
               >
                 {streamingSendMode === "steer" ? (
@@ -1029,9 +1061,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <button
               type="button"
               onClick={() => void handleSend()}
-              disabled={isSubmitting || (!value.trim() && !attachedImages.length)}
+              disabled={isSubmitting || uploadsPending || (!value.trim() && !attachedImages.length)}
               aria-label={t("input.send")}
-              className={(value.trim() || attachedImages.length) && !isSubmitting ? styles.sendButtonActive : styles.sendButtonDisabled}
+              className={(value.trim() || attachedImages.length) && !isSubmitting && !uploadsPending ? styles.sendButtonActive : styles.sendButtonDisabled}
               onMouseDown={(e) => { if (value.trim() || attachedImages.length) e.currentTarget.style.transform = "scale(0.97)"; }}
               onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
@@ -1050,13 +1082,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div className={styles.bottomBarLeft}>
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={isStreaming || isSubmitting}
-              title={t("input.attachImage")}
-              aria-label={t("input.attachImage")}
-              className={isStreaming || isSubmitting ? styles.attachButtonDisabled : styles.attachButtonEnabled}
+              type="button"
+              disabled={isSubmitting}
+              title={t("input.attachFilesHint")}
+              aria-label={t("input.attachFiles")}
+              className={isSubmitting ? styles.attachButtonDisabled : styles.attachButtonEnabled}
               style={{ color: attachedImages.length ? "var(--accent)" : "var(--text-muted)" }}
             >
-              <ImageIcon size={15} strokeWidth={1.8} aria-hidden="true" />
+              <Paperclip size={16} strokeWidth={1.8} aria-hidden="true" />
             </button>
             {isStreaming && onSteer && onFollowUp && (
               <div className={styles.sendModeSwitch} aria-label={t("input.sendMode")} role="group">
