@@ -79,17 +79,37 @@ test("draft and reading position survive navigation and reload", async ({ page }
   await expect(composer).toBeVisible();
   const transcript = page.locator("[data-transcript-scroll]");
   await transcript.evaluate(element => { element.scrollTop = 220; element.dispatchEvent(new Event("scroll")); });
-  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("pi-transcript-positions"))).toContain("220");
+  // Visiting skipped history materializes content-visibility placeholders.
+  // Chromium preserves its reading anchor by adjusting scrollTop (e.g. 220
+  // becomes 179). Record the settled position, not the requested offset.
+  const readingPosition = await transcript.evaluate(async element => {
+    await document.fonts.ready;
+    let previous = -1;
+    let stableFrames = 0;
+    for (let frame = 0; frame < 120; frame++) {
+      await new Promise(requestAnimationFrame);
+      const current = element.scrollTop;
+      stableFrames = current === previous ? stableFrames + 1 : 0;
+      if (stableFrames >= 6) return current;
+      previous = current;
+    }
+    throw new Error("Transcript reading position did not settle");
+  });
+  expect(readingPosition).toBeGreaterThan(100);
+  await expect.poll(() => page.evaluate(() => {
+    const positions = new Map<string, number>(JSON.parse(sessionStorage.getItem("pi-transcript-positions") ?? "[]"));
+    return positions.get("aaaa1111-2222-3333-4444-555566667777");
+  })).toBe(readingPosition);
   await composer.fill("Unsaved first conversation");
   await page.getByText("結構化輸出設計", { exact: true }).first().click();
   await expect(composer).toHaveValue("");
   await composer.fill("Unsaved second conversation");
   await page.getByText("專案架構分析", { exact: true }).first().click();
   await expect(composer).toHaveValue("Unsaved first conversation");
-  await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeCloseTo(220, 0);
+  await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeCloseTo(readingPosition, 0);
   await page.reload();
   await expect(composer).toHaveValue("Unsaved first conversation");
-  await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeCloseTo(220, 0);
+  await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeCloseTo(readingPosition, 0);
 });
 
 test("subagent budgets are editable and persist without starting any run", async ({ page }) => {
