@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ComponentProps, type RefObject } from "react";
+import { useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
-import { DialogShell } from "@/components/ui/DialogShell";
 import { useI18n } from "@/lib/i18n";
 import type { WebExtensionUIDialogRequest, WebExtensionUIResponse } from "@/lib/web-extension-ui-types";
 import { AskUserFields, QuestionChoiceList } from "./UserQuestionFields";
@@ -90,13 +89,6 @@ export function UserQuestionCard({ request, pendingCount, onRespond, cardRef }: 
     return () => cancelAnimationFrame(frame);
   }, [activeQuestionIndex, request.method]);
 
-  const initialFocusRef = (
-    request.method === "input" || request.method === "editor"
-      ? firstInputRef
-      : request.method === "ask_user" && (activeQuestion?.options.length ?? 0) === 0
-        ? firstInputRef
-        : firstControlRef
-  ) as RefObject<HTMLElement | null>;
   const title = request.method === "ask_user" ? t("extensionUI.waiting") : request.title;
   const description = request.method === "ask_user" ? t("extensionUI.waitingHint") : undefined;
   const headerActions = (
@@ -109,14 +101,11 @@ export function UserQuestionCard({ request, pendingCount, onRespond, cardRef }: 
 
   if (request.method === "confirm") {
     return (
-      <DialogShell
-        open
+      <QuestionSurface
+        cardRef={cardRef}
         title={request.title}
         onClose={closeDialog}
         canClose={!submitting}
-        size="compact"
-        mobileMode="sheet"
-        initialFocusRef={firstControlRef as RefObject<HTMLElement | null>}
         headerActions={headerActions}
         bodyClassName={styles.questionDialogBody}
         footer={(
@@ -134,7 +123,7 @@ export function UserQuestionCard({ request, pendingCount, onRespond, cardRef }: 
       >
         <p className={styles.message}>{request.message}</p>
         {error && <p className={styles.error} role="alert">{error}</p>}
-      </DialogShell>
+      </QuestionSurface>
     );
   }
 
@@ -157,16 +146,11 @@ export function UserQuestionCard({ request, pendingCount, onRespond, cardRef }: 
 
   return (
     <QuestionSurface
-      inline={request.method === "ask_user"}
       cardRef={cardRef}
-      open
       title={title}
       description={description}
       onClose={closeDialog}
       canClose={!submitting}
-      size={request.method === "ask_user" ? "default" : "compact"}
-      mobileMode="sheet"
-      initialFocusRef={initialFocusRef}
       headerActions={headerActions}
       bodyClassName={styles.questionDialogBody}
       footer={(
@@ -245,10 +229,17 @@ export function UserQuestionCard({ request, pendingCount, onRespond, cardRef }: 
   );
 }
 
-/** Only structured questions are non-modal; explicit extension confirmations
- * retain DialogShell's focus isolation and cancellation contract. */
-function QuestionSurface({ inline, cardRef, ...props }: ComponentProps<typeof DialogShell> & {
-  inline: boolean;
+/** All agent questions stay in the transcript. Deferring never responds,
+ * cancels, steals focus, or makes the rest of the application inert. */
+function QuestionSurface({ cardRef, ...props }: {
+  title: string;
+  description?: string;
+  onClose: () => void;
+  canClose: boolean;
+  headerActions: ReactNode;
+  bodyClassName: string;
+  footer: ReactNode;
+  children: ReactNode;
   cardRef?: RefObject<UserQuestionCardHandle | null>;
 }) {
   const { t } = useI18n();
@@ -267,7 +258,6 @@ function QuestionSurface({ inline, cardRef, ...props }: ComponentProps<typeof Di
       });
     },
   }), []);
-  if (!inline) return <DialogShell {...props} />;
   return (
     <section ref={rootRef} className={`${styles.card} ${styles.inlineQuestion}`} aria-labelledby={titleId} data-testid="inline-user-question">
       <header className={styles.cardHeader}>

@@ -103,7 +103,7 @@ test.describe("responsive shell", () => {
       detail: "skills-config-detail",
     },
   ]) {
-    test(`AC-RWD-2: ${modal.name} becomes a full-width single-column dialog at 320px`, async ({ page }) => {
+    test(`AC-RWD-2: ${modal.name} becomes a nonblocking single-column panel at 320px`, async ({ page }) => {
       await page.setViewportSize({ width: 320, height: 800 });
       await openSession(page);
       await page.evaluate(() => localStorage.setItem("pi-font-size", "xlarge"));
@@ -116,7 +116,8 @@ test.describe("responsive shell", () => {
       const nav = page.getByTestId(modal.nav);
       const detail = page.getByTestId(modal.detail);
       await expect(dialog).toHaveAttribute("role", "dialog");
-      await expect(dialog).toHaveAttribute("aria-modal", "true");
+      await expect(dialog).not.toHaveAttribute("aria-modal", "true");
+      expect(await page.getByRole("textbox", { name: "Message…" }).evaluate(element => element.closest("[inert]"))).toBeNull();
       await expect(nav).toBeVisible();
       await expect(detail).toBeHidden();
 
@@ -128,7 +129,8 @@ test.describe("responsive shell", () => {
       expect(navBox).not.toBeNull();
       expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
       expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(320);
-      expect(navBox!.width).toBeGreaterThanOrEqual(300);
+      expect(navBox!.width).toBeGreaterThanOrEqual(280);
+      expect(dialogBox!.height).toBeLessThanOrEqual(800 * 0.55);
 
       if (modal.name === "Models") {
         await nav.getByRole("button").first().click();
@@ -139,7 +141,7 @@ test.describe("responsive shell", () => {
       await expect(detail).toBeVisible();
       const detailBox = await detail.boundingBox();
       expect(detailBox).not.toBeNull();
-      expect(detailBox!.width).toBeGreaterThanOrEqual(300);
+      expect(detailBox!.width).toBeGreaterThanOrEqual(280);
       expect(detailBox!.x).toBeGreaterThanOrEqual(0);
       expect(detailBox!.x + detailBox!.width).toBeLessThanOrEqual(320);
       await detail.getByRole("button", { name: /Back to/ }).click();
@@ -160,7 +162,7 @@ test.describe("responsive shell", () => {
 
     for (const control of [
       page.getByRole("button", { name: "Sessions", exact: true }),
-      page.getByRole("button", { name: "Attach image", exact: true }),
+      page.getByRole("button", { name: "Attach files", exact: true }),
       page.getByRole("button", { name: "Files", exact: true }),
     ]) {
       const box = await control.boundingBox();

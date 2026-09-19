@@ -11,7 +11,7 @@ interface Props {
   state: ExtensionUIState;
   onRespond: (response: WebExtensionUIResponse) => Promise<void>;
   wide?: boolean;
-  /** ChatWindow renders ask_user in its transcript, not in the composer dock. */
+  /** ChatWindow renders all agent questions in its transcript, never over the composer. */
   questionInTranscript?: boolean;
 }
 
@@ -38,7 +38,7 @@ function visibleStatuses(statuses: ExtensionUIState["statuses"]) {
 
 export function ExtensionUIPanel({ state, onRespond, wide = false, questionInTranscript = false }: Props) {
   const first = state.dialogs[0];
-  const dialog = questionInTranscript && first?.method === "ask_user" ? undefined : first;
+  const dialog = questionInTranscript ? undefined : first;
   const hasAboveWidgets = Object.values(state.widgets).some((widget) => widget.placement === "aboveEditor");
   const statuses = visibleStatuses(state.statuses);
   const hasStatuses = statuses.length > 0;

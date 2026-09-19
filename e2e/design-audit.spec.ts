@@ -504,7 +504,8 @@ async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: bool
   await auditControls(page, scheduleEditor, `${style}/${viewport}/new-schedule`, mobile);
   await page.getByRole("button", { name: "Cancel", exact: true }).last().click();
 
-  // Settings and analysis surfaces are modal/sheet states over the main shell.
+  // Settings and analysis are modeless panels; explicit close keeps background
+  // keyboard work intact instead of intercepting Escape from the composer.
   const modals = [
     { label: "Analytics", desktopTrigger: "Token usage and cost report", dialog: "Session Analytics" },
     { label: "Models", desktopTrigger: /^Models/, dialog: "Models" },
@@ -520,7 +521,8 @@ async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: bool
     await expect(dialog, `${modal.label} dialog`).toBeVisible();
     await expect.poll(() => dialog.evaluate((element) => getComputedStyle(element).opacity)).toBe("1");
     await auditControls(page, dialog, `${style}/${viewport}/${modal.label}`, mobile);
-    await page.keyboard.press("Escape");
+    if (modal.label === "Appearance") await page.keyboard.press("Escape");
+    else await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
     await expect(dialog).toHaveCount(0);
   }
 

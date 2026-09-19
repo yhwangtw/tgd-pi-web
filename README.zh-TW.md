@@ -58,7 +58,7 @@ Pi 的終端體驗快速而專注；這個專案補上長時間或多工作流�
 > [!IMPORTANT]
 > tGD Pi Web 能在允許的工作區讀寫檔案、檢查 git repository，並執行 shell 指令。預設只在 localhost 使用；若要遠端存取，請設定 `PIWEB_ACCESS_PASSWORD` 與獨立的 `PIWEB_SESSION_SECRET`，並放在具身分驗證的私人網路或 Access proxy 後方。詳見[部署指南](./deploy/README.md)。
 
-內嵌 Safety Guard 會在高影響指令、受保護檔案、安裝相依套件及外部變更前要求確認。授權可以只用一次，或只允許同一工作區中的同一操作五分鐘；每次決定都會寫入 Security Activity。這是應用層授權，**不是**作業系統 sandbox：工具與 Extension 仍沿用伺服器帳號權限。需要更強隔離時，請使用專用作業系統帳號、container 或 VM。
+內嵌 Agent 比照 Pi CLI 直接執行工具，不另外要求逐次授權，也沒有五分鐘授權期限。工具與 Extension 沿用伺服器帳號權限，包括存取專案外資料；Pi Web **不是**作業系統 sandbox。請只讓受信任的使用者存取服務，需要更強隔離時，請使用專用作業系統帳號、container 或 VM。登入保護和檔案／Git API 的工作區存取邊界仍然保留。Agent 提問與 Extension 確認均顯示為對話內可稍後回答的卡片，不使用阻擋式彈窗；收合卡片不會自動回答或核准。
 
 正式支援的一步式安裝請使用獨立 checkout：
 
@@ -179,12 +179,10 @@ parent/
 | --- | --- | --- | --- | --- | --- |
 | **Agent 對話** | 官方 Pi SDK | 原生 Web | 不需要 | 一般 Web runtime | 單一使用者主機 |
 | **Session 與跨專案搜尋** | 官方 Pi SDK | Web 轉接 | 不需要 | 一般 Web runtime | 單一使用者主機 |
-| **Ask User 與 Extension 對話框** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 明確確認 |
+| **Ask User 與 Extension 內嵌提問** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 明確確認 |
 | **規劃模式** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 受信任工作區 |
 | **結構化輸出** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 無 |
 | **內嵌子代理** | 官方 Pi SDK | Web 轉接 | 不需要 | 一般 Web runtime | 受信任工作區 |
-| **權限閘門** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 明確確認 |
-| **受保護路徑** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 明確確認 |
 | **MCP 連線** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 受信任端點／指令 |
 | **Agent 排程** | 官方 Pi SDK | Web 轉接 | 不需要 | 必須常駐 | 管理者設定 |
 | **檔案、Git 與還原點** | Pi Web | 原生 Web | 不需要 | 一般 Web runtime | 受信任工作區 |
@@ -200,7 +198,11 @@ parent/
 - 使用 `!command` 直接執行 shell；使用 `!!command` 讓結果不進入模型 context。
 - 在 session 中途切換模型與 thinking level。
 - Web runtime 內建第一方 `subagent` 工具，可把隔離工作交給 scout、planner、worker 與 reviewer，最多八項任務會沿用現有 Agent 佇列執行；每個子 Session 都能在 Agent 面板檢查或取消，不需要全域 `pi` CLI。
+- **Agents → 子代理執行上限** 可設定新任務的時間、回合與回報費用（預設 30 分鐘、24 回合、5 美元；`0` 表示不限）。接近上限會提示，可直接延長原任務。費用依供應商回報，不等於帳戶實際扣款。
 - 內建 `ask_user` 工具，並支援 Pi extension 的 `select`、`confirm`、`input`、`editor` 對話框、通知、狀態與文字 Widget；等待中的決定可跨斷線重連保留。
+- 設定改為可收合、不阻擋操作的面板，輸入框持續可用。快速切換對話與重新整理會保留草稿，同一瀏覽器分頁會記住閱讀位置；仍在執行的任務不會因為暫時沒輸出而被閒置回收。
+- 敏感操作的確認不再限時閱讀，仍只限使用一次並核對目標；內容變更、服務重啟或待確認快取已滿時，需重新確認。
+- 大文字檔每次載入 256 KiB，最多預覽 2 MiB，另提供完整檔案的開啟／下載。部分預覽不可儲存覆蓋原檔。
 - Pi extension 的 session 指令（`newSession`、`fork`、`switchSession`）改由原生 `AgentSessionRuntime` 執行；Web UI 會跟隨替換後的 session，並將 SSE 重連至新 session。
 - 替換失敗時會恢復原本的 runtime；目標 session 已被其他 runtime 使用時會在切換前拒絕，所有開啟中的分頁也會同步跟隨。Extensions 設定可查看即時 runtime 診斷。
 - 可透過預覽優先的對話框匯入 Pi `.jsonl`；切換前會驗證 header、實際 cwd、允許的根目錄、symlink、檔案大小與目的地衝突。
@@ -234,6 +236,8 @@ OAuth/PKCE、resource/prompt 瀏覽與 required-task 執行尚未整合；詳見
 
 ### 檔案與 git
 
+- 輸入框的迴紋針或拖曳可附加圖片、上傳一般檔案。一般檔案存入選定專案（每個上限 50 MB），並加入 `@file` 引用，由 agent 的可用工具讀取，不會自動解析所有格式。失敗可直接重試或移除；移除引用不會刪除已存檔案。
+- 檔案總管提供明顯的「上傳檔案」按鈕；上傳不會覆蓋同名檔案。
 - 專案樹、遞迴檔名搜尋、文字編輯、Markdown/HTML/圖片預覽，以及對話內可點擊的檔案路徑。
 - Git 狀態 badge、working tree 摘要、逐檔統計，以及 `HEAD` 對 worktree diff。
 - 將 `edit`、`write` tool call 顯示為實際 diff 或檔案內容，不顯示難讀的原始 JSON。
@@ -297,7 +301,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 
 `dev` 與 `start` 預設只綁定 localhost。可用 `PORT=30143 npm run dev` 改 port；明確傳入 `-- -p 30143` 時優先採用。遠端綁定必須明確設定 `PIWEB_HOST=0.0.0.0` 或 `-- -H 0.0.0.0`，並加上認證邊界。預覽模式只允許 localhost。
 
-環境列會區分開發、正式、獨立功能預覽與展示資料，並顯示運行建置及實際模型設定路徑。`npm run preview` **不會**複製憑證、對話或排程；請在預覽自己的 Models 畫面設定供應商。預覽不繼承供應商環境變數，若 checkout 有會被自動載入的私人 `.env` 檔案也會拒絕啟動，請改用乾淨 checkout。這是資料隔離，不是 OS sandbox。
+環境列會區分開發、正式、獨立功能預覽與展示資料，並顯示運行建置及實際模型設定路徑。`npm run preview` **不會自動**複製憑證、對話或排程。若要沿用平常的模型，先停止預覽、執行 `npm run preview:configure`（也可加 `-- --source /path/to/agent` 指定來源），再重新啟動。此明確操作會複製模型清單與預設模型、私下備份原預覽設定，並連結同一份登入資料，讓 OAuth 更新共用同一把鎖；任一邊登入／登出都會影響另一邊，但模型清單的修改仍分開。對話、排程、packages 與 extensions 不會複製。不執行此指令時，可在預覽 Models 畫面設定獨立帳號。預覽不繼承供應商環境變數，若 checkout 有會被自動載入的私人 `.env` 檔案也會拒絕啟動，請改用乾淨 checkout。這是資料隔離，不是 OS sandbox。
 
 啟動器會在新的空白預覽目錄建立私人來源標記。既有非空目錄必須已有相符標記，不能直接指向任意複製的 agent 資料；fixture 產生器也會建立自己的 fixture 標記。
 

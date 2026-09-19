@@ -21,6 +21,13 @@ const DOCX_PREVIEW_MAX_BYTES = 10 * 1024 * 1024;
 // survives Next.js hot-reload.
 declare global {
   var __piAllowedRootsCache: { roots: Set<string>; expiresAt: number } | undefined;
+  var __piSelectedWorkspaceRoots: Set<string> | undefined;
+}
+
+/** Explicit workspace selection precedes Pi's first persisted session. */
+export function registerSelectedWorkspace(cwd: string): void {
+  (globalThis.__piSelectedWorkspaceRoots ??= new Set()).add(cwd);
+  globalThis.__piAllowedRootsCache = undefined;
 }
 
 const ALLOWED_ROOTS_TTL_MS = 5_000;
@@ -47,7 +54,7 @@ export async function getAllowedRoots(): Promise<Set<string>> {
   if (cached && cached.expiresAt > now) return cached.roots;
 
   const sessions = await listAllSessions();
-  const roots = new Set<string>();
+  const roots = new Set<string>(globalThis.__piSelectedWorkspaceRoots);
   const { resolveTgdDir } = await import("./tgd-artifacts");
   for (const s of sessions) {
     if (s.cwd) {

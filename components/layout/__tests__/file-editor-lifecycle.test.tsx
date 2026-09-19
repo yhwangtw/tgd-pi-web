@@ -32,7 +32,7 @@ describe("file editor request ownership", () => {
   let container: HTMLDivElement;
   let root: Root;
   const fetchMock = vi.fn<typeof fetch>();
-  const render = (name: string, gotoNonce?: number, initialMode: "auto" | "source" | "preview" = "auto") => act(async () => { root.render(<TextFileViewer filePath={`/project/${name}.txt`} gotoNonce={gotoNonce} initialMode={initialMode} />); });
+  const render = (name: string, gotoNonce?: number, initialMode: "auto" | "source" | "preview" = "auto", visible = true) => act(async () => { root.render(<TextFileViewer filePath={`/project/${name}.txt`} gotoNonce={gotoNonce} initialMode={initialMode} visible={visible} />); });
   const click = async (label: string) => {
     const button = [...container.querySelectorAll("button")].find(el => el.textContent === label)!;
     expect(button, label).toBeTruthy();
@@ -108,6 +108,35 @@ describe("file editor request ownership", () => {
     await edit("keep draft");
     await render("a", 2);
     expect(container.querySelector("textarea")?.value).toBe("keep draft");
+  });
+
+  it("keeps an unsaved draft when hiding and reopening the panel", async () => {
+    fetchMock.mockResolvedValue(response(file("original")));
+    await render("a");
+    await edit("keep hidden draft");
+    await render("a", undefined, "auto", false);
+    await render("a");
+    expect(container.querySelector("textarea")?.value).toBe("keep hidden draft");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("defers restoring a hidden file and never saves its clamped zero position", async () => {
+    fetchMock.mockResolvedValue(response(file("long file")));
+    const savePosition = vi.fn();
+    const show = (visible: boolean) => act(async () => root.render(<TextFileViewer
+      filePath="/project/a.txt" visible={visible}
+      initialViewState={{ scrollTop: 640, selection: null }} onViewStateChange={savePosition}
+    />));
+    await show(false);
+    const content = container.querySelector<HTMLElement>('[class*="contentArea"]')!;
+    await act(async () => { content.dispatchEvent(new Event("scroll")); await vi.advanceTimersByTimeAsync(2000); });
+    expect(savePosition).not.toHaveBeenCalled();
+    expect(content.scrollTop).toBe(0);
+    Object.defineProperty(content, "scrollHeight", { configurable: true, value: 2000 });
+    Object.defineProperty(content, "clientHeight", { configurable: true, value: 400 });
+    await show(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(40); });
+    expect(content.scrollTop).toBe(640);
   });
 
   it("keeps save available when a preview request arrives during editing", async () => {

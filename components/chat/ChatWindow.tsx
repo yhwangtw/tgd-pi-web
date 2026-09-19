@@ -9,7 +9,7 @@ import {
   ChevronUp,
   Code2,
   FilePenLine,
-  ImagePlus,
+  FileUp,
   ListChecks,
   Map as MapIcon,
   RotateCcw,
@@ -230,9 +230,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const { t } = useI18n();
   const scrollFollowMode = useScrollFollowMode();
   const questionCardRef = useRef<UserQuestionCardHandle>(null);
-  const firstDialog = extensionUIState.dialogs[0];
-  const pendingQuestion = firstDialog?.method === "ask_user" ? firstDialog : undefined;
-  const blockingDialog = firstDialog !== undefined && !pendingQuestion;
+  const pendingQuestion = extensionUIState.dialogs[0];
 
   // ── tGD pipeline: detect which phases have run in this session ──
   const [pipelineHidden, setPipelineHidden] = useState(false);
@@ -377,7 +375,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   useEffect(() => () => { onContextUsageChange?.(null); }, [onContextUsageChange]);
 
   const onDrop = useCallback((files: File[]) => {
-    chatInputRef?.current?.addImages(files);
+    chatInputRef?.current?.addFiles(files);
   }, [chatInputRef]);
 
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(onDrop);
@@ -1078,7 +1076,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         </div>
       )}
       {isDragOver && (
-        <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[var(--color-accent-bg)] backdrop-blur-[1px]">
+        <div role="status" className="pointer-events-none absolute inset-0 z-50 flex flex-col gap-3 animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[var(--color-accent-bg)] backdrop-blur-[1px]">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             {[0, 0.8, 1.6].map((delay) => (
               <div
@@ -1088,13 +1086,14 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               />
             ))}
           </div>
-          <ImagePlus
-            size={112}
+          <FileUp
+            size={56}
             strokeWidth={1.25}
             color="var(--color-accent-border)"
             className="drop-shadow-[0_6px_18px_var(--color-accent-glow)]"
             aria-hidden="true"
           />
+          <span>{t("input.dropFiles")}</span>
         </div>
       )}
 
@@ -1534,13 +1533,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               questionInTranscript
             />
             {pendingQuestion && <PendingQuestionNotice onShow={() => questionCardRef.current?.reveal()} wide={wideChat} />}
-            {/* Ordinary questions leave the composer and navigation available.
-                Actual modal dialogs only hide it; keep the draft mounted for
-                one-shot setEditorText events. */}
-            <div
-              className={styles.composerMount}
-              hidden={blockingDialog}
-            >
+            {/* All agent questions leave the composer and navigation available.
+                Keep the draft mounted for one-shot setEditorText events. */}
+            <div className={styles.composerMount}>
               {chatInputElement}
             </div>
             <ExtensionWidgets state={extensionUIState} placement="belowEditor" wide={wideChat} />

@@ -14,6 +14,7 @@ import {
   MessageSquare,
   PanelRightClose,
   PanelRightOpen,
+  Plus,
   X,
 } from "lucide-react";
 import { SessionSidebar } from "../sidebar/SessionSidebar";
@@ -39,6 +40,7 @@ import { BranchNavigator, hasSessionBranches } from "../chat/BranchNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppShellState } from "@/hooks/useAppShellState";
 import { useFileTabs } from "@/hooks/useFileTabs";
+import { useFileReviewQueue } from "@/hooks/useFileReviewQueue";
 import { useRightPanelWidth } from "@/hooks/useRightPanelWidth";
 import { useSessions } from "@/hooks/useSessions";
 import { useTags } from "@/hooks/useTags";
@@ -109,7 +111,10 @@ export function AppShell() {
   const [panelView, setPanelView] = useState<PanelView>("sessions");
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
   const [revealSignal, setRevealSignal] = useState(0);
-  const [pendingReviewFiles, setPendingReviewFiles] = useState<string[]>([]);
+  const { pendingReviewFiles, refreshReviewFiles, markReviewed } = useFileReviewQueue(
+    state.selectedSession?.cwd ?? state.newSessionCwd ?? state.activeCwd,
+    state.selectedSession?.id ?? null,
+  );
   const revealInExplorer = useCallback((filePath: string) => {
     setActiveFileTabId(`file:${filePath}`);
     setPanelView("files");
@@ -254,6 +259,18 @@ export function AppShell() {
   const { tags } = useTags();
   const { ToastContainer } = useToast();
   const effectiveCwdForPalette = state.selectedSession?.cwd ?? state.newSessionCwd ?? state.activeCwd;
+  const handleStartNewSession = useCallback(() => {
+    if (!effectiveCwdForPalette) {
+      setPanelView("sessions");
+      // Mount the session panel before delivering the New intent to its picker.
+      window.setTimeout(() => requestOpenProjectSwitcher({ startNewSession: true }), 0);
+      return;
+    }
+    const tempId = typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    handleNewSessionFromSidebar(tempId, effectiveCwdForPalette);
+  }, [effectiveCwdForPalette, handleNewSessionFromSidebar]);
 
   const palette = useCommandPalette({
     sessions: allSessions,
@@ -359,13 +376,7 @@ export function AppShell() {
       },
       setSkin,
       setUiStyle,
-      newSession: () => {
-        if (!effectiveCwdForPalette) return;
-        const tempId = typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-        handleNewSessionFromSidebar(tempId, effectiveCwdForPalette);
-      },
+      newSession: handleStartNewSession,
       importSession: () => {
         if (state.selectedSession) setSessionImportOpen(true);
         else showToast(translate("sessionImport.openSessionFirst"), { type: "warning" });
@@ -375,7 +386,7 @@ export function AppShell() {
       },
       openHelp: () => setShortcutsOpen(true),
     });
-  }, [palette, toggleTheme, actions, effectiveCwdForPalette, state.selectedSession, setRightPanelOpen, handleNewSessionFromSidebar, toggleChatWidth]);
+  }, [palette, toggleTheme, actions, state.selectedSession, setRightPanelOpen, handleStartNewSession, toggleChatWidth]);
 
   // Helper: turn a session id into the full SessionInfo record (palette only
   // stores the id in its data when the user picked it via the palette).
@@ -477,25 +488,11 @@ export function AppShell() {
     showToast(t("files.contextAdded"), { type: "success" });
   }, [state.selectedSession, t]);
 
+  const refreshAfterAgentEnd = actions.handleAgentEnd;
   const handleAgentEndWithReview = useCallback(() => {
-    actions.handleAgentEnd();
-    const cwd = state.selectedSession?.cwd ?? state.activeCwd;
-    if (!cwd) return;
-    window.setTimeout(async () => {
-      try {
-        const response = await fetch(`/api/git/changes?cwd=${encodeURIComponent(cwd)}`);
-        if (!response.ok) return;
-        const payload = await response.json() as { files?: Array<{ path: string }> };
-        const paths = (payload.files ?? []).map((file) => file.path);
-        setPendingReviewFiles(paths);
-        if (paths.length === 0) return;
-        const first = paths[0];
-        const absolute = `${cwd.replace(/[\\/]$/, "")}/${first}`;
-        openFileTab({ path: absolute, label: first.split(/[\\/]/).pop() ?? first, mode: "source", origin: { kind: "review" } });
-        showToast(t("files.reviewReady").replace("{count}", paths.length.toLocaleString()), { type: "success" });
-      } catch { /* changes are optional outside git workspaces */ }
-    }, 450);
-  }, [actions, openFileTab, state.activeCwd, state.selectedSession?.cwd, t]);
+    refreshAfterAgentEnd();
+    refreshReviewFiles();
+  }, [refreshAfterAgentEnd, refreshReviewFiles]);
 
   const handleExportSession = useCallback(() => {
     if (!state.selectedSession) return;
@@ -639,20 +636,14 @@ export function AppShell() {
     }
   }, [activeFileTab?.intent?.origin, handleOpenScheduledSession, setRightPanelOpen, state.selectedSession?.id]);
 
-  useEffect(() => {
-    if (!activeFileTab?.filePath || pendingReviewFiles.length === 0) return;
-    const cwd = state.selectedSession?.cwd ?? state.activeCwd;
-    if (!cwd) return;
-    const relative = activeFileTab.filePath.startsWith(`${cwd}/`) ? activeFileTab.filePath.slice(cwd.length + 1) : activeFileTab.filePath;
-    setPendingReviewFiles((current) => current.filter((path) => path !== relative));
-  }, [activeFileTab?.filePath, pendingReviewFiles.length, state.activeCwd, state.selectedSession?.cwd]);
-
   const openNextReviewFile = useCallback(() => {
     const cwd = state.selectedSession?.cwd ?? state.activeCwd;
     const next = pendingReviewFiles[0];
     if (!cwd || !next) return;
+    setDiffFile(null);
     openFileTab({ path: `${cwd.replace(/[\\/]$/, "")}/${next}`, label: next.split(/[\\/]/).pop() ?? next, mode: "source", origin: { kind: "review" } });
-  }, [openFileTab, pendingReviewFiles, state.activeCwd, state.selectedSession?.cwd]);
+    markReviewed(next);
+  }, [openFileTab, pendingReviewFiles, markReviewed, state.activeCwd, state.selectedSession?.cwd]);
 
   const panelCwd = state.selectedSession?.cwd ?? state.newSessionCwd ?? state.activeCwd ?? null;
 
@@ -1043,6 +1034,9 @@ export function AppShell() {
                   ? <PanelRightClose size={16} strokeWidth={1.9} aria-hidden />
                   : <PanelRightOpen size={16} strokeWidth={1.9} aria-hidden />}
                 <span>{t("mobile.files")}</span>
+                {pendingReviewFiles.length > 0 && <span className={s.mobileReviewCount}>
+                  {t("files.reviewCount").replace("{count}", pendingReviewFiles.length.toLocaleString())}
+                </span>}
               </button>
               <button
                 type="button"
@@ -1122,12 +1116,19 @@ export function AppShell() {
             onClick={() => setRightPanelOpen((open) => !open)}
             title={rightPanelOpen ? t("topbar.hideFilePanel") : t("topbar.showFilePanel")}
             aria-label={rightPanelOpen ? t("topbar.hideFilePanel") : t("topbar.showFilePanel")}
+            aria-describedby={pendingReviewFiles.length > 0 ? "file-review-count" : undefined}
             className={`${s.topBarButton} ${s.filePanelToggle} ${rightPanelOpen ? s.filePanelToggleOpen : ""} hover-text`}
             style={{ color: rightPanelOpen ? "var(--text)" : "var(--text-muted)" }}
           >
             {rightPanelOpen
               ? <PanelRightClose size={16} strokeWidth={1.9} aria-hidden />
               : <PanelRightOpen size={16} strokeWidth={1.9} aria-hidden />}
+            {pendingReviewFiles.length > 0 && <span
+              id="file-review-count"
+              data-testid="file-review-count"
+              className={s.fileReviewCount}
+              aria-label={t("files.reviewCount").replace("{count}", pendingReviewFiles.length.toLocaleString())}
+            >{pendingReviewFiles.length > 99 ? "99+" : pendingReviewFiles.length}</span>}
           </button>
         </div>
 
@@ -1256,6 +1257,10 @@ export function AppShell() {
                     {t("welcome.subtitle")}
                   </div>
                 </div>
+                <button type="button" className={s.welcomeStartButton} onClick={handleStartNewSession}>
+                  <Plus size={18} aria-hidden="true" />
+                  {t("welcome.startConversation")}
+                </button>
                 <div className={s.welcomeSteps}>
                   <div className={s.welcomeStep}>
                     <span className={s.welcomeStepNumber}>1</span>
@@ -1263,7 +1268,7 @@ export function AppShell() {
                   </div>
                   <div className={s.welcomeStep}>
                     <span className={s.welcomeStepNumber}>2</span>
-                    <span className={s.welcomeStepText}>{t("welcome.step2pre")} <strong style={{ color: "var(--text)" }}>+ {t("sidebar.new")}</strong> {t("welcome.step2post")}</span>
+                    <span className={s.welcomeStepText}>{t("welcome.chooseProject")}</span>
                   </div>
                   <div className={s.welcomeStep}>
                     <span className={s.welcomeStepNumber}>3</span>
@@ -1347,6 +1352,7 @@ export function AppShell() {
               <div className={s.fileWorkspacePane}>
                 <FileViewer
                   filePath={activeFileTab.filePath}
+                  visible={rightPanelOpen}
                   cwd={state.activeCwd ?? undefined}
                   gotoLine={activeFileTab.gotoLine}
                   gotoNonce={activeFileTab.gotoNonce}
@@ -1362,6 +1368,7 @@ export function AppShell() {
                 <div className={s.fileWorkspacePane} data-testid="file-split-pane">
                   <FileViewer
                     filePath={splitFileTab.filePath}
+                    visible={rightPanelOpen}
                     cwd={state.activeCwd ?? undefined}
                     gotoLine={splitFileTab.gotoLine}
                     gotoNonce={splitFileTab.gotoNonce}

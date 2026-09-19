@@ -36,11 +36,13 @@ test("two tabs acknowledge a committed answer after a lost HTTP reply without an
   await expect(composer).toBeVisible();
   await composer.fill("/e2e-ui");
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Choose a release target" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose a release target" })).toBeAttached();
+  await page.getByRole("button", { name: "View question", exact: true }).click();
   const otherTab = await page.context().newPage();
   try {
     await otherTab.goto(`/?session=${MAIN_ID}`);
-    await expect(otherTab.getByRole("heading", { name: "Choose a release target" })).toBeVisible();
+    await expect(otherTab.getByRole("heading", { name: "Choose a release target" })).toBeAttached();
+    await otherTab.getByRole("button", { name: "View question", exact: true }).click();
     await page.getByRole("radio", { name: "Production", exact: true }).click();
     await page.getByRole("button", { name: "Continue", exact: true }).click();
     const response = await committed;
@@ -61,10 +63,12 @@ test("two tabs acknowledge a committed answer after a lost HTTP reply without an
     // The command was resumed once and both native EventSources reached its
     // next dialog instead of leaving a stale question or duplicate decision.
     for (const tab of [page, otherTab]) {
+      await expect(tab.getByRole("heading", { name: "Confirm release" })).toBeAttached();
+      await tab.getByRole("button", { name: "View question", exact: true }).click();
       await expect(tab.getByRole("heading", { name: "Confirm release" })).toBeVisible();
       await expect(tab.getByRole("heading", { name: "Choose a release target" })).toBeHidden();
     }
-    await page.getByRole("button", { name: "Not now", exact: true }).click();
+    await page.getByRole("button", { name: "Decline", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Confirm release" })).toBeHidden();
     await expect(otherTab.getByRole("heading", { name: "Confirm release" })).toBeHidden();
     expect(decisions(requestId)).toHaveLength(1);

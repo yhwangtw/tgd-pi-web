@@ -58,7 +58,7 @@ This project is distributed from GitHub source and is **not published to npm**.
 > [!IMPORTANT]
 > tGD Pi Web can read and edit files, inspect git repositories, and run shell commands in allowed workspaces. Keep it on localhost by default. For remote access, set `PIWEB_ACCESS_PASSWORD` and `PIWEB_SESSION_SECRET`, then place the service behind an authenticated private network or access proxy. See the [deployment guide](./deploy/README.md).
 
-The embedded Safety Guard asks before high-impact commands, protected-file access, dependency installation, and external mutations. Approval is either one use or the exact same operation in the same workspace for five minutes, and every decision is written to Security Activity. This is an application authorization layer, **not** an operating-system sandbox: tools and extensions still run with the server account's permissions. Use a dedicated OS account, container, or VM when stronger isolation is required.
+Like Pi CLI, the embedded agent executes tools without a built-in per-action approval gate or five-minute grants. Tools and extensions run with the server account's permissions, including access outside the project; Pi Web is **not** an operating-system sandbox. Only expose the service to trusted users, and use a dedicated OS account, container, or VM when stronger isolation is required. Login protection and the file/Git API workspace boundaries remain enforced. Agent questions and extension confirmations appear as deferrable cards in the conversation, never as blocking popups; deferring a card does not answer or approve it.
 
 Use a dedicated checkout for the supported one-step installation:
 
@@ -179,12 +179,10 @@ This table is generated from `lib/capabilities.json`; it is the product contract
 | --- | --- | --- | --- | --- | --- |
 | **Agent chat** | Official Pi SDK | Native | Not required | Normal Web runtime | Single-user host |
 | **Sessions and cross-project search** | Official Pi SDK | Web adapter | Not required | Normal Web runtime | Single-user host |
-| **Ask User and extension dialogs** | Official Extension API | Web adapter | Not required | Normal Web runtime | Explicit confirmation |
+| **Ask User and inline extension questions** | Official Extension API | Web adapter | Not required | Normal Web runtime | Explicit confirmation |
 | **Plan Mode** | Official Extension API | Web adapter | Not required | Normal Web runtime | Trusted workspace |
 | **Structured Output** | Official Extension API | Web adapter | Not required | Normal Web runtime | None |
 | **Embedded subagents** | Official Pi SDK | Web adapter | Not required | Normal Web runtime | Trusted workspace |
-| **Permission Gate** | Official Extension API | Web adapter | Not required | Normal Web runtime | Explicit confirmation |
-| **Protected Paths** | Official Extension API | Web adapter | Not required | Normal Web runtime | Explicit confirmation |
 | **MCP connections** | Official Extension API | Web adapter | Not required | Normal Web runtime | Trusted endpoint/command |
 | **Scheduled agents** | Official Pi SDK | Web adapter | Not required | Required | Operator configuration |
 | **Files, Git, and restore points** | Pi Web | Native | Not required | Normal Web runtime | Trusted workspace |
@@ -201,7 +199,11 @@ This table is generated from `lib/capabilities.json`; it is the product contract
 - Model and thinking-level switching during a session.
 - Tool access can inherit Pi/project defaults, use a preset, or select individual built-in, extension, and MCP tools.
 - A first-party `subagent` tool is installed with the Web runtime: delegate isolated work to the built-in scout, planner, worker, and reviewer, run up to eight tasks through the existing Agent queue, and inspect or cancel every child session from the Agent dashboard. No global `pi` CLI is required.
+- **Agents → Subagent budgets** configures time, turns, and reported cost for new children (defaults: 30 minutes, 24 turns, US$5; `0` disables that limit). Active runs show a near-limit notice and can be extended without starting another session. Reported cost depends on provider usage data, not your billing balance.
 - A built-in `ask_user` tool plus Pi extension dialogs (`select`, `confirm`, `input`, and `editor`), notifications, status indicators, and text widgets; pending decisions survive reconnects.
+- Settings use collapsible, nonblocking panels; the composer stays available. Drafts survive rapid session switches and reloads, and reading positions are remembered within the browser tab. Quiet active sessions are not recycled by the idle timer.
+- Reviewed sensitive actions have no reading countdown. Confirmations remain single-use and target-bound; changed content, server restarts, or a full pending-review cache require another review.
+- Large text previews load in 256 KiB chunks up to 2 MiB, with full-file open/download links. Partial previews cannot be saved over the original file.
 - Pi extension session commands (`newSession`, `fork`, and `switchSession`) use the native `AgentSessionRuntime`; the Web UI follows the replacement session and reconnects SSE to it.
 - Replacement failures restore the previous runtime, active-session conflicts are rejected before switching, and every open tab follows the same replacement. Extensions settings expose live runtime diagnostics.
 - Import a Pi `.jsonl` through a preview-first dialog that validates its header, effective cwd, allowed roots, symlinks, size, and destination collision before switching.
@@ -247,6 +249,9 @@ MCP guide for API revisions, validation limits and saved-but-reload-failed warni
 - Local hybrid semantic search spans session history, tGD artifacts, and project source, alongside exact filename/content search.
 
 ### Files and git
+
+- Attach images or general files using the composer's paperclip or drag-and-drop. Documents are saved in the selected project (up to 50 MB each) and inserted as `@file` references; their contents are read with the agent's available tools, not automatically extracted. Upload errors remain inline with retry/dismiss actions. Removing a reference does not delete the saved file.
+- The Files explorer has a visible **Upload files** button. Uploads never overwrite an existing filename.
 
 - Project tree, recursive filename search, text editing, Markdown/HTML/image preview, and clickable file paths in chat.
 - Git-aware badges, working-tree summary, per-file statistics, and `HEAD` versus worktree diffs.
@@ -357,7 +362,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 
 `dev` and `start` bind to localhost by default. `PORT=30143 npm run dev` changes the port; an explicit `-- -p 30143` takes precedence. Remote binding requires deliberate `PIWEB_HOST=0.0.0.0` or `-- -H 0.0.0.0` and an authenticated access boundary. Preview mode stays localhost-only.
 
-The environment bar identifies development, production, functional preview, or demonstration data and shows the running build and actual model-config path. `npm run preview` does **not** copy credentials, sessions, or schedules. Configure providers in its own Models screen; inherited provider environment variables are excluded, and automatic private `.env` loading is refused. Use a clean checkout for preview if your normal checkout has private `.env` files. This is data separation, not an OS sandbox.
+The environment bar identifies development, production, functional preview, or demonstration data and shows the running build and actual model-config path. `npm run preview` does **not** automatically copy credentials, sessions, or schedules. To reuse your normal models, stop the preview and run `npm run preview:configure` (or append `-- --source /path/to/agent`), then restart it. This explicitly copies model definitions and model defaults, backs up the previous preview configuration privately, and links the same login store so OAuth refresh uses one canonical lock. Login/logout changes affect both environments; model-definition edits remain separate. Sessions, schedules, packages and extensions are not copied. Alternatively configure separate accounts in the preview Models screen without running this command. Inherited provider environment variables are excluded, and automatic private `.env` loading is refused. Use a clean checkout for preview if your normal checkout has private `.env` files. This is data separation, not an OS sandbox.
 
 The launcher creates a private provenance marker in a new empty preview directory. Existing non-empty directories must already carry the matching marker; an arbitrary copied agent directory is refused. Fixture generators create their own fixture marker.
 

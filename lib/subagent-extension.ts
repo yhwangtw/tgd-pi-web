@@ -8,6 +8,7 @@ import {
   type InlineExtension,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { DEFAULT_SUBAGENT_LIMITS } from "./agent-run-limits";
 import type {
   AgentRun,
   AgentRunCompletion,
@@ -18,11 +19,6 @@ import type { AgentMessage } from "./types";
 
 const MAX_TASKS = 8;
 const MAX_OUTPUT_BYTES = 50 * 1024;
-const DEFAULT_LIMITS = {
-  maxTurns: 24,
-  maxCostUsd: 5,
-  timeoutMs: 30 * 60_000,
-} as const;
 
 const ALLOWED_AGENT_TOOLS = new Set([
   "read",
@@ -255,7 +251,7 @@ async function defaultExecutor(
     prompt: composeSubagentPrompt(request.agent, request.task),
     toolNames: normalizeTools(request.agent.tools),
     workspace,
-    limits: { ...DEFAULT_LIMITS },
+    limits: { ...DEFAULT_SUBAGENT_LIMITS, ...(await import("./agent-run-store")).readAgentRunStore().subagentLimits },
     ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.id } : {}),
     ...(request.thinkingLevel ? { thinkingLevel: request.thinkingLevel } : {}),
   };
@@ -277,7 +273,7 @@ interface DelegateOutcome {
 function outcomeDetails(mode: "single" | "parallel" | "chain", outcomes: DelegateOutcome[]) {
   return {
     mode,
-    limits: DEFAULT_LIMITS,
+    limits: outcomes[0]?.run.limits ?? DEFAULT_SUBAGENT_LIMITS,
     runs: outcomes.map((outcome) => ({
       agent: outcome.agent,
       source: outcome.source,

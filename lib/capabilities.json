@@ -33,10 +33,10 @@
     },
     {
       "id": "ask-user",
-      "title": { "en": "Ask User and extension dialogs", "zh": "Ask User 與 Extension 對話框" },
+      "title": { "en": "Ask User and inline extension questions", "zh": "Ask User 與 Extension 內嵌提問" },
       "summary": {
-        "en": "Structured questions and supported Pi extension dialogs pause safely and survive browser reconnects.",
-        "zh": "結構化問題與支援的 Pi Extension 對話框可安全暫停，並在瀏覽器重連後繼續。"
+        "en": "Structured questions, confirmations, choices, and text inputs appear as deferrable transcript cards without blocking navigation or the composer, and survive reconnects.",
+        "zh": "結構化問題、確認、選擇與文字輸入以可稍後回答的對話內卡片呈現，不阻擋導覽或輸入框，並在重連後繼續。"
       },
       "foundation": "pi-extension-api",
       "webSupport": "adapted",
@@ -90,36 +90,6 @@
       "backgroundServerRequired": false,
       "trust": "workspace",
       "evidence": ["lib/subagent-extension.ts", "lib/agent-run-supervisor.ts"]
-    },
-    {
-      "id": "permission-gate",
-      "title": { "en": "Permission Gate", "zh": "權限閘門" },
-      "summary": {
-        "en": "High-impact commands, installs, and external changes pause for one-time or exact-operation approval and create audit events.",
-        "zh": "高影響指令、安裝與外部變更會暫停，等待單次或限定同一操作的授權，並留下稽核紀錄。"
-      },
-      "foundation": "pi-extension-api",
-      "webSupport": "adapted",
-      "packaging": "built-in",
-      "globalPiCliRequired": false,
-      "backgroundServerRequired": false,
-      "trust": "decision",
-      "evidence": ["lib/safety-guard.ts", "lib/security-activity.ts"]
-    },
-    {
-      "id": "protected-paths",
-      "title": { "en": "Protected Paths", "zh": "受保護路徑" },
-      "summary": {
-        "en": "Credential files, automation and deployment configuration, Git internals, and paths outside the active workspace require explicit review.",
-        "zh": "憑證檔、Automation 與部署設定、Git 內部檔案，以及工作區外路徑都需要明確檢查與授權。"
-      },
-      "foundation": "pi-extension-api",
-      "webSupport": "adapted",
-      "packaging": "built-in",
-      "globalPiCliRequired": false,
-      "backgroundServerRequired": false,
-      "trust": "decision",
-      "evidence": ["lib/safety-guard.ts", "lib/security-activity.ts"]
     },
     {
       "id": "mcp",

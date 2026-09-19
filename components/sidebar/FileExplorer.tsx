@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { AtSign, ChevronRight, LoaderCircle } from "lucide-react";
+import { AtSign, ChevronRight, LoaderCircle, Upload } from "lucide-react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
 import { encodeFilePathForApi, getRelativeFilePath, joinFilePath } from "@/lib/file-paths";
 import styles from "./FileExplorer.module.css";
@@ -239,6 +239,15 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
   const [dragOver, setDragOver] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const uploadTargetRef = useRef<string>(cwd);
+  const [uploadCount, setUploadCount] = useState(0);
+  useEffect(() => {
+    const refresh = (event: Event) => {
+      const target = (event as CustomEvent<{ cwd: string }>).detail.cwd;
+      if (target === cwd || target.startsWith(`${cwd}/`)) bumpRefresh();
+    };
+    window.addEventListener("pi:files-uploaded", refresh);
+    return () => window.removeEventListener("pi:files-uploaded", refresh);
+  }, [cwd, bumpRefresh]);
 
   const handleToggleExpanded = useCallback((fullPath: string, open: boolean) => {
     setExpandedPaths((prev) => {
@@ -328,7 +337,8 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
   // ── File operations (create / rename / delete / upload) ──
   const doUpload = useCallback(async (dir: string, files: File[]) => {
     if (files.length === 0) return;
-    const { results, error } = await uploadFiles(dir, files);
+    setUploadCount(count => count + 1);
+    const { results, error } = await uploadFiles(dir, files).finally(() => setUploadCount(count => count - 1));
     if (error) { showToast(`${t("explorer.uploadFailed")}: ${error}`, { type: "error" }); return; }
     const okCount = results.filter((r) => r.ok).length;
     for (const f of results.filter((r) => !r.ok)) {
@@ -435,6 +445,12 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
       }}
     >
       <input ref={uploadInputRef} type="file" multiple hidden onChange={onFileInputChange} />
+      <div className={styles.uploadToolbar}>
+        <button type="button" onClick={() => openUpload(cwd)} disabled={uploadCount > 0} title={cwd}>
+          <Upload size={14} aria-hidden="true" />{t("explorer.uploadFiles")}
+        </button>
+        {uploadCount > 0 && <span role="status">{t("input.uploading")}</span>}
+      </div>
       {dragOver && <div className={styles.dropHint}>{t("explorer.dropToUpload")}</div>}
 
       <div ref={containerRef} className={styles.treeContainer} onKeyDown={onTreeKeyDown}

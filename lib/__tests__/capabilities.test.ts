@@ -29,8 +29,8 @@ describe("product capability manifest", () => {
     expect(byId.get("embedded-subagents")).toMatchObject({ foundation: "pi-sdk", webSupport: "adapted" });
     expect(byId.get("plan-mode")).toMatchObject({ foundation: "pi-extension-api", globalPiCliRequired: false });
     expect(byId.get("structured-output")).toMatchObject({ foundation: "pi-extension-api", trust: "none" });
-    expect(byId.get("permission-gate")).toMatchObject({ foundation: "pi-extension-api", trust: "decision" });
-    expect(byId.get("protected-paths")).toMatchObject({ foundation: "pi-extension-api", trust: "decision" });
+    expect(byId.has("permission-gate")).toBe(false);
+    expect(byId.has("protected-paths")).toBe(false);
     expect(byId.get("session-workspace")).toMatchObject({ trust: "host" });
   });
 });

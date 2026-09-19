@@ -109,7 +109,7 @@ describe("agent-run-store", () => {
       version: 1,
       runs: [
         { ...run("queued", "subagent"), trigger: "subagent", limits: { maxTurns: 24, maxCostUsd: 5, timeoutMs: 1_800_000 } },
-        { ...run("queued", "bad-limit"), trigger: "subagent", limits: { maxTurns: 0 } },
+        { ...run("queued", "bad-limit"), trigger: "subagent", limits: { maxTurns: -1 } },
       ],
     }));
 

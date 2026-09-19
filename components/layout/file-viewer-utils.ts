@@ -8,6 +8,7 @@ export interface FileData {
   version?: string;
   /** Set when only the file's first chunk was returned (file > preview cap). */
   truncated?: boolean;
+  previewBytes?: number;
 }
 
 export function formatSize(bytes: number): string {

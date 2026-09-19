@@ -17,7 +17,7 @@ interface PendingMutation {
   action: PackageMutationAction;
   source: string;
   token: string;
-  expiresAt: number;
+  expiresAt?: number;
   preview: PackageMutationPreview;
 }
 type PackageResource = { packages?: PackageCenterEntry[]; error?: string };
@@ -63,7 +63,7 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
     const data = await response.json() as {
       packages?: PackageCenterEntry[];
       updates?: UpdateEntry[];
-      confirmation?: { token: string; expiresAt: number };
+      confirmation?: { token: string; expiresAt?: number };
       preview?: PackageMutationPreview;
       action?: PackageMutationAction;
       source?: string;
@@ -227,7 +227,7 @@ export function PackageCenter({ sessionId }: { sessionId: string | null }) {
           </div>
           <div className={styles.actions}>
             <button type="button" className={pending.action === "remove" ? styles.dangerButton : styles.primaryButton}
-              disabled={!!busy || Date.now() >= pending.expiresAt} onClick={() => void execute()}>
+              disabled={!!busy} onClick={() => void execute()}>
               {t(`packages.confirmAction.${pending.action}`)}
             </button>
             <button type="button" className={styles.secondaryButton} disabled={!!busy} onClick={() => setPending(null)}>{t("common.cancel")}</button>

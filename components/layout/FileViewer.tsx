@@ -12,6 +12,7 @@ import type { FileOpenMode, FileViewState } from "@/lib/file-open";
 
 interface Props {
   filePath: string;
+  visible?: boolean;
   cwd?: string;
   /** Jump to this 1-based line on open (from a search hit). */
   gotoLine?: number;
@@ -66,7 +67,7 @@ export function DownloadLink({ filePath, label = "Download" }: { filePath: strin
   const encoded = encodeFilePathForApi(filePath);
   return (
     <a
-      href={`/api/files/${encoded}?type=read`}
+      href={`/api/files/${encoded}?type=download`}
       download={getFileName(filePath)}
       className={styles.downloadLink}
     >
@@ -83,7 +84,7 @@ export function formatDuration(seconds: number): string {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
-export function FileViewer({ filePath, cwd, gotoLine, gotoNonce, onSendToAgent, sessionId, initialMode, initialViewState, onViewStateChange, onNavigationConsumed }: Props) {
+export function FileViewer({ filePath, visible, cwd, gotoLine, gotoNonce, onSendToAgent, sessionId, initialMode, initialViewState, onViewStateChange, onNavigationConsumed }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} />;
   }
@@ -99,5 +100,5 @@ export function FileViewer({ filePath, cwd, gotoLine, gotoNonce, onSendToAgent, 
   if (isBinaryPath(filePath)) {
     return <BinaryViewer filePath={filePath} cwd={cwd} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} gotoLine={gotoLine} gotoNonce={gotoNonce} onSendToAgent={onSendToAgent} sessionId={sessionId} initialMode={initialMode} initialViewState={initialViewState} onViewStateChange={onViewStateChange} onNavigationConsumed={onNavigationConsumed} />;
+  return <TextFileViewer filePath={filePath} visible={visible} cwd={cwd} gotoLine={gotoLine} gotoNonce={gotoNonce} onSendToAgent={onSendToAgent} sessionId={sessionId} initialMode={initialMode} initialViewState={initialViewState} onViewStateChange={onViewStateChange} onNavigationConsumed={onNavigationConsumed} />;
 }

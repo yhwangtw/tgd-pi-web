@@ -2,7 +2,6 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join } from "node:path";
-import { SAFETY_GRANT_TTL_MS } from "./safety-guard";
 import { PRODUCT_CAPABILITIES, type ProductCapabilityManifest } from "./capabilities";
 
 const execFileAsync = promisify(execFile);
@@ -23,8 +22,9 @@ export interface DeploymentSafetyStatus {
   nodeEnv: string;
   boundary: "single-user";
   webCliIndependent: true;
-  safetyGuard: true;
-  scopedAuthorizationTtlSeconds: number;
+  /** Retained for API compatibility; Pi Web no longer installs a tool approval gate. */
+  safetyGuard: false;
+  scopedAuthorizationTtlSeconds: 0;
   toolIsolation: "host-process";
   accessGate: boolean;
   independentSessionSecret: boolean;
@@ -79,7 +79,7 @@ export function deploymentSafetyFromEnv(env: NodeJS.ProcessEnv): DeploymentSafet
   );
   const warnings = [
     "Single-user boundary: every browser user shares the host account's Pi sessions, credentials, tools, and allowed workspaces.",
-    "Host-process isolation: Safety Guard is an authorization layer, not an OS sandbox; tools and extensions inherit the server account's permissions.",
+    "Host-process isolation: Pi Web is not an OS sandbox; tools and extensions inherit the server account's permissions without a built-in per-action approval gate.",
   ];
   if (nodeEnv !== "production") warnings.push("Development mode is intended for local preview, not remote access.");
   if (!accessGate) warnings.push("The built-in access gate is disabled; keep this instance on localhost.");
@@ -88,8 +88,8 @@ export function deploymentSafetyFromEnv(env: NodeJS.ProcessEnv): DeploymentSafet
     nodeEnv,
     boundary: "single-user",
     webCliIndependent: true,
-    safetyGuard: true,
-    scopedAuthorizationTtlSeconds: SAFETY_GRANT_TTL_MS / 1_000,
+    safetyGuard: false,
+    scopedAuthorizationTtlSeconds: 0,
     toolIsolation: "host-process",
     accessGate,
     independentSessionSecret,

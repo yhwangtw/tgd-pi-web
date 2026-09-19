@@ -146,8 +146,9 @@ describe("MCP draft conflict and save lifecycle", () => {
     await render();
     await act(async () => container.querySelector<HTMLButtonElement>('[role="switch"]')!.click());
     expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ action: "toggle", revision: "fixture-revision" });
-    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
     await click("Delete");
+    expect(fetcher.mock.calls).toHaveLength(1);
+    await click("Confirm");
     expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({ action: "delete", revision: "fixture-revision" });
   });
   it("shows committed-save warnings and closes the successful draft", async () => {

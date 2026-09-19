@@ -1,0 +1,10 @@
+.panel { min-width: 0; margin-block: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--bg-elev-1); overflow-wrap: anywhere; }
+.panel header, .panel footer { display: flex; align-items: start; gap: var(--space-3); padding: var(--space-3); }
+.panel header > div { flex: 1; min-width: 0; }
+.panel h3 { margin: 0; font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.panel p { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--text-muted); white-space: pre-wrap; }
+.panel button { min-height: 36px; border-radius: var(--radius-control); padding: var(--space-2) var(--space-3); background: var(--bg-elev-2); color: var(--text); font-size: var(--text-sm); }
+.panel button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panel footer { justify-content: flex-end; flex-wrap: wrap; border-top: 1px solid var(--border-subtle); }
+.body { padding: var(--space-3); min-width: 0; }
+@media (max-width: 700px), (pointer: coarse) { .panel button { min-height: var(--control-touch); min-width: var(--control-touch); } }

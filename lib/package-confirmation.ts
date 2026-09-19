@@ -8,7 +8,7 @@ export interface PendingPackageMutation {
   sessionId: string;
   resolvedSource?: string;
   integrity?: string;
-  expiresAt: number;
+  expiresAt?: number;
 }
 
 declare global {
@@ -19,16 +19,17 @@ function store(): Map<string, PendingPackageMutation> {
   globalThis.__piPackageConfirmations ??= new Map();
   const now = Date.now();
   for (const [token, pending] of globalThis.__piPackageConfirmations) {
-    if (pending.expiresAt <= now) globalThis.__piPackageConfirmations.delete(token);
+    if (pending.expiresAt !== undefined && pending.expiresAt <= now) globalThis.__piPackageConfirmations.delete(token);
   }
   return globalThis.__piPackageConfirmations;
 }
 
-export function preparePackageMutation(input: Omit<PendingPackageMutation, "expiresAt">): { token: string; expiresAt: number } {
+export function preparePackageMutation(input: Omit<PendingPackageMutation, "expiresAt">): { token: string; expiresAt?: number } {
   const token = randomBytes(24).toString("base64url");
-  const expiresAt = Date.now() + 60_000;
-  store().set(token, { ...input, expiresAt });
-  return { token, expiresAt };
+  const pending = store();
+  while (pending.size >= 256) pending.delete(pending.keys().next().value!);
+  pending.set(token, { ...input });
+  return { token };
 }
 
 export function consumePreparedPackageMutation(
@@ -38,7 +39,7 @@ export function consumePreparedPackageMutation(
   const pending = store().get(token);
   store().delete(token);
   return pending
-    && pending.expiresAt > Date.now()
+    && (pending.expiresAt === undefined || pending.expiresAt > Date.now())
     && pending.action === expected.action
     && pending.source === expected.source
     && pending.sessionId === expected.sessionId

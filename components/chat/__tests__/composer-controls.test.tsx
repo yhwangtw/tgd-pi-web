@@ -340,7 +340,9 @@ describe("composer controls", () => {
     expect(dialog.textContent).toContain("272k ctx");
     expect(dialog.textContent).toContain("$0.25 / $2 · 1M");
     const search = dialog.querySelector<HTMLInputElement>('input[aria-label="Search models"]')!;
-    expect(document.activeElement).toBe(search);
+    expect(dialog.getAttribute("aria-modal")).toBeNull();
+    expect(Boolean(container!.inert)).toBe(false);
+    search.focus();
 
     await act(async () => {
       const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -448,7 +450,7 @@ describe("composer controls", () => {
     expect(panel.className).not.toContain("bottomBarRightMobileOpen");
   });
 
-  it("opens mobile composer controls as a focus-managed bottom sheet", async () => {
+  it("opens mobile composer controls without trapping the rest of the app", async () => {
     useMobileViewport();
     const onThinkingLevelChange = vi.fn();
     const onToolPresetChange = vi.fn();
@@ -479,8 +481,8 @@ describe("composer controls", () => {
     expect(sheet.textContent).toContain("Reasoning");
     expect(sheet.textContent).toContain("Tools");
     expect(dialog.textContent).toContain("Done");
-    expect(Boolean(container!.inert)).toBe(true);
-    expect(document.activeElement).toBe(sheet.querySelector('button[aria-label="Expand composer"]'));
+    expect(Boolean(container!.inert)).toBe(false);
+    expect(dialog.getAttribute("aria-modal")).toBeNull();
 
     const reasoning = sheet.querySelector<HTMLButtonElement>('button[aria-label="Change reasoning level"]')!;
     await act(async () => reasoning.click());
@@ -510,7 +512,7 @@ describe("composer controls", () => {
     expect(sheet.querySelector('[role="listbox"][aria-label="Change tool preset"]')).toBeNull();
     expect(document.activeElement).toBe(tools);
 
-    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await act(async () => tools.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     await nextFrame();
     expect(document.body.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);

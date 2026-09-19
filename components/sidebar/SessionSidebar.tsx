@@ -9,6 +9,7 @@ import { SessionItem } from "./SessionItem";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import { useSessions } from "@/hooks/useSessions";
 import { useCwd } from "@/hooks/useCwd";
+import { useProjectSessionStart } from "@/hooks/useProjectSessionStart";
 import { useExplorer } from "@/hooks/useExplorer";
 import { useTags } from "@/hooks/useTags";
 import { useToast } from "@/hooks/useToast";
@@ -58,7 +59,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const { allSessions, loading, error, pinnedIds, sessionRefreshDone, loadSessions, handlePinToggle, archivedIds, handleArchiveToggle } = useSessions(refreshKey);
   const { state: cwdState, actions: cwdActions } = useCwd(onCwdChange);
   const { selectedCwd } = cwdState;
-  const { setSelectedCwd, setDropdownOpen, handleDefaultCwd } = cwdActions;
+  const { setSelectedCwd, setDropdownOpen } = cwdActions;
+  const { startNew: handleNewSession, openPicker, closePicker, pickProject, pickProjectPath, pickDefaultProject } = useProjectSessionStart(
+    selectedCwd, setSelectedCwd, setDropdownOpen, onNewSession,
+  );
   const { explorerOpen, explorerKey, explorerRefreshDone, toggleExplorer, refreshExplorer } = useExplorer(explorerRefreshKey);
   const { tags, setTag, removeTag, sessionTagsOf } = useTags();
   const { showToast } = useToast();
@@ -77,34 +81,18 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     error: sessionSearchError,
   } = useUnifiedSearchResults(null, normalizedSessionQuery, "sessions", false);
 
-  const pickProjectPath = useCallback(async (path: string): Promise<string | null> => {
-    try {
-      const response = await fetch("/api/cwd/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd: path }),
-      });
-      const data = await response.json().catch(() => ({})) as { cwd?: string; error?: string };
-      if (!response.ok || data.error) return data.error ?? `HTTP ${response.status}`;
-      setSelectedCwd(data.cwd ?? path);
-      return null;
-    } catch (error) {
-      return error instanceof Error ? error.message : String(error);
-    }
-  }, [setSelectedCwd]);
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "p") {
         event.preventDefault();
-        setDropdownOpen(true);
+        openPicker();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [setDropdownOpen]);
+  }, [openPicker]);
 
-  useEffect(() => onOpenProjectSwitcher(() => setDropdownOpen(true)), [setDropdownOpen]);
+  useEffect(() => onOpenProjectSwitcher(openPicker), [openPicker]);
 
   useEffect(() => {
     try {
@@ -189,16 +177,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     }
     onInitialRestoreDone?.();
   }, [allSessions, loading, selectedCwd, selectedSessionId, initialSessionId, onSelectSession, onInitialRestoreDone, setSelectedCwd]);
-
-  const handleNewSession = useCallback(() => {
-    if (!selectedCwd) return;
-    // Generate a temporary UUID client-side — no backend call needed.
-    // Pi will be spawned lazily when the user sends the first message.
-    const tempId = typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-    onNewSession?.(tempId, selectedCwd);
-  }, [selectedCwd, onNewSession]);
 
   // All known projects (cwd + session count), most recently used first.
   const projects = useMemo(() => {
@@ -489,10 +467,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <PiAgentTitle />
           <div className={styles.headerButtons}>
             <button
+              type="button"
               onClick={handleNewSession}
-              disabled={!selectedCwd}
-              className={`${styles.newSessionButton} ${selectedCwd ? styles.newSessionButtonEnabled : styles.newSessionButtonDisabled} hover-bg-selected-accent`}
-              title={selectedCwd ? `${t("sidebar.newIn")} ${selectedCwd}` : t("sidebar.selectProjectFirst")}
+              className={`${styles.newSessionButton} ${styles.newSessionButtonEnabled} hover-bg-selected-accent`}
+              title={selectedCwd ? `${t("sidebar.newIn")} ${selectedCwd}` : t("sidebar.newChooseProject")}
             >
               <Plus size={12} strokeWidth={2.2} aria-hidden="true" />
               {t("sidebar.new")}
@@ -759,7 +737,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               className={styles.projectFilterButton}
               onClick={() => {
                 setFiltersOpen(false);
-                requestAnimationFrame(() => setDropdownOpen(true));
+                requestAnimationFrame(() => openPicker());
               }}
             >
               <FolderGit2 size={18} strokeWidth={1.8} aria-hidden />
@@ -798,10 +776,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
       <ProjectSwitcher
         open={cwdState.dropdownOpen}
-        onClose={() => setDropdownOpen(false)}
-        onPick={setSelectedCwd}
+        onClose={closePicker}
+        onPick={pickProject}
         onPickPath={pickProjectPath}
-        onDefaultCwd={() => void handleDefaultCwd()}
+        onDefaultCwd={pickDefaultProject}
         projects={projects}
         selectedCwd={selectedCwd}
         homeDir={cwdState.homeDir}

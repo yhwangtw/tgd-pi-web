@@ -14,6 +14,7 @@ import { StructuredDataView } from "./text-viewer/StructuredDataView";
 import { FileInspectorDrawer } from "./FileInspectorDrawer";
 import { buildFileAgentPrompt, extractFileOutline, type TextSelectionRange } from "@/lib/file-workbench";
 import { showToast } from "@/hooks/useToast";
+import { TEXT_PREVIEW_CHUNK_BYTES, TEXT_PREVIEW_EXPANDED_MAX_BYTES } from "@/lib/preview-limits";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/ActionMenu";
 import styles from "./TextFileViewer.module.css";
 
@@ -21,6 +22,7 @@ const LazyPreviewView = lazy(() => import("./text-viewer/PreviewView").then((mod
 
 interface Props {
   filePath: string;
+  visible?: boolean;
   cwd?: string;
   /** Jump to this 1-based line on open (from a search hit). */
   gotoLine?: number;
@@ -36,11 +38,13 @@ interface Props {
 
 type InspectorTab = "outline" | "problems" | "history" | "blame" | "notes";
 
-export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonce, onSendToAgent, sessionId, initialMode = "auto", initialViewState, onViewStateChange, onNavigationConsumed }: Props) {
+export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLineProp, gotoNonce, onSendToAgent, sessionId, initialMode = "auto", initialViewState, onViewStateChange, onNavigationConsumed }: Props) {
   const { t } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [viewMode, setViewMode] = useState<"source" | "diff">("source");
@@ -154,18 +158,20 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   const editingRef = useRef(editing);
   editingRef.current = editing;
 
-  const fetchContent = useCallback((filePath: string, isRefresh = false) => {
+  const fetchContent = useCallback((filePath: string, isRefresh = false, requestedBytes?: number) => {
+    const previewBytes = requestedBytes ?? (loadedFilePathRef.current === filePath ? dataRef.current?.previewBytes : undefined) ?? TEXT_PREVIEW_CHUNK_BYTES;
     readRequestRef.current?.abort();
     const controller = new AbortController();
     readRequestRef.current = controller;
     const encoded = encodeFilePathForApi(filePath);
     const current = () => !controller.signal.aborted && readRequestRef.current === controller && activeFilePathRef.current === filePath;
-    return fetch(`/api/files/${encoded}?type=read`, { signal: controller.signal })
+    return fetch(`/api/files/${encoded}?type=read${previewBytes > TEXT_PREVIEW_CHUNK_BYTES ? `&previewBytes=${previewBytes}` : ""}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((d: FileData & { error?: string }) => {
         if (!current() || (isRefresh && editingRef.current)) return null;
         if (d.error) {
-          setError(d.error);
+          if (loadedFilePathRef.current === filePath && dataRef.current) setPreviewError(d.error);
+          else setError(d.error);
           return null;
         }
         if (isRefresh) {
@@ -178,11 +184,15 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
           loadedFilePathRef.current = filePath;
         }
         dataRef.current = d;
+        setPreviewError(null);
         setData(d);
         return d;
       })
       .catch((e) => {
-        if (current()) setError(String(e));
+        if (current()) {
+          if (loadedFilePathRef.current === filePath && dataRef.current) setPreviewError(String(e));
+          else setError(String(e));
+        }
         return null;
       });
   }, []);
@@ -193,6 +203,8 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     loadedFilePathRef.current = null;
     dataRef.current = null;
     setLoading(true);
+    setLoadingMore(false);
+    setPreviewError(null);
     setError(null);
     setData(null);
     setPrevContent(null);
@@ -288,6 +300,14 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
   }, [gotoLineProp, gotoNonce, onNavigationConsumed]);
 
   useEffect(() => {
+    // The phone panel uses display:none while closed. Restoring into that
+    // zero-height layout clamps scrollTop to zero and consumes the restore.
+    // Keep the mounted editor/draft, but defer navigation until it is visible.
+    if (!visible) {
+      restoredViewKeyRef.current = null;
+      stopRestoringView();
+      return;
+    }
     if (!data || loadedFilePathRef.current !== filePath || !contentAreaRef.current) return;
     const key = `${filePath}:${gotoNonce ?? "initial"}:${viewMode}:${previewMode ? "preview" : structuredMode ? "structured" : "source"}`;
     if (restoredViewKeyRef.current === key) return;
@@ -305,7 +325,7 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
       cancelAnimationFrame(frame);
       if (restoredViewKeyRef.current === key) stopRestoringView();
     };
-  }, [data, filePath, gotoNonce, previewMode, restoreReadingPosition, stopRestoringView, structuredMode, viewMode]);
+  }, [data, filePath, gotoNonce, previewMode, restoreReadingPosition, stopRestoringView, structuredMode, viewMode, visible]);
 
   useEffect(() => () => {
     if (scrollSaveTimerRef.current) clearTimeout(scrollSaveTimerRef.current);
@@ -369,10 +389,10 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
     // Suspense initially commits a compact fallback; once the real preview
     // chunk paints, restore the tab's saved reading position against its final
     // scroll height instead of leaving the viewport clamped to zero.
-    if (!pendingGotoLineRef.current) {
+    if (visible && !pendingGotoLineRef.current) {
       restoreReadingPosition(initialViewStateRef.current?.scrollTop ?? 0);
     }
-  }, [data?.language, data?.size, restoreReadingPosition]);
+  }, [data?.language, data?.size, restoreReadingPosition, visible]);
 
   const startEditing = useCallback(() => {
     if (!data?.version || loadedFilePathRef.current !== filePath) return;
@@ -691,9 +711,17 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
       )}
 
       {/* Partial-preview banner: the API returned only the file's first chunk */}
+      {previewError && <div className={styles.truncatedNotice} role="status">{previewError}</div>}
       {data.truncated && (
-        <div className={styles.truncatedNotice}>
-          {t("files.largeFilePrefix")} ({formatSize(data.size)}) — {t("files.largeFileNotice")}{" "}
+        <div className={styles.truncatedNotice} role="status">
+          <span>{t("files.loadedBytes").replace("{loaded}", formatSize(new TextEncoder().encode(data.content).length)).replace("{total}", formatSize(data.size))}</span>
+          {(data.previewBytes ?? TEXT_PREVIEW_CHUNK_BYTES) < TEXT_PREVIEW_EXPANDED_MAX_BYTES && <button type="button" disabled={loadingMore} onClick={async () => {
+            const path = filePath;
+            setLoadingMore(true);
+            await fetchContent(path, false, Math.min(TEXT_PREVIEW_EXPANDED_MAX_BYTES, (data.previewBytes ?? TEXT_PREVIEW_CHUNK_BYTES) + TEXT_PREVIEW_CHUNK_BYTES));
+            if (activeFilePathRef.current === path) setLoadingMore(false);
+          }}>{t(loadingMore ? "common.loading" : "files.loadMore")}</button>}
+          <a href={`/api/files/${encodeFilePathForApi(filePath)}?type=raw`} target="_blank" rel="noopener noreferrer">{t("files.openFull")}</a>
           <a href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>{t("files.downloadFull")}</a>
         </div>
       )}
@@ -714,7 +742,7 @@ export function TextFileViewer({ filePath, cwd, gotoLine: gotoLineProp, gotoNonc
         onWheelCapture={stopRestoringView}
         onPointerUp={handleTextSelection}
         onScroll={(event) => {
-          if (!onViewStateChange || restoringViewRef.current) return;
+          if (!visible || !onViewStateChange || restoringViewRef.current) return;
           const scrollTop = event.currentTarget.scrollTop;
           if (scrollSaveTimerRef.current) clearTimeout(scrollSaveTimerRef.current);
           scrollSaveTimerRef.current = setTimeout(() => onViewStateChange({ scrollTop, selection }), 120);

@@ -28,6 +28,7 @@ import { FileOperationError } from "@/lib/versioned-file";
 import { FileSaveConflict, readEditableFile, saveEditableFile } from "@/lib/file-editor";
 import { readTextPrefixSync } from "@/lib/text-prefix";
 import { validateEntryName } from "@/lib/file-name";
+import { textPreviewLimit } from "@/lib/preview-limits";
 
 async function handleRead(
   filePath: string,
@@ -58,12 +59,14 @@ async function handleRead(
     return streamFile(filePath, stat, documentMime, request.headers.get("range"), "inline", { signal: request.signal });
   }
   const language = getLanguage(filePath);
+  const limit = textPreviewLimit(request.nextUrl.searchParams.get("previewBytes"));
+  if (limit === null) return NextResponse.json({ error: "Invalid preview size" }, { status: 400 });
   if (stat.size > TEXT_PREVIEW_MAX_BYTES) {
     // Partial preview instead of a refusal: first 256KB (on a UTF-8 char
     // boundary) + truncated flag. The viewer shows a banner with a download
     // link and disables editing (saving a prefix would destroy the file).
-    const content = readTextPrefixSync(filePath, TEXT_PREVIEW_MAX_BYTES);
-    return NextResponse.json({ content, language, size: stat.size, truncated: true });
+    const content = readTextPrefixSync(filePath, limit);
+    return NextResponse.json({ content, language, size: stat.size, truncated: Buffer.byteLength(content) < stat.size, previewBytes: limit });
   }
   const snapshot = await readEditableFile(filePath, allowedRoots);
   return NextResponse.json({ ...snapshot, language });
@@ -342,8 +345,14 @@ export async function POST(
         const dest = path.join(filePath, file.name.trim());
         if (!isPathAllowed(dest, allowedRoots)) { results.push({ name: file.name, ok: false, error: "Access denied" }); continue; }
         if (fs.existsSync(dest)) { results.push({ name: file.name, ok: false, error: "Already exists" }); continue; }
-        fs.writeFileSync(dest, Buffer.from(await file.arrayBuffer()));
-        results.push({ name: file.name, ok: true });
+        try {
+          // Exclusive creation also rejects dangling symlinks and races with
+          // another upload: an existing project file is never overwritten.
+          fs.writeFileSync(dest, Buffer.from(await file.arrayBuffer()), { flag: "wx" });
+          results.push({ name: file.name.trim(), ok: true });
+        } catch (error) {
+          results.push({ name: file.name, ok: false, error: (error as NodeJS.ErrnoException).code === "EEXIST" ? "Already exists" : "Could not write file" });
+        }
       }
       return NextResponse.json({ results });
     }

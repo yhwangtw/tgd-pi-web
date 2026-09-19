@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronDown, GitBranch, RefreshCw, RotateCcw } from "luci
 import { IconButton } from "@/components/ui/IconButton";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/hooks/useToast";
+import { useInlineConfirm } from "@/hooks/useInlineConfirm";
 import s from "./ChangesPanel.module.css";
 
 interface ChangedFile {
@@ -58,6 +59,7 @@ const STATUS_CLASS: Record<string, string> = {
  */
 export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedPath }: Props) {
   const { t } = useI18n();
+  const { confirm, confirmation } = useInlineConfirm(cwd);
   const { showToast } = useToast();
   const [files, setFiles] = useState<ChangedFile[]>([]);
   const [branch, setBranch] = useState<string | null>(null);
@@ -200,7 +202,7 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
 
   const discard = useCallback(async (path: string) => {
     if (!cwd) return;
-    if (!window.confirm(t("changes.discardConfirm").replace("{path}", path))) return;
+    if (!await confirm(t("changes.discardConfirm").replace("{path}", path))) return;
     setDiscarding(path);
     try {
       const res = await fetch("/api/git/commit", {
@@ -216,7 +218,7 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
     } finally {
       setDiscarding(null);
     }
-  }, [cwd, showToast, t, load]);
+  }, [cwd, showToast, t, load, confirm]);
 
   if (!cwd) {
     return <div className={s.empty}>{t("sidebar.selectProjectFirst")}</div>;
@@ -224,6 +226,7 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
 
   return (
     <div className={s.container}>
+      {confirmation}
       <div className={`${s.header} chrome-mono`}>
         <GitBranch size={14} strokeWidth={1.8} aria-hidden="true" />
         <span className={s.branch} title={branch ?? undefined}>{branch ?? "—"}</span>

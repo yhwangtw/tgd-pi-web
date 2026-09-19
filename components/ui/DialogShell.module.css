@@ -42,9 +42,13 @@
 .headerActions { display: flex; flex: 0 0 auto; align-items: center; gap: var(--space-2); }
 .headerActions:empty { display: none; }
 .header h2 { margin: 0; color: var(--text); font-size: var(--type-title-size); font-weight: var(--weight-semibold); line-height: var(--type-title-leading); }
-.header p { max-width: 68ch; margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--type-label-size); line-height: var(--leading-copy); }
+.header p { max-width: 68ch; margin: var(--space-1) 0 0; overflow-wrap: anywhere; color: var(--text-muted); font-size: var(--type-label-size); line-height: var(--leading-copy); }
 
 .body { min-height: 0; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; padding: var(--component-dialog-padding); }
+.body[hidden], .footer[hidden] { display: none; }
+.collapse { min-width: 36px; min-height: 36px; color: var(--text-muted); font-size: var(--text-lg); border-radius: var(--radius-control); }
+.overlay[data-modeless] { background: transparent; backdrop-filter: none; pointer-events: none; place-items: start end; padding-top: var(--space-4); }
+.overlay[data-modeless] .dialog { pointer-events: auto; width: min(680px, calc(100vw - 32px)); max-height: min(80dvh, 900px); }
 
 :global(html[data-ui-style="trae"]) .dialog { border-color: var(--trae-hairline); background: var(--trae-surface-solid); }
 :global(html[data-ui-style="trae"]) .header,
@@ -57,4 +61,7 @@
   .header,
   .footer { padding: var(--space-3) var(--space-4); }
   .body { padding: var(--space-4); }
+  .overlay[data-modeless] { place-items: start center; padding: var(--space-2); }
+  .overlay[data-modeless] .dialog { width: 100%; height: auto; max-height: 55dvh; border: 1px solid var(--border-subtle); border-radius: var(--radius-dialog); }
+  .collapse { min-width: var(--control-touch); min-height: var(--control-touch); }
 }

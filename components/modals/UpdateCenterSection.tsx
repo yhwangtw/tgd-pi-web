@@ -11,7 +11,7 @@ import {
   ServerCog,
   X,
 } from "lucide-react";
-import { DialogShell } from "@/components/ui/DialogShell";
+import { InlinePanel as DialogShell } from "@/components/ui/InlinePanel";
 import { fetchJson, useRequestResource } from "@/hooks/useRequestResource";
 import { showToast } from "@/hooks/useToast";
 import { useI18n, type MsgKey } from "@/lib/i18n";
@@ -26,7 +26,7 @@ import styles from "./UpdateCenterSection.module.css";
 
 interface UpdateConfirmation {
   token: string;
-  expiresAt: number;
+  expiresAt?: number;
   action: UpdateCenterAction;
   summary: string;
   impact: string[];

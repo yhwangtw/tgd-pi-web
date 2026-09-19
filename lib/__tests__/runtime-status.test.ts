@@ -11,8 +11,8 @@ describe("deploymentSafetyFromEnv", () => {
     expect(status).toMatchObject({
       boundary: "single-user",
       webCliIndependent: true,
-      safetyGuard: true,
-      scopedAuthorizationTtlSeconds: 300,
+      safetyGuard: false,
+      scopedAuthorizationTtlSeconds: 0,
       toolIsolation: "host-process",
       accessGate: true,
       independentSessionSecret: true,

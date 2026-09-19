@@ -9,6 +9,7 @@ import {
   useTranscriptScroll,
 } from "../use-transcript-scroll";
 import { resetScrollFollowModeCache } from "@/lib/prefs";
+import { clearScrollPositions, saveScrollPosition } from "@/lib/scroll-memory";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -17,10 +18,11 @@ interface HarnessProps {
   running: boolean;
   runningRef: React.RefObject<boolean>;
   onRefs?: (refs: ReturnType<typeof useTranscriptScroll>) => void;
+  memoryKey?: string;
 }
 
-function Harness({ messagesLength, running, runningRef, onRefs }: HarnessProps) {
-  const refs = useTranscriptScroll(messagesLength, running, runningRef);
+function Harness({ messagesLength, running, runningRef, onRefs, memoryKey }: HarnessProps) {
+  const refs = useTranscriptScroll(messagesLength, running, runningRef, memoryKey);
   useEffect(() => onRefs?.(refs), [onRefs, refs]);
   return (
     <div ref={refs.scrollContainerRef}>
@@ -38,6 +40,7 @@ describe("useTranscriptScroll", () => {
 
   beforeEach(() => {
     localStorage.clear();
+    clearScrollPositions();
     resetScrollFollowModeCache();
     scrollIntoView = vi.fn();
     scrollTo = vi.fn();
@@ -58,6 +61,20 @@ describe("useTranscriptScroll", () => {
     container = null;
     localStorage.clear();
     vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("cancels delayed position restoration as soon as the reader scrolls", async () => {
+    vi.useFakeTimers();
+    saveScrollPosition("reading", 480, 200);
+    container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => root?.render(<Harness memoryKey="reading" messagesLength={10} running={false} runningRef={{ current: false }} />));
+    const scroller = container.firstElementChild as HTMLElement;
+    expect(scroller.scrollTop).toBe(480);
+    scroller.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -100 }));
+    scroller.scrollTop = 380;
+    await act(async () => vi.advanceTimersByTime(100));
+    expect(scroller.scrollTop).toBe(380);
   });
 
   async function renderRun(mode: "smart" | "always" | "preserve") {

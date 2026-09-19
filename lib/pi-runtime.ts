@@ -17,7 +17,6 @@ import { appendPiWebOutputGuidance } from "./output-design";
 import { createPiModelRuntime } from "./pi-model-runtime";
 import { createMcpExtension } from "./mcp";
 import { createSubagentExtension } from "./subagent-extension";
-import { createSafetyGuardExtension } from "./safety-guard";
 import { createPlanModeExtension } from "./plan-mode";
 import { createStructuredOutputExtension } from "./structured-output-extension";
 
@@ -222,7 +221,6 @@ export async function createTrackedAgentServices(cwd: string): Promise<{
     resourceLoaderOptions: {
       extensionFactories: [
         createPlanModeExtension(),
-        createSafetyGuardExtension(),
         createStructuredOutputExtension(),
         createMcpExtension(cwd),
         createSubagentExtension(),
