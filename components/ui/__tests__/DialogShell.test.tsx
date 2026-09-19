@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, useState } from "react";
+import { act, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { DialogShell } from "../DialogShell";
@@ -94,6 +94,27 @@ describe("DialogShell", () => {
     composer.focus();
     await act(async () => root?.render(view(false)));
     expect(document.activeElement).toBe(composer);
+  });
+
+  it("honors an explicit initial field without trapping focus in a modeless panel", async () => {
+    function SearchHarness() {
+      const [open, setOpen] = useState(false);
+      const inputRef = useRef<HTMLInputElement>(null);
+      return <><button onClick={() => setOpen(true)}>Open search</button>
+        <DialogShell open={open} title="Search" initialFocusRef={inputRef} onClose={() => setOpen(false)}>
+          <input ref={inputRef} aria-label="Search items" />
+        </DialogShell></>;
+    }
+    container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => root!.render(<SearchHarness />));
+    const trigger = container.querySelector("button")!; trigger.focus();
+    await act(async () => trigger.click());
+    const input = document.querySelector<HTMLInputElement>('[aria-label="Search items"]')!;
+    expect(document.activeElement).toBe(input);
+    expect(container.inert).not.toBe(true);
+    await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 
   it("keeps stacked dialogs isolated and restores the app regardless of close order", async () => {

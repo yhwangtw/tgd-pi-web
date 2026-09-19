@@ -46,10 +46,12 @@ test.describe("prompt templates", () => {
     // Saved item shows in the list with a Delete control (unambiguous — the
     // live name-hint also renders the /name text while typing).
     await expect(page.getByRole("button", { name: "Delete" }).first()).toBeVisible();
+    await expect(dialog.getByRole("textbox", { name: "Template name" })).toBeFocused();
     await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
 
     // It shows up in the composer's slash menu and inserts the BODY (not /name)
-    const composer = page.locator("textarea").last();
+    const composer = page.getByTestId("composer-shell").locator("textarea");
     await composer.click();
     await composer.type(`/${NAME}`);
     await expect(page.getByText("template", { exact: true })).toBeVisible();

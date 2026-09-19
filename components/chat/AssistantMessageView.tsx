@@ -482,6 +482,7 @@ export function AssistantMessageView({
       </div>}
     </div>
   );
+}
 
 function TurnWorkLog({
   messages,
@@ -914,5 +915,4 @@ function formatUsage(usage: {
   if (usage.cacheRead) parts.push(`${usage.cacheRead.toLocaleString(language)} ${locale === "zh" ? "快取" : "cache"}`);
   if (usage.cost?.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
   return parts.join(" · ");
-}
 }

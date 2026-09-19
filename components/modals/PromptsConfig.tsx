@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { DialogShell } from "@/components/ui/DialogShell";
 import { usePrompts } from "@/hooks/usePrompts";
 import { useI18n } from "@/lib/i18n";
@@ -13,6 +13,8 @@ export function PromptsConfig({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const resetForm = useCallback(() => { setEditingId(null); setName(""); setBody(""); }, []);
 
@@ -26,10 +28,14 @@ export function PromptsConfig({ onClose }: { onClose: () => void }) {
 
   const save = useCallback(async () => {
     if (!name.trim() || !body.trim()) return;
+    const restoreFocus = editorRef.current?.contains(document.activeElement);
     setSaving(true);
     await savePrompt({ id: editingId ?? undefined, name, body });
     setSaving(false);
     resetForm();
+    // Disabling Save can leave focus on body. Keep keyboard users in the
+    // editor (including Escape), but do not steal focus from background work.
+    if (restoreFocus && (document.activeElement === document.body || editorRef.current?.contains(document.activeElement))) nameRef.current?.focus({ preventScroll: true });
   }, [name, body, editingId, savePrompt, resetForm]);
 
   return (
@@ -42,10 +48,11 @@ export function PromptsConfig({ onClose }: { onClose: () => void }) {
       bodyClassName={styles.body}
     >
           {/* Editor */}
-          <div className={styles.editor}>
+          <div ref={editorRef} className={styles.editor}>
             <div className={styles.nameRow}>
               <span className={styles.slash}>/</span>
               <input
+                ref={nameRef}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t("prompts.namePlaceholder")}

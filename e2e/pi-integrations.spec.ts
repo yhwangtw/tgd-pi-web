@@ -63,11 +63,11 @@ test.describe("Pi integration centers", () => {
     await dialog.getByRole("tab", { name: "MCP", exact: true }).click();
     await expect(dialog.getByRole("heading", { name: "MCP connections" })).toBeVisible();
     await dialog.getByRole("button", { name: "Add server" }).click();
-    const gallery = page.getByRole("dialog", { name: "Add an MCP connection" });
+    const gallery = page.getByRole("region", { name: "Add an MCP connection" });
     await expect(gallery).toBeVisible();
     await expect(gallery.getByText("Filesystem", { exact: true })).toBeVisible();
     await gallery.getByRole("button", { name: "Configure manually" }).click();
-    const editor = page.getByRole("dialog", { name: "New MCP server" });
+    const editor = page.getByRole("region", { name: "New MCP server" });
     await expect(editor).toBeVisible();
     await expect(editor.getByText("Command", { exact: true })).toBeVisible();
     await expect(editor.getByText("Arguments (one per line)", { exact: true })).toBeVisible();

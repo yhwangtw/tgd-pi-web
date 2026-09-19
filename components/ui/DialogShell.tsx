@@ -56,6 +56,9 @@ export function DialogShell({
     };
     document.addEventListener("focusin", trackFocus);
     document.addEventListener("pointerdown", trackPointer, true);
+    // Explicitly opened search/picker flows can nominate a starting field.
+    // Otherwise modeless panels leave the current editor untouched.
+    initialFocusRef?.current?.focus({ preventScroll: true });
     return () => {
       document.removeEventListener("focusin", trackFocus);
       document.removeEventListener("pointerdown", trackPointer, true);
@@ -63,7 +66,7 @@ export function DialogShell({
       // from a composer they chose while this modeless panel was open.
       if (focusedInside && launcher?.isConnected && (panel?.contains(document.activeElement) || document.activeElement === document.body)) launcher.focus();
     };
-  }, [open, modal, panelRef]);
+  }, [open, modal, panelRef, initialFocusRef]);
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
