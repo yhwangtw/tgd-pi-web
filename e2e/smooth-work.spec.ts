@@ -101,10 +101,15 @@ test("draft and reading position survive navigation and reload", async ({ page }
     return positions.get("aaaa1111-2222-3333-4444-555566667777");
   })).toBe(readingPosition);
   await composer.fill("Unsaved first conversation");
-  await page.getByText("結構化輸出設計", { exact: true }).first().click();
+  // Other integration tests create conversations; an older fixture can be
+  // outside the virtualized sidebar. Find it through the actual search UI.
+  const search = page.getByRole("textbox", { name: "Search conversations", exact: true });
+  await search.fill("結構化輸出設計");
+  await page.getByRole("listbox", { name: "Sessions", exact: true }).getByRole("option", { name: /^結構化輸出設計/ }).click();
   await expect(composer).toHaveValue("");
   await composer.fill("Unsaved second conversation");
-  await page.getByText("專案架構分析", { exact: true }).first().click();
+  await search.fill("專案架構分析");
+  await page.getByRole("listbox", { name: "Sessions", exact: true }).getByRole("option", { name: /^專案架構分析/ }).click();
   await expect(composer).toHaveValue("Unsaved first conversation");
   await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeCloseTo(readingPosition, 0);
   await page.reload();
