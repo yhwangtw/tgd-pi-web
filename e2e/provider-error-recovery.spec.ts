@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
+test.afterEach(async ({ page }) => {
+  // Let in-flight fixture reads finish before Playwright disposes responses.
+  await page.unrouteAll({ behavior: "wait" });
+});
+
 const SESSION = "aaaa1111-2222-3333-4444-555566667777";
 const reasoningError = '400: {"message":"reasoning_effort `none` is not supported by this model Request id: fixture-request-123","type":"invalid_request_error","param":null}';
 const rejectedError = "The 'fixture-spark' model is not supported when using Codex with a ChatGPT account";

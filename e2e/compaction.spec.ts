@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "wait" });
+});
+
 const SESSION = "aaaa1111-2222-3333-4444-555566667777";
 type Job = { id: string; status: string; reason: string; startedAt: number; error?: string; notice?: string; result?: { tokensBefore: number; estimatedTokensAfter: number } };
 
