@@ -3,6 +3,15 @@ import { expect, test, type Page } from "@playwright/test";
 const SESSION = "aaaa1111-2222-3333-4444-555566667777";
 type Job = { id: string; status: string; reason: string; startedAt: number; error?: string; notice?: string; result?: { tokensBefore: number; estimatedTokensAfter: number } };
 
+async function enterMessage(page: Page, text: string) {
+  const input = page.getByRole("textbox", { name: /^(Message…|Queue a message after compaction…)$/ });
+  await input.fill(text);
+  // Enter does not wait for React to finish committing the controlled draft,
+  // unlike clicking Send. Wait for the same visible ready state first.
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+  await input.press("Enter");
+}
+
 async function fixture(page: Page, initialOutcome = "running") {
   let job: Job | null = null;
   let queue: object[] = [];
@@ -52,13 +61,13 @@ for (const style of ["original", "trae"]) for (const width of [320, 390, 1440]) 
     const backend = await fixture(page);
     await page.goto(`/?session=${SESSION}`);
     const input = page.getByRole("textbox", { name: /^(Message…|Queue a message after compaction…)$/ });
-    await input.fill("/compact keep decisions"); await input.press("Enter");
+    await enterMessage(page, "/compact keep decisions");
     const status = page.getByTestId("compaction-status");
     await expect(status).toHaveAttribute("data-state", "running");
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(input).toBeEditable();
     await expect(page.getByTestId("model-selector-trigger")).toBeDisabled();
-    await input.fill("continue after compact"); await input.press("Enter");
+    await enterMessage(page, "continue after compact");
     await expect(status).toContainText("1 message(s) waiting");
     await expect(input).toHaveValue("");
     await expect(status.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
@@ -82,14 +91,14 @@ test("no-op is neutral and failure details/retry are inline", async ({ page }) =
   const backend = await fixture(page, "skipped");
   await page.goto(`/?session=${SESSION}`);
   const input = page.getByRole("textbox", { name: /^(Message…|Queue a message after compaction…)$/ });
-  await input.fill("/compact decisions"); await input.press("Enter");
+  await enterMessage(page, "/compact decisions");
   const status = page.getByTestId("compaction-status");
   await expect(status).toContainText("Already compacted");
   await expect(status.getByRole("alert")).toHaveCount(0);
   await status.getByRole("button", { name: "Dismiss compaction status" }).click();
   await expect(status).toHaveCount(0);
   // A new accepted operation fails later; polling reconciles it without a modal.
-  await input.fill("/compact retry decisions"); await input.press("Enter");
+  await enterMessage(page, "/compact retry decisions");
   await expect(status).toHaveAttribute("data-state", "skipped");
   backend.finish("failed");
   await page.reload();
