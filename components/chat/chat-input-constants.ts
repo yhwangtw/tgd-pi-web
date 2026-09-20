@@ -9,8 +9,8 @@ export const TOOL_PRESET_MAP = {
 } as const;
 export const COMPOSITION_END_ENTER_GRACE_MS = 100;
 
-export const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"] as const;
-export type ThinkingLevelOption = typeof THINKING_LEVELS[number];
+export { THINKING_LEVEL_OPTIONS as THINKING_LEVELS } from "@/lib/thinking-levels";
+export type { ThinkingLevelOption } from "@/lib/thinking-levels";
 
 // tGD 7-phase slash commands
 export const TGD_COMMANDS = [

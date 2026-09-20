@@ -309,7 +309,7 @@
 
 /* ── Session list ── */
 .sessionList {
-  --session-row-height: calc(84px * var(--font-scale));
+  --session-row-height: max(68px, calc(68px * var(--font-scale)));
   --session-group-height: 42px;
   position: relative;
   overflow-y: auto;
@@ -396,15 +396,13 @@
   display: flex;
   height: var(--session-group-height);
   align-items: flex-end;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-caps);
+  font-family: var(--font-ui);
   padding: var(--space-2) var(--space-3) var(--space-1);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   color: var(--text-dim);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
   user-select: none;
 }
 
@@ -553,7 +551,7 @@
   }
 
   .sessionList {
-    --session-row-height: calc(108px * var(--font-scale));
+    --session-row-height: max(88px, calc(88px * var(--font-scale)));
     --session-group-height: 44px;
     padding-bottom: var(--space-3);
     overscroll-behavior-y: contain;
@@ -589,7 +587,7 @@
 }
 
 :global(html[data-ui-style="trae"]) .groupHeader {
-  letter-spacing: var(--tracking-caps);
+  letter-spacing: normal;
 }
 
 :global(html[data-ui-style="trae"]) .groupHeaderDivider {

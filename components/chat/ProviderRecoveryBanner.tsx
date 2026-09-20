@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProviderErrorKind, ProviderRecoveryModel } from "@/lib/provider-recovery";
+import { classifyProviderError, type ProviderErrorKind, type ProviderRecoveryModel } from "@/lib/provider-recovery";
 import { useI18n } from "@/lib/i18n";
 import s from "./ProviderRecoveryBanner.module.css";
 
@@ -18,30 +18,34 @@ interface Props {
   onRetryWithModel: (model: ProviderRecoveryModel) => void | Promise<void>;
   onAutomaticChange: (enabled: boolean) => void;
   onDismiss: () => void;
+  onAdjustThinking?: () => void;
 }
 
-export function ProviderRecoveryBanner({ recovery, busy, onRetryWithModel, onAutomaticChange, onDismiss }: Props) {
+export function ProviderRecoveryBanner({ recovery, busy, onRetryWithModel, onAutomaticChange, onDismiss, onAdjustThinking }: Props) {
   const { t } = useI18n();
+  const canFallback = classifyProviderError(recovery.message).recoverableWithFallback;
   return (
-    <section className={s.root} role="status" aria-label={t("recovery.title")}>
-      <div className={s.icon} aria-hidden>↻</div>
+    <section className={s.root} aria-label={t("recovery.options")}>
       <div className={s.body}>
         <div className={s.titleRow}>
-          <strong>{t(`recovery.kind.${recovery.kind}`)}</strong>
+          <strong>{t("recovery.options")}</strong>
           <button type="button" className={s.dismiss} onClick={onDismiss} aria-label={t("common.close")}>×</button>
         </div>
-        <p>{recovery.message}</p>
+        {recovery.kind === "model_unavailable" && <p>{t("recovery.chooseModel")}</p>}
         {recovery.retryAfterSeconds !== null && <span className={s.retryAfter}>{t("recovery.retryAfter").replace("{seconds}", String(recovery.retryAfterSeconds))}</span>}
         <div className={s.actions}>
+          {recovery.kind === "unsupported_setting" && onAdjustThinking && (
+            <button type="button" className={s.primary} disabled={busy} onClick={onAdjustThinking}>{t("recovery.adjustThinking")}</button>
+          )}
           {recovery.candidate && (
             <button type="button" className={s.primary} disabled={busy} onClick={() => void onRetryWithModel(recovery.candidate as ProviderRecoveryModel)}>
               {t("recovery.retryWith").replace("{model}", recovery.candidate.name)}
             </button>
           )}
-          <label>
+          {canFallback && <label>
             <input type="checkbox" checked={recovery.automatic} onChange={(event) => onAutomaticChange(event.target.checked)} />
             <span>{t("recovery.automatic")}</span>
-          </label>
+          </label>}
         </div>
       </div>
     </section>

@@ -2,12 +2,13 @@ import { stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { nextScheduleRunAt, validateScheduleTiming } from "./schedule-core";
 import type { ScheduleInput, ScheduleTiming } from "./schedule-types";
+import { THINKING_LEVEL_OPTIONS } from "./thinking-levels";
 
 export const DEFAULT_SCHEDULE_TOOLS = ["read", "grep", "find", "ls", "ask_user"];
 export const ALLOWED_SCHEDULE_TOOLS = new Set([
   "read", "bash", "edit", "write", "grep", "find", "ls", "ask_user",
 ]);
-const THINKING_LEVELS = new Set(["auto", "off", "minimal", "low", "medium", "high", "xhigh"]);
+const THINKING_LEVELS = new Set<string>(THINKING_LEVEL_OPTIONS);
 
 export class ScheduleValidationError extends Error {}
 

@@ -1,4 +1,4 @@
-export type ProviderErrorKind = "rate_limit" | "billing" | "authentication" | "unavailable" | "network" | "context" | "unknown";
+export type ProviderErrorKind = "rate_limit" | "billing" | "authentication" | "unavailable" | "network" | "context" | "unsupported_setting" | "model_unavailable" | "unknown";
 
 export interface ProviderRecoveryModel {
   provider: string;
@@ -23,6 +23,13 @@ export function classifyProviderError(message: string): ProviderErrorInfo {
     .map((pattern) => message.match(pattern)?.[1])
     .find(Boolean);
   const retryAfter = retryAfterSeconds ? Number.parseInt(retryAfterSeconds, 10) : null;
+
+  if (/(?:reasoning[_ ]effort|thinking[_ ](?:level|budget)).*(?:not supported|unsupported|invalid|not allowed)/i.test(message)) {
+    return { kind: "unsupported_setting", retryAfterSeconds: null, recoverableWithFallback: false };
+  }
+  if (/(?:model.{0,180}(?:not supported|not found|does not exist)|(?:do not|don't) have access to.{0,100}model)/i.test(message)) {
+    return { kind: "model_unavailable", retryAfterSeconds: null, recoverableWithFallback: false };
+  }
 
   if (/context(?: length| window)|too many tokens|maximum context|context_length_exceeded/i.test(message)) {
     return { kind: "context", retryAfterSeconds: retryAfter, recoverableWithFallback: false };

@@ -17,6 +17,11 @@ afterEach(() => {
 });
 
 describe("schedule validation", () => {
+  it("accepts Pi's Max level but rejects unsupported Ultra", async () => {
+    const base = { name: "Review", cwd: cwd(), prompt: "Inspect", timing: { kind: "daily", time: "09:00" }, timezone: "UTC" };
+    expect((await validateScheduleInput({ ...base, thinkingLevel: "max" })).thinkingLevel).toBe("max");
+    await expect(validateScheduleInput({ ...base, thinkingLevel: "ultra" })).rejects.toThrow(/thinking/i);
+  });
   it("normalizes a safe read-only schedule", async () => {
     const input = await validateScheduleInput({
       name: " Review ",

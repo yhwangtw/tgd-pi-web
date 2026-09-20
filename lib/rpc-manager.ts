@@ -10,6 +10,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { buildSessionContext, buildTree, cacheSessionPath, getLeafId } from "./session-reader";
 import { AgentEventLog, type AgentStreamRecord, type ReplayStatus } from "./agent-event-log";
+import { CompactionController } from "./compaction-controller";
+import type { QueuedFollowUp } from "./queued-follow-ups";
 import type { SessionEntry } from "./types";
 import { isWebExtensionUIDialogRequest } from "./web-extension-ui-types";
 import { createSnapshot } from "./git-snapshot";
@@ -147,6 +149,10 @@ export class AgentSessionWrapper {
   private lastReplacement?: AgentRuntimeDiagnostics["lastReplacement"];
   private lastFailure?: AgentRuntimeDiagnostics["lastFailure"];
   private lastRecoveryTarget?: RuntimeSessionTarget;
+  private compaction: CompactionController;
+  private compactionQueue: (QueuedFollowUp & { mode?: "steer" | "followUp" })[] = [];
+  private compactionQueueIds = new Set<string>();
+  private flushingCompactionQueue = false;
 
   constructor(
     inner: AgentSessionLike,
@@ -160,6 +166,7 @@ export class AgentSessionWrapper {
     private readonly onActiveToolsChanged?: (mode: ToolSelectionMode, toolNames: string[] | undefined) => void,
   ) {
     this.currentInner = inner;
+    this.compaction = this.createCompactionController();
     this.currentCwd = cwd;
     this.currentProviderTracker = providerTracker;
     this.currentRefreshModelCatalog = refreshModelCatalog;
@@ -244,7 +251,66 @@ export class AgentSessionWrapper {
     });
   }
 
+  private createCompactionController(): CompactionController {
+    const inner = this.inner;
+    const controller = new CompactionController(instructions => {
+      if (!this._alive || this.inner !== inner) return Promise.reject(new Error("Session changed before compaction started"));
+      return inner.compact(instructions);
+    }, state => {
+      if (this.compaction !== controller || !this._alive) return;
+      this.emitEvent({ type: "compaction_status", compaction: state });
+      if (state.status !== "running") void this.flushCompactionQueue(state.willRetry === true);
+    });
+    return controller;
+  }
+
+  private publishCompactionQueue() {
+    this.emitEvent({ type: "compaction_queue", items: this.compactionQueue });
+  }
+
+  private async flushCompactionQueue(willRetry = false) {
+    if (!this._alive || this.flushingCompactionQueue || !this.compactionQueue.length || this.compaction.state?.status === "running") return;
+    if (this.inner.isCompacting && !willRetry) {
+      const controller = this.compaction;
+      setTimeout(() => { if (controller === this.compaction) void this.flushCompactionQueue(); }, 50).unref?.();
+      return;
+    }
+    this.flushingCompactionQueue = true;
+    const inner = this.inner;
+    try {
+      while (this._alive && this.inner === inner && this.compactionQueue.length && (!inner.isCompacting || willRetry)) {
+        const item = this.compactionQueue[0];
+        const images = item.images?.map(image => ({ ...image, type: "image" as const }));
+        if (willRetry || inner.isStreaming) {
+          if (item.mode === "steer") await inner.steer(item.message, images);
+          else await inner.followUp(item.message, images);
+          this.compactionQueue = this.compactionQueue.filter(queued => queued.id !== item.id);
+          this.publishCompactionQueue();
+        } else {
+          // Remove submitted text from the pending display. Restore only a setup
+          // rejection; a completed failed run already has a transcript/retry action.
+          this.compactionQueue = this.compactionQueue.filter(queued => queued.id !== item.id);
+          this.publishCompactionQueue();
+          const previousEnd = this.lastAgentEndCursor;
+          try { await this.send({ type: "prompt", message: item.message, images, awaitCompletion: true }); }
+          catch (error) {
+            if (this.inner === inner && this.lastAgentEndCursor === previousEnd) this.compactionQueue.unshift(item);
+            this.publishCompactionQueue();
+            throw error;
+          }
+        }
+      }
+    } catch (error) {
+      this.emitEvent({ type: "compaction_queue_error", message: this.errorMessage(error) });
+    } finally {
+      this.flushingCompactionQueue = false;
+    }
+  }
+
   private prepareForSessionReplacement(): void {
+    this.compactionQueue = [];
+    this.compactionQueueIds.clear();
+    this.compaction = this.createCompactionController();
     this.runActive = null;
     this.streamingMessage = null;
     this.activeTools.clear();
@@ -260,6 +326,7 @@ export class AgentSessionWrapper {
     if (!runtime) return;
     const previousSessionId = this.currentInner.sessionId;
     this.currentInner = runtime.session as unknown as AgentSessionLike;
+    this.compaction = this.createCompactionController();
     this.currentCwd = runtime.cwd;
     this.applyRuntimeMetadata();
     this.configureWebExtensionUI();
@@ -511,7 +578,7 @@ export class AgentSessionWrapper {
     this.idleTimer = setTimeout(() => {
       // Silence is not idleness: a model/tool may be working without events.
       // Pending decisions also need to survive while the user works elsewhere.
-      if (this.runActive || this.inner.isStreaming || this.inner.isCompacting || this.bashRunning
+      if (this.runActive || this.inner.isStreaming || this.inner.isCompacting || this.compaction.state?.status === "running" || this.flushingCompactionQueue || this.bashRunning
         || this.webExtensionUI?.snapshot().some(isWebExtensionUIDialogRequest)) {
         this.resetIdleTimer();
         return;
@@ -575,7 +642,9 @@ export class AgentSessionWrapper {
       sessionId: this.inner.sessionId,
       sessionFile: this.inner.sessionFile ?? "",
       isStreaming: this.runActive ?? this.inner.isStreaming,
-      isCompacting: this.inner.isCompacting,
+      isCompacting: this.inner.isCompacting || this.compaction.state?.status === "running",
+      compaction: this.compaction.state,
+      compactionQueue: this.compactionQueue,
       autoCompactionEnabled: this.inner.autoCompactionEnabled,
       autoRetryEnabled: this.inner.autoRetryEnabled,
       model: model ? { id: model.id, provider: model.provider } : undefined,
@@ -604,6 +673,10 @@ export class AgentSessionWrapper {
   }
 
   private emitEvent(event: AgentEvent | WebExtensionUIEvent): void {
+    if (["compaction_start", "compaction_end", "auto_compaction_start", "auto_compaction_end"].includes(event.type)) {
+      this.compaction.observe(event as AgentEvent);
+      event = { ...event, webManaged: true } as AgentEvent;
+    }
     const message = "message" in event ? event.message : undefined;
     if (event.type === "agent_start") {
       this.runActive = true;
@@ -667,7 +740,7 @@ export class AgentSessionWrapper {
 
   private restartForAuthIfIdle(): boolean {
     if (!this._alive || !this.authRefreshPending) return false;
-    if (this.inner.isStreaming || this.inner.isCompacting || this.bashRunning) return false;
+    if (this.inner.isStreaming || this.inner.isCompacting || this.compaction.state?.status === "running" || this.flushingCompactionQueue || this.bashRunning) return false;
     this.authRefreshPending = false;
     this.emitEvent({ type: "session_restart", reason: "auth" });
     this.destroy();
@@ -797,7 +870,40 @@ export class AgentSessionWrapper {
         // Pi owns compaction eligibility, including repeated compactions whose
         // boundary starts at the previous firstKeptEntryId. Duplicating that
         // private algorithm here caused valid repeated compactions to be rejected.
+        if (command.background === true) {
+          if (typeof command.requestId !== "string" || !/^[\w-]{1,128}$/.test(command.requestId)) throw new Error("A valid compaction request ID is required");
+          return this.compaction.start(command.requestId, command.customInstructions as string | undefined);
+        }
         return this.inner.compact(command.customInstructions as string | undefined);
+      }
+
+      case "queue_compaction_prompt": {
+        if (typeof command.id !== "string" || typeof command.message !== "string") throw new Error("A queued message ID and text are required");
+        if (this.compactionQueueIds.has(command.id)) return { queued: true };
+        this.compactionQueueIds.add(command.id);
+        while (this.compactionQueueIds.size > 128) this.compactionQueueIds.delete(this.compactionQueueIds.values().next().value!);
+        const images = (command.images as QueuedFollowUp["images"])?.map(image => ({ ...image, type: "image" as const }));
+        if (!this.inner.isCompacting && this.compaction.state?.status !== "running" && !this.flushingCompactionQueue) {
+          if (this.inner.isStreaming) {
+            if (command.mode === "steer") await this.inner.steer(command.message, images);
+            else await this.inner.followUp(command.message, images);
+          } else await this.send({ type: "prompt", message: command.message, images });
+          return { queued: false };
+        }
+        this.compactionQueue.push({ id: command.id, message: command.message, images, mode: command.mode === "steer" ? "steer" : "followUp" });
+        this.publishCompactionQueue();
+        return { queued: true };
+      }
+
+      case "retry_compaction_queue": {
+        void this.flushCompactionQueue();
+        return null;
+      }
+
+      case "clear_compaction_queue": {
+        this.compactionQueue = [];
+        this.publishCompactionQueue();
+        return null;
       }
 
       case "set_auto_compaction": {

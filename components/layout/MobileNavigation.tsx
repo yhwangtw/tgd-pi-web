@@ -73,16 +73,20 @@ interface MoreActionProps {
 }
 
 function MoreAction({ icon, label, onClick, disabled, active, badge }: MoreActionProps) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
       className={`${s.mobileMoreAction} ${active ? s.mobileMoreActionActive : ""}`}
       onClick={onClick}
       disabled={disabled}
+      aria-label={badge ? `${label} · ${badge} ${t("attention.unread")}` : undefined}
     >
       <span aria-hidden>{icon}</span>
-      <span>{label}</span>
-      {badge ? <span className={s.mobileActionBadge}>{Math.min(badge, 99)}</span> : null}
+      <span className={s.mobileActionLabel}>
+        <span>{label}</span>
+        {badge ? <span className={s.mobileActionBadge} aria-hidden="true">{badge > 99 ? "99+" : badge}</span> : null}
+      </span>
     </button>
   );
 }

@@ -5,6 +5,7 @@ import { Clock3, Pencil, Plus } from "lucide-react";
 import { fetchJson, useRequestResource } from "@/hooks/useRequestResource";
 import { showToast } from "@/hooks/useToast";
 import { useI18n, type MsgKey } from "@/lib/i18n";
+import { THINKING_LEVEL_OPTIONS } from "@/lib/thinking-levels";
 import { DialogShell } from "@/components/ui/DialogShell";
 import { IconButton } from "@/components/ui/IconButton";
 import type {
@@ -473,7 +474,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
               <label className={s.field}>
                 <span>{t("schedule.thinking")}</span>
                 <select value={draft.thinkingLevel} onChange={(event) => setDraft({ ...draft, thinkingLevel: event.target.value })}>
-                  {["auto", "off", "minimal", "low", "medium", "high", "xhigh"].map((level) => <option key={level} value={level}>{level}</option>)}
+                  {THINKING_LEVEL_OPTIONS.map((level) => <option key={level} value={level}>{level}</option>)}
                 </select>
               </label>
               <label className={s.field}>

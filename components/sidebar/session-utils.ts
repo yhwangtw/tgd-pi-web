@@ -100,6 +100,20 @@ export function formatRelativeTime(dateStr: string, locale: "en" | "zh" = "en"):
   return date.toLocaleDateString(locale === "zh" ? "zh-TW" : undefined);
 }
 
+/** Short visual label; the row retains the precise timestamp in its tooltip. */
+export function formatSessionListTime(dateStr: string, locale: "en" | "zh" = "en"): string {
+  const date = new Date(dateStr);
+  if (!Number.isFinite(date.getTime())) return "";
+  const now = new Date();
+  const elapsed = Math.max(0, now.getTime() - date.getTime());
+  if (elapsed < 60_000) return locale === "zh" ? "剛剛" : "now";
+  if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)}${locale === "zh" ? "分" : "m"}`;
+  if (elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)}${locale === "zh" ? "小時" : "h"}`;
+  return date.toLocaleDateString(locale === "zh" ? "zh-TW" : "en-US", {
+    month: "numeric", day: "numeric", ...(date.getFullYear() !== now.getFullYear() ? { year: "2-digit" as const } : {}),
+  });
+}
+
 /** Return the 5 most recently active cwds across all sessions */
 export function getRecentCwds(sessions: SessionInfo[]): string[] {
   const latestByCwd = new Map<string, string>(); // cwd -> most recent modified

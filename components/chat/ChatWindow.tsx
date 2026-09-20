@@ -38,6 +38,7 @@ import { useDragDrop } from "@/hooks/useDragDrop";
 import styles from "./ChatWindow.module.css";
 import { useI18n, type MsgKey } from "@/lib/i18n";
 import { QueuedFollowUps } from "./QueuedFollowUps";
+import { CompactionStatus } from "./CompactionStatus";
 import { isProviderAuthError } from "./AssistantMessageView";
 import { buildConversationLayout } from "./conversation-turns";
 import { assistantModelKey, shouldShowAssistantModelLabel } from "./message-chrome";
@@ -205,13 +206,16 @@ function activityText(messages: import("@/lib/types").AssistantMessage[], toolRe
   return parts.join(" ");
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange, onSessionNamed, isParallel, paneLabel, onClosePane, wideChat, onOpenModels }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef: providedChatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange, onSessionNamed, isParallel, paneLabel, onClosePane, wideChat, onOpenModels }: Props) {
+  const localChatInputRef = useRef<ChatInputHandle>(null);
+  const chatInputRef = providedChatInputRef ?? localChatInputRef;
   const {
     loading, error, runtimeFailure, messages, entryIds, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
+    compactionStatus, compactionQueue, handleCheckCompaction, handleDismissCompaction, handleClearCompactionQueue, handleRetryCompaction,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,
     isNew,
     messagesEndRef, scrollContainerRef,
@@ -1006,7 +1010,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       modelCatalogDiagnostics={catalogDiagnostics}
       onRetryModelCatalog={retryModelCatalog}
       onOpenModels={onOpenModels}
-      onCompact={session ? handleCompact : undefined}
+      onCompact={session ? () => void handleCompact() : undefined}
       onAbortCompaction={handleAbortCompaction}
       isCompacting={isCompacting}
       compactError={compactError}
@@ -1412,6 +1416,17 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               </div>
             )}
 
+            {providerRecovery && !agentRunning && (
+              <ProviderRecoveryBanner
+                recovery={{ ...providerRecovery, automatic: autoProviderFallback }}
+                busy={false}
+                onRetryWithModel={handleRetryWithModel}
+                onAdjustThinking={() => chatInputRef.current?.openControls?.()}
+                onAutomaticChange={handleAutoProviderFallbackChange}
+                onDismiss={() => setProviderRecovery(null)}
+              />
+            )}
+
             {bashRun && (
               <BashBlock
                 command={bashRun.command}
@@ -1487,7 +1502,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 {Math.round(contextUsage.percent)}%
               </span>
               <button
-                onClick={handleCompact}
+                onClick={() => void handleCompact()}
                 disabled={agentRunning}
                 className="shrink-0 rounded border border-[var(--color-warning-border)] px-2 py-0.5 text-[11px] font-medium hover:bg-[var(--color-warning-bg-strong)] disabled:opacity-50"
               >
@@ -1497,6 +1512,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </div>
           </div>
         )}
+        <CompactionStatus state={compactionStatus} queued={compactionQueue.length}
+          onCancel={handleAbortCompaction} onCheck={handleCheckCompaction} onRetry={handleRetryCompaction}
+          onDismiss={handleDismissCompaction} onClear={handleClearCompactionQueue} />
         <QueuedFollowUps
           items={queuedFollowUps}
           busy={queueUpdating}
@@ -1506,15 +1524,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           onMove={handleMoveQueued}
           onClear={handleClearQueue}
         />
-        {providerRecovery && (
-          <ProviderRecoveryBanner
-            recovery={{ ...providerRecovery, automatic: autoProviderFallback }}
-            busy={agentRunning}
-            onRetryWithModel={handleRetryWithModel}
-            onAutomaticChange={handleAutoProviderFallbackChange}
-            onDismiss={() => setProviderRecovery(null)}
-          />
-        )}
         {runtimeFailure ? (
           <div className={styles.runtimeRecovery} role="alert">
             <div className={styles.runtimeRecoveryText}>

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useI18n } from "@/lib/i18n";
+import { THINKING_LEVEL_OPTIONS } from "@/lib/thinking-levels";
 import type { AgentRun } from "@/lib/agent-run-types";
 import { DialogShell } from "@/components/ui/DialogShell";
 import s from "./AgentDashboardPanel.module.css";
@@ -182,7 +183,7 @@ export function AgentRunForm({ defaultCwd, onCancel, onCreated }: Props) {
               <label className={s.field}>
                 <span>{t("agents.thinking")}</span>
                 <select value={thinkingLevel} onChange={(event) => setThinkingLevel(event.target.value)}>
-                  {["auto", "off", "minimal", "low", "medium", "high", "xhigh"].map((level) => (
+                  {THINKING_LEVEL_OPTIONS.map((level) => (
                     <option key={level} value={level}>{level}</option>
                   ))}
                 </select>

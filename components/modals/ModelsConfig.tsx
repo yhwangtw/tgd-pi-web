@@ -12,6 +12,7 @@ import { ApiKeyDetail } from "./ApiKeyDetail";
 import { AddProviderPicker } from "./AddProviderPicker";
 import { ProviderHealth } from "./ProviderHealth";
 import { useI18n } from "@/lib/i18n";
+import { PI_THINKING_LEVELS as THINKING_LEVELS } from "@/lib/thinking-levels";
 import styles from "./ModelsConfig.module.css";
 
 // ── Provider detail ───────────────────────────────────────────────────────────
@@ -69,7 +70,6 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
 
 // ── ThinkingLevelMap editor ───────────────────────────────────────────────────
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 type ThinkingLevel = typeof THINKING_LEVELS[number];
 
 const LEVEL_COLORS: Record<ThinkingLevel, string> = {
@@ -79,6 +79,7 @@ const LEVEL_COLORS: Record<ThinkingLevel, string> = {
   medium:  "var(--color-thinking-med)",
   high:    "var(--color-thinking-high)",
   xhigh:   "var(--color-thinking-max)",
+  max:     "var(--color-thinking-max)",
 };
 
 function ThinkingLevelMapEditor({

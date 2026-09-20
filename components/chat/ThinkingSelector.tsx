@@ -15,6 +15,7 @@ const THINKING_LABEL_KEYS: Record<ThinkingLevelOption, MsgKey> = {
   medium: "input.thinking.medium",
   high: "input.thinking.high",
   xhigh: "input.thinking.xhigh",
+  max: "input.thinking.max",
 };
 
 const THINKING_DESC_KEYS: Record<ThinkingLevelOption, MsgKey> = {
@@ -25,15 +26,16 @@ const THINKING_DESC_KEYS: Record<ThinkingLevelOption, MsgKey> = {
   medium: "input.thinkingDesc.medium",
   high: "input.thinkingDesc.high",
   xhigh: "input.thinkingDesc.xhigh",
+  max: "input.thinkingDesc.max",
 };
 
 interface ThinkingSelectorProps {
-  thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+  thinkingLevel?: ThinkingLevelOption;
   thinkingLevelMap?: Record<string, string | null> | null;
   availableThinkingLevels?: string[] | null;
   isStreaming: boolean;
   presentation?: "popover" | "inline";
-  onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
+  onThinkingLevelChange?: (level: ThinkingLevelOption) => void;
 }
 
 export function ThinkingSelector({
@@ -109,7 +111,7 @@ export function ThinkingSelector({
           aria-label={t("input.thinkingTitle")}
         >
           {THINKING_LEVELS.filter((lvl) => {
-            if (!availableThinkingLevels) return true;
+            if (!availableThinkingLevels) return lvl !== "max" || typeof thinkingLevelMap?.max === "string";
             if (lvl === "auto") return true;
             return availableThinkingLevels.includes(lvl);
           }).map((lvl) => {

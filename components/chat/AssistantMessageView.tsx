@@ -35,31 +35,11 @@ import { MessageBookmarkAction, MessageBookmarkIndicator } from "./MessageBookma
 import { useMobileActionPlacement } from "@/hooks/use-mobile-action-placement";
 import { redactSensitiveText } from "@/lib/redaction";
 import type { OutputCardKind } from "@/lib/output-design";
+import { presentProviderError } from "@/lib/provider-error-presentation";
+export { presentProviderError } from "@/lib/provider-error-presentation";
 
 export function isProviderAuthError(errorMessage?: string): boolean {
   return !!errorMessage && /(?:no api key|unauthori[sz]ed|authentication|credential|sign[ -]?in|log[ -]?in|openai-codex)/i.test(errorMessage);
-}
-
-export function presentProviderError(errorMessage: string | undefined, fallback: string): {
-  summary: string;
-  actionUrl: string | null;
-  details: string | null;
-} {
-  const raw = errorMessage ? redactSensitiveText(errorMessage).trim() : undefined;
-  if (!raw) return { summary: fallback, actionUrl: null, details: null };
-  const url = raw.match(/https?:\/\/[^\s<>]+/i)?.[0]?.replace(/[),.;]+$/, "") ?? null;
-  const withoutUrl = url ? raw.replace(url, "") : raw;
-  const summary = withoutUrl
-    .replace(/^\s*(?:error\s*)?\d{3}\s*[:\-]?\s*/i, "")
-    .replace(/\s*(?:manage|update)\s+(?:your\s+)?billing\s+(?:here\s*)?:?\s*$/i, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/[.:\-\s]+$/, "") || fallback;
-  return {
-    summary,
-    actionUrl: url,
-    details: url || summary !== raw ? raw : null,
-  };
 }
 
 function formatTime(ts?: number, locale: "en" | "zh" = "en"): string | null {
@@ -138,7 +118,10 @@ export function AssistantMessageView({
 }) {
   const { locale, t } = useI18n();
   const time = showTimestamp ? formatTime(message.timestamp, locale) : null;
-  const errorPresentation = presentProviderError(message.errorMessage, t("chat.modelFailed"));
+  const errorPresentation = presentProviderError(message.errorMessage, t("chat.modelFailed"), {
+    unsupported_setting: t("recovery.unsupportedThinking"),
+    model_unavailable: t("recovery.modelRejected"),
+  });
   const blocks = useMemo(() => message.content ?? [], [message.content]);
   const [copied, setCopied] = useState(false);
   const streamStartRef = useRef<number | null>(null);

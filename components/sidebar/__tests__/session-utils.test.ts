@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { buildSessionDisplayTitles, buildSessionTree, findSessionTreeNode, flattenSessionTree, getSessionDisplayTitle, getSessionPreview, getSessionProjectName } from "../session-utils";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { buildSessionDisplayTitles, buildSessionTree, findSessionTreeNode, flattenSessionTree, formatSessionListTime, getSessionDisplayTitle, getSessionPreview, getSessionProjectName } from "../session-utils";
 import type { SessionInfo } from "@/lib/types";
 
 const s = (id: string, over: Partial<SessionInfo> = {}): SessionInfo => ({
@@ -11,6 +11,23 @@ const s = (id: string, over: Partial<SessionInfo> = {}): SessionInfo => ({
   messageCount: 1,
   firstMessage: `msg-${id}`,
   ...over,
+});
+
+describe("compact sidebar timestamps", () => {
+  afterEach(() => vi.useRealTimers());
+  it("keeps minutes and hours short in both languages", () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-09-20T12:00:00Z"));
+    expect(formatSessionListTime("2026-09-20T12:00:00Z")).toBe("now");
+    expect(formatSessionListTime("2026-09-20T11:55:00Z")).toBe("5m");
+    expect(formatSessionListTime("2026-09-20T10:00:00Z")).toBe("2h");
+    expect(formatSessionListTime("2026-09-20T10:00:00Z", "zh")).toBe("2小時");
+    expect(formatSessionListTime("invalid")).toBe("");
+  });
+  it("omits the current year but retains older years", () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 8, 20, 12));
+    expect(formatSessionListTime(new Date(2026, 8, 12, 12).toISOString())).toBe("9/12");
+    expect(formatSessionListTime(new Date(2025, 8, 12, 12).toISOString())).toBe("9/12/25");
+  });
 });
 
 describe("buildSessionTree sort modes", () => {

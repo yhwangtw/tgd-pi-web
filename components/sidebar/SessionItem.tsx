@@ -3,12 +3,12 @@
 import { useState, useCallback, useRef } from "react";
 import type { SessionInfo } from "@/lib/types";
 import { workspaceStateLabel, type WorkspaceIdentity } from "@/lib/workspace-identity";
-import { formatRelativeTime, getSessionDisplayTitle, getSessionPreview, getSessionProjectName } from "./session-utils";
+import { formatSessionListTime, getSessionDisplayTitle, getSessionPreview, getSessionProjectName } from "./session-utils";
 import { getTagStyle } from "@/lib/tag-colors";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/lib/i18n";
 import { SessionContextMenu, type SessionContextMenuPosition } from "./SessionContextMenu";
-import { ChevronDown, GitFork, MoreHorizontal, Pencil, Star, Trash2 } from "lucide-react";
+import { ChevronDown, GitFork, MoreHorizontal, Trash2 } from "lucide-react";
 import styles from "./SessionItem.module.css";
 
 interface SessionItemProps {
@@ -55,6 +55,7 @@ export function SessionItem({
   onOpenParallel,
   isArchived = false,
   onArchiveToggle,
+  showProject = false,
   displayTitle,
   workspaceIdentity,
   listOrder,
@@ -65,14 +66,19 @@ export function SessionItem({
   const [deleting, setDeleting] = useState(false);
   const [contextMenu, setContextMenu] = useState<SessionContextMenuPosition | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const overflowRef = useRef<HTMLButtonElement>(null);
   const { locale, t } = useI18n();
   const { theme } = useTheme();
 
-  const title = displayTitle ?? getSessionDisplayTitle(session, 50);
+  // Keep disambiguation available to assistive technology and tooltips without
+  // repeating project names and full dates in the visible conversation title.
+  const title = getSessionDisplayTitle(session, 200);
+  const accessibleTitle = displayTitle ?? title;
   const preview = getSessionPreview(session);
   const repository = workspaceIdentity?.repository ?? getSessionProjectName(session.cwd);
   const branch = workspaceIdentity?.branch
     ?? t(workspaceIdentity ? workspaceStateLabel(workspaceIdentity) : "topbar.gitLoading");
+  const details = `${accessibleTitle}\n${session.cwd} · ${branch}\n${session.modified}`;
 
   const startRename = useCallback(() => {
     setRenameValue(session.name ?? "");
@@ -119,6 +125,7 @@ export function SessionItem({
 
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
+    overflowRef.current?.focus({ preventScroll: true });
   }, []);
 
   const handleOverflowClick = useCallback((e: React.MouseEvent) => {
@@ -143,6 +150,7 @@ export function SessionItem({
         tabIndex={-1}
         role="option"
         aria-selected={isSelected}
+        aria-label={accessibleTitle}
         className={["hover-group", !confirmDelete && !isSelected ? "hover-bg" : "", styles.item].filter(Boolean).join(" ")}
         style={{
           paddingLeft: depth > 0 ? depth * 12 + 14 : 14,
@@ -195,30 +203,14 @@ export function SessionItem({
               )}
               <div
                 className={`${styles.sessionTitle} ${isSelected ? styles.sessionTitleSelected : styles.sessionTitleDefault}`}
-                title={title}
+                title={details}
               >
                 {title}
               </div>
+              <time className={styles.metaTime} dateTime={session.modified} title={session.modified}>
+                {formatSessionListTime(session.modified, locale)}
+              </time>
               <div className={styles.titleActions}>
-                <button
-                  type="button"
-                  onClick={(event) => { event.stopPropagation(); onPinToggle?.(session.id); }}
-                  title={isPinned ? t("session.unpin") : t("session.pin")}
-                  aria-label={isPinned ? t("session.unpin") : t("session.pin")}
-                  aria-pressed={isPinned}
-                  className={`${styles.rowAction} ${isPinned ? styles.rowActionPinned : ""}`}
-                >
-                  <Star size={14} strokeWidth={1.8} fill={isPinned ? "currentColor" : "none"} aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => { event.stopPropagation(); startRename(); }}
-                  title={t("session.rename")}
-                  aria-label={t("session.rename")}
-                  className={styles.rowAction}
-                >
-                  <Pencil size={14} strokeWidth={1.8} aria-hidden />
-                </button>
                 {hasChildren && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
@@ -231,6 +223,7 @@ export function SessionItem({
                   </button>
                 )}
                 <button
+                  ref={overflowRef}
                   onClick={handleOverflowClick}
                   title={t("session.moreActions")}
                   aria-label={t("session.moreActions")}
@@ -243,16 +236,11 @@ export function SessionItem({
               </div>
             </div>
 
-            {/* Keep repository identity separate from the conversational excerpt. */}
-            <div className={styles.metaRow}>
-              <span className={styles.workspaceMeta} title={`${session.cwd} · ${branch}`}>
-                <span>{repository}</span>
-                <span className={styles.workspaceSlash}>/</span>
-                <span className={styles.workspaceBranch}>{branch}</span>
-              </span>
-              <span className={styles.metaTime} title={session.modified}>{formatRelativeTime(session.modified, locale)}</span>
-            </div>
             <div className={styles.previewRow}>
+              {showProject && <>
+                <span className={styles.workspaceMeta} title={`${session.cwd} · ${branch}`}>{repository}</span>
+                <span className={styles.metaDivider} aria-hidden>·</span>
+              </>}
               <span className={styles.preview} title={preview || `${session.messageCount} ${session.messageCount === 1 ? t("sidebar.msg") : t("sidebar.msgs")}`}>
                 {preview || `${session.messageCount} ${session.messageCount === 1 ? t("sidebar.msg") : t("sidebar.msgs")}`}
               </span>

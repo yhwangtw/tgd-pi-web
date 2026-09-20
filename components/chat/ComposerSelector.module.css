@@ -52,6 +52,12 @@
 .catalogAction:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .catalogAction:disabled { color: var(--text-muted); cursor: not-allowed; }
 
+.modelOption[aria-disabled="true"], .mobileModelSelect[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .inlineRoot {
   display: grid;
   width: 100%;
@@ -429,9 +435,11 @@
 
 @media (max-width: 700px) {
   .panelInline .option {
+    display: grid;
     min-height: var(--control-touch);
     grid-template-columns: 12px minmax(0, 1fr);
     align-items: start;
+    row-gap: var(--space-1);
     white-space: normal;
   }
 

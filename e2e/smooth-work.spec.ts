@@ -109,7 +109,10 @@ test("draft and reading position survive navigation and reload", async ({ page }
   await expect(composer).toHaveValue("");
   await composer.fill("Unsaved second conversation");
   await search.fill("專案架構分析");
-  await page.getByRole("listbox", { name: "Sessions", exact: true }).getByRole("option", { name: /^專案架構分析/ }).click();
+  // Runtime import/fork tests can leave a conversation with the same title.
+  // Select the original fixture identity, not an arbitrary matching name.
+  await page.getByRole("listbox", { name: "Sessions", exact: true })
+    .locator('[data-session-row="aaaa1111-2222-3333-4444-555566667777"]').click();
   await expect(composer).toHaveValue("Unsaved first conversation");
   await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeCloseTo(readingPosition, 0);
   await page.reload();

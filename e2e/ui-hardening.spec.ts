@@ -114,14 +114,15 @@ for (const style of ["original", "trae"]) {
     }
   });
 
-  test(`${style}: repo and branch have a dedicated line with scaled virtual rows`, async ({ page }) => {
+  test(`${style}: project and excerpt share one quiet line with scaled virtual rows`, async ({ page }) => {
     await page.addInitScript(style => localStorage.setItem("pi-ui-style", style), style);
     await page.setViewportSize({ width: 1440, height: 900 });
     await openSession(page);
     const row = page.locator(`[data-session-row="${SID}"]`);
     const workspace = row.locator('[class*="workspaceMeta"]');
     await expect(workspace).toContainText("demo-project");
-    await expect(workspace).toContainText("main");
+    await expect(workspace).toHaveAttribute("title", /main/);
+    await expect(workspace).not.toContainText("main");
     const outputPreview = page.locator('[data-session-row="bbbb1111-2222-3333-4444-555566667777"] [class*="previewRow"]');
     await expect(outputPreview).not.toContainText("[!RESULT]");
     await expect(outputPreview).not.toContainText(">");
@@ -136,7 +137,8 @@ for (const style of ["original", "trae"]) {
       }).toBe(true);
       const identityBox = (await workspace.boundingBox())!;
       const excerptBox = (await row.locator('[class*="previewRow"]').boundingBox())!;
-      expect(excerptBox.y).toBeGreaterThanOrEqual(identityBox.y + identityBox.height - 1);
+      expect(identityBox.y).toBeGreaterThanOrEqual(excerptBox.y - 1);
+      expect(identityBox.y + identityBox.height).toBeLessThanOrEqual(excerptBox.y + excerptBox.height + 1);
       const rows = await page.locator('[class*="virtualSessionRow"]').evaluateAll(elements => elements.map(el => ({ top: el.getBoundingClientRect().top, bottom: el.getBoundingClientRect().bottom })));
       for (let i = 1; i < rows.length; i++) expect(rows[i].top).toBeGreaterThanOrEqual(rows[i - 1].bottom - 1);
     }

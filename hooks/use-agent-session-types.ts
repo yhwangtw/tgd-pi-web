@@ -135,7 +135,7 @@ export interface UseAgentSessionOptions {
   onSessionNamed?: () => void;
 }
 
-export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type { ThinkingLevelOption } from "@/lib/thinking-levels";
 
 export interface ChatInputHandle {
   insertText: (text: string) => void;

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Archive, Columns2, Pencil, Star, Tag, Trash2 } from "lucide-react";
 import type { SessionInfo } from "@/lib/types";
 import { getTagStyle } from "@/lib/tag-colors";
@@ -86,23 +87,30 @@ export function SessionContextMenu({
 
   // Clamp the menu to the viewport so it never opens off-screen
   const [clampedPos, setClampedPos] = useState<{ left: number; top: number } | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!position) {
       setClampedPos(null);
       return;
     }
-    // First measure the menu, then clamp
-    const MENU_W = 200;
-    const MENU_H = (addingTag ? 250 : 210) + (existingTags.length > 0 ? 34 : 0);
-    const padding = 6;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let left = position.x;
-    let top = position.y;
-    if (left + MENU_W + padding > vw) left = Math.max(padding, vw - MENU_W - padding);
-    if (top + MENU_H + padding > vh) top = Math.max(padding, vh - MENU_H - padding);
-    setClampedPos({ left, top });
+    const clamp = () => {
+      const menu = menuRef.current;
+      if (!menu) return;
+      const padding = 8;
+      setClampedPos({
+        left: Math.max(padding, Math.min(position.x, window.innerWidth - menu.offsetWidth - padding)),
+        top: Math.max(padding, Math.min(position.y, window.innerHeight - menu.offsetHeight - padding)),
+      });
+    };
+    clamp();
+    window.addEventListener("resize", clamp);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(clamp);
+    if (menuRef.current) observer?.observe(menuRef.current);
+    return () => { window.removeEventListener("resize", clamp); observer?.disconnect(); };
   }, [position, addingTag, existingTags.length]);
+
+  useEffect(() => {
+    if (position) menuRef.current?.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')?.focus();
+  }, [position]);
 
   const runAndClose = useCallback(
     (fn: () => void) => {
@@ -146,16 +154,31 @@ export function SessionContextMenu({
     [tagDraft, onAddTag, onClose],
   );
 
-  if (!position || !clampedPos) return null;
+  if (!position) return null;
 
-  return (
+  // Virtualized rows have transformed ancestors: portal the menu so it cannot
+  // be clipped or positioned relative to a scrolling row.
+  return createPortal(
     <div
       ref={menuRef}
       role="menu"
       aria-label={t("mobile.sessionActions")}
       className={styles.menu}
-      style={{ left: clampedPos.left, top: clampedPos.top }}
+      style={{ left: clampedPos?.left ?? position.x, top: clampedPos?.top ?? position.y }}
       onContextMenu={(e) => e.preventDefault()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+        if (e.key === "Tab") { onClose(); return; }
+        if ((e.target as HTMLElement).tagName === "INPUT") return;
+        if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+        e.preventDefault();
+        const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)') ?? []);
+        const current = items.indexOf(document.activeElement as HTMLButtonElement);
+        const next = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1
+          : (current + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+        items[next]?.focus();
+      }}
     >
       <button role="menuitem" onClick={handlePin} className={styles.menuItem}>
         <Star size={13} fill={isPinned ? "currentColor" : "none"} className={styles.menuIcon} aria-hidden />
@@ -239,6 +262,6 @@ export function SessionContextMenu({
         <Trash2 size={13} className={styles.menuIcon} aria-hidden />
         <span>{t("session.delete")}</span>
       </button>
-    </div>
+    </div>, document.body,
   );
 }

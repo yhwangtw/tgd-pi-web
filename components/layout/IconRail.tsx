@@ -53,6 +53,7 @@ export function IconRail({
   onToggleAppearance,
 }: IconRailProps) {
   const { t } = useI18n();
+  const attentionLabel = `${t("attention.title")}${attentionUnreadCount > 0 ? ` · ${attentionUnreadCount} ${t("attention.unread")}` : ""}`;
 
   return (
     <nav className={s.rail} aria-label={t("navigation.primary")}>
@@ -67,13 +68,13 @@ export function IconRail({
       </button>
       <button
         onClick={() => onSelectView("attention")}
-        title={t("attention.title")}
-        aria-label={`${t("attention.title")}${attentionUnreadCount > 0 ? ` · ${attentionUnreadCount}` : ""}`}
+        title={attentionLabel}
+        aria-label={attentionLabel}
         aria-pressed={panelView === "attention" && sidebarOpen}
         className={`${s.railButton} ${panelView === "attention" && sidebarOpen ? s.railButtonActive : ""}`}
       >
         <Bell size={17} strokeWidth={1.8} aria-hidden="true" />
-        {attentionUnreadCount > 0 && <span className={s.railBadge}>{Math.min(attentionUnreadCount, 99)}</span>}
+        {attentionUnreadCount > 0 && <span className={s.railUnreadDot} data-testid="attention-unread-dot" aria-hidden="true" />}
       </button>
       <button
         onClick={() => onSelectView("agents")}
