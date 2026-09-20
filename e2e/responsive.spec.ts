@@ -281,7 +281,7 @@ test.describe("responsive shell", () => {
     await page.route(/\/api\/models(?:\?|$)/, async (route) => {
       const response = await route.fetch();
       const catalog = await response.json();
-      const levels = ["off", "minimal", "low", "medium", "high", "xhigh"];
+      const levels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
       await route.fulfill({ response, json: { ...catalog,
         thinkingLevels: Object.fromEntries(catalog.modelList.map((model: { provider: string; id: string }) => [`${model.provider}:${model.id}`, levels])),
         thinkingLevelMaps: {},
@@ -298,6 +298,7 @@ test.describe("responsive shell", () => {
     await page.getByRole("button", { name: "切換推理層級" }).click();
     await expect(page.getByText("沿用 Pi 預設值", { exact: true })).toBeVisible();
     await expect(page.getByText("低強度推理", { exact: true })).toBeVisible();
+    await expect(page.getByText("極高強度推理", { exact: true })).toBeVisible();
     await expect(page.getByText("最高強度推理", { exact: true })).toBeVisible();
     await expect(page.getByText(/切换|默认|关闭|强度|设置/)).toHaveCount(0);
   });
