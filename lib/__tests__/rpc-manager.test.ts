@@ -4,6 +4,20 @@ import { AgentSessionWrapper } from "../rpc-manager";
 import type { AgentSessionLike } from "../pi-types";
 import { WebExtensionUIBridge } from "../web-extension-ui";
 
+describe("Pi 0.86 session state", () => {
+  it("reads the effective prompt from the session getter", async () => {
+    const inner = {
+      sessionId: "prompt-state", sessionFile: "", systemPrompt: "effective prompt",
+      agent: { state: { systemPrompt: "legacy prompt", thinkingLevel: "high" } },
+      dispose: vi.fn(),
+    } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner);
+    try {
+      expect(wrapper.getStreamSnapshot().state).toMatchObject({ systemPrompt: "effective prompt" });
+    } finally { wrapper.destroy(); }
+  });
+});
+
 describe("active-session idle protection", () => {
   it("does not dispose a silent working model, but still reclaims an idle session", async () => {
     vi.useFakeTimers();

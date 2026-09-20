@@ -101,6 +101,54 @@ describe("buildTree", () => {
 });
 
 describe("buildSessionContext", () => {
+  it("keeps system prompt and tool declarations out of the displayed transcript", () => {
+    const entries = [
+      { ...messageEntry("system"), message: { role: "system", content: "private prompt", tools: [] } },
+      messageEntry("user", "system"),
+      { ...messageEntry("updated-system", "user"), message: { role: "system", content: "updated prompt" } },
+      messageEntry("next-user", "updated-system"),
+    ] as unknown as SessionEntry[];
+
+    const context = buildSessionContext(entries, "next-user");
+    expect(context.messages.map((message) => message.role)).toEqual(["user", "user"]);
+    expect(context.entryIds).toEqual(["user", "next-user"]);
+    expect(buildSessionContext(entries, "user").entryIds).toEqual(["user"]);
+    expect(buildSessionContext(entries, null).messages).toEqual([]);
+  });
+
+  it("maps a Pi 0.86 compaction with restored system state to its visible summary", () => {
+    const entries = [
+      messageEntry("old-user"),
+      { ...messageEntry("old-system", "old-user"), message: { role: "system", content: "old prompt" } },
+      messageEntry("kept-user", "old-system"),
+      { ...messageEntry("kept-system", "kept-user"), message: { role: "system", content: "intermediate prompt" } },
+      {
+        id: "compact", type: "compaction", parentId: "kept-system", timestamp: "2026-09-20T00:00:00Z",
+        summary: "older history", firstKeptEntryId: "kept-user", tokensBefore: 40_000,
+        systemMessage: { role: "system", content: "restored prompt", tools: [], timestamp: 1 },
+      },
+      messageEntry("new-user", "compact"),
+    ] as unknown as SessionEntry[];
+
+    const context = buildSessionContext(entries, "new-user");
+    expect(context.entryIds).toEqual(["compact", "kept-user", "new-user"]);
+    expect(context.messages).toHaveLength(3);
+    expect(context.messages[0]).toMatchObject({ role: "user", content: expect.stringContaining("older history") });
+    expect(context.messages[1]).toMatchObject({ content: "msg-kept-user" });
+    expect(JSON.stringify(context.messages)).not.toContain("prompt");
+  });
+
+  it("does not assign a message id to an empty branch summary", () => {
+    const entries = [
+      messageEntry("user"),
+      { id: "branch", type: "branch_summary", parentId: "user", timestamp: "2026-09-20T00:00:00Z", fromId: "user", summary: "" },
+      messageEntry("next-user", "branch"),
+    ] as SessionEntry[];
+    const context = buildSessionContext(entries);
+    expect(context.messages).toHaveLength(2);
+    expect(context.entryIds).toEqual(["user", "next-user"]);
+  });
+
   it("keeps entryIds parallel after compaction with custom and branch-summary messages", () => {
     const entries = [
       messageEntry("old-user"),

@@ -72,6 +72,7 @@ export function buildSessionAnalyticsReport(sessions: AnalyticsSessionInput[], l
       }
       if (entry.type === "compaction") compactions++;
       if (entry.type !== "message" || !entry.message) continue;
+      if (entry.message.role === "system") continue;
       messageCount++;
       const date = new Date(entry.timestamp ?? "");
       const month = Number.isNaN(date.valueOf()) ? "unknown" : date.toISOString().slice(0, 7);

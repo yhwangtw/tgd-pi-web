@@ -16,7 +16,7 @@
 /test-results/
 
 # next.js
-/.next/
+/.next
 /.piweb-runtime/
 /.pi-web-preview/
 /out/

@@ -650,7 +650,7 @@ export class AgentSessionWrapper {
       model: model ? { id: model.id, provider: model.provider } : undefined,
       messageCount: 0, pendingMessageCount: 0,
       contextUsage: contextUsage ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens } : null,
-      systemPrompt: this.inner.agent?.state?.systemPrompt ?? "",
+      systemPrompt: this.inner.systemPrompt ?? "",
       thinkingLevel: this.inner.agent?.state?.thinkingLevel ?? "off",
     };
   }
@@ -678,6 +678,11 @@ export class AgentSessionWrapper {
       event = { ...event, webManaged: true } as AgentEvent;
     }
     const message = "message" in event ? event.message : undefined;
+    // Prompt/tool declarations are persisted by Pi, but are not chat bubbles.
+    // Drop their UI events before they can replace an assistant stream or be
+    // replayed after reconnect; the effective prompt is exposed in state.
+    if (["message_start", "message_update", "message_end"].includes(event.type)
+      && (message as { role?: string } | undefined)?.role === "system") return;
     if (event.type === "agent_start") {
       this.runActive = true;
       this.lastRunError = null;
