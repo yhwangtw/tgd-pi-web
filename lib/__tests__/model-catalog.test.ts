@@ -13,6 +13,12 @@ const extensionModel = {
 };
 
 describe("model catalog", () => {
+  it("does not advertise explicitly unsupported off/minimal thinking levels", () => {
+    const model = { ...extensionModel, reasoning: true, thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" } };
+    const catalog = buildModelCatalog({ getAvailable: () => [model] }, { getDefaultProvider: () => model.provider, getDefaultModel: () => model.id });
+    expect(catalog.thinkingLevels[`${model.provider}:${model.id}`]).toEqual(["low", "medium", "high", "xhigh", "max"]);
+  });
+
   it("serializes extension-registered models from the supplied registry", () => {
     const registry = { getAvailable: () => [extensionModel] };
     const settings = {

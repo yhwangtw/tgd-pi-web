@@ -10,7 +10,7 @@ export interface ModelCatalogEntry {
   id: string;
   name: string;
   provider: string;
-  /** Catalog endpoints only return usable models; kept explicit for UI clarity. */
+  /** Credentials are configured; upstream account access is only known after a request. */
   available?: boolean;
   contextWindow?: number;
   maxTokens?: number;

@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 import type { AgentRunInput } from "./agent-run-types";
 import { isAgentRunLimits } from "./agent-run-limits";
 import type { AgentRunLimits } from "./agent-run-types";
+import { PI_THINKING_LEVELS } from "./thinking-levels";
 import {
   isAgentRunConcurrency,
   MAX_AGENT_RUN_CONCURRENCY,
@@ -13,7 +14,7 @@ import {
   DEFAULT_SCHEDULE_TOOLS,
 } from "./schedule-validation";
 
-const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh"]);
+const THINKING_LEVELS = new Set<string>(PI_THINKING_LEVELS);
 
 export class AgentRunValidationError extends Error {}
 

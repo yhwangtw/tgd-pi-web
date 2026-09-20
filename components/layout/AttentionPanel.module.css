@@ -27,16 +27,17 @@
 .unreadCount {
   display: grid;
   min-width: 22px;
-  height: 22px;
+  min-height: 22px;
   margin-left: auto;
   padding: 0 var(--space-2);
   place-items: center;
   border-radius: var(--radius-pill);
   background: var(--color-accent-bg);
   color: var(--accent);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
 }
 .toolbar { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr); gap: var(--space-2); }
 .toolbarButton, .filters button, .actions button {

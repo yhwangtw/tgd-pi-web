@@ -88,6 +88,19 @@ describe("useModelCatalog", () => {
     expect(catalog.newSessionModel).toEqual({ provider: "test", modelId: "B" });
   });
 
+  it("marks only rejected models in this source, and lets an explicit refresh recheck them", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => responseFor("test", "spark")));
+    await render();
+    await act(async () => catalog.reportModelUnavailable({ provider: "test", modelId: "spark" }));
+    expect(catalog.modelList[0].available).toBe(false);
+    expect(catalog.newSessionModel).toBeNull();
+    await act(async () => catalog.retryModelCatalog());
+    expect(catalog.modelList[0].available).not.toBe(false);
+    await act(async () => catalog.reportModelUnavailable({ provider: "test", modelId: "spark" }));
+    await render("/workspace/second");
+    expect(catalog.modelList[0].available).not.toBe(false);
+  });
+
   it("clears source-bound data immediately and never exposes old choices after a cwd failure", async () => {
     const second = deferredResponse();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(responseFor("old", "old-model")).mockReturnValueOnce(second.promise));

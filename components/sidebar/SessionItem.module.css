@@ -1,12 +1,12 @@
 /* ── Session item — grid layout, dynamic height ── */
 .item {
   box-sizing: border-box;
-  height: 100%;
+  height: calc(100% - 4px);
   display: block;
   padding-top: var(--space-2);
   padding-bottom: var(--space-2);
   padding-right: var(--space-2);
-  margin: 1px 6px;
+  margin: 2px 6px;
   border-radius: var(--radius-row);
   transition: background 0.1s;
   overflow: hidden;
@@ -27,10 +27,10 @@
   box-shadow: inset 0 0 0 1.5px var(--color-accent-border-focus-strong);
 }
 
-/* Title/actions, repository identity, then a plain-language excerpt. */
+/* Two stable lines: conversation title/time, then quiet context and excerpt. */
 .grid {
   display: grid;
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto auto;
   row-gap: var(--space-1);
   min-width: 0;
 }
@@ -50,7 +50,7 @@
 .sessionTitle {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   line-height: var(--leading-snug);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -74,41 +74,16 @@
   transition: opacity 0.12s;
 }
 /* Reveal actions on row hover OR when context menu is open */
-.hover-group:hover .titleActions,
+.item:hover .titleActions,
 .item:focus-within .titleActions,
 .titleActions:has(.overflowButtonOpen) {
   opacity: 1;
   pointer-events: auto;
 }
-/* Always show actions for the selected session (so pin dot is visible) */
+/* Keep the single entry point discoverable for the selected conversation. */
 .item:has(.sessionTitleSelected) .titleActions {
   opacity: 1;
   pointer-events: auto;
-}
-
-.rowAction,
-.pinDot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--control-xs);
-  height: var(--control-xs);
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-control-compact);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.rowAction:hover,
-.rowAction:focus-visible {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.rowActionPinned {
-  color: var(--color-accent);
 }
 
 .collapseToggle {
@@ -161,46 +136,27 @@
   color: var(--text);
 }
 
-/* ── Row 2: workspace · preview · time ── */
-.metaRow {
-  font-family: var(--font-mono);
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-width: 0;
-  color: var(--text-dim);
-  font-size: var(--text-xs);
-  line-height: var(--leading-snug);
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.metaItem,
+/* ── Row 2: optional project · preview ── */
 .metaTime {
   flex-shrink: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .metaDivider {
   flex-shrink: 0;
-  opacity: 0.5;
+  color: var(--text-dim);
 }
 
 .workspaceMeta {
-  display: inline-flex;
   min-width: 0;
-  flex: 1 1 0;
-  align-items: center;
-  gap: var(--space-optical);
+  max-width: 38%;
+  flex: 0 0 auto;
   overflow: hidden;
   color: var(--text-muted);
-  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.workspaceMeta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspaceSlash { flex: 0 0 auto; color: var(--text-dim); }
-.workspaceMeta > span:first-child { flex: 0 1 auto; }
-.workspaceBranch { flex: 0 1 auto; max-width: 55%; color: var(--color-accent); }
 
 .previewRow {
   display: flex;
@@ -229,7 +185,7 @@
   color: var(--text-dim);
 }
 
-.metaTime { color: var(--text-muted); font-family: var(--font-ui); font-size: var(--text-xs); }
+.metaTime { color: var(--text-dim); font-family: var(--font-ui); font-size: var(--text-2xs); }
 
 .tagChip {
   display: inline-flex;
@@ -393,7 +349,6 @@
     font-size: var(--text-base);
   }
 
-  .metaRow,
   .previewRow {
     font-size: var(--text-sm);
   }
@@ -404,7 +359,6 @@
   }
 
   .collapseToggle,
-  .rowAction,
   .overflowButton {
     width: var(--control-mobile);
     height: var(--control-mobile);
@@ -420,14 +374,14 @@
 
 :global(html[data-ui-style="trae"]) .item {
   position: relative;
-  margin: 3px 9px;
+  margin: 2px 9px;
   padding: var(--space-2) var(--space-2);
   border-radius: var(--radius-row);
 }
 
 :global(html[data-ui-style="trae"]) .item:has(.sessionTitleSelected) {
   background: var(--bg-elev-1);
-  box-shadow: var(--color-shadow-card);
+  box-shadow: none;
 }
 
 :global(html[data-ui-style="trae"]) .item:has(.sessionTitleSelected)::before {
@@ -444,7 +398,7 @@
 @media (max-width: 700px) {
   :global(html[data-ui-style="trae"]) .item {
     min-height: 70px;
-    margin: 3px 10px;
-    padding: var(--space-3) var(--space-3);
+    margin: 2px 10px;
+    padding: var(--space-2) var(--space-3);
   }
 }

@@ -54,6 +54,7 @@
   z-index: 300;
 }
 .railButton {
+  --rail-indicator-surface: var(--bg-panel);
   position: relative;
   display: flex;
   align-items: center;
@@ -68,24 +69,21 @@
   cursor: pointer;
   transition: color 0.12s, background 0.12s;
 }
-.railBadge {
+.railUnreadDot {
   position: absolute;
-  top: 1px;
-  right: 0;
-  display: grid;
-  min-width: calc(18px * var(--font-scale));
-  min-height: calc(18px * var(--font-scale));
-  padding: 0 var(--space-1);
-  place-items: center;
-  border: 2px solid var(--bg-panel);
-  border-radius: var(--radius-pill);
-  background: var(--color-error);
-  color: var(--color-error-fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-compact);
+  /* Track the icon's center, not the different Original/TRAE button edges.
+     Unread is informational; reserve red for actual failures inside the inbox. */
+  top: calc(50% - 13px);
+  right: calc(50% - 13px);
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-circle);
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--rail-indicator-surface);
+  pointer-events: none;
 }
 .railButton:hover:not(:disabled) {
+  --rail-indicator-surface: var(--bg-hover);
   background: var(--bg-hover);
   color: var(--text);
 }
@@ -94,10 +92,12 @@
   cursor: default;
 }
 .railButtonActive {
+  --rail-indicator-surface: var(--color-accent-bg);
   background: var(--color-accent-bg);
   color: var(--accent);
 }
 .railButtonActive:hover:not(:disabled) {
+  --rail-indicator-surface: var(--color-accent-bg-strong);
   background: var(--color-accent-bg-strong);
   color: var(--accent);
 }
@@ -1289,7 +1289,7 @@
     min-height: 68px;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-1);
     border: 1px solid transparent;
@@ -1300,20 +1300,29 @@
     line-height: var(--leading-tight);
     text-align: center;
   }
+  .mobileActionLabel {
+    display: flex;
+    max-width: 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+  }
   .mobileActionBadge {
-    position: absolute;
-    top: 6px;
-    right: 9px;
     display: grid;
+    flex-shrink: 0;
     min-width: 18px;
-    height: 18px;
+    min-height: 18px;
     padding: 0 var(--space-1);
     place-items: center;
     border-radius: var(--radius-pill);
-    background: var(--color-error);
-    color: var(--color-error-fg);
-    font-family: var(--font-mono);
+    background: var(--color-accent-bg);
+    color: var(--accent);
+    font-family: var(--font-ui);
     font-size: var(--text-2xs);
+    font-weight: var(--weight-medium);
+    line-height: var(--leading-ui);
+    font-variant-numeric: tabular-nums;
   }
 
   .mobileMoreAction:disabled {
@@ -1485,8 +1494,13 @@
 }
 
 :global(html[data-ui-style="trae"]) .railButtonActive {
+  --rail-indicator-surface: var(--bg-elev-1);
   background: var(--bg-elev-1);
   box-shadow: var(--color-shadow-card);
+}
+
+:global(html[data-ui-style="trae"]) .railButtonActive:hover:not(:disabled) {
+  --rail-indicator-surface: var(--color-accent-bg-strong);
 }
 
 :global(html[data-ui-style="trae"]) .sidebarContainer {

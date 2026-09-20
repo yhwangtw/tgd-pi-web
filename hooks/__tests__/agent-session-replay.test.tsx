@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionInfo, AgentMessage } from "@/lib/types";
 import type { AgentEvent, SessionData } from "../use-agent-session-types";
 
-const harness = vi.hoisted(() => ({ send: vi.fn(), toast: vi.fn(), created: vi.fn(), fetch: vi.fn() }));
+const harness = vi.hoisted(() => ({ send: vi.fn(), toast: vi.fn(), created: vi.fn(), fetch: vi.fn(), rejectModel: vi.fn() }));
 vi.mock("@/lib/agent-client", () => ({ sendAgentCommand: harness.send }));
 vi.mock("@/hooks/useToast", () => ({ showToast: harness.toast }));
 vi.mock("@/lib/attention", () => ({ setIdleTitle: vi.fn(), setRunningTitle: vi.fn(), setDoneTitle: vi.fn(), setErrorTitle: vi.fn(), setExtensionTitle: vi.fn(), notifyDone: vi.fn(), requestNotifyPermission: vi.fn() }));
-vi.mock("../use-model-catalog", () => ({ useModelCatalog: () => ({ modelNames: {}, modelList: [], modelThinkingLevels: {}, modelThinkingLevelMaps: {}, newSessionModel: { provider: "fixture", modelId: "instant" }, setNewSessionModel: vi.fn(), catalogStatus: "ready", catalogDiagnostics: [], retryModelCatalog: vi.fn() }) }));
+vi.mock("../use-model-catalog", () => ({ useModelCatalog: () => ({ modelNames: {}, modelList: [], modelThinkingLevels: {}, modelThinkingLevelMaps: {}, newSessionModel: { provider: "fixture", modelId: "instant" }, setNewSessionModel: vi.fn(), catalogStatus: "ready", catalogDiagnostics: [], retryModelCatalog: vi.fn(), reportModelUnavailable: harness.rejectModel }) }));
 import { useAgentSession } from "../useAgentSession";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -48,6 +48,7 @@ describe("session reconciliation and first-prompt ordering", () => {
     vi.useFakeTimers(); vi.stubGlobal("EventSource", FakeEventSource); vi.stubGlobal("fetch", harness.fetch);
     FakeEventSource.instances = []; serverMessages = []; serverStreaming = false;
     harness.send.mockReset(); harness.created.mockReset(); harness.toast.mockReset(); harness.fetch.mockReset();
+    harness.rejectModel.mockReset();
     harness.send.mockResolvedValue(null);
     harness.fetch.mockImplementation(async (url: string) => {
       if (url === "/api/agent/new") return new Response(JSON.stringify({ sessionId: "one", deferred: true }));
@@ -57,6 +58,26 @@ describe("session reconciliation and first-prompt ordering", () => {
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it("reads the accepted thinking level back after changing models", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    harness.fetch.mockResolvedValue(new Response(JSON.stringify({ ...data(), agentState: { running: true, state: { isStreaming: false, thinkingLevel: "low" } } })));
+    await act(async () => { await current.handleModelChange("fixture", "reasoning-only"); });
+    expect(harness.send).toHaveBeenCalledWith("one", { type: "set_model", provider: "fixture", modelId: "reasoning-only" });
+    expect(current.thinkingLevel).toBe("low");
+    expect(harness.send.mock.calls.some(([, command]) => command.type === "prompt")).toBe(false);
+  });
+
+  it("marks the rejected response model, not a different current selection, without a duplicate toast", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    const rejected = { ...assistant, provider: "opencodex", model: "spark", stopReason: "error", errorMessage: "The spark model is not supported when using Codex with a ChatGPT account" };
+    serverMessages = [user, rejected];
+    await act(async () => current.handleAgentEventRef.current?.({ type: "agent_end", messages: [rejected] }));
+    expect(harness.rejectModel).toHaveBeenCalledWith({ provider: "opencodex", modelId: "spark" });
+    expect(current.providerRecovery?.kind).toBe("model_unavailable");
+    expect(harness.toast).not.toHaveBeenCalled();
+    expect(harness.send.mock.calls.some(([, command]) => command.type === "prompt")).toBe(false);
+  });
 
   it("creates only, waits for the snapshot, then receives an instant completed first turn", async () => {
     await act(async () => root.render(<Harness selected={null} />));

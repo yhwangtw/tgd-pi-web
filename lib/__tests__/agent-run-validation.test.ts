@@ -17,6 +17,11 @@ afterEach(() => {
 });
 
 describe("agent run validation", () => {
+  it("accepts Pi's Max level but rejects unsupported Ultra", async () => {
+    const base = { name: "Review", cwd: cwd(), prompt: "Inspect" };
+    expect((await validateAgentRunInput({ ...base, thinkingLevel: "max" })).thinkingLevel).toBe("max");
+    await expect(validateAgentRunInput({ ...base, thinkingLevel: "ultra" })).rejects.toThrow(/thinking/i);
+  });
   it("AC-3.1: normalizes a safe read-only daemon run", async () => {
     const result = await validateAgentRunInput({
       name: " Review auth ",

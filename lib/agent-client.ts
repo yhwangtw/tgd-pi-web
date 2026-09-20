@@ -20,9 +20,11 @@ function forkRequestKey(): string {
 export async function sendAgentCommand<T = unknown>(
   sessionId: string,
   command: Record<string, unknown>,
+  signal?: AbortSignal,
 ): Promise<T> {
   const res = await fetch(`/api/agent/${encodeURIComponent(sessionId)}`, {
     method: "POST",
+    signal,
     headers: {
       "Content-Type": "application/json",
       ...(command.type === "fork" ? { "Idempotency-Key": forkRequestKey() } : {}),

@@ -52,7 +52,19 @@ export function useModelCatalog(
   const overrideRef = useRef(overrideSetNewSessionModel);
   overrideRef.current = overrideSetNewSessionModel;
   const [retryKey, setRetryKey] = useState(0);
-  const retryModelCatalog = useCallback(() => setRetryKey((key) => key + 1), []);
+  const [rejections, setRejections] = useState<{ sourceKey: string; refreshKey: number | undefined; keys: string[] }>({ sourceKey: "", refreshKey: modelsRefreshKey, keys: [] });
+  const retryModelCatalog = useCallback(() => {
+    setRejections({ sourceKey: "", refreshKey: undefined, keys: [] });
+    setRetryKey((key) => key + 1);
+  }, []);
+  const reportModelUnavailable = useCallback((model: ModelRef) => {
+    if (sourceRef.current !== sourceKey) return;
+    const key = `${model.provider}:${model.modelId}`;
+    setRejections(current => ({
+      sourceKey, refreshKey: modelsRefreshKey,
+      keys: [...new Set([...(current.sourceKey === sourceKey && current.refreshKey === modelsRefreshKey ? current.keys : []), key])],
+    }));
+  }, [sourceKey, modelsRefreshKey]);
   const setNewSessionModel = useCallback((model: ModelRef | null) => {
     if (sourceRef.current !== sourceKey) return;
     const next = { sourceKey, model };
@@ -114,13 +126,16 @@ export function useModelCatalog(
   const active = snapshot.sourceKey === sourceKey;
   const catalogStatus = !sourceKey ? "empty" : active ? snapshot.status : "loading";
   const data = active && catalogStatus === "ready" ? snapshot : EMPTY_CATALOG;
-  const newSessionModel = catalogStatus === "ready" && selection.sourceKey === sourceKey ? selection.model : null;
+  const rejected = rejections.sourceKey === sourceKey && rejections.refreshKey === modelsRefreshKey ? rejections.keys : [];
+  const modelList = data.modelList.map(model => rejected.includes(`${model.provider}:${model.id}`) ? { ...model, available: false } : model);
+  const newSessionModel = catalogStatus === "ready" && selection.sourceKey === sourceKey && selection.model
+    && !rejected.includes(`${selection.model.provider}:${selection.model.modelId}`) ? selection.model : null;
   return {
-    modelNames: data.models, modelList: data.modelList,
+    modelNames: data.models, modelList,
     modelThinkingLevels: data.thinkingLevels, modelThinkingLevelMaps: data.thinkingLevelMaps,
     newSessionModel, setNewSessionModel, catalogStatus,
     catalogError: active ? snapshot.error : null,
     catalogDiagnostics: active ? snapshot.diagnostics : EMPTY_CATALOG.diagnostics,
-    retryModelCatalog,
+    retryModelCatalog, reportModelUnavailable,
   };
 }

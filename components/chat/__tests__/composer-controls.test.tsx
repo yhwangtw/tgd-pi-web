@@ -10,6 +10,7 @@ import { ChatInput } from "../ChatInput";
 import { ModelSelector } from "../ModelSelector";
 import { ThinkingSelector } from "../ThinkingSelector";
 import { ToolPresetSelector } from "../ToolPresetSelector";
+import { ProviderRecoveryBanner } from "../ProviderRecoveryBanner";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -63,6 +64,52 @@ describe("composer controls", () => {
     await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
   }
 
+  it("offers Max only when the model supports it, including sparse level maps", async () => {
+    const change = vi.fn();
+    await render(<ThinkingSelector thinkingLevel="high" availableThinkingLevels={["high", "max"]} thinkingLevelMap={{ off: null, minimal: null, low: null, medium: null, high: "high", xhigh: null, max: "max" }} isStreaming={false} onThinkingLevelChange={change} />);
+    await act(async () => container!.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!.click());
+    const options = [...container!.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    const max = options.find((option) => option.textContent?.startsWith("Max"));
+    expect(max).toBeDefined();
+    expect(options).toHaveLength(3); // Auto, High, Max — no invented intermediate levels.
+    await act(async () => max!.click());
+    expect(change).toHaveBeenCalledWith("max");
+  });
+
+  it("does not advertise Max without a model capability declaration", async () => {
+    await render(<ThinkingSelector isStreaming={false} onThinkingLevelChange={vi.fn()} />);
+    await act(async () => container!.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!.click());
+    expect([...container!.querySelectorAll('[role="option"]')].some((option) => option.textContent?.startsWith("Max"))).toBe(false);
+  });
+
+  it.each([false, true])("prevents selecting rejected models and offers refresh (mobile=%s)", async (mobile) => {
+    if (mobile) useMobileViewport();
+    const options = [
+      { provider: "fixture", modelId: "denied", name: "Rejected model", available: false },
+      { provider: "fixture", modelId: "ok", name: "Working model", available: true },
+    ];
+    const change = vi.fn(); const retry = vi.fn();
+    await render(<ModelSelector modelOptions={options} modelsByProvider={[{ provider: "fixture", options }]} currentName="Working model" model={{ provider: "fixture", modelId: "ok" }} isStreaming={false} onModelChange={change} onRetry={retry} />);
+    await act(async () => container!.querySelector<HTMLButtonElement>('[data-testid="model-selector-trigger"]')!.click());
+    const rejected = [...document.querySelectorAll<HTMLButtonElement>('button[aria-disabled="true"]')].find((button) => button.textContent?.includes("Rejected model"));
+    expect(rejected).toBeDefined();
+    await act(async () => rejected!.click());
+    expect(change).not.toHaveBeenCalled();
+    const refresh = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Refresh model availability"));
+    await act(async () => refresh!.click());
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it("keeps unsupported-setting recovery quiet and actionable without duplicating JSON", async () => {
+    const adjust = vi.fn();
+    await render(<ProviderRecoveryBanner recovery={{ message: '{"message":"reasoning_effort none is not supported"}', kind: "unsupported_setting", retryAfterSeconds: null, candidate: null, automatic: false }} busy={false} onRetryWithModel={vi.fn()} onAutomaticChange={vi.fn()} onDismiss={vi.fn()} onAdjustThinking={adjust} />);
+    expect(container!.textContent).not.toMatch(/reasoning_effort|\{"message"|Automatically/);
+    expect(container!.querySelector('input[type="checkbox"]')).toBeNull();
+    const button = [...container!.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Adjust thinking");
+    await act(async () => button!.click());
+    expect(adjust).toHaveBeenCalledOnce();
+  });
+
   it("renders the thinking-level selector in Traditional Chinese without simplified Chinese", async () => {
     setLocale("zh");
     await render(
@@ -81,7 +128,7 @@ describe("composer controls", () => {
 
     expect(container!.textContent).toContain("沿用 Pi 預設值");
     expect(container!.textContent).toContain("低強度推理");
-    expect(container!.textContent).toContain("最高強度推理");
+    expect(container!.textContent).toContain("極高強度推理");
     expect(`${container!.textContent} ${container!.innerHTML}`).not.toMatch(/切换|默认|关闭|强度|设置/);
   });
 

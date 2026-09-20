@@ -139,6 +139,7 @@ export function ModelSelector({
   }, []);
 
   const selectModel = useCallback((option: ModelOption, restoreFocus = true) => {
+    if (option.available === false) return;
     const isActive = option.modelId === model?.modelId && option.provider === model?.provider;
     rememberModel(option);
     closeMenu(restoreFocus && !isMobile);
@@ -224,6 +225,8 @@ export function ModelSelector({
           type="button"
           className={styles.mobileModelSelect}
           aria-current={isActive ? "true" : undefined}
+          aria-disabled={option.available === false || undefined}
+          title={option.available === false ? t("model.rejected") : undefined}
           onClick={() => selectModel(option, false)}
         >
           <span className={styles.mobileModelLeading} aria-hidden>
@@ -259,6 +262,11 @@ export function ModelSelector({
 
   const statusLabel = t(status === "loading" ? "model.catalogLoading" : status === "error" ? "model.catalogError" : "model.catalogEmpty");
   const triggerLabel = currentName || model?.modelId || (needsRecovery ? statusLabel : t("model.choose"));
+  const refreshRejected = modelOptions.some((option) => option.available === false) && onRetry ? (
+    <button type="button" className={styles.catalogAction} onClick={() => { closeMenu(); onRetry(); }}>
+      <RefreshCw size={14} aria-hidden />{t("model.recheck")}
+    </button>
+  ) : null;
 
   return (
     <div ref={dropdownRef} className={`${styles.root} ${className ?? ""}`}>
@@ -358,6 +366,7 @@ export function ModelSelector({
             </section>
           ))}
           {!hasMobileResults && <p className={styles.modelNoResults}>{t("model.noResults")}</p>}
+          {refreshRejected}
         </DialogShell>
       )}
       {open && !needsRecovery && !isMobile && rect && (() => {
@@ -368,12 +377,10 @@ export function ModelSelector({
         return (
           <div
             ref={panelRef}
-            id={panelId}
             className={`${styles.panel} ${styles.panelFixed} ${styles.modelPanel}`}
             style={{ bottom, left, width: "max-content", maxHeight: maxH }}
-            role="listbox"
-            aria-label={t("model.selectorLabel")}
             onKeyDown={(event) => {
+              if (!(event.target as HTMLElement).closest('[role="option"]')) return;
               if (event.key === "ArrowDown") {
                 event.preventDefault();
                 focusOption(activeIndex + 1);
@@ -386,11 +393,12 @@ export function ModelSelector({
               } else if (event.key === "End") {
                 event.preventDefault();
                 focusOption(flatOptions.length - 1);
-              } else if (event.key === "Tab") {
+              } else if (event.key === "Tab" && !refreshRejected) {
                 closeMenu();
               }
             }}
           >
+            <div id={panelId} role="listbox" aria-label={t("model.selectorLabel")}>
             {modelsByProvider.map((group, gi) => (
               <div key={group.provider}>
                 {modelsByProvider.length > 1 && (
@@ -410,6 +418,8 @@ export function ModelSelector({
                       type="button"
                       role="option"
                       aria-selected={isActive}
+                      aria-disabled={opt.available === false || undefined}
+                      title={opt.available === false ? t("model.rejected") : undefined}
                       tabIndex={optionIndex === activeIndex ? 0 : -1}
                       onFocus={() => setActiveIndex(optionIndex)}
                       onClick={() => {
@@ -423,8 +433,8 @@ export function ModelSelector({
                       <span className={styles.desktopModelCopy}>
                         <span className={styles.desktopModelName}>{opt.name}</span>
                         <span className={styles.desktopModelMeta}>
-                          {opt.contextWindow ? formatContextWindow(opt.contextWindow) : opt.provider}
-                          {opt.cost ? ` · ${formatModelCost(opt.cost)}` : ""}
+                          {opt.available === false ? t("model.unavailable") : opt.contextWindow ? formatContextWindow(opt.contextWindow) : opt.provider}
+                          {opt.available !== false && opt.cost ? ` · ${formatModelCost(opt.cost)}` : ""}
                         </span>
                       </span>
                     </button>
@@ -432,6 +442,8 @@ export function ModelSelector({
                 })}
               </div>
             ))}
+            </div>
+            {refreshRejected}
           </div>
         );
       })()}

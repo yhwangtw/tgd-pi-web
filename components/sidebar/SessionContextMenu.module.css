@@ -3,6 +3,9 @@
   position: fixed;
   z-index: 800;
   min-width: 184px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-menu);
@@ -26,7 +29,7 @@
   align-items: center;
   gap: var(--space-2);
   width: 100%;
-  height: 30px;
+  min-height: 30px;
   padding: 0 var(--space-2);
   background: none;
   border: none;
@@ -40,7 +43,8 @@
   transition: background 0.08s, color 0.08s;
 }
 
-.menuItem:hover:not(:disabled) {
+.menuItem:hover:not(:disabled),
+.menuItem:focus-visible {
   background: var(--bg-hover);
 }
 
@@ -141,9 +145,14 @@
   padding: var(--space-2);
   border-color: var(--trae-hairline);
   border-radius: var(--radius-menu);
-  background: var(--glass-bg);
+  background: var(--bg-elev-2);
   box-shadow: var(--color-shadow-dropdown);
 }
-:global(html[data-ui-style="trae"]) .menuItem { height: 36px; border-radius: var(--radius-row); }
+:global(html[data-ui-style="trae"]) .menuItem { min-height: 36px; border-radius: var(--radius-row); }
 :global(html[data-ui-style="trae"]) .separator { background: var(--trae-hairline); }
 :global(html[data-ui-style="trae"]) .tagForm { height: 38px; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
+
+@media (pointer: coarse), (max-width: 700px) {
+  .menuItem,
+  :global(html[data-ui-style="trae"]) .menuItem { min-height: var(--control-mobile); }
+}

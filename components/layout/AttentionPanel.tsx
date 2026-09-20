@@ -155,7 +155,7 @@ export function AttentionPanel({
             <h2>{t("attention.title")}</h2>
             <p>{unreadCount > 0 ? `${unreadCount} ${t("attention.unread")}` : t("attention.caughtUp")}</p>
           </div>
-          {unreadCount > 0 && <span className={s.unreadCount} aria-hidden>{Math.min(unreadCount, 99)}</span>}
+          {unreadCount > 0 && <span className={s.unreadCount} aria-hidden>{unreadCount > 99 ? "99+" : unreadCount}</span>}
         </div>
         <div className={s.toolbar} role="group" aria-label={t("attention.actions")}>
           <button

@@ -240,7 +240,7 @@ async function auditTypography(root: Locator, context: string) {
 async function openPrimaryView(page: Page, name: string, mobile: boolean) {
   // Completion notifications can be produced by earlier real fixture flows.
   // Keep the exact control identity while allowing its announced unread count.
-  const accessibleName = name === "Attention" ? /^Attention(?:\s+(?:·\s*)?\d+)?$/ : name;
+  const accessibleName = name === "Attention" ? /^Attention(?:\s+(?:·\s*)?\d+(?:\s+unread)?)?$/ : name;
   if (mobile) {
     const backdrop = page.locator("button[class*='mobileSheetBackdrop']");
     if (await backdrop.isVisible()) {

@@ -10,14 +10,8 @@ export interface ModelsByProviderGroup {
   options: ModelOption[];
 }
 
-export type ThinkingLevel =
-  | "auto"
-  | "off"
-  | "minimal"
-  | "low"
-  | "medium"
-  | "high"
-  | "xhigh";
+import type { ThinkingLevelOption as ThinkingLevel } from "@/lib/thinking-levels";
+export type { ThinkingLevelOption as ThinkingLevel } from "@/lib/thinking-levels";
 
 export type ToolPreset = ToolSelectionMode;
 

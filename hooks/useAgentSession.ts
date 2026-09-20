@@ -6,6 +6,7 @@ import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { showToast } from "@/hooks/useToast";
 import { translate } from "@/lib/i18n";
+import { presentProviderError } from "@/lib/provider-error-presentation";
 import { setIdleTitle, setRunningTitle, setDoneTitle, setErrorTitle, setExtensionTitle, notifyDone, requestNotifyPermission } from "@/lib/attention";
 import {
   DEFAULT_TOOL_CATALOG,
@@ -14,8 +15,9 @@ import {
   type ToolSelectionMode,
   type ToolSelectionState,
 } from "@/lib/tool-selection";
-import type { SessionData, AgentEvent, AgentPhase, UseAgentSessionOptions, ThinkingLevelOption, ChatInputHandle, AttachedImage, CompactResult } from "./use-agent-session-types";
-import { streamReducer, getRunError, computeSessionStats, isCompactionCancellation, shouldApplySessionLoad } from "./use-agent-session-types";
+import type { SessionData, AgentEvent, AgentPhase, UseAgentSessionOptions, ThinkingLevelOption, ChatInputHandle, AttachedImage } from "./use-agent-session-types";
+import { streamReducer, getRunError, computeSessionStats, shouldApplySessionLoad } from "./use-agent-session-types";
+import { useSessionCompaction, type CompactionLiveState } from "./use-session-compaction";
 import { useAgentEvents, useRunProgress } from "./use-agent-connection";
 import { useTranscriptScroll } from "./use-transcript-scroll";
 import { shouldResyncOnVisible } from "@/lib/wake-resync";
@@ -41,7 +43,7 @@ import {
 
 export type { SessionData, AgentPhase, ThinkingLevelOption, ChatInputHandle, AttachedImage };
 
-interface LiveAgentState {
+interface LiveAgentState extends CompactionLiveState {
   isStreaming?: boolean;
   isCompacting?: boolean;
   autoCompactionEnabled?: boolean;
@@ -97,7 +99,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
   const [isCompacting, setIsCompacting] = useState(false);
-  const [compactError, setCompactError] = useState<string | null>(null);
   const [autoCompactionEnabled, setAutoCompactionEnabled] = useState<boolean | null>(null);
   const [autoCompactionUpdating, setAutoCompactionUpdating] = useState(false);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
@@ -128,7 +129,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const { eventSourceRef, lastEventAtRef, connectionState, connectEvents } = useAgentEvents(agentRunningRef, handleAgentEventRef);
   const { runProgress, resetRunProgress } = useRunProgress(
-    agentRunning && extensionUIState.dialogs.length === 0,
+    agentRunning && !isCompacting && extensionUIState.dialogs.length === 0,
     agentPhaseRef,
     lastEventAtRef,
     connectionState,
@@ -140,7 +141,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps,
     newSessionModel, setNewSessionModel,
-    catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
+    catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog, reportModelUnavailable,
   } = useModelCatalog(
     isNew,
     modelsRefreshKey,
@@ -197,10 +198,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       setCurrentModelOverride(null);
       setError(null);
-      // If no live agent state, fall back to thinking level from session file
-      if (!d.agentState?.state?.thinkingLevel && d.context.thinkingLevel && d.context.thinkingLevel !== "off") {
-        setThinkingLevel(d.context.thinkingLevel as ThinkingLevelOption);
-      }
+      // Model changes can clamp the previous thinking level. Reflect the
+      // runtime's accepted value, including "off", instead of a stale choice.
+      const acceptedThinking = d.agentState?.state?.thinkingLevel ?? d.context.thinkingLevel;
+      if (acceptedThinking) setThinkingLevel(acceptedThinking as ThinkingLevelOption);
       return d.agentState ?? null;
     } catch (e) {
       if (shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
@@ -211,6 +212,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (showLoading) setLoading(false);
     }
   }, []);
+
+  const compaction = useSessionCompaction(sessionIdRef, setIsCompacting, () => {
+    const sid = sessionIdRef.current;
+    if (sid) void loadSession(sid, false, true).then(state => {
+      if (state?.state?.contextUsage !== undefined) setContextUsage(state.state.contextUsage);
+    });
+  }, connectEvents);
+  const handleCompact = compaction.start;
+  const handleAbortCompaction = compaction.abort;
+  const { handleEvent: handleCompactionEvent, reconcile: reconcileCompaction, enqueue: enqueueCompaction } = compaction;
+  const compactError = compaction.view?.status === "failed" ? compaction.view.error ?? null : null;
 
   const loadContext = useCallback(async (sid: string, leafId: string | null) => {
     try {
@@ -252,6 +264,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   agentPhaseRef.current = agentPhase;
 
   const handleAgentEvent = useCallback((event: AgentEvent) => {
+    if (handleCompactionEvent(event)) return;
     if (event.type === "connected") {
       // The server immediately follows this with a complete Web UI snapshot.
       // Reset first so status/widgets removed while this tab was offline do
@@ -285,6 +298,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setAgentPhase(running ? (event.phase as AgentPhase) ?? { kind: "waiting_model" } : null);
       setAgentStartedAt((current) => running ? current ?? Date.now() : null);
       if (state?.isCompacting !== undefined) setIsCompacting(state.isCompacting);
+      reconcileCompaction(state);
       if (state?.autoCompactionEnabled !== undefined) setAutoCompactionEnabled(state.autoCompactionEnabled);
       if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage);
       if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt);
@@ -459,11 +473,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const runError = getRunError(event);
           if (runError) {
             const classified = classifyProviderError(runError);
-            const current = currentModelRef.current;
+            const failedMessage = (event.messages as AgentMessage[] | undefined)?.findLast((message) => message.role === "assistant");
+            const current = failedMessage?.role === "assistant" && failedMessage.provider && failedMessage.model
+              ? { provider: failedMessage.provider, modelId: failedMessage.model }
+              : currentModelRef.current;
+            if (classified.kind === "model_unavailable" && current) reportModelUnavailable(current);
             let candidate = selectFallbackModel(
               current,
-              modelListRef.current.map((model) => ({ provider: model.provider, modelId: model.id, name: model.name })),
+              modelListRef.current.filter((model) => model.available !== false).map((model) => ({ provider: model.provider, modelId: model.id, name: model.name })),
             );
+            if (!classified.recoverableWithFallback && classified.kind !== "model_unavailable") candidate = null;
             if ((classified.kind === "billing" || classified.kind === "authentication")
               && candidate?.provider === current?.provider) candidate = null;
             setProviderRecovery({
@@ -480,9 +499,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               autoFallbackAttemptedRef.current = true;
               window.setTimeout(() => autoFallbackRetryRef.current?.(candidate as ProviderRecoveryModel), 350);
             }
-            showToast(`Model error: ${runError}`, { type: "error", duration: 8000 });
+            const { summary } = presentProviderError(runError, translate("chat.modelFailed"), {
+              unsupported_setting: translate("recovery.unsupportedThinking"),
+              model_unavailable: translate("recovery.modelRejected"),
+            });
             setErrorTitle(sessionNameRef.current);
-            notifyDone(sessionNameRef.current, runError);
+            // The transcript owns the error; do not add a duplicate toast.
+            notifyDone(sessionNameRef.current, summary);
           } else {
             setProviderRecovery(null);
             autoFallbackAttemptedRef.current = false;
@@ -596,52 +619,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "auto_retry_end":
         setRetryInfo(null);
         break;
-      case "auto_compaction_start":
-      case "compaction_start":
-        setIsCompacting(true);
-        setCompactError(null);
-        break;
-      case "auto_compaction_end":
-      case "compaction_end":
-        setIsCompacting(false);
-        if (event.errorMessage) {
-          const message = event.errorMessage as string;
-          setCompactError(message);
-          if (event.reason !== "manual") {
-            showToast(`${translate("toast.compactFailed")}: ${message}`, { type: "error", duration: 8000 });
-          }
-        } else if (!event.aborted) {
-          if (sessionIdRef.current) {
-            loadSession(sessionIdRef.current, false, true).then((agentState) => {
-              if (agentState?.state?.contextUsage !== undefined) {
-                setContextUsage(agentState.state.contextUsage ?? null);
-              }
-            });
-          }
-          if (event.reason !== "manual") {
-            const result = event.result as Partial<CompactResult> | undefined;
-            const message = result && Number.isFinite(result.tokensBefore) && Number.isFinite(result.estimatedTokensAfter)
-              ? translate("toast.compactDoneWithTokens")
-                  .replace("{before}", Number(result.tokensBefore).toLocaleString())
-                  .replace("{after}", Number(result.estimatedTokensAfter).toLocaleString())
-              : translate("toast.compactDone");
-            showToast(message, { type: "success", duration: 6000 });
-          }
-        }
-        break;
-      case "session_compact_failed": {
-        const message = typeof event.errorMessage === "string"
-          ? event.errorMessage
-          : typeof event.error === "string"
-            ? event.error
-            : translate("toast.compactFailed");
-        setIsCompacting(false);
-        setCompactError(message);
-        showToast(`${translate("toast.compactFailed")}: ${message}`, { type: "error", duration: 8000 });
-        break;
-      }
     }
-  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef]);
+  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef, reportModelUnavailable, handleCompactionEvent, reconcileCompaction]);
   handleAgentEventRef.current = handleAgentEvent;
 
   useEffect(() => {
@@ -726,6 +705,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]): Promise<boolean> => {
     if (!message.trim() && !images?.length) return false;
+    const compactCommand = /^\/compact(?:\s+([\s\S]*))?$/.exec(message.trim());
+    if (compactCommand && sessionIdRef.current && !images?.length) {
+      await handleCompact(compactCommand[1]);
+      return true;
+    }
+    if (isCompacting) return enqueueCompaction(message, images);
     if (agentRunning) return false;
     if (isNew && (catalogStatus !== "ready" || !newSessionModel)) {
       showToast(translate("model.catalogRequired"), { type: "warning" });
@@ -831,7 +816,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       dispatch({ type: "end" });
       return false;
     }
-  }, [isNew, newSessionCwd, newSessionModel, catalogStatus, session, agentRunning, connectEvents, createNewSession, loadSession, lastEventAtRef, pendingScrollToUserRef, resetRunProgress]);
+  }, [isNew, newSessionCwd, newSessionModel, catalogStatus, session, agentRunning, connectEvents, createNewSession, loadSession, lastEventAtRef, pendingScrollToUserRef, resetRunProgress, isCompacting, enqueueCompaction, handleCompact]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -907,6 +892,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [loadContext]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string): Promise<boolean> => {
+    if (modelListRef.current.some((model) => model.provider === provider && model.id === modelId && model.available === false)) return false;
     if (isNew) {
       setNewSessionModel({ provider, modelId });
       return true;
@@ -919,44 +905,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // change and must not overwrite the optimistic selection when it lands.
       sessionLoadRequestRef.current += 1;
       setCurrentModelOverride({ provider, modelId });
+      await loadSession(sid, false, true);
+      setProviderRecovery(null);
       return true;
     } catch (e) {
       console.error("Failed to set model:", e);
       showToast(`${translate("recovery.switchFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
       return false;
     }
-  }, [isNew, setNewSessionModel]);
-
-  const handleCompact = useCallback(async () => {
-    const sid = sessionIdRef.current;
-    if (!sid || isCompacting) return;
-    setIsCompacting(true);
-    setCompactError(null);
-    try {
-      const result = await sendAgentCommand<CompactResult>(sid, { type: "compact" });
-      const agentState = await loadSession(sid, true, true);
-      if (agentState?.state?.contextUsage !== undefined) {
-        setContextUsage(agentState.state.contextUsage ?? null);
-      }
-      const message = Number.isFinite(result?.tokensBefore) && Number.isFinite(result?.estimatedTokensAfter)
-        ? translate("toast.compactDoneWithTokens")
-            .replace("{before}", Number(result.tokensBefore).toLocaleString())
-            .replace("{after}", Number(result.estimatedTokensAfter).toLocaleString())
-        : translate("toast.compactDone");
-      showToast(message, { type: "success", duration: 6000 });
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      if (isCompactionCancellation(e)) {
-        setCompactError(null);
-        showToast(translate("toast.compactCancelled"), { type: "info" });
-        return;
-      }
-      setCompactError(message);
-      showToast(`${translate("toast.compactFailed")}: ${message}`, { type: "error", duration: 8000 });
-    } finally {
-      setIsCompacting(false);
-    }
-  }, [isCompacting, loadSession]);
+  }, [isNew, setNewSessionModel, loadSession]);
 
   const handleAutoCompactionChange = useCallback(async (enabled: boolean) => {
     const sid = sessionIdRef.current;
@@ -977,6 +934,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [autoCompactionEnabled, autoCompactionUpdating]);
 
   const handleSteer = useCallback(async (message: string, images?: AttachedImage[]): Promise<boolean> => {
+    if (isCompacting) return enqueueCompaction(message, images, "steer");
     const sid = sessionIdRef.current;
     if (!sid) return false;
     const optimisticMessage = { role: "user", content: `[steer] ${message}`, timestamp: Date.now() } as AgentMessage;
@@ -998,9 +956,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       showToast(`${translate("toast.steerFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
       return false;
     }
-  }, []);
+  }, [isCompacting, enqueueCompaction]);
 
   const handleFollowUp = useCallback(async (message: string, images?: AttachedImage[]): Promise<boolean> => {
+    if (isCompacting) return enqueueCompaction(message, images);
     const sid = sessionIdRef.current;
     if (!sid) return false;
     // Don't append to the transcript — the message hasn't been delivered yet.
@@ -1026,7 +985,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       showToast(`${translate("toast.followUpFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
       return false;
     }
-  }, []);
+  }, [isCompacting, enqueueCompaction]);
 
   const handleClearQueue = useCallback(async (): Promise<boolean> => {
     const sid = sessionIdRef.current;
@@ -1156,16 +1115,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, []);
 
-  const handleAbortCompaction = useCallback(async () => {
-    const sid = sessionIdRef.current;
-    if (!sid) return;
-    try {
-      await sendAgentCommand(sid, { type: "abort_compaction" });
-    } catch (e) {
-      console.error("Failed to abort compaction:", e);
-    }
-  }, []);
-
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
     setThinkingLevel(level);
     if (level === "auto") return; // "auto" leaves pi's current setting untouched
@@ -1173,10 +1122,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!sid) return;
     try {
       await sendAgentCommand(sid, { type: "set_thinking_level", level });
+      await loadSession(sid, false, true);
+      setProviderRecovery((current) => current?.kind === "unsupported_setting" ? null : current);
     } catch (e) {
       console.error("Failed to set thinking level:", e);
+      await loadSession(sid, false, true);
+      showToast(translate("recovery.thinkingFailed"), { type: "error" });
     }
-  }, []);
+  }, [loadSession]);
 
   const handleToolPresetChange = useCallback(async (preset: ToolSelectionMode, selectedNames: string[] = []) => {
     const toolNames = namesForToolSelection(preset, selectedNames);
@@ -1219,6 +1172,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         if (agentState?.state) {
           if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
+          reconcileCompaction(agentState.state);
           if (agentState.state.autoCompactionEnabled !== undefined) setAutoCompactionEnabled(agentState.state.autoCompactionEnabled);
           if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
           if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
@@ -1249,6 +1203,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
         if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
         if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
+        reconcileCompaction(agentState.state);
         if (agentState.state.autoCompactionEnabled !== undefined) setAutoCompactionEnabled(agentState.state.autoCompactionEnabled);
       }
       if (agentState?.running && agentState.state?.isStreaming) {
@@ -1269,7 +1224,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // hidden. Reopen with the cursor to recover them and reconcile a snapshot.
       if (agentState.running) void connectEvents(sid, true);
     });
-  }, [agentStartedAt, connectEvents, lastEventAtRef, loadSession, resetRunProgress]);
+  }, [agentStartedAt, connectEvents, lastEventAtRef, loadSession, resetRunProgress, reconcileCompaction]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -1298,13 +1253,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onBranchDataChange(data?.tree ?? [], activeLeafId, handleLeafChange);
   }, [data?.tree, activeLeafId, handleLeafChange, onBranchDataChange]);
 
-  // Keep the inline error around long enough to read; the toast mirrors it.
-  useEffect(() => {
-    if (!compactError) return;
-    const t = setTimeout(() => setCompactError(null), 8000);
-    return () => clearTimeout(t);
-  }, [compactError]);
-
   return {
     // State
     data, loading, error, runtimeFailure, activeLeafId, messages, entryIds, streamState,
@@ -1312,6 +1260,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, currentModel, displayModel, sessionStats,
+    compactionStatus: compaction.view, compactionQueue: compaction.queue,
+    handleRetryCompaction: compaction.retry,
+    handleCheckCompaction: compaction.check, handleDismissCompaction: compaction.dismiss, handleClearCompactionQueue: compaction.clearQueue,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,
     isNew,
     // Refs

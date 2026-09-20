@@ -16,7 +16,7 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { COMPOSITION_END_ENTER_GRACE_MS, buildSlashItems } from "./chat-input-constants";
+import { COMPOSITION_END_ENTER_GRACE_MS, buildSlashItems, type ThinkingLevelOption } from "./chat-input-constants";
 import { SlashMenu, filterSlashItems } from "./SlashMenu";
 import { clearDraft, loadHistory, saveHistory } from "@/lib/composer-persistence";
 import { useComposerDraft } from "@/hooks/useComposerDraft";
@@ -79,8 +79,8 @@ interface Props {
   availableTools?: ToolCatalogEntry[];
   customToolNames?: string[];
   onToolPresetChange?: (preset: ToolSelectionMode, customNames?: string[]) => void;
-  thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
-  onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
+  thinkingLevel?: ThinkingLevelOption;
+  onThinkingLevelChange?: (level: ThinkingLevelOption) => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
@@ -126,6 +126,7 @@ export interface ChatInputHandle {
   setText: (text: string) => void;
   addImages: (files: File[]) => void;
   addFiles: (files: File[]) => void;
+  openControls?: () => void;
 }
 
 function resizeTextarea(textarea: HTMLTextAreaElement, expanded: boolean): void {
@@ -197,7 +198,7 @@ function ResponsiveComposerControls({
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
   modelCatalogStatus, modelCatalogError, modelCatalogDiagnostics, onRetryModelCatalog, onOpenModels,
-  onCompact, onAbortCompaction, isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, availableTools, customToolNames, onToolPresetChange,
+  onCompact, onAbortCompaction, isCompacting, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, availableTools, customToolNames, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   ephemeral = false, onEphemeralChange,
@@ -251,6 +252,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   expandedRef.current = expanded;
 
   useImperativeHandle(ref, () => ({
+    openControls() {
+      setMobileToolsOpen(true);
+    },
     insertIfEmpty(text: string) {
       const ta = textareaRef.current;
       const current = ta ? ta.value : value;
@@ -656,6 +660,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       // Two presses within 600ms — a single Esc only arms it (and shows a
       // hint), so stray Escapes can't kill a run. Open menus consumed their
       // Escape above.
+      if (e.key === "Escape" && isCompacting && !isComposing) {
+        e.preventDefault();
+        onAbortCompaction?.();
+        return;
+      }
       if (e.key === "Escape" && isStreaming && !isComposing) {
         e.preventDefault();
         const now = Date.now();
@@ -710,7 +719,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
     },
-    [isStreaming, onSteer, onFollowUp, sendQueued, handleSend, showSlashMenu, slashFilter, slashSelectedIndex, slashItems, value, mention, mentionItems, mentionIndex, applyMention, onAbort, t, expanded, streamingSendMode, setValue]
+    [isStreaming, isCompacting, onAbortCompaction, onSteer, onFollowUp, sendQueued, handleSend, showSlashMenu, slashFilter, slashSelectedIndex, slashItems, value, mention, mentionItems, mentionIndex, applyMention, onAbort, t, expanded, streamingSendMode, setValue]
   );
 
   const handleInput = useCallback(() => {
@@ -999,7 +1008,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             readOnly={isSubmitting}
             aria-busy={isSubmitting}
             placeholder={
-              isStreaming && (onSteer || onFollowUp)
+              isCompacting ? t("compact.placeholder")
+              : isStreaming && (onSteer || onFollowUp)
                 ? t(streamingSendMode === "steer" ? "input.steerPlaceholder" : "input.followUpPlaceholder")
                 : isStreaming ? t("input.agentRunning")
                 : t("input.message")
@@ -1115,7 +1125,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               modelsByProvider={modelsByProvider}
               currentName={currentName}
               model={model}
-              isStreaming={isStreaming}
+              isStreaming={isStreaming || !!isCompacting}
               onModelChange={onModelChange}
               catalogStatus={modelCatalogStatus}
               catalogError={modelCatalogError}
@@ -1188,7 +1198,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 thinkingLevel={thinkingLevel}
                 thinkingLevelMap={thinkingLevelMap}
                 availableThinkingLevels={availableThinkingLevels}
-                isStreaming={isStreaming}
+                isStreaming={isStreaming || !!isCompacting}
                 presentation={isMobileViewport ? "inline" : "popover"}
                 onThinkingLevelChange={onThinkingLevelChange}
               />
@@ -1241,11 +1251,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <div className={styles.mobileLabeledControl}>
                   <span className={styles.mobileControlLabel}>{t("input.contextControl")}</span>
                   <div className={styles.compactWrapper}>
-                    {compactError && (
-                      <div className={styles.compactErrorTooltip}>
-                        {compactError}
-                      </div>
-                    )}
                     <button
                       onClick={isCompacting ? onAbortCompaction : onCompact}
                       className={isCompacting ? styles.compactButtonCompacting : styles.compactButtonIdle}
