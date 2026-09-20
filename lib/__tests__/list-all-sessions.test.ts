@@ -73,6 +73,19 @@ describe("listAllSessions", () => {
     expect(sessions[0].id).toBe("bbbb-2222");
   });
 
+  it("does not count Pi system prompt updates as conversation messages", async () => {
+    sessionFile(join(sessionsDir, "--tmp-proj"), "system-state.jsonl", [
+      header("system-state"),
+      { ...userMessage("system", null, "internal"), message: { role: "system", content: "internal" } },
+      userMessage("user", "system", "visible message"),
+    ]);
+    const { listAllSessions } = await import("../session-reader");
+    const [session] = await listAllSessions();
+    expect(session.messageCount).toBe(1);
+    expect(session.firstMessage).toBe("visible message");
+    expect(session.lastMessage).toBe("visible message");
+  });
+
   it("preserves last-message line boundaries for plain Markdown previews", async () => {
     const text = "> [!RESULT] 完成\n> - **正常**";
     sessionFile(join(sessionsDir, "--tmp-proj"), "preview.jsonl", [

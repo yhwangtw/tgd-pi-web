@@ -8,6 +8,16 @@ function response(provider: string, usage?: NonNullable<AnalyticsEntry["message"
   return { type: "message", timestamp, message: { role: "assistant", provider, model: "same/model", usage } };
 }
 
+it("does not inflate message totals with Pi system prompt updates", () => {
+  const report = buildSessionAnalyticsReport([session([
+    { type: "message", timestamp: "2026-01-31T23:30:00Z", message: { role: "system" } },
+    response("provider"),
+  ])]);
+  expect(report.summary.totalMessages).toBe(1);
+  expect(report.perSession[0].messageCount).toBe(1);
+  expect(report.summary.monthly[0].messages).toBe(1);
+});
+
 describe("historical analytics", () => {
   it("keeps same-named models distinct by their full provider identity", () => {
     const { summary } = buildSessionAnalyticsReport([session([

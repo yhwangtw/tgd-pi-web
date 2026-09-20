@@ -85,6 +85,10 @@ npm start
 
 ### Vorhandenen Checkout aktualisieren
 
+Diese Version bindet die eingebettete Pi-Runtime (`pi-ai` und `pi-coding-agent`) fest an **0.86.0**. Ein Web-Update installiert die eigene Runtime; eine globale CLI wird separat verwaltet. Zum Abgleichen einer optionalen globalen CLI `npm install -g @earendil-works/pi-coding-agent@0.86.0` ausführen und mit `pi --version` prüfen.
+
+Pi 0.86 protokolliert Änderungen am System-Prompt und an der Werkzeugauswahl im Session-Transkript. Web erhält diesen Zustand in der Pi-Sessiondatei, blendet Systemaktualisierungen im Chat aus und zählt sie nicht als Nachrichten. Die korrekte Zuordnung der Einträge für komprimierte Verläufe, Verzweigungen und Bearbeiten mit erneutem Ausführen bleibt erhalten. Eigene Provider-Integrationen sollten die [Migrationshinweise zu Pi 0.86](https://github.com/earendil-works/pi/releases/tag/v0.86.0) beachten.
+
 Zuerst den Dienst dieses Checkouts stoppen. Der Befehl aktualisiert keinen laufenden Checkout im Betrieb.
 
 ```bash

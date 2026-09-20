@@ -40,6 +40,7 @@ export interface AgentSessionLike {
   readonly isCompacting: boolean;
   readonly autoCompactionEnabled: boolean;
   readonly autoRetryEnabled: boolean;
+  readonly systemPrompt: string;
   readonly model: ModelLike | undefined;
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;

@@ -85,6 +85,10 @@ Open [http://localhost:30141](http://localhost:30141).
 
 ### Update an existing checkout
 
+This version pins the embedded Pi runtime (`pi-ai` and `pi-coding-agent`) to **0.86.0**. Updating Web installs its own runtime; a globally installed CLI is managed separately. To align an optional global CLI, run `npm install -g @earendil-works/pi-coding-agent@0.86.0` and verify it with `pi --version`.
+
+Pi 0.86 records system-prompt and tool-set changes in the session transcript. Web preserves that state in Pi's session file, keeps system updates out of chat messages and message counts, and retains the correct entry mapping for compacted history, branching, and edit-and-rerun. Custom provider integrations should review the [upstream 0.86 migration notes](https://github.com/earendil-works/pi/releases/tag/v0.86.0).
+
 ```bash
 bash setup.sh
 ```

@@ -19,6 +19,26 @@ function fixture() {
 }
 
 describe("agent SSE replay contract", () => {
+  it("does not stream or replay internal system messages as chat bubbles", () => {
+    const { wrapper, emit } = fixture();
+    try {
+      const records: Array<{ id?: string; data: string }> = [];
+      wrapper.onStreamEvent((record) => records.push(record), null);
+      emit({ type: "agent_start" });
+      const cursor = records.at(-1)!.id!;
+      const partial = { role: "assistant", content: [{ type: "text", text: "working" }] };
+      emit({ type: "message_update", message: partial });
+      for (const type of ["message_start", "message_update", "message_end"]) {
+        emit({ type, message: { role: "system", content: "internal prompt", tools: [] } });
+        expect(wrapper.getStreamSnapshot().streamingMessage).toEqual(partial);
+      }
+      expect(JSON.stringify(records)).not.toContain("internal prompt");
+      const replay: typeof records = [];
+      wrapper.onStreamEvent((record) => replay.push(record), cursor);
+      expect(JSON.stringify(replay)).not.toContain("internal prompt");
+    } finally { wrapper.destroy(); }
+  });
+
   it("closes pending questions before the terminal SSE frame and disposes only once", async () => {
     const bridge = new WebExtensionUIBridge();
     const dispose = vi.fn();

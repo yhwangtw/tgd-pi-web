@@ -1,5 +1,5 @@
-import { buildSessionContext as piBuildSessionContext, getAgentDir, migrateSessionEntries, parseSessionEntries } from "@earendil-works/pi-coding-agent";
-import type { SessionEntry, SessionHeader, SessionInfo, SessionContext, SessionTreeNode, AssistantMessage } from "./types";
+import { buildContextEntries, buildSessionContext as piBuildSessionContext, getAgentDir, migrateSessionEntries, parseSessionEntries, sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
+import type { SessionEntry, SessionHeader, SessionInfo, SessionContext, SessionTreeNode, AgentMessage } from "./types";
 import type { SessionEntry as PiSessionEntry } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize";
 import { readFileSync } from "fs";
@@ -90,8 +90,9 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
       continue;
     }
     if (entry.type !== "message") continue;
-    messageCount++;
     const message = entry.message as { role?: string; content?: unknown; timestamp?: unknown } | undefined;
+    if (message?.role === "system") continue;
+    messageCount++;
     if (!message || message.content == null) continue;
     if (message.role !== "user" && message.role !== "assistant") continue;
     const activity = typeof message.timestamp === "number"
@@ -302,74 +303,26 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
   for (const e of entries) byId.set(e.id, e);
 
   const piEntries = entries as unknown as PiSessionEntry[];
-  const piCtx = piBuildSessionContext(piEntries, leafId, byId as unknown as Map<string, PiSessionEntry>);
-
-  // Build entryIds: parallel array to messages[], mapping each message back to its entry id.
-  // Needed for fork and navigate_tree calls from the UI.
-  let targetLeaf: SessionEntry | undefined;
-  if (leafId === null) {
-    return { messages: [], entryIds: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model };
-  }
-  if (leafId) targetLeaf = byId.get(leafId);
-  if (!targetLeaf) targetLeaf = entries[entries.length - 1];
-  if (!targetLeaf) {
-    return { messages: [], entryIds: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model };
-  }
-
-  // Walk path from target leaf to root
-  const path: SessionEntry[] = [];
-  let cur: SessionEntry | undefined = targetLeaf;
-  while (cur) {
-    path.unshift(cur);
-    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
-  }
-
-  // Find the last compaction on path (mirrors pi's buildSessionContext logic)
-  let compactionId: string | undefined;
-  let firstKeptEntryId: string | undefined;
-  for (const e of path) {
-    if (e.type === "compaction") {
-      compactionId = e.id;
-      firstKeptEntryId = (e as { firstKeptEntryId: string }).firstKeptEntryId;
-    }
-  }
-
+  const piIndex = byId as unknown as Map<string, PiSessionEntry>;
+  const piCtx = piBuildSessionContext(piEntries, leafId, piIndex);
+  const messages: AgentMessage[] = [];
   const entryIds: string[] = [];
-  const contributesMessage = (entry: SessionEntry) =>
-    entry.type === "message" || entry.type === "custom_message" || entry.type === "branch_summary";
-  if (compactionId) {
-    // The first message in piCtx.messages is the synthetic compaction summary — map to compaction entry id
-    entryIds.push(compactionId);
-    const compactionIdx = path.findIndex((e) => e.id === compactionId);
-    const firstKeptIdx = firstKeptEntryId
-      ? path.findIndex((e, i) => i < compactionIdx && e.id === firstKeptEntryId)
-      : -1;
-    const startIdx = firstKeptIdx >= 0 ? firstKeptIdx : compactionIdx;
-    for (let i = startIdx; i < compactionIdx; i++) {
-      if (contributesMessage(path[i])) entryIds.push(path[i].id);
-    }
-    for (let i = compactionIdx + 1; i < path.length; i++) {
-      if (contributesMessage(path[i])) entryIds.push(path[i].id);
-    }
-  } else {
-    for (const e of path) {
-      if (contributesMessage(e)) entryIds.push(e.id);
-    }
-  }
 
-  // pi injects compaction summary as {role:"compactionSummary", summary, tokensBefore}.
-  // Convert to {role:"user"} so MessageView can render it the same as before.
-  const messages = (piCtx.messages as AssistantMessage[]).map((msg) => {
-    const raw = msg as unknown as Record<string, unknown>;
-    if (raw.role === "compactionSummary") {
-      return {
-        role: "user" as const,
+  // Pi 0.86 can project one compaction entry into both system state and a
+  // summary. Use its projection for both arrays so fork/edit targets stay
+  // aligned after compaction, branching, and hidden system/tool updates.
+  for (const entry of buildContextEntries(piEntries, leafId, piIndex)) {
+    for (const message of sessionEntryToContextMessages(entry)) {
+      if (message.role === "system") continue;
+      const raw = message as unknown as Record<string, unknown>;
+      messages.push(raw.role === "compactionSummary" ? {
+        role: "user",
         content: `*The conversation history before this point was compacted into the following summary:*\n\n${raw.summary ?? ""}`,
         timestamp: raw.timestamp as number | undefined,
-      };
+      } : normalizeToolCalls(message as AgentMessage));
+      entryIds.push(entry.id);
     }
-    return normalizeToolCalls(msg);
-  });
+  }
 
   return {
     messages,
