@@ -1374,6 +1374,13 @@ span.linenumber {
   scroll-margin-top: 10px;
 }
 
+/* A streaming bubble becomes a committed msg-item at message_end. Keep the
+   current turn measured: substituting the history's 120px estimate here makes
+   the tail jump before scroll-follow can reconcile the completed response. */
+.msg-item[data-current-turn] {
+  content-visibility: visible;
+}
+
 /* content-visibility adds paint containment. Temporarily lift it while a
    disclosure is open so upward-opening message menus and usage popovers are
    not clipped to the message's own box. */

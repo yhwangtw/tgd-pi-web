@@ -21,6 +21,10 @@ const DESTRUCTIVE_PATTERNS = [
   /\bdd\b/i,
   /\bshred\b/i,
   /\bfind\b[^\n]*(?:-delete|-exec|-execdir)\b/i,
+  /\bfind\b[^\n]*-(?:fprint0?|fprintf|fls)\b/i,
+  /\brg\b[^\n]*--pre(?:=|\s)/i,
+  /\bsort\b[^\n]*(?:\s-o\S*|--output(?:=|\s))/i,
+  /\bgit\b[^\n]*(?:--output(?:=|\s)|--ext-diff|--textconv)/i,
   /\b(?:npm|pnpm|yarn|bun)\s+(?:i|install|add|remove|uninstall|update|ci|link|publish)\b/i,
   /\b(?:pip|pip3|uv)\s+(?:install|uninstall|add|remove)\b/i,
   /\b(?:apt|apt-get|brew)\s+(?:install|remove|purge|update|upgrade|uninstall)\b/i,
@@ -31,16 +35,14 @@ const DESTRUCTIVE_PATTERNS = [
 ];
 
 const SAFE_SEGMENT_PATTERNS = [
-  /^\s*(?:cat|head|tail|less|more|grep|rg|find|fd|ls|pwd|echo|printf|wc|sort|uniq|diff|file|stat|du|df|tree|which|whereis|type|env|printenv|uname|whoami|id|date|cal|uptime|ps|top|htop|free|jq|bat|eza)\b/i,
-  /^\s*sed\s+-n\b/i,
-  /^\s*git\s+(?:status|log|diff|show|branch|remote|ls-[a-z-]+|config\s+--get)\b/i,
+  /^\s*(?:cat|head|tail|grep|rg|find|ls|pwd|echo|printf|wc|sort|diff|file|stat|du|df|tree|which|whereis|type|printenv|uname|whoami|id|cal|uptime|ps|free|jq)\b/i,
+  /^\s*git\s+(?:status|log|diff|show|ls-files|ls-tree|config\s+--get)\b/i,
   /^\s*(?:npm|pnpm|yarn)\s+(?:list|ls|view|info|search|outdated|audit|why)\b/i,
   /^\s*(?:node|python|python3|ruby|go|rustc|cargo)\s+--version\b/i,
-  /^\s*curl\s+(?!(?:.|\n)*(?:--data(?:-raw|-binary|-urlencode)?\b|-d\b|--form\b|-F\b|--upload-file\b|-T\b|-X\s*(?!GET\b|HEAD\b)|--request\s*(?!GET\b|HEAD\b)))/i,
-  /^\s*wget\s+(?:-q\s+)?-O\s+-(?:\s|$)/i,
+  /^\s*curl\s+(?:-I|--head)\s+https?:\/\/[^\s]+$/,
 ];
 
-const SHELL_CONTROL_RE = /(?:\r|\n|;|&&|\|\||`|\$\(|[<>])/;
+const SHELL_CONTROL_RE = /[\r\n;&`$()<>\\]|\|\|/;
 
 export const PLAN_MODE_PROMPT = `[PLAN MODE ACTIVE]
 This is a planning-only turn. Explore the workspace and return a safe, implementation-ready plan.
@@ -51,11 +53,13 @@ Rules:
 - Bash accepts only allowlisted read-only inspection commands.
 - Use ask_user only when a missing decision would materially change the plan.
 - Inspect the existing implementation before proposing changes and cite concrete files or symbols.
-- Finish with structured_output. Put a short conclusion in summary and the ordered implementation steps in actionItems.
+- Save the ordered steps with update_plan, then finish with structured_output. Put a short conclusion in summary and the ordered implementation steps in actionItems.
 - Do not claim that the plan has been implemented.`;
 
 function normalizedToolSet(names: readonly string[]): string {
-  return [...new Set(names)].sort().join(",");
+  // Existing saved Plan selections predate workflow tools; management tools
+  // must not accidentally disable their read-only guard.
+  return [...new Set(names.filter(name => name !== "update_plan" && name !== "goal_status"))].sort().join(",");
 }
 
 export function isPlanToolSelection(names: readonly string[]): boolean {

@@ -11,6 +11,11 @@ import { useCallback, useSyncExternalStore } from "react";
 export type Locale = "en" | "zh";
 
 const MESSAGES = {
+  "workflow.pause": { en: "Pause", zh: "暫停" },
+  "workflow.resume": { en: "Resume", zh: "繼續" },
+  "workflow.manage": { en: "Manage goal", zh: "管理目標" },
+  "workflow.review": { en: "Review plan", zh: "檢視計畫" },
+  "workflow.execute": { en: "Execute plan", zh: "執行計畫" },
   "interaction.minimize": { en: "Minimize panel", zh: "收合面板" },
   "interaction.expand": { en: "Expand panel", zh: "展開面板" },
   "agents.limits": { en: "Subagent budgets", zh: "子代理執行上限" },

@@ -113,3 +113,49 @@ test("no-op is neutral and failure details/retry are inline", async ({ page }) =
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(backend.forbidden).toEqual([]);
 });
+
+test("success expires once, survives reload, and a new compaction still announces its result", async ({ page }) => {
+  const backend = await fixture(page, "completed");
+  await page.goto(`/?session=${SESSION}`);
+  await enterMessage(page, "/compact first result");
+  const status = page.getByTestId("compaction-status");
+  await expect(status).toHaveAttribute("data-state", "completed");
+  await expect(status).toContainText("Context compacted");
+  await expect(status).toHaveCount(0, { timeout: 8000 });
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeEditable();
+  await expect(status).toHaveCount(0);
+  await enterMessage(page, "/compact second result");
+  await expect(status).toHaveAttribute("data-state", "completed");
+  const requests = backend.commands.filter(command => command.type === "compact");
+  expect(requests).toHaveLength(2);
+  expect(requests[0].requestId).not.toBe(requests[1].requestId);
+  expect(backend.forbidden).toEqual([]);
+});
+
+for (const dismiss of [false, true]) {
+  test(`success is not replayed after leaving the session (manually dismissed=${dismiss})`, async ({ page }) => {
+    const backend = await fixture(page, "completed");
+    await page.goto(`/?session=${SESSION}`);
+    await enterMessage(page, "/compact result shown once");
+    const status = page.getByTestId("compaction-status");
+    await expect(status).toHaveAttribute("data-state", "completed");
+    if (dismiss) {
+      await status.getByRole("button", { name: "Dismiss compaction status" }).click();
+      await expect(status).toHaveCount(0);
+    }
+    // Both leaving during the five-second display and explicitly dismissing
+    // should acknowledge the result. Switch views without a document reload.
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    await expect(page).not.toHaveURL(new RegExp(`session=${SESSION}`));
+    await page.getByText("專案架構分析", { exact: true }).first().click();
+    await expect(page).toHaveURL(new RegExp(`session=${SESSION}`));
+    await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeEditable();
+    await expect(status).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeEditable();
+    await expect(status).toHaveCount(0);
+    expect(backend.commands.filter(command => command.type === "compact")).toHaveLength(1);
+    expect(backend.forbidden).toEqual([]);
+  });
+}

@@ -15,6 +15,7 @@ import type { QueuedFollowUp } from "./queued-follow-ups";
 import type { SessionEntry } from "./types";
 import { isWebExtensionUIDialogRequest } from "./web-extension-ui-types";
 import { createSnapshot } from "./git-snapshot";
+import { readWorkflow, WORKFLOW_ENTRY } from "./workflow-state";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 import { bindWebExtensions, createTrackedAgentServices, emitWebBeforeFork, type ExtensionProviderTracker } from "./pi-runtime";
 import type { ExtensionDiagnosticInfo, ExtensionProviderInfo } from "./extensions-info";
@@ -699,6 +700,9 @@ export class AgentSessionWrapper {
       const messages = "messages" in event && Array.isArray(event.messages) ? event.messages : [];
       const last = [...messages].reverse().find((item: { role?: string }) => item?.role === "assistant");
       this.lastRunError = last?.stopReason === "error" ? last.errorMessage || "Model call failed" : null;
+      const workflow = [...(this.inner.sessionManager?.getBranch?.() ?? [])].reverse()
+        .find(entry => entry.type === "custom" && entry.customType === WORKFLOW_ENTRY);
+      if (workflow?.type === "custom" && readWorkflow(workflow.data)?.goal?.status === "active") event = { ...event, goalActive: true };
     } else if (event.type === "tool_execution_start") {
       const tool = event as AgentEvent;
       this.activeTools.set(String(tool.toolCallId), { id: String(tool.toolCallId), name: String(tool.toolName), ...(typeof tool.toolLabel === "string" ? { label: tool.toolLabel } : {}) });
@@ -729,6 +733,12 @@ export class AgentSessionWrapper {
       message: `[${error.event}] ${error.error}`,
       path: error.extensionPath,
     });
+    if (error.event === "send_user_message" || error.event === "send_message") {
+      const runner = this.inner.extensionRunner;
+      const goal = runner?.getCommand("goal");
+      if (runner && goal) void goal.handler("pause", runner.createCommandContext()).catch(() => {});
+      if (!this.runActive && !this.inner.isStreaming) this.emitEvent({ type: "agent_end", messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage: error.error }] });
+    }
   }
 
   getExtensionDiagnostics(): ExtensionDiagnosticInfo[] {
@@ -780,8 +790,14 @@ export class AgentSessionWrapper {
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         const previousEnd = this.lastAgentEndCursor;
         const prompt = this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined);
-        if (command.awaitCompletion === true) await prompt;
-        else prompt.catch((error: unknown) => {
+        const settled = () => {
+          // Management-only extension commands have no agent_end event.
+          if (!this.inner.isStreaming && !this.runActive) this.emitEvent(this.getStreamSnapshot());
+        };
+        if (command.awaitCompletion === true) {
+          await prompt;
+          settled();
+        } else void prompt.then(settled, (error: unknown) => {
           // Setup/model errors can reject before Pi emits any run events.
           if (this.lastAgentEndCursor === previousEnd) this.emitEvent({
             type: "agent_end", messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage: this.errorMessage(error) }],
@@ -790,9 +806,29 @@ export class AgentSessionWrapper {
         return null;
       }
 
-      case "abort":
+      case "workflow_command": {
+        if (command.command !== "goal" && command.command !== "plan") throw new Error("Unknown workflow command");
+        const runner = this.inner.extensionRunner;
+        const handler = runner?.getCommand(command.command);
+        if (!runner || !handler) throw new Error("Workflow extension is unavailable");
+        const args = typeof command.args === "string" ? command.args : "";
+        if (this.cwd && !["pause", "status", "clear", "cancel"].includes(args.trim()) && !args.startsWith("budget ")) {
+          await createSnapshot(this.cwd, this.inner.sessionId, `Before /${command.command}`).catch(() => {});
+        }
+        await handler.handler(args, runner.createCommandContext());
+        this.emitEvent(this.getStreamSnapshot());
+        return null;
+      }
+
+      case "abort": {
+        // Stop also revokes automatic Goal continuation, including the gap
+        // between two SDK runs when abort alone has nothing to cancel.
+        const runner = this.inner.extensionRunner;
+        const goal = runner?.getCommand("goal");
+        if (runner && goal) await goal.handler("pause", runner.createCommandContext());
         await this.inner.abort();
         return null;
+      }
 
       case "get_state": {
         return this.getLiveState();
@@ -931,10 +967,15 @@ export class AgentSessionWrapper {
       case "get_tools": {
         const all: ToolInfo[] = this.inner.getAllTools();
         const active = new Set<string>(this.inner.getActiveToolNames());
-        const selection = this.getToolSelection?.() ?? {
+        let selection = this.getToolSelection?.() ?? {
           mode: inferToolSelectionMode([...active]),
           selectedNames: [...active],
         };
+        // Extensions can change active tools without a set_tools RPC.
+        if (inferToolSelectionMode([...active]) === "plan"
+          || (selection.mode !== "inherit" && [...active].sort().join(",") !== [...selection.selectedNames].sort().join(","))) {
+          selection = { mode: inferToolSelectionMode([...active]), selectedNames: [...active] };
+        }
         return {
           mode: selection.mode,
           selectedNames: selection.selectedNames,

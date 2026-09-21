@@ -36,6 +36,47 @@ describe("active-session idle protection", () => {
 });
 
 describe("AgentSessionWrapper prompt command", () => {
+  it("reconciles a management-only command without manufacturing a completed model run", async () => {
+    const inner = { sessionId: "workflow", sessionFile: "", prompt: vi.fn(async () => {}), dispose: vi.fn() } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner);
+    const events: Array<{ type: string }> = [];
+    wrapper.onEvent(event => events.push(event));
+    try {
+      await wrapper.send({ type: "prompt", message: "/goal status", awaitCompletion: true });
+      expect(events.map(e => e.type)).toEqual(["session_snapshot"]);
+    } finally { wrapper.destroy(); }
+  });
+
+  it("pauses Goal before aborting, including between automatic runs", async () => {
+    const order: string[] = [];
+    const ctx = {};
+    const handler = vi.fn(async () => { order.push("pause"); });
+    const inner = { sessionId: "workflow", sessionFile: "", dispose: vi.fn(),
+      extensionRunner: { getCommand: () => ({ handler }), createCommandContext: () => ctx },
+      abort: vi.fn(async () => { order.push("abort"); }),
+    } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner);
+    try {
+      await wrapper.send({ type: "abort" });
+      expect(handler).toHaveBeenCalledWith("pause", ctx);
+      expect(order).toEqual(["pause", "abort"]);
+    } finally { wrapper.destroy(); }
+  });
+
+  it("pauses a goal and reports extension prompt setup failures", async () => {
+    const handler = vi.fn(async () => {});
+    const inner = { sessionId: "workflow", sessionFile: "", dispose: vi.fn(),
+      extensionRunner: { getCommand: () => ({ handler }), createCommandContext: () => ({}) },
+    } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner);
+    const events: unknown[] = []; wrapper.onEvent(e => events.push(e));
+    try {
+      wrapper.recordExtensionError({ event: "send_message", extensionPath: "<runtime>", error: "No model configured" });
+      expect(handler).toHaveBeenCalledWith("pause", expect.anything());
+      expect(events).toContainEqual(expect.objectContaining({ type: "agent_end", messages: [expect.objectContaining({ errorMessage: "No model configured" })] }));
+    } finally { wrapper.destroy(); }
+  });
+
   it("lets background callers observe an immediate prompt rejection", async () => {
     const failure = new Error("No model configured");
     const inner = {

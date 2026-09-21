@@ -99,7 +99,7 @@ export const BUILTIN_SUBAGENTS: readonly SubagentDefinition[] = [
   {
     name: "reviewer",
     description: "Review correctness, regressions, security, and test coverage without editing.",
-    tools: ["read", "bash", "grep", "find", "ls"],
+    tools: ["read", "grep", "find", "ls"],
     source: "builtin",
     systemPrompt: [
       "You are the read-only reviewer subagent.",
@@ -327,6 +327,8 @@ export function createSubagentExtension(options: {
         promptGuidelines: [
           "Delegate only concrete, bounded work that benefits from isolated context; keep simple work in the current agent.",
           "Use scout/planner/reviewer for read-only work and worker for changes. Do not recursively delegate.",
+          "Use tasks to run independent work in parallel, including workers assigned disjoint files. Use chain when a task needs another task's output or edits; do not put dependent review-after-edit work in tasks.",
+          "Child sessions share this working directory. Do not edit the same files while a worker is running; independent checkouts must be prepared separately.",
         ],
         parameters: SubagentParams,
         executionMode: "sequential",
@@ -422,17 +424,23 @@ export function createSubagentExtension(options: {
 
           if (hasParallel) {
             const outcomes: DelegateOutcome[] = [];
-            const results = await Promise.all((params.tasks as Array<{ agent: string; task: string }>).map(async (item) => {
+            const tasks = params.tasks as Array<{ agent: string; task: string }>;
+            const runTask = async (item: { agent: string; task: string }) => {
               const result = await runOne(item.agent, item.task, outcomes);
               outcomes.push(result);
               return result;
-            }));
+            };
+            // tasks declares independent work. Enqueue every child immediately;
+            // the shared supervisor owns the configured concurrency limit.
+            // Dependent work belongs in chain, regardless of tool permissions.
+            const results = (await Promise.all(tasks.map(item => signal?.aborted ? null : runTask(item))))
+              .filter((result): result is DelegateOutcome => result !== null);
             const failed = results.filter((result) => result.run.status !== "completed");
             const text = results.map((result) => `### ${result.agent} · ${result.run.status}\n\n${result.output}`).join("\n\n---\n\n");
             return {
-              content: [{ type: "text", text: `${results.length - failed.length}/${results.length} subagents completed\n\n${text}` }],
+              content: [{ type: "text", text: `${results.length - failed.length}/${tasks.length} subagents completed${results.length < tasks.length ? " (remaining tasks cancelled)" : ""}\n\n${text}` }],
               details: outcomeDetails("parallel", results),
-              ...(failed.length ? { isError: true } : {}),
+              ...(failed.length || results.length < tasks.length ? { isError: true } : {}),
             };
           }
 

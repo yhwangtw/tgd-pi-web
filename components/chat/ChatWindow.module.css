@@ -287,6 +287,9 @@
 
 .transcriptScroll {
   overflow-x: hidden;
+  /* The scroll controller preserves reader intent. Native anchoring can pick
+     the spacer when a streaming bubble is replaced and pull paused readers. */
+  overflow-anchor: none;
 }
 
 .transcript {

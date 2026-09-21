@@ -50,8 +50,8 @@
       "id": "plan-mode",
       "title": { "en": "Plan Mode", "zh": "規劃模式" },
       "summary": {
-        "en": "A selectable read-only mode limits tools and shell commands, inspects the workspace, and returns an implementation-ready plan.",
-        "zh": "可選的唯讀模式會限制工具與 Shell 指令、檢查工作區，並輸出可直接執行的實作計畫。"
+        "en": "Restricted exploration saves ordered steps for review, refinement, explicit execution and progress tracking in the same session.",
+        "zh": "限制工具的探索模式會保存有序步驟，支援檢視、調整、明確啟動執行，並在同一對話追蹤進度。"
       },
       "foundation": "pi-extension-api",
       "webSupport": "adapted",
@@ -59,7 +59,22 @@
       "globalPiCliRequired": false,
       "backgroundServerRequired": false,
       "trust": "workspace",
-      "evidence": ["lib/plan-mode.ts", "components/chat/ToolPresetSelector.tsx"]
+      "evidence": ["lib/plan-mode.ts", "lib/workflow-extension.ts", "components/chat/ExtensionUIPanel.tsx"]
+    },
+    {
+      "id": "goal-mode",
+      "title": { "en": "Goal Mode", "zh": "目標模式" },
+      "summary": {
+        "en": "Session-owned goals support pause, resume, optional token budgets and bounded continuation at Pi's settled boundary.",
+        "zh": "對話專屬目標支援暫停、繼續、選用 token 預算，以及在 Pi 完成當輪工作後有上限地自動續跑。"
+      },
+      "foundation": "pi-extension-api",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": true,
+      "trust": "workspace",
+      "evidence": ["lib/workflow-extension.ts", "lib/workflow-state.ts", "components/chat/ExtensionUIPanel.tsx"]
     },
     {
       "id": "structured-output",

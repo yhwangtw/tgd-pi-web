@@ -15,7 +15,7 @@ export interface ToolSelectionState {
 }
 
 export const TOOL_PRESET_NONE: string[] = [];
-export const TOOL_PRESET_PLAN = ["read", "bash", "grep", "find", "ls", "ask_user", "structured_output"] as const;
+export const TOOL_PRESET_PLAN = ["read", "bash", "grep", "find", "ls", "ask_user", "structured_output", "update_plan"] as const;
 export const TOOL_PRESET_DEFAULT = ["read", "bash", "edit", "write", "ask_user", "structured_output"] as const;
 export const TOOL_PRESET_FULL = ["read", "bash", "edit", "write", "grep", "find", "ls", "ask_user", "structured_output"] as const;
 
