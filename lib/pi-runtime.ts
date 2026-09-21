@@ -18,6 +18,7 @@ import { createPiModelRuntime } from "./pi-model-runtime";
 import { createMcpExtension } from "./mcp";
 import { createSubagentExtension } from "./subagent-extension";
 import { createPlanModeExtension } from "./plan-mode";
+import { createWorkflowExtension } from "./workflow-extension";
 import { createStructuredOutputExtension } from "./structured-output-extension";
 
 interface ProviderModelLike {
@@ -221,6 +222,7 @@ export async function createTrackedAgentServices(cwd: string): Promise<{
     resourceLoaderOptions: {
       extensionFactories: [
         createPlanModeExtension(),
+        createWorkflowExtension(),
         createStructuredOutputExtension(),
         createMcpExtension(cwd),
         createSubagentExtension(),

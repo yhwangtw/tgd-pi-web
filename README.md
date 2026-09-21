@@ -185,6 +185,7 @@ This table is generated from `lib/capabilities.json`; it is the product contract
 | **Sessions and cross-project search** | Official Pi SDK | Web adapter | Not required | Normal Web runtime | Single-user host |
 | **Ask User and inline extension questions** | Official Extension API | Web adapter | Not required | Normal Web runtime | Explicit confirmation |
 | **Plan Mode** | Official Extension API | Web adapter | Not required | Normal Web runtime | Trusted workspace |
+| **Goal Mode** | Official Extension API | Web adapter | Not required | Required | Trusted workspace |
 | **Structured Output** | Official Extension API | Web adapter | Not required | Normal Web runtime | None |
 | **Embedded subagents** | Official Pi SDK | Web adapter | Not required | Normal Web runtime | Trusted workspace |
 | **MCP connections** | Official Extension API | Web adapter | Not required | Normal Web runtime | Trusted endpoint/command |
@@ -197,12 +198,16 @@ This table is generated from `lib/capabilities.json`; it is the product contract
 
 ### Agent chat
 
+Subagent, Plan, and Goal are Pi Web-maintained extensions built on the official Pi SDK and Extension API. They are Web integrations, not unmodified upstream extension packages; Pi SDK upgrades still require compatibility validation here.
+
 - Live SSE streaming with connect-before-prompt delivery.
 - Prompt, steer, follow-up queue, retry, bash, and context compaction.
 - Direct shell mode with `!command`; use `!!command` to omit the result from model context.
 - Model and thinking-level switching during a session.
 - Tool access can inherit Pi/project defaults, use a preset, or select individual built-in, extension, and MCP tools.
-- A first-party `subagent` tool is installed with the Web runtime: delegate isolated work to the built-in scout, planner, worker, and reviewer, run up to eight tasks through the existing Agent queue, and inspect or cancel every child session from the Agent dashboard. No global `pi` CLI is required.
+- A first-party `subagent` tool is installed with the Web runtime: delegate work in separate sessions to the built-in scout, planner, worker, and reviewer, run up to eight tasks through the existing Agent queue, and inspect or cancel every child session from the Agent dashboard. `tasks` runs independent children in parallel, including workers; the Agent panel's shared concurrency limit controls how many run at once (default 3, configurable from 1 to 8). Children share the parent's working directory, so assign workers disjoint files and use `chain` for dependencies such as reviewing a preceding worker's edits. The three read-only built-ins have no shell access. Use **Inherit** or explicitly enable `subagent` in custom tools; explicit core-tool presets do not include it. No global `pi` CLI is required.
+- **Goal:** `/goal <objective>` starts a session-owned objective; `/goal --tokens 100k <objective>` adds an optional budget. The Goal panel and `/goal pause`, `/goal resume`, `/goal status`, `/goal budget 200k`, and `/goal clear` manage it. Continuations run only after Pi fully settles, stay hidden in the transcript, and stop on completion, a blocker, model error, user stop, budget exhaustion, three repeated/empty tool-free responses, or 25 automatic continuations. Pause lets the current response finish; Stop also aborts it. Usage counts provider-reported uncached input plus output after each response, so a response can exceed the remaining budget. Child usage remains in the separate subagent budgets. Reopening a runtime/branch restores an active goal as paused; browser reconnects preserve the live runtime.
+- **Plan:** `/plan <request>` explores with restricted tools and saves up to 30 ordered steps. Review/refine through the Plan panel or `/plan refine <changes>`, then explicitly choose `/plan execute`; execution stays in the same session and restores the prior tool selection. `/plan cancel` leaves the conversation intact. The `update_plan` tool tracks verified progress. Goal and plan state survive compaction in custom session entries. Planning pauses an active Goal. Shell filtering prevents common accidental writes; it is not an operating-system sandbox.
 - **Agents → Subagent budgets** configures time, turns, and reported cost for new children (defaults: 30 minutes, 24 turns, US$5; `0` disables that limit). Active runs show a near-limit notice and can be extended without starting another session. Reported cost depends on provider usage data, not your billing balance.
 - A built-in `ask_user` tool plus Pi extension dialogs (`select`, `confirm`, `input`, and `editor`), notifications, status indicators, and text widgets; pending decisions survive reconnects.
 - Settings use collapsible, nonblocking panels; the composer stays available. Drafts survive rapid session switches and reloads, and reading positions are remembered within the browser tab. Quiet active sessions are not recycled by the idle timer.

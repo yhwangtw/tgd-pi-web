@@ -28,7 +28,7 @@ describe("default Web tool execution", () => {
     const options = vi.mocked(createAgentSessionServices).mock.calls.at(-1)![0]!;
     const extensions = options.resourceLoaderOptions!.extensionFactories!;
     const names = extensions.map(extension => typeof extension === "function" ? extension.name : extension.name);
-    expect(names).toEqual(["Plan Mode", "Structured Output", "pi-web-mcp", "pi-web-subagent"]);
+    expect(names).toEqual(["Plan Mode", "pi-web-workflow", "Structured Output", "pi-web-mcp", "pi-web-subagent"]);
     expect(names).not.toContain("Safety Guard");
   });
 });

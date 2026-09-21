@@ -39,6 +39,15 @@ describe("Plan Mode", () => {
     "cat package.json > copy.json",
     "curl -X POST https://example.com/run",
     "find . -name '*.tmp' -delete",
+    "git branch -D work",
+    "git remote add backup https://example.com/repo.git",
+    "env python -c 'open(\"x\",\"w\")'",
+    "sort -o source.txt source.txt",
+    "curl -o source.txt https://example.com",
+    "rg --pre=formatter pattern",
+    "find . -fprint files.txt",
+    "sed -n 'w changed.txt' source.txt",
+    "ls & node script.js",
   ])("blocks mutating or compound command: %s", (command) => {
     expect(isPlanReadOnlyCommand(command)).toBe(false);
   });

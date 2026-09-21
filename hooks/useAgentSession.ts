@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect, useReducer } from "react";
 import type { AgentMessage } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
+import { parseWorkflowCommand } from "@/lib/workflow-state";
 import { showToast } from "@/hooks/useToast";
 import { translate } from "@/lib/i18n";
 import { presentProviderError } from "@/lib/provider-error-presentation";
@@ -509,8 +510,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           } else {
             setProviderRecovery(null);
             autoFallbackAttemptedRef.current = false;
-            setDoneTitle(sessionNameRef.current);
-            notifyDone(sessionNameRef.current);
+            if (event.goalActive) setRunningTitle(sessionNameRef.current);
+            else {
+              setDoneTitle(sessionNameRef.current);
+              notifyDone(sessionNameRef.current);
+            }
           }
         }
         dispatch({ type: "end" });
@@ -703,8 +707,24 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return result.sessionId;
   }, [newSessionCwd, newSessionModel, catalogStatus, toolPreset, customToolNames, thinkingLevel, ephemeralNewSession, connectEvents, onSessionCreated]);
 
+  const handleWorkflowCommand = useCallback(async (message: string): Promise<boolean> => {
+    const command = parseWorkflowCommand(message);
+    const sid = sessionIdRef.current;
+    if (!command || !sid) return false;
+    try {
+      if (!(await connectEvents(sid))) throw new Error(translate("connection.streamNotReady"));
+      await sendAgentCommand(sid, { type: "workflow_command", ...command });
+      if (sessionIdRef.current === sid) await loadTools(sid);
+      return true;
+    } catch (reason) {
+      showToast(reason instanceof Error ? reason.message : String(reason), { type: "error" });
+      return false;
+    }
+  }, [connectEvents, loadTools]);
+
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]): Promise<boolean> => {
     if (!message.trim() && !images?.length) return false;
+    if (!images?.length && sessionIdRef.current && parseWorkflowCommand(message)) return handleWorkflowCommand(message);
     const compactCommand = /^\/compact(?:\s+([\s\S]*))?$/.exec(message.trim());
     if (compactCommand && sessionIdRef.current && !images?.length) {
       await handleCompact(compactCommand[1]);
@@ -816,7 +836,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       dispatch({ type: "end" });
       return false;
     }
-  }, [isNew, newSessionCwd, newSessionModel, catalogStatus, session, agentRunning, connectEvents, createNewSession, loadSession, lastEventAtRef, pendingScrollToUserRef, resetRunProgress, isCompacting, enqueueCompaction, handleCompact]);
+  }, [isNew, newSessionCwd, newSessionModel, catalogStatus, session, agentRunning, connectEvents, createNewSession, loadSession, lastEventAtRef, pendingScrollToUserRef, resetRunProgress, isCompacting, enqueueCompaction, handleCompact, handleWorkflowCommand]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -934,6 +954,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [autoCompactionEnabled, autoCompactionUpdating]);
 
   const handleSteer = useCallback(async (message: string, images?: AttachedImage[]): Promise<boolean> => {
+    if (!images?.length && parseWorkflowCommand(message)) return handleWorkflowCommand(message);
     if (isCompacting) return enqueueCompaction(message, images, "steer");
     const sid = sessionIdRef.current;
     if (!sid) return false;
@@ -956,9 +977,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       showToast(`${translate("toast.steerFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
       return false;
     }
-  }, [isCompacting, enqueueCompaction]);
+  }, [isCompacting, enqueueCompaction, handleWorkflowCommand]);
 
   const handleFollowUp = useCallback(async (message: string, images?: AttachedImage[]): Promise<boolean> => {
+    if (!images?.length && parseWorkflowCommand(message)) return handleWorkflowCommand(message);
     if (isCompacting) return enqueueCompaction(message, images);
     const sid = sessionIdRef.current;
     if (!sid) return false;
@@ -985,7 +1007,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       showToast(`${translate("toast.followUpFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
       return false;
     }
-  }, [isCompacting, enqueueCompaction]);
+  }, [isCompacting, enqueueCompaction, handleWorkflowCommand]);
 
   const handleClearQueue = useCallback(async (): Promise<boolean> => {
     const sid = sessionIdRef.current;

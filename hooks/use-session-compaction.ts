@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { classifyCompactionError, type CompactionState } from "@/lib/compaction-state";
+import { hasCompactionNoticeReceipt, rememberCompactionNotice } from "@/lib/compaction-notices";
 import type { QueuedFollowUp } from "@/lib/queued-follow-ups";
 import type { AgentEvent, AttachedImage } from "./use-agent-session-types";
 
@@ -26,7 +27,6 @@ export function useSessionCompaction(
   const starting = useRef<Promise<void> | null>(null);
   const mounted = useRef(true);
   const completed = useRef(new Set<string>());
-  const dismissed = useRef<string | null>(null);
   const onCompletedRef = useRef(onCompleted);
   onCompletedRef.current = onCompleted;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -39,16 +39,35 @@ export function useSessionCompaction(
   }, [setIsCompacting]);
 
   const accept = useCallback((state: CompactionState, force = false) => {
+    if (!mounted.current) return;
     const current = viewRef.current;
     if (!force && awaitingId.current && state.id !== awaitingId.current && state.status !== "running") return;
     if (current?.id === state.id && !["running", "checking", "unknown"].includes(current.status) && state.status === "running") return;
     if (state.id === awaitingId.current || force || state.status === "running") awaitingId.current = null;
-    if (dismissed.current !== state.id || state.status === "running") update(state);
+    const alreadyShown = hasCompactionNoticeReceipt(sessionIdRef.current, state.id, state.status);
+    const stillVisible = current?.id === state.id && current.status === state.status;
+    if (state.status === "running" || !alreadyShown || stillVisible) {
+      // Record success on first display, not only at timeout: switching away
+      // during these five seconds must not make the same notice new again.
+      if (state.status === "completed" && !alreadyShown) rememberCompactionNotice(sessionIdRef.current, state.id, state.status);
+      update(state);
+    } else if (current?.id === state.id) {
+      // Another view may already have shown the result. Clear our running /
+      // checking state without reopening the acknowledged terminal notice.
+      update(null);
+    }
     if (state.status === "completed" && !completed.current.has(state.id)) {
       completed.current.add(state.id);
       onCompletedRef.current();
     }
-  }, [update]);
+  }, [sessionIdRef, update]);
+
+  const dismiss = useCallback(() => {
+    const current = viewRef.current;
+    if (!current || current.status === "running" || current.status === "checking") return;
+    rememberCompactionNotice(sessionIdRef.current, current.id, current.status);
+    update(null);
+  }, [sessionIdRef, update]);
 
   const reconcile = useCallback((state?: CompactionLiveState) => {
     if (!state || !mounted.current) return;
@@ -154,6 +173,15 @@ export function useSessionCompaction(
   const activeId = view?.id;
   const activeStatus = view?.status;
   useEffect(() => {
+    if (!activeId || activeStatus !== "completed") return;
+    const sid = sessionIdRef.current;
+    const timer = setTimeout(() => {
+      if (sid === sessionIdRef.current && viewRef.current?.id === activeId && viewRef.current.status === "completed") dismiss();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [activeId, activeStatus, dismiss, sessionIdRef]);
+
+  useEffect(() => {
     if (!activeId || !["running", "checking"].includes(activeStatus ?? "")) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -169,5 +197,5 @@ export function useSessionCompaction(
     await check();
   }, [sessionIdRef, start, check]);
 
-  return { view, queue, start, retry, abort, check, enqueue, clearQueue, reconcile, handleEvent, dismiss: () => { dismissed.current = viewRef.current?.id ?? null; update(null); } };
+  return { view, queue, start, retry, abort, check, enqueue, clearQueue, reconcile, handleEvent, dismiss };
 }

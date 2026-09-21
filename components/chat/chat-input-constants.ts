@@ -42,6 +42,8 @@ function firstLine(body: string): string {
 /** Combine the built-in tGD commands with the user's saved prompt templates. */
 export function buildSlashItems(prompts: { name: string; body: string }[]): SlashItem[] {
   return [
+    { name: "/goal", description: "Goal — start, pause or resume a persistent objective", insert: "/goal " },
+    { name: "/plan", description: "Plan — explore, review and track implementation steps", insert: "/plan " },
     ...TGD_COMMANDS.map((c) => ({ name: c.name, description: c.description, insert: `${c.name} ` })),
     ...prompts.map((p) => ({ name: `/${p.name}`, description: firstLine(p.body), insert: p.body, isTemplate: true })),
   ];

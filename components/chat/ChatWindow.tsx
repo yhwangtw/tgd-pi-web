@@ -606,6 +606,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const [newLines, setNewLines] = useState(0);
   const newBaselineRef = useRef(0);
   const userPausedSmartFollowRef = useRef(false);
+  const hasMessages = messages.length > 0;
   const updateJumpVisibility = useCallback(() => {
     const container = scrollContainerRef.current;
     const end = messagesEndRef.current;
@@ -619,6 +620,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     const el = scrollContainerRef.current;
     if (!el) return;
     let lastTouchY: number | null = null;
+    let lastScrollTop = el.scrollTop;
     const pauseFollow = () => {
       if (scrollFollowMode === "always") return;
       if (scrollFollowMode === "smart") userPausedSmartFollowRef.current = true;
@@ -639,6 +641,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       if (["ArrowUp", "PageUp", "Home"].includes(event.key)) pauseFollow();
     };
     const onScroll = () => {
+      const movedUp = el.scrollTop < lastScrollTop - 1;
+      const movedDown = el.scrollTop > lastScrollTop + 1;
+      lastScrollTop = el.scrollTop;
       updateJumpVisibility();
       const end = messagesEndRef.current;
       if (end) {
@@ -650,7 +655,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         if (scrollFollowMode === "always") {
           followStreamRef.current = true;
         } else if (scrollFollowMode === "smart") {
-          if (atTail) {
+          // Turn navigation and the minimap scroll without wheel/touch events.
+          // Moving away from the tail must pause those readers too. A layout
+          // change alone must not undo an explicit upward-scroll pause.
+          if (movedUp && !atTail) pauseFollow();
+          if (atTail && (!userPausedSmartFollowRef.current || movedDown)) {
             userPausedSmartFollowRef.current = false;
             followStreamRef.current = true;
           } else if (userPausedSmartFollowRef.current) {
@@ -676,37 +685,50 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("keydown", onKeyDown);
     };
-  }, [scrollContainerRef, messagesEndRef, messages.length, scrollFollowMode, updateJumpVisibility]);
-
-  // A paused stream grows without firing a scroll event. Re-evaluate the real
-  // tail after content/spacer layout changes so Latest appears only when it is
-  // useful, and never merely because the run spacer mounted.
-  useLayoutEffect(() => {
-    updateJumpVisibility();
-  }, [agentRunning, messages, spacerHeight, streamState.streamingMessage, updateJumpVisibility]);
+  }, [scrollContainerRef, messagesEndRef, hasMessages, loading, scrollFollowMode, updateJumpVisibility]);
 
   // Follow policy at run start. Smart mode starts engaged so the reply is
   // visible without manual work, but the user's upward scroll disengages it.
-  useEffect(() => {
+  // Explicit mode changes also govern late layout after the run has ended.
+  useLayoutEffect(() => {
+    if (scrollFollowMode === "preserve") {
+      followStreamRef.current = false;
+      return;
+    }
+    if (scrollFollowMode === "always") {
+      userPausedSmartFollowRef.current = false;
+      followStreamRef.current = true;
+      return;
+    }
     if (!agentRunning) return;
     userPausedSmartFollowRef.current = false;
-    followStreamRef.current = scrollFollowMode !== "preserve";
+    followStreamRef.current = true;
   }, [agentRunning, scrollFollowMode]);
 
   // Re-baseline the "+N" counter whenever layout shifts for non-content
   // reasons: run start/end, the run spacer mounting/resizing, or a historical
   // message being expanded/collapsed. Content growth after this is real.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     newBaselineRef.current = el.scrollHeight;
     setNewLines(0);
   }, [agentRunning, spacerHeight, expandedKeys, scrollContainerRef]);
 
-  // Count new content while streaming without following.
-  useEffect(() => {
+  // Reconcile every kind of output with the reader's existing follow intent.
+  // message_end clears streamingMessage before committing the last chunk;
+  // bash output and async Markdown layout also grow independently of it.
+  const reconcileTranscriptTail = useCallback(() => {
     const el = scrollContainerRef.current;
-    if (!el || !agentRunning) return;
+    const end = messagesEndRef.current;
+    if (!el || !end) return;
+    if (followStreamRef.current && end.getBoundingClientRect().top > el.getBoundingClientRect().bottom) {
+      // Instant automatic scrolling avoids queuing animations at token rate.
+      // The marker precedes the run spacer, so short replies keep their anchor.
+      end.scrollIntoView({ behavior: "auto", block: "end" });
+    }
+    updateJumpVisibility();
+    if (!agentRunning) return;
     if (followStreamRef.current) {
       newBaselineRef.current = el.scrollHeight;
       setNewLines((v) => (v === 0 ? v : 0));
@@ -715,7 +737,34 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     const delta = el.scrollHeight - newBaselineRef.current;
     const lines = delta > 12 ? Math.max(1, Math.round(delta / 24)) : 0;
     setNewLines((v) => (v === lines ? v : lines));
-  }, [messages, streamState.streamingMessage, agentRunning, scrollContainerRef]);
+  }, [agentRunning, messagesEndRef, scrollContainerRef, updateJumpVisibility]);
+
+  useLayoutEffect(() => {
+    reconcileTranscriptTail();
+  }, [messages, streamState.streamingMessage, bashRun, spacerHeight, loading, reconcileTranscriptTail]);
+
+  // Images, syntax highlighting, expanded content and viewport resizing can
+  // change the tail without a session event. Coalesce these layout changes;
+  // the observer never changes follow intent or pulls a paused reader down.
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    const transcript = messagesEndRef.current?.parentElement;
+    if (!container || !transcript) return;
+    let frame: number | null = null;
+    const observer = new ResizeObserver(() => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        reconcileTranscriptTail();
+      });
+    });
+    observer.observe(container);
+    observer.observe(transcript);
+    return () => {
+      observer.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [hasMessages, loading, error, messagesEndRef, scrollContainerRef, reconcileTranscriptTail]);
 
   const jumpToBottom = useCallback(() => {
     // block:"end" — with the run spacer mounted below the marker, the default
@@ -731,22 +780,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     followStreamRef.current = true;
     userPausedSmartFollowRef.current = false;
   }, [agentRunning, messagesEndRef]);
-
-  // Streaming follow: while engaged, keep the tail pinned to the viewport
-  // bottom as tokens arrive. Instant (not smooth) — smooth animations queue
-  // and jitter at token rate. Only scrolls once the tail escapes the fold,
-  // so short content under the top anchor never moves.
-  useEffect(() => {
-    if (!streamState.streamingMessage || !followStreamRef.current) return;
-    const el = scrollContainerRef.current;
-    const end = messagesEndRef.current;
-    if (!el || !end) return;
-    const containerBottom = el.getBoundingClientRect().bottom;
-    const markerTop = end.getBoundingClientRect().top;
-    if (markerTop > containerBottom) {
-      end.scrollIntoView({ behavior: "auto", block: "end" });
-    }
-  }, [streamState.streamingMessage, scrollContainerRef, messagesEndRef]);
 
   // ── ⌘F in-conversation search ────────────────────────────────────────────
   const [findOpen, setFindOpen] = useState(false);
@@ -1351,7 +1384,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 if (msg.role === "user" && compactionSummary === null) seenUserMessage = true;
                 if (currentAssistantModelKey !== null) previousAssistantModelKey = currentAssistantModelKey;
                 // The current turn (last user message onward) never collapses.
-                const collapsible = compactionSummary === null && (lastUserIdx === -1 ? idx < messages.length - 1 : idx < lastUserIdx);
+                const currentTurn = lastUserIdx === -1 ? idx === messages.length - 1 : idx >= lastUserIdx;
+                const collapsible = compactionSummary === null && !currentTurn;
                 return (
                   <Fragment key={key}>
                     {idx === unreadMessageIndex && (
@@ -1361,6 +1395,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     )}
                   <div
                     data-message-role={compactionSummary === null ? msg.role : "summary"}
+                    data-current-turn={currentTurn || undefined}
                     data-entry-id={entryId}
                     data-bookmarked={isBookmarked || undefined}
                     data-turn-start={startsNewTurn || undefined}
@@ -1538,6 +1573,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             <ExtensionUIPanel
               state={extensionUIState}
               onRespond={handleExtensionUIResponse}
+              onWorkflowCommand={handleSend}
               wide={wideChat}
               questionInTranscript
             />

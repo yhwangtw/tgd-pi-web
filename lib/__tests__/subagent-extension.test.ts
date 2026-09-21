@@ -136,6 +136,58 @@ describe("built-in Web subagents", () => {
     expect(result.details.runs.map((run: { agent: string }) => run.agent)).toEqual(["scout", "reviewer"]);
   });
 
+  it("gives every built-in read-only role inspection tools without shell access", () => {
+    for (const name of ["scout", "planner", "reviewer"]) {
+      expect(BUILTIN_SUBAGENTS.find(agent => agent.name === name)?.tools)
+        .toEqual(["read", "grep", "find", "ls"]);
+    }
+  });
+
+  it("starts independent workers and readers before any finish, preserving request order", async () => {
+    const release = new Map<string, () => void>();
+    const executor = vi.fn(async request => {
+      await new Promise<void>(resolve => release.set(request.task, resolve));
+      return completedRun(request.agent.name, request.task);
+    });
+    const tool = await registeredTool({ executor });
+    const pending = executeTool(tool, { tasks: [
+      { agent: "worker", task: "Edit component A" },
+      { agent: "worker", task: "Edit independent component B" },
+      { agent: "scout", task: "Inspect unrelated module C" },
+    ] });
+    expect(executor).toHaveBeenCalledTimes(3);
+    release.get("Inspect unrelated module C")!();
+    release.get("Edit independent component B")!();
+    release.get("Edit component A")!();
+    const result = await pending;
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("3/3 subagents completed");
+    expect(result.details.runs.map(run => run.agent)).toEqual(["worker", "worker", "scout"]);
+    expect(result.content[0].text!.indexOf("Edit component A")).toBeLessThan(result.content[0].text!.indexOf("Edit independent component B"));
+  });
+
+  it("does not start the remaining writes after the parent is cancelled", async () => {
+    const controller = new AbortController();
+    const executor = vi.fn(async request => { controller.abort(); return completedRun(request.agent.name, "done"); });
+    const tool = await registeredTool({ executor });
+    const result = await tool.execute("call", { tasks: [{ agent: "worker", task: "first" }, { agent: "worker", task: "second" }] }, controller.signal, undefined, context() as never) as unknown as TestToolResult;
+    expect(executor).toHaveBeenCalledOnce();
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("1/2 subagents completed (remaining tasks cancelled)");
+  });
+
+  it("passes chain output into the next task and stops a failed chain", async () => {
+    const executor = vi.fn(async request => request.agent.name === "scout" ? completedRun("scout", "loader.ts") : {
+      run: { ...completedRun("worker", "").run, status: "failed" as const, error: "Verification failed" },
+    });
+    const tool = await registeredTool({ executor });
+    const result = await executeTool(tool, { chain: [{ agent: "scout", task: "Find it" }, { agent: "worker", task: "Fix {previous}" }, { agent: "reviewer", task: "Review {previous}" }] });
+    expect(executor).toHaveBeenCalledTimes(2);
+    expect(executor.mock.calls[1][0].task).toBe("Fix loader.ts");
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("Chain stopped at worker");
+  });
+
   it("requires confirmation before an untrusted project agent runs", async () => {
     const projectAgent: SubagentDefinition = {
       name: "repo-agent",
