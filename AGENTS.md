@@ -23,8 +23,9 @@ tsconfig/eslint for the same reason.
 Release: after the PR is merged and CI passes on the exact merged main, use a
 clean up-to-date main checkout: `bash scripts/release.sh` is read-only preflight;
 add `--dispatch` to request the canonical GitHub workflow. It pins the expected
-source SHA, and the workflow rechecks source ancestry and all five CI jobs before
-publishing. See `docs/RELEASING.md`. New tags must use the current
+source SHA, and the workflow rechecks source ancestry and all four required main
+CI jobs before publishing. E2E runs on PRs, not again after merge. See
+`docs/RELEASING.md`. New tags must use the current
 UTC date; for another release on the same date, append a sequence such as
 `vYYYY.MM.DD-1`. The workflow updates both
 package version files, creates the `[skip ci]` release commit and annotated tag,

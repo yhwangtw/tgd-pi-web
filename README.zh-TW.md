@@ -427,7 +427,7 @@ bash scripts/release.sh                        # 唯讀檢查，預設 UTC 今�
 bash scripts/release.sh vYYYY.MM.DD --dispatch  # 明確送出發布請求
 ```
 
-日期使用 UTC，同日後續版本加上 `-1`、`-2` 等流水號。入口不會在本機 build、改版本或推送；workflow 會再次核對已審閱的 source SHA 與五個 CI 工作，才原子推送版本 commit/tag 並發布 GitHub Release。只有經差異核對的純版本提交能沿用 CI；缺少、跳過、失敗或仍在執行的檢查都會阻擋。既有 tag 可續發，但不移動 tag，也不把較新的 Latest 換掉。這**不等於 npm 發布或正式部署**。詳見[發版、復原與驗證手冊](./docs/RELEASING.md)。
+日期使用 UTC，同日後續版本加上 `-1`、`-2` 等流水號。入口不會在本機 build、改版本或推送；workflow 會再次核對已審閱的 source SHA 與四個必要的 main CI 工作，才原子推送版本 commit/tag 並發布 GitHub Release。E2E 在 PR 階段執行，合併後不重跑。只有經差異核對的純版本提交能沿用 CI；缺少、跳過、失敗或仍在執行的必要檢查都會阻擋。既有 tag 可續發，但不移動 tag，也不把較新的 Latest 換掉。這**不等於 npm 發布或正式部署**。詳見[發版、復原與驗證手冊](./docs/RELEASING.md)。
 
 ## 授權
 

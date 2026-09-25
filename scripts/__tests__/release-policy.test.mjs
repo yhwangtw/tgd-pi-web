@@ -77,6 +77,10 @@ describe("calendar release policy", () => {
 });
 
 describe("SHA-bound CI gate", () => {
+  it("requires only the four main checks", () => {
+    expect(REQUIRED_CI_JOBS).toEqual(["Lint & Typecheck", "Test", "Build", "Security Audit"]);
+    expect(() => requireCIJobs(jobs(), run)).not.toThrow();
+  });
   it("reads all run/job pages and pins job evidence to the run attempt", () => {
     const api = apiFixture();
     expect(checkCI(repository, sha, api)).toEqual({ sha, runId: 80, attempt: 2, url: "https://github.com/owner/project/actions/runs/80" });

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { isDeepStrictEqual } from "node:util";
 
-export const REQUIRED_CI_JOBS = ["Lint & Typecheck", "Test", "Build", "E2E", "Security Audit"];
+export const REQUIRED_CI_JOBS = ["Lint & Typecheck", "Test", "Build", "Security Audit"];
 const VERSION_FILES = ["package-lock.json", "package.json"];
 
 export function command(executable, args, cwd = process.cwd()) {
