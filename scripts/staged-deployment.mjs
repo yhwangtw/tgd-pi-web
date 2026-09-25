@@ -78,7 +78,7 @@ export async function runStagedDeployment(input, env = process.env, dependencies
   const attempts = dependencies.attempts || 60;
   const stopped = dependencies.assertCheckoutStopped || assertCheckoutStopped;
   await stopped(stageDir);
-  const fixtureDir = await mkdtemp(join(tmpdir(), 'pi-staged-health-'));
+  const fixtureDir = await realpath(await mkdtemp(join(tmpdir(), 'pi-staged-health-')));
   const stageUrl = new URL(plan.stageIdentityUrl);
   // Candidate commands get the same allowlisted environment as fixture
   // previews, never the live provider keys, NODE_OPTIONS, or update adapters.

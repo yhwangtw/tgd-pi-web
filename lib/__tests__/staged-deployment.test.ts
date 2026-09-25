@@ -62,7 +62,10 @@ describe("staged deployment operator contract", () => {
     const { plan, previous, candidate } = await fixture();
     const phases: string[] = [];
     const environments: Record<string, string>[] = [];
-    const execute = vi.fn(async (phase: string, _argv: string[], _cwd: string, env: Record<string, string>) => { phases.push(phase); environments.push(env); });
+    const execute = vi.fn(async (phase: string, _argv: string[], _cwd: string, env: Record<string, string>) => {
+      phases.push(phase); environments.push(env);
+      if (phase === "stageStart") expect(env.PI_CODING_AGENT_DIR).toBe(await realpath(env.PI_CODING_AGENT_DIR));
+    });
     const readIdentity = identitySequence(candidate, previous, { ...candidate, cwd: plan.liveDir });
     const result = await runStagedDeployment(plan, fixtureEnv, { execute, readIdentity, assertCheckoutStopped: vi.fn(), attempts: 1 });
     expect(result.status).toBe("succeeded");
