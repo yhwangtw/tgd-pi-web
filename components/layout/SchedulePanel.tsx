@@ -412,7 +412,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
             <legend>{t("schedule.type")}</legend>
             <div className={s.segmented}>
               {(["once", "daily", "weekly", "cron"] as ScheduleKind[]).map((kind) => (
-                <button key={kind} type="button" className={draft.kind === kind ? s.segmentActive : s.segment} onClick={() => setDraft({ ...draft, kind })}>
+                <button key={kind} type="button" aria-pressed={draft.kind === kind} className={draft.kind === kind ? s.segmentActive : s.segment} onClick={() => setDraft({ ...draft, kind })}>
                   {t(`schedule.${kind}` as MsgKey)}
                 </button>
               ))}

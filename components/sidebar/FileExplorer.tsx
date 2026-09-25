@@ -172,27 +172,39 @@ function TreeNode({
         data-dir={node.isDir ? "1" : "0"}
         data-open={open ? "1" : "0"}
       >
-        {node.isDir && (
-          <ChevronRight
-            size={12}
-            strokeWidth={1.8}
-            aria-hidden="true"
-            className={styles.treeChevron}
-            style={{ transform: open ? "rotate(90deg)" : "none" }}
-          />
-        )}
-        {!node.isDir && <span className={styles.fileSpacer} />}
-        <span className={styles.iconWrapper}>
-          {node.isDir ? <FolderIcon size={14} open={open} /> : getFileIcon(node.name, 14)}
-        </span>
-        <span className={styles.fileName} title={node.fullPath}>
-          {node.name}
-        </span>
-        {fileStatus && <GitBadge status={fileStatus} />}
-        {dirDirty && <span className={styles.dirtyDot} aria-hidden />}
-        {loading && (
-          <LoaderCircle className={styles.loadingIcon} size={12} strokeWidth={1.8} aria-hidden="true" />
-        )}
+        <button
+          type="button"
+          className={styles.treePrimaryAction}
+          aria-label={node.name}
+          tabIndex={-1}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.currentTarget.parentElement?.focus();
+            handleClick();
+          }}
+        >
+          {node.isDir && (
+            <ChevronRight
+              size={12}
+              strokeWidth={1.8}
+              aria-hidden="true"
+              className={styles.treeChevron}
+              style={{ transform: open ? "rotate(90deg)" : "none" }}
+            />
+          )}
+          {!node.isDir && <span className={styles.fileSpacer} />}
+          <span className={styles.iconWrapper}>
+            {node.isDir ? <FolderIcon size={14} open={open} /> : getFileIcon(node.name, 14)}
+          </span>
+          <span className={styles.fileName} title={node.fullPath}>
+            {node.name}
+          </span>
+          {fileStatus && <GitBadge status={fileStatus} />}
+          {dirDirty && <span className={styles.dirtyDot} aria-hidden />}
+          {loading && (
+            <LoaderCircle className={styles.loadingIcon} size={12} strokeWidth={1.8} aria-hidden="true" />
+          )}
+        </button>
         {onAtMention && !node.isDir && (
           <button
             type="button"

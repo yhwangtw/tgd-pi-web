@@ -204,6 +204,20 @@ test.describe("appearance", () => {
     }
   });
 
+  test("schedule frequency exposes the selected option", async ({ page }) => {
+    await openMain(page);
+    await page.getByRole("button", { name: "Schedules", exact: true }).click();
+    await page.getByRole("button", { name: "New schedule", exact: true }).first().click();
+    const editor = page.getByTestId("schedule-editor");
+    const once = editor.getByRole("button", { name: "Once", exact: true });
+    const daily = editor.getByRole("button", { name: "Daily", exact: true });
+    await expect(once).toHaveAttribute("aria-pressed", "false");
+    await expect(daily).toHaveAttribute("aria-pressed", "true");
+    await once.click();
+    await expect(once).toHaveAttribute("aria-pressed", "true");
+    await expect(daily).toHaveAttribute("aria-pressed", "false");
+  });
+
   test("shared geometry and status tokens resolve in every skin and theme", async ({ page }) => {
     await openMain(page);
 
