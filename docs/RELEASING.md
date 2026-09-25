@@ -2,6 +2,12 @@
 
 ## One publication path
 
+Choose the scope first: documentation-only or CI-only changes normally take
+effect on merge and do not require an application version bump or service
+restart. Application/runtime changes follow the release/deployment path below.
+Changes to setup, authentication, stored data or deployment logic retain their
+relevant installation, recovery and behavior checks.
+
 Merge a reviewed PR after its checks pass, including E2E. Then wait for **CI on
 the exact merged `main` commit**. The merged commit must pass Lint & Typecheck
 (including design, i18n and capability contracts), Test, Build, and Security
@@ -35,6 +41,13 @@ The helper requires Node.js, Git and authenticated GitHub CLI access. It derives
 the GitHub repository from `origin`, not the current shell's default repository.
 Git push credentials and `gh` API credentials are separate; a working push alone
 does not prove workflow-dispatch access. Do not print tokens in diagnostic logs.
+
+For operators with configured staging/service adapters, the same entrypoint
+also supports `--deploy /absolute/plan.json --execute`: publish, wait, prepare
+the exact tag, deploy and verify the public hostname with resumable receipts.
+Without `--execute` this mode is read-only. See the
+[one-entrypoint release/deployment guide](./RELEASE-PIPELINE.md). The
+publication-only `--dispatch` behavior and canonical workflow stay unchanged.
 
 The equivalent operator command is:
 

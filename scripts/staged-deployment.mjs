@@ -1,15 +1,16 @@
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { assertCheckoutStopped } from './runtime-guard.mjs';
 import { serveEnvironment } from './serve-plan.mjs';
 import { matchesRunningIdentity, validateIdentityUrl } from './managed-update-runner.mjs';
 import { patchUpdateOperation, readUpdateOperation, writeExpectedUpdateIdentity } from './update-operation-store.mjs';
+import { deploymentFingerprint } from './deployment-fingerprint.mjs';
 
 const PHASES = ['build', 'stageStart', 'stageStop', 'stop', 'switch', 'start', 'rollback'];
-const nested = (parent, child) => { const path = relative(parent, child); return path === '' || (!path.startsWith('..') && !isAbsolute(path)); };
+const nested = (parent, child) => { const path = relative(parent, child); return path === '' || (path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path)); };
 
 export function validateStagedPlan(plan) {
   if (!plan || !isAbsolute(plan.stageDir || '') || !isAbsolute(plan.liveDir || '')
@@ -31,7 +32,7 @@ export function validateStagedPlan(plan) {
   return plan;
 }
 
-async function execute(_phase, argv, cwd, env) {
+export async function executeDeploymentCommand(_phase, argv, cwd, env) {
   await new Promise((done, reject) => {
     const child = spawn(argv[0], argv.slice(1), { cwd, env, shell: false, stdio: 'ignore' });
     child.once('error', reject);
@@ -71,13 +72,13 @@ export async function runStagedDeployment(input, env = process.env, dependencies
   const stageDir = await realpath(plan.stageDir);
   const liveDir = await realpath(plan.liveDir);
   if (nested(stageDir, liveDir) || nested(liveDir, stageDir)) throw new Error('Canonical stage and live directories overlap');
-  const exec = dependencies.execute || execute;
+  const exec = dependencies.execute || executeDeploymentCommand;
   const read = dependencies.readIdentity || readIdentity;
   const wait = dependencies.wait || (milliseconds => new Promise(done => setTimeout(done, milliseconds)));
   const attempts = dependencies.attempts || 60;
   const stopped = dependencies.assertCheckoutStopped || assertCheckoutStopped;
   await stopped(stageDir);
-  const fixtureDir = await mkdtemp(join(tmpdir(), 'pi-staged-health-'));
+  const fixtureDir = await realpath(await mkdtemp(join(tmpdir(), 'pi-staged-health-')));
   const stageUrl = new URL(plan.stageIdentityUrl);
   // Candidate commands get the same allowlisted environment as fixture
   // previews, never the live provider keys, NODE_OPTIONS, or update adapters.
@@ -88,9 +89,20 @@ export async function runStagedDeployment(input, env = process.env, dependencies
   };
   const commonEnv = { ...env, PIWEB_STAGED_SOURCE_DIR: stageDir, PIWEB_LIVE_SOURCE_DIR: liveDir };
   const step = (phase, stage = false) => exec(phase, plan.commands[phase], stage ? stageDir : liveDir, { ...(stage ? stageEnv : commonEnv), PIWEB_DEPLOY_PHASE: phase });
+  const checkpoint = dependencies.checkpoint;
+  const fingerprint = dependencies.fingerprint || deploymentFingerprint;
+  // The per-run fixture directory changes on every invocation; it is not a
+  // build input. All other allowlisted environment values must still match.
+  const buildEnvironment = { ...stageEnv };
+  delete buildEnvironment.PI_CODING_AGENT_DIR;
+  let reuseBuild = false;
+  if (checkpoint?.fingerprint) {
+    try { reuseBuild = checkpoint.fingerprint === await fingerprint(plan, buildEnvironment); }
+    catch { /* Missing or changed artifacts require a fresh isolated build. */ }
+  }
   let stageStarted = false;
   try {
-    await step('build', true);
+    if (!reuseBuild) await step('build', true);
     stageStarted = true; // Even a partially failing start must run stageStop.
     await step('stageStart', true);
     await waitForIdentity(plan.stageIdentityUrl, plan.expected, null, stageDir, stageEnv, read, wait, attempts);
@@ -101,6 +113,7 @@ export async function runStagedDeployment(input, env = process.env, dependencies
     }
     await rm(fixtureDir, { recursive: true, force: true });
   }
+  if (checkpoint) await checkpoint.save(await fingerprint(plan, buildEnvironment));
   // A successful build alone never authorizes a cutover: capture the current
   // process/build for rollback and verify candidate identity before touching it.
   const before = await read(plan.liveIdentityUrl, env);

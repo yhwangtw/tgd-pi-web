@@ -429,6 +429,12 @@ bash scripts/release.sh vYYYY.MM.DD --dispatch  # 明確送出發布請求
 
 日期使用 UTC，同日後續版本加上 `-1`、`-2` 等流水號。入口不會在本機 build、改版本或推送；workflow 會再次核對已審閱的 source SHA 與四個必要的 main CI 工作，才原子推送版本 commit/tag 並發布 GitHub Release。E2E 與 macOS 安裝檢查在 PR 階段執行；發布程式會強制核對 PR 的成功 CI 與相同的原始碼內容，main 仍跑 Linux 安裝檢查。若 PR 證據不足，可在 main 手動跑一次完整 CI。只有經差異核對的純版本提交能沿用 CI；缺少、跳過、失敗或仍在執行的必要檢查都會阻擋。既有 tag 可續發，但不移動 tag，也不把較新的 Latest 換掉。這**不等於 npm 發布或正式部署**。詳見[發版、復原與驗證手冊](./docs/RELEASING.md)。
 
+若已設定本機服務的 staged 部署 adapter，可用
+`bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/plan.json --execute`
+串接發布、等待完成、部署與正式網址檢查。省略 `--execute` 只做唯讀檢查；
+重複相同 tag／設定可接續已完成的階段。詳見[設定與中斷復原限制](./docs/RELEASE-PIPELINE.md)。
+純文件或 CI 規則調整通常合併即可生效，不必升版或重啟服務。
+
 ## 授權
 
 MIT — 詳見 [`LICENSE`](./LICENSE)。
