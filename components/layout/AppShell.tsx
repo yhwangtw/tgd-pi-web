@@ -202,14 +202,19 @@ export function AppShell() {
   // other view switches to it (opening the panel if needed).
   const handleRailView = useCallback((view: PanelView) => {
     setMobileActionsOpen(false);
+    // On phones the file viewer covers the contextual panel. Selecting a
+    // section must bring that section back into view, including when it was
+    // already selected behind the viewer.
+    const coveredByFileViewer = window.innerWidth <= 700 && rightPanelOpen;
+    if (coveredByFileViewer) setRightPanelOpen(false);
     if (view === "search") setSearchFocusSignal((signal) => signal + 1);
-    if (view === panelView) {
+    if (view === panelView && !coveredByFileViewer) {
       setSidebarOpen((open) => !open);
     } else {
       setPanelView(view);
       setSidebarOpen(true);
     }
-  }, [panelView]);
+  }, [panelView, rightPanelOpen, setRightPanelOpen]);
 
   const handleShowMobileChat = useCallback(() => {
     setSidebarOpen(false);

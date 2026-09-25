@@ -19,6 +19,22 @@
   user-select: none;
 }
 
+.treePrimaryAction {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .treeChevron {
   flex-shrink: 0;
   transition: transform 0.1s;

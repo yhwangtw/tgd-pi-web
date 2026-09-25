@@ -198,7 +198,9 @@ test.describe("responsive shell", () => {
     await expect(sidebar).toHaveClass(/sidebar-open/);
     await expect(page.getByText("README.md", { exact: true })).toBeVisible();
 
-    await page.getByText("README.md", { exact: true }).click();
+    const fileAction = sidebar.getByRole("button", { name: "README.md", exact: true });
+    await expect(fileAction).toBeVisible();
+    await fileAction.click();
 
     const viewer = page.locator(".right-panel-container");
     await expect(sidebar).toHaveClass(/sidebar-closed/);
@@ -224,7 +226,16 @@ test.describe("responsive shell", () => {
 
     await page.getByRole("button", { name: "Files", exact: true }).click();
     await expect(sidebar).toHaveClass(/sidebar-open/);
+    await expect(viewer).toHaveClass(/right-panel-closed/);
     await expect(sidebar.getByText("README.md", { exact: true })).toBeVisible();
+
+    // A different primary section must also replace a full-screen file viewer.
+    await fileAction.click();
+    await expect(viewer).toHaveClass(/right-panel-open/);
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await expect(sidebar).toHaveClass(/sidebar-open/);
+    await expect(viewer).toHaveClass(/right-panel-closed/);
+    await expect(sidebar.getByText("Unified search", { exact: true })).toBeVisible();
   });
 
   test("AC-RWD-6: mobile composer preserves typing space and keeps Send visible", async ({ page }) => {
