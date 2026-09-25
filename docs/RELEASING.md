@@ -5,9 +5,16 @@
 Merge a reviewed PR after its checks pass, including E2E. Then wait for **CI on
 the exact merged `main` commit**. The merged commit must pass Lint & Typecheck
 (including design, i18n and capability contracts), Test, Build, and Security
-Audit. Skipped, cancelled, missing or failing required jobs block release. E2E
-runs on PRs and manual CI dispatches; it does not rebuild the same browser suite
-after merge. The four required main jobs start independently where possible.
+Audit. Main still runs the Linux archive/offline installation check. E2E and
+macOS installation run on PRs and manual CI dispatches, not on every main push.
+Independent jobs run together; new PR commits cancel only that PR's older run.
+
+Publication automatically verifies the omitted checks from the merged PR's
+latest successful CI attempt and requires its Git tree to match the release
+source. PR jobs explicitly check out the PR head, so this compares the code
+actually tested. Missing, skipped, failed or pending evidence blocks publication
+even when the repository has no branch protection. This is a publication gate;
+it does not configure GitHub merge restrictions or a release-bot bypass.
 
 From a clean checkout at the fetched remote `main`:
 
@@ -54,6 +61,10 @@ Before any release commit, tag or publication, `release.yml` checks:
 4. The latest matching run and its specific attempt contain all four successful
    jobs. A previously green run cannot excuse a newer failed or pending run.
    If a partial re-run lacks the required job set, re-run the full main CI.
+5. E2E and macOS installation passed either in that main run or in the canonical
+   PR CI for the exact head of the PR merged as this source commit. The PR must
+   target this repository's main branch, its source tree must match, and its
+   latest run attempt must contain all required main and deferred checks.
 
 The workflow then changes only version fields, atomically pushes the version
 commit plus annotated tag, and creates a GitHub Release with source/CI links.
@@ -79,6 +90,13 @@ If CI is still running, wait for that specific run. If API authorization, rate
 limits, missing evidence or failures prevent checking, publication stops. Fix
 the actual cause and retry; there is no bypass/force-success flag. A GitHub
 Release that already exists is left unchanged, not edited on every retry.
+
+If the source has no matching merged PR, merge resolution changed its tree, or
+PR evidence is unavailable, run **CI → Run workflow → main** once (or
+`gh workflow run ci.yml --ref main`). A manual run includes Linux/macOS
+installation and E2E; after it passes on the exact source, publication needs no
+PR evidence. This also supports historical tags with complete main CI. Full CI
+is a recovery path, not an extra step in the normal PR → main → release flow.
 
 After dispatch, verify the actual run and resulting release:
 

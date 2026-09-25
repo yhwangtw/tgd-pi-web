@@ -494,7 +494,9 @@ helper never builds or versions the local checkout. The workflow rechecks the
 reviewed source SHA and four required main CI jobs before atomically pushing the version
 commit/tag and publishing a GitHub Release. Only verified version-only commits
 inherit CI; skipped, failed, missing or pending required checks block publication. E2E
-runs on PRs and is not repeated after merge. Existing
+and macOS installation run on PRs. Publication verifies their successful PR CI
+and matching source tree; main still runs Linux installation. A full manual
+main CI run is the fallback when PR evidence is unavailable. Existing
 tags can be resumed without moving them or replacing a newer Latest release.
 This does **not** publish to npm or deploy production. See the
 [release, recovery and readback guide](./docs/RELEASING.md).

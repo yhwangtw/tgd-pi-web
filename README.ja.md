@@ -372,7 +372,7 @@ bash scripts/release.sh                        # 読み取り専用、UTC の今
 bash scripts/release.sh vYYYY.MM.DD --dispatch  # 明示的に公開を要求
 ```
 
-日付は UTC、同日の追加 release は `-1`、`-2` を付けます。ローカル build・バージョン変更・push は行いません。workflow は確認済み source SHA と main の必須 CI job 4 件を再検証し、version commit/tag を原子的に push して GitHub Release を公開します。E2E は PR で実行し、マージ後には繰り返しません。実際の差分がバージョンだけの場合に限り CI を継承します。必須チェックの失敗・欠落・skip・実行中は公開を停止します。既存 tag は移動せず再開でき、古い release が新しい Latest を置き換えることもありません。**npm 公開や production deploy とは別です。** [手順・復元・結果確認](./docs/RELEASING.md)を参照してください。
+日付は UTC、同日の追加 release は `-1`、`-2` を付けます。ローカル build・バージョン変更・push は行いません。workflow は確認済み source SHA と main の必須 CI job 4 件を再検証し、version commit/tag を原子的に push して GitHub Release を公開します。E2E と macOS のインストール検証は PR で実行し、公開時に成功した PR CI と同一のソースツリーを必須とします。main では Linux のインストール検証を続けます。PR の証拠がない場合は main で完全な CI を手動実行します。実際の差分がバージョンだけの場合に限り CI を継承します。必須チェックの失敗・欠落・skip・実行中は公開を停止します。既存 tag は移動せず再開でき、古い release が新しい Latest を置き換えることもありません。**npm 公開や production deploy とは別です。** [手順・復元・結果確認](./docs/RELEASING.md)を参照してください。
 
 ## ライセンス
 

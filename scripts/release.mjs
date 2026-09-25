@@ -28,6 +28,7 @@ export function main(argv, { run = (exe, args) => command(exe, args, root), api,
   const source = verifiedSource(git, target, { tag, existing: false });
   const evidence = checkCI(repository, source, request);
   log(`Repository: ${repository}\nTag: ${tag}\nSource: ${target}\nVerified CI: ${evidence.url} (attempt ${evidence.attempt})`);
+  if (evidence.pr) log(`Verified PR #${evidence.pr.number}: ${evidence.pr.url} (attempt ${evidence.pr.attempt}, matching source tree)`);
   if (!dispatch) { log("Preflight passed. Nothing published. Add --dispatch to request the release."); return evidence; }
   run("gh", ["workflow", "run", "release.yml", "--repo", `https://github.com/${repository}`, "--ref", "main",
     "-f", `tag=${tag}`, "-f", `expected_sha=${target}`]);

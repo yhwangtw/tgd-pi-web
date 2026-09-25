@@ -7,12 +7,19 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint:
     name: Lint & Typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Release verifies this exact PR tree against the merged source.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -49,6 +56,9 @@ jobs:
         node: ['22.19.0', '23.4.0', '24', '26']
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Release verifies this exact PR tree against the merged source.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -72,9 +82,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Linux still validates every merge; macOS is verified once on the PR.
+        os: ${{ fromJSON(github.event_name == 'push' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest"]') }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Release verifies this exact PR tree against the merged source.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -109,6 +123,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Release verifies this exact PR tree against the merged source.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -134,6 +151,9 @@ jobs:
     if: github.event_name != 'push'
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Release verifies this exact PR tree against the merged source.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -172,6 +192,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Release verifies this exact PR tree against the merged source.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7

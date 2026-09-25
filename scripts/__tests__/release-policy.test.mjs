@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { checkCI, command, isVersionOnlyCommit, repositoryFromOrigin, REQUIRED_CI_JOBS, requireCIJobs, selectCIRun, utcTag, validateTag, verifiedSource } from "../release-policy.mjs";
+import { checkCI, command, DEFERRED_CI_JOBS, isVersionOnlyCommit, repositoryFromOrigin, REQUIRED_CI_JOBS, requireCIJobs, selectCIRun, utcTag, validateTag, verifiedSource } from "../release-policy.mjs";
 import { main } from "../release.mjs";
 import { shouldBeLatest } from "../release-latest.mjs";
 
@@ -12,10 +12,11 @@ const sha = "a".repeat(40);
 const repository = "owner/project";
 const run = { id: 80, workflow_id: 7, head_sha: sha, head_branch: "main", event: "push", status: "completed", conclusion: "success", run_attempt: 2, repository: { full_name: repository }, head_repository: { full_name: repository } };
 const jobs = () => REQUIRED_CI_JOBS.map((name) => ({ name, run_id: run.id, head_sha: sha, status: "completed", conclusion: "success" }));
+const fullJobs = () => [...jobs(), ...DEFERRED_CI_JOBS.map((name) => ({ ...jobs()[0], name }))];
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
-function apiFixture({ runs = [run], ciJobs = jobs(), refresh = run } = {}) {
+function apiFixture({ runs = [run], ciJobs = fullJobs(), refresh = run } = {}) {
   return vi.fn((endpoint) => {
     if (endpoint.endsWith("/commits/main")) return { sha };
     if (endpoint.endsWith("/workflows/ci.yml")) return { id: 7, path: ".github/workflows/ci.yml" };
@@ -110,6 +111,66 @@ describe("SHA-bound CI gate", () => {
   it("fails closed for API errors and a re-run during verification", () => {
     expect(() => checkCI(repository, sha, () => { throw new Error("HTTP 403"); })).toThrow("HTTP 403");
     expect(() => checkCI(repository, sha, apiFixture({ refresh: { ...run, run_attempt: 3 } }))).toThrow("changed during verification");
+  });
+});
+
+describe("PR evidence for checks omitted on main", () => {
+  const headSha = "b".repeat(40);
+  const tree = "c".repeat(40);
+  const pull = { number: 42, merged_at: "2026-09-25T12:00:00Z", merge_commit_sha: sha,
+    base: { ref: "main", repo: { full_name: repository } },
+    head: { sha: headSha, ref: "feature", repo: { full_name: repository } } };
+  const prRun = { ...run, id: 79, head_sha: headSha, head_branch: "feature", event: "pull_request", run_attempt: 1 };
+  const prJobs = () => fullJobs().map((job) => ({ ...job, run_id: prRun.id, head_sha: headSha }));
+  function fixture({ pulls = [pull], headTree = tree, runs = [prRun], ciJobs = prJobs(), refresh = prRun, mainRefresh = run } = {}) {
+    const main = apiFixture({ ciJobs: jobs(), refresh: mainRefresh });
+    return vi.fn((endpoint, options) => {
+      if (endpoint.includes(`/commits/${sha}/pulls?`)) return [pulls];
+      if (endpoint.endsWith(`/git/commits/${sha}`)) return { sha, tree: { sha: tree } };
+      if (endpoint.endsWith(`/git/commits/${headSha}`)) return { sha: headSha, tree: { sha: headTree } };
+      if (endpoint.includes(`/workflows/7/runs?head_sha=${headSha}`)) return [{ workflow_runs: runs }];
+      if (endpoint.includes("/runs/79/attempts/1/jobs?")) return [{ jobs: ciJobs }];
+      if (endpoint.endsWith("/runs/79")) return refresh;
+      return main(endpoint, options);
+    });
+  }
+  it("accepts a green same-tree merged PR when main omits E2E and macOS installation", () => {
+    const api = fixture();
+    expect(checkCI(repository, sha, api).pr).toEqual({ number: 42, sha: headSha, runId: 79, attempt: 1,
+      url: "https://github.com/owner/project/actions/runs/79" });
+    expect(api.mock.calls.some(([endpoint]) => endpoint.includes("/runs/79/attempts/1/jobs?"))).toBe(true);
+  });
+  it.each([[], [{ ...pull, merged_at: null }], [{ ...pull, merge_commit_sha: headSha }],
+    [{ ...pull, base: { ref: "develop", repo: { full_name: repository } } }], [pull, pull]].map((pulls) => ({ pulls })))(
+    "rejects direct pushes, unrelated/unmerged or ambiguous PR evidence %j", ({ pulls }) => {
+      expect(() => checkCI(repository, sha, fixture({ pulls }))).toThrow("No unique merged PR");
+    });
+  it("rejects a merge that changed the tested PR tree and explains recovery", () => {
+    expect(() => checkCI(repository, sha, fixture({ headTree: "d".repeat(40) }))).toThrow("Run the full CI workflow manually");
+  });
+  it.each(DEFERRED_CI_JOBS)("requires successful %s in the selected PR attempt", (name) => {
+    expect(() => checkCI(repository, sha, fixture({ ciJobs: prJobs().filter((job) => job.name !== name) }))).toThrow(name);
+    expect(() => checkCI(repository, sha, fixture({ ciJobs: prJobs().map((job) => job.name === name ? { ...job, conclusion: "skipped" } : job) }))).toThrow(name);
+  });
+  it.each([{ workflow_id: 8 }, { event: "workflow_dispatch" }, { head_sha: sha },
+    { head_branch: "unrelated" }, { repository: { full_name: "another/repo" } }, { head_repository: { full_name: "another/repo" } }])(
+    "does not borrow a green unrelated run %j", (change) => {
+      expect(() => checkCI(repository, sha, fixture({ runs: [{ ...prRun, ...change }] }))).toThrow("No CI run for PR");
+    });
+  it("does not borrow an older green PR run after a failed or pending run", () => {
+    for (const state of ["failure", "in_progress"]) {
+      const latest = { ...prRun, id: 81, status: state === "failure" ? "completed" : state, conclusion: state === "failure" ? state : null };
+      expect(() => checkCI(repository, sha, fixture({ runs: [prRun, latest] }))).toThrow("Latest CI run 81");
+    }
+  });
+  it("rejects a changed PR or main run during verification", () => {
+    expect(() => checkCI(repository, sha, fixture({ refresh: { ...prRun, run_attempt: 2 } }))).toThrow("changed during verification");
+    expect(() => checkCI(repository, sha, fixture({ mainRefresh: { ...run, run_attempt: 3 } }))).toThrow("changed during verification");
+  });
+  it("uses a full successful main run without requiring a PR or old artifacts", () => {
+    const api = apiFixture();
+    expect(checkCI(repository, sha, api).pr).toBeUndefined();
+    expect(api.mock.calls.some(([endpoint]) => endpoint.includes("/pulls"))).toBe(false);
   });
 });
 
@@ -254,7 +315,7 @@ describe("workflow entrypoint and wiring", () => {
     mkdirSync(fakeBin);
     const fakeGh = join(fakeBin, "gh");
     const fixtureRun = { ...run, head_sha: f.base, status: "completed", conclusion: state };
-    const fixtureJobs = jobs().map((job) => ({ ...job, head_sha: f.base }));
+    const fixtureJobs = fullJobs().map((job) => ({ ...job, head_sha: f.base }));
     // Only API GET is implemented. Any dispatch/publication attempt fails.
     writeFileSync(fakeGh, `#!${process.execPath}\nconst args = process.argv.slice(2);
 if (args[0] !== 'api') process.exit(90);

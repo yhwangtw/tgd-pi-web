@@ -16,11 +16,18 @@ describe("runtime and installation CI contract", () => {
     expect(runtime).toContain("run: node scripts/check-node-version.mjs");
     expect(runtime).not.toContain("continue-on-error: true");
   });
-  it("runs the actual archive/offline setup smoke on both operating systems", () => {
+  it("runs Linux installation on every merge and both operating systems before merge or on request", () => {
     const smoke = job("installation-smoke");
-    expect(smoke).toContain("os: [ubuntu-latest, macos-latest]");
+    expect(smoke).toContain(`fromJSON(github.event_name == 'push' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest"]')`);
     expect(smoke).toContain("run: npm ci");
     expect(smoke).toContain("run: node scripts/ci-install-smoke.mjs");
+  });
+  it("tests the PR head explicitly so release can compare its tree and cancels only superseded PR runs", () => {
+    for (const id of ["lint", "runtime-tests", "installation-smoke", "build", "e2e", "audit"]) {
+      expect(job(id)).toContain("ref: ${{ github.event.pull_request.head.sha || github.sha }}");
+    }
+    expect(workflow).toContain("group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}");
+    expect(workflow).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
   });
   it("keeps the four main release jobs, runs E2E on PRs, and makes Test fail closed", () => {
     for (const name of ["Lint & Typecheck", "Test", "Build", "E2E", "Security Audit"]) {
