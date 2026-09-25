@@ -24,7 +24,9 @@ Release: after the PR is merged and CI passes on the exact merged main, use a
 clean up-to-date main checkout: `bash scripts/release.sh` is read-only preflight;
 add `--dispatch` to request the canonical GitHub workflow. It pins the expected
 source SHA, and the workflow rechecks source ancestry and all four required main
-CI jobs before publishing. E2E runs on PRs, not again after merge. See
+CI jobs before publishing. E2E and macOS installation run on PRs; main retains
+Linux installation. The gate requires successful PR CI on the same source tree
+for deferred checks, or a full manual main CI run. See
 `docs/RELEASING.md`. New tags must use the current
 UTC date; for another release on the same date, append a sequence such as
 `vYYYY.MM.DD-1`. The workflow updates both

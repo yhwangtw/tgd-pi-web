@@ -12,10 +12,12 @@ try {
   const target = git(["rev-parse", "--verify", `${existing ? `refs/tags/${tag}` : "HEAD"}^{commit}`]);
   const source = verifiedSource(git, target, { expectedSha: process.env.EXPECTED_SHA, tag, existing });
   const ci = checkCI(repository, source);
-  const outputs = { tag, version: tag.slice(1), source_sha: target, ci_sha: source, ci_run_id: ci.runId, ci_url: ci.url };
+  const outputs = { tag, version: tag.slice(1), source_sha: target, ci_sha: source, ci_run_id: ci.runId, ci_url: ci.url,
+    pr_ci_url: ci.pr?.url ?? "", pr_number: ci.pr?.number ?? "" };
   if (!process.env.GITHUB_OUTPUT) throw new Error("GITHUB_OUTPUT is required in the release workflow.");
   appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(outputs).map(([key, value]) => `${key}=${value}\n`).join(""));
   console.log(`Verified ${tag}: source ${target}; CI ${ci.url} at ${source}.`);
+  if (ci.pr) console.log(`PR #${ci.pr.number}: ${ci.pr.url}; tested source tree matches.`);
 } catch (error) {
   console.error(`Release stopped: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;

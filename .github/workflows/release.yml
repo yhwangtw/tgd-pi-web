@@ -18,6 +18,7 @@ on:
 permissions:
   contents: write
   actions: read
+  pull-requests: read
 
 concurrency:
   group: release
@@ -102,6 +103,8 @@ jobs:
           VERIFIED_SHA: ${{ steps.gate.outputs.source_sha }}
           CI_SHA: ${{ steps.gate.outputs.ci_sha }}
           CI_URL: ${{ steps.gate.outputs.ci_url }}
+          PR_CI_URL: ${{ steps.gate.outputs.pr_ci_url }}
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 "${VERSION}^" 2>/dev/null || echo "")
 
@@ -141,6 +144,9 @@ jobs:
             echo "## tGD-pi-web $VERSION"
             echo ""
             echo "Source: \`$VERIFIED_SHA\` · CI: [$CI_SHA]($CI_URL)"
+            if [ -n "$PR_CI_URL" ]; then
+              echo "PR checks: [#$PR_NUMBER]($PR_CI_URL) (matching source tree)"
+            fi
             echo ""
             echo "This is a source release, not a deployment or an npm package."
             echo ""

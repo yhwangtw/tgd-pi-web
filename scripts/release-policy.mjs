@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { isDeepStrictEqual } from "node:util";
 
 export const REQUIRED_CI_JOBS = ["Lint & Typecheck", "Test", "Build", "Security Audit"];
+export const DEFERRED_CI_JOBS = ["E2E", "Archive and offline setup (macos-latest)"];
 const VERSION_FILES = ["package-lock.json", "package.json"];
 
 export function command(executable, args, cwd = process.cwd()) {
@@ -51,31 +52,77 @@ export function requireSha(sha) {
   return sha;
 }
 
-export function selectCIRun(runs, repository, sha, workflowId) {
-  const matching = runs.filter((run) => run.workflow_id === workflowId
-    && run.head_sha === sha && run.head_branch === "main"
-    && ["push", "workflow_dispatch"].includes(run.event)
-    && run.repository?.full_name?.toLowerCase() === repository.toLowerCase()
-    && run.head_repository?.full_name?.toLowerCase() === repository.toLowerCase());
+function latestSuccessfulRun(matching, label) {
   matching.sort((a, b) => (Date.parse(b.updated_at) || 0) - (Date.parse(a.updated_at) || 0)
     || b.id - a.id || b.run_attempt - a.run_attempt);
   const run = matching[0];
-  if (!run) throw new Error(`No CI run for ${repository} main at ${sha}. Run CI on main first.`);
+  if (!run) throw new Error(`No CI run for ${label}.`);
   if (run.status !== "completed" || run.conclusion !== "success") {
-    throw new Error(`Latest CI run ${run.id} is ${run.conclusion ?? run.status}; not releasing ${sha}.`);
+    throw new Error(`Latest CI run ${run.id} is ${run.conclusion ?? run.status}; not releasing ${label}.`);
   }
   if (!Number.isSafeInteger(run.id) || !Number.isSafeInteger(run.run_attempt) || run.run_attempt < 1) throw new Error("Invalid CI run identity.");
   return run;
 }
 
-export function requireCIJobs(jobs, run) {
+export function selectCIRun(runs, repository, sha, workflowId) {
+  return latestSuccessfulRun(runs.filter((run) => run.workflow_id === workflowId
+    && run.head_sha === sha && run.head_branch === "main"
+    && ["push", "workflow_dispatch"].includes(run.event)
+    && run.repository?.full_name?.toLowerCase() === repository.toLowerCase()
+    && run.head_repository?.full_name?.toLowerCase() === repository.toLowerCase()), `${repository} main at ${sha}`);
+}
+
+export function requireCIJobs(jobs, run, required = REQUIRED_CI_JOBS) {
   const valid = jobs.filter((job) => job.run_id === run.id && job.head_sha === run.head_sha);
-  for (const name of REQUIRED_CI_JOBS) {
+  for (const name of required) {
     const matches = valid.filter((job) => job.name === name);
     if (matches.length !== 1 || matches[0].status !== "completed" || matches[0].conclusion !== "success") {
       throw new Error(`CI ${run.id}: required job "${name}" is missing, skipped, ambiguous, or unsuccessful.`);
     }
   }
+}
+
+function readJobs(prefix, run, api) {
+  return api(`${prefix}/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`, { paginate: true }).flatMap((page) => page.jobs);
+}
+
+function assertRunUnchanged(prefix, run, api) {
+  const refreshed = api(`${prefix}/runs/${run.id}`);
+  if (refreshed.head_sha !== run.head_sha || refreshed.run_attempt !== run.run_attempt
+    || refreshed.status !== "completed" || refreshed.conclusion !== "success") {
+    throw new Error("CI changed during verification; retry after it completes.");
+  }
+}
+
+function checkPRCI(repository, sha, workflowId, api) {
+  const recovery = "Run the full CI workflow manually on this main commit before releasing.";
+  const prefix = `repos/${repository}`;
+  const pulls = api(`${prefix}/commits/${sha}/pulls?per_page=100`, { paginate: true }).flat();
+  const matching = pulls.filter((pr) => pr.merged_at && pr.merge_commit_sha === sha
+    && pr.base?.ref === "main" && pr.base?.repo?.full_name?.toLowerCase() === repository.toLowerCase());
+  if (matching.length !== 1) throw new Error(`No unique merged PR for ${sha}. ${recovery}`);
+  const pr = matching[0];
+  if (!Number.isSafeInteger(pr.number) || pr.number < 1 || !pr.head?.ref) throw new Error("Invalid merged PR identity.");
+  const headSha = requireSha(pr.head.sha);
+  const headRepo = repositoryName(pr.head.repo?.full_name ?? "");
+  const source = api(`${prefix}/git/commits/${sha}`);
+  const head = api(`repos/${headRepo}/git/commits/${headSha}`);
+  if (source.sha !== sha || head.sha !== headSha
+    || requireSha(source.tree?.sha) !== requireSha(head.tree?.sha)) {
+    throw new Error(`Merged source differs from PR #${pr.number}'s tested tree. ${recovery}`);
+  }
+  const actions = `${prefix}/actions`;
+  const pages = api(`${actions}/workflows/${workflowId}/runs?head_sha=${headSha}&per_page=100`, { paginate: true });
+  const run = latestSuccessfulRun(pages.flatMap((page) => page.workflow_runs).filter((candidate) =>
+    candidate.workflow_id === workflowId && candidate.event === "pull_request"
+    && candidate.head_sha === headSha && candidate.head_branch === pr.head.ref
+    && candidate.repository?.full_name?.toLowerCase() === repository.toLowerCase()
+    && candidate.head_repository?.full_name?.toLowerCase() === headRepo.toLowerCase()),
+  `PR #${pr.number} at ${headSha}. ${recovery}`);
+  requireCIJobs(readJobs(actions, run, api), run, [...REQUIRED_CI_JOBS, ...DEFERRED_CI_JOBS]);
+  assertRunUnchanged(actions, run, api);
+  return { number: pr.number, sha: headSha, runId: run.id, attempt: run.run_attempt,
+    url: `https://github.com/${repository}/actions/runs/${run.id}` };
 }
 
 export function checkCI(repository, sha, api = ghJson) {
@@ -87,13 +134,17 @@ export function checkCI(repository, sha, api = ghJson) {
   // Never filter to success: a later failure/re-run invalidates old green evidence.
   const pages = api(`${prefix}/workflows/${workflow.id}/runs?head_sha=${sha}&per_page=100`, { paginate: true });
   const run = selectCIRun(pages.flatMap((page) => page.workflow_runs), repository, sha, workflow.id);
-  const jobPages = api(`${prefix}/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`, { paginate: true });
-  requireCIJobs(jobPages.flatMap((page) => page.jobs), run);
-  const refreshed = api(`${prefix}/runs/${run.id}`);
-  if (refreshed.run_attempt !== run.run_attempt || refreshed.status !== "completed" || refreshed.conclusion !== "success") {
-    throw new Error("CI changed during verification; retry after it completes.");
-  }
-  return { sha, runId: run.id, attempt: run.run_attempt, url: `https://github.com/${repository}/actions/runs/${run.id}` };
+  const jobs = readJobs(prefix, run, api);
+  requireCIJobs(jobs, run);
+  // A full manual main run (or a historical full run) is sufficient itself.
+  // Fast main runs must inherit the omitted checks from the same source tree.
+  const fullMain = DEFERRED_CI_JOBS.every((name) => {
+    const matches = jobs.filter((job) => job.name === name && job.run_id === run.id && job.head_sha === sha);
+    return matches.length === 1 && matches[0].status === "completed" && matches[0].conclusion === "success";
+  });
+  const pr = fullMain ? undefined : checkPRCI(repository, sha, workflow.id, api);
+  assertRunUnchanged(prefix, run, api);
+  return { sha, runId: run.id, attempt: run.run_attempt, url: `https://github.com/${repository}/actions/runs/${run.id}`, ...(pr ? { pr } : {}) };
 }
 
 function withoutReleaseVersion(document, isLock) {
