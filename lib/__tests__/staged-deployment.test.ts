@@ -57,6 +57,7 @@ describe("staged deployment operator contract", () => {
     const { plan } = await fixture();
     expect(() => validateStagedPlan({ ...plan, commands: { ...plan.commands, rollback: undefined } })).toThrow(/rollback/);
     expect(() => validateStagedPlan({ ...plan, stageDir: join(plan.liveDir, "stage") })).toThrow(/separate/);
+    expect(() => validateStagedPlan({ ...plan, stageDir: join(plan.liveDir, "..stage") })).toThrow(/separate/);
   });
   it("builds and health-checks isolated stage before stopping live, then verifies new running identity", async () => {
     const { plan, previous, candidate } = await fixture();

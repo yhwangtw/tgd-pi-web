@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { access, lstat, mkdir, readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { main as releasePreflight } from './release.mjs';
 import { checkCI, command, ghJson, isVersionOnlyCommit, releaseVersions, repositoryFromOrigin, requireSha, utcTag, validateTag } from './release-policy.mjs';
@@ -12,7 +12,7 @@ import { finishUpdateOperation, patchUpdateOperation, reserveUpdateOperation } f
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const delay = milliseconds => new Promise(done => setTimeout(done, milliseconds));
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const inside = (parent, child) => { const path = relative(parent, child); return path === '' || (!path.startsWith('..') && !isAbsolute(path)); };
+const inside = (parent, child) => { const path = relative(parent, child); return path === '' || (path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path)); };
 const help = `Usage: bash scripts/release.sh [vYYYY.MM.DD[-N]] --deploy /absolute/plan.json [--execute]
 Default: read-only preflight. --execute publishes, waits, stages, deploys and verifies.
 Repeat the SAME tag and plan to resume. State stays outside source. A crashed lock
@@ -104,7 +104,9 @@ async function localIdentity(plan, env) {
 
 export async function verifyPublicDeployment(plan, identity, env = process.env, request = fetch) {
   // Credentials are read at execution time, never stored in plan/state/logs.
-  const headers = JSON.parse(env.PIWEB_RELEASE_PUBLIC_HEADERS_JSON || '{}');
+  let headers;
+  try { headers = JSON.parse(env.PIWEB_RELEASE_PUBLIC_HEADERS_JSON || '{}'); }
+  catch { throw new Error('Invalid public request headers JSON'); }
   if (!headers || Array.isArray(headers) || typeof headers !== 'object'
     || Object.values(headers).some(value => typeof value !== 'string')) throw new Error('Invalid public request headers');
   async function read(path) {

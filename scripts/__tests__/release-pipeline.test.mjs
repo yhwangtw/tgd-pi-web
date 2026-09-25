@@ -181,6 +181,7 @@ describe('resumable release and deployment', () => {
   it('requires external non-overlapping state, stage and live paths plus an exact public origin', async () => {
     const f = await fixture();
     await expect(validatePipelinePlan({ ...f.plan, stageRoot: join(f.plan.liveDir, 'candidate') }, f.tag, f.options.sourceDir)).rejects.toThrow('separate');
+    await expect(validatePipelinePlan({ ...f.plan, stageRoot: join(f.plan.liveDir, '..candidate') }, f.tag, f.options.sourceDir)).rejects.toThrow('separate');
     await expect(validatePipelinePlan({ ...f.plan, publicOrigin: 'https://pi.example.test/path' }, f.tag, f.options.sourceDir)).rejects.toThrow('origin');
     await expect(f.run({ env: { PIWEB_UPDATE_OPERATION_DIR: join(f.root, 'different-store') } })).rejects.toThrow('share one lock');
   });
@@ -208,6 +209,8 @@ describe('public deployment readback', () => {
     const request = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => f.identity })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ error: 'not sessions' }) });
     await expect(verifyPublicDeployment(f.plan, f.identity, {}, request)).rejects.toThrow('session-list');
+    await expect(verifyPublicDeployment(f.plan, f.identity, { PIWEB_RELEASE_PUBLIC_HEADERS_JSON: 'private-cookie-not-json' }, request))
+      .rejects.toThrow(/^Invalid public request headers JSON$/);
   });
 });
 

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { assertCheckoutStopped } from './runtime-guard.mjs';
 import { serveEnvironment } from './serve-plan.mjs';
@@ -10,7 +10,7 @@ import { patchUpdateOperation, readUpdateOperation, writeExpectedUpdateIdentity 
 import { deploymentFingerprint } from './deployment-fingerprint.mjs';
 
 const PHASES = ['build', 'stageStart', 'stageStop', 'stop', 'switch', 'start', 'rollback'];
-const nested = (parent, child) => { const path = relative(parent, child); return path === '' || (!path.startsWith('..') && !isAbsolute(path)); };
+const nested = (parent, child) => { const path = relative(parent, child); return path === '' || (path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path)); };
 
 export function validateStagedPlan(plan) {
   if (!plan || !isAbsolute(plan.stageDir || '') || !isAbsolute(plan.liveDir || '')
