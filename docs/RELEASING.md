@@ -2,10 +2,12 @@
 
 ## One publication path
 
-Merge a reviewed PR, then wait for **CI on the exact merged `main` commit**.
-PR checks alone do not prove the resulting merge commit passed. CI must finish
-Lint & Typecheck (including design, i18n and capability contracts), Test, Build,
-E2E, and Security Audit. Skipped, cancelled, missing or failing jobs block release.
+Merge a reviewed PR after its checks pass, including E2E. Then wait for **CI on
+the exact merged `main` commit**. The merged commit must pass Lint & Typecheck
+(including design, i18n and capability contracts), Test, Build, and Security
+Audit. Skipped, cancelled, missing or failing required jobs block release. E2E
+runs on PRs and manual CI dispatches; it does not rebuild the same browser suite
+after merge. The four required main jobs start independently where possible.
 
 From a clean checkout at the fetched remote `main`:
 
@@ -49,9 +51,9 @@ Before any release commit, tag or publication, `release.yml` checks:
    fields agree, including `package-lock.json`'s root package.
 3. The canonical `.github/workflows/ci.yml` has completed successfully for that
    exact source, in this repository on `main`, not a fork's PR or another workflow.
-4. The latest matching run and its specific attempt contain all five successful
+4. The latest matching run and its specific attempt contain all four successful
    jobs. A previously green run cannot excuse a newer failed or pending run.
-   If a partial re-run lacks the full job set, re-run **all** CI jobs.
+   If a partial re-run lacks the required job set, re-run the full main CI.
 
 The workflow then changes only version fields, atomically pushes the version
 commit plus annotated tag, and creates a GitHub Release with source/CI links.

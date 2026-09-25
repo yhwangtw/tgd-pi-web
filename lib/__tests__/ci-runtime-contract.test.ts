@@ -22,7 +22,7 @@ describe("runtime and installation CI contract", () => {
     expect(smoke).toContain("run: npm ci");
     expect(smoke).toContain("run: node scripts/ci-install-smoke.mjs");
   });
-  it("keeps the exact five release-gate job names and makes Test fail closed", () => {
+  it("keeps the four main release jobs, runs E2E on PRs, and makes Test fail closed", () => {
     for (const name of ["Lint & Typecheck", "Test", "Build", "E2E", "Security Audit"]) {
       expect(workflow.match(new RegExp(`^    name: ${name.replace(/&/g, "\\&")}$`, "gm"))).toHaveLength(1);
     }
@@ -31,7 +31,8 @@ describe("runtime and installation CI contract", () => {
     expect(aggregate).toContain("if: ${{ always() }}");
     expect(aggregate).toContain('test "$RUNTIME_RESULT" = success');
     expect(aggregate).toContain('test "$INSTALL_RESULT" = success');
-    expect(job("build")).toContain("needs: [lint, test]");
-    expect(job("e2e")).toContain("needs: [lint, test]");
+    expect(job("build")).not.toContain("needs:");
+    expect(job("e2e")).toContain("if: github.event_name != 'push'");
+    expect(job("e2e")).not.toContain("needs:");
   });
 });

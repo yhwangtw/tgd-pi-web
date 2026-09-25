@@ -491,9 +491,10 @@ bash scripts/release.sh vYYYY.MM.DD --dispatch  # explicitly request publication
 
 Use today's UTC date, adding `-1`, `-2`, etc. for later releases that day. The
 helper never builds or versions the local checkout. The workflow rechecks the
-reviewed source SHA and all five CI jobs before atomically pushing the version
+reviewed source SHA and four required main CI jobs before atomically pushing the version
 commit/tag and publishing a GitHub Release. Only verified version-only commits
-inherit CI; skipped, failed, missing or pending checks block publication. Existing
+inherit CI; skipped, failed, missing or pending required checks block publication. E2E
+runs on PRs and is not repeated after merge. Existing
 tags can be resumed without moving them or replacing a newer Latest release.
 This does **not** publish to npm or deploy production. See the
 [release, recovery and readback guide](./docs/RELEASING.md).
