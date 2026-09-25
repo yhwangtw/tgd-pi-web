@@ -29,6 +29,30 @@ async function fixture() {
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 
 describe("staged deployment operator contract", () => {
+  it("reuses an unchanged verified build but starts a fresh isolated health check before every cutover", async () => {
+    const { plan, previous, candidate } = await fixture();
+    const phases: string[] = [];
+    const save = vi.fn();
+    await runStagedDeployment(plan, fixtureEnv, {
+      execute: async (phase: string) => { phases.push(phase); }, assertCheckoutStopped: vi.fn(), attempts: 1,
+      readIdentity: identitySequence(candidate, previous, { ...candidate, cwd: plan.liveDir }),
+      checkpoint: { fingerprint: "same-artifacts", save }, fingerprint: async () => "same-artifacts",
+    });
+    expect(phases).toEqual(["stageStart", "stageStop", "stop", "switch", "start"]);
+    expect(save).toHaveBeenCalledWith("same-artifacts");
+  });
+  it("rebuilds when cached artifacts changed, and never accepts a saved health result alone", async () => {
+    const { plan, candidate } = await fixture();
+    const phases: string[] = [];
+    const save = vi.fn();
+    await expect(runStagedDeployment(plan, fixtureEnv, {
+      execute: async (phase: string) => { phases.push(phase); }, assertCheckoutStopped: vi.fn(), attempts: 1,
+      readIdentity: identitySequence({ ...candidate, build: { ...candidate.build, sourceSha: "c".repeat(40) } }),
+      checkpoint: { fingerprint: "old", save }, fingerprint: async () => "changed",
+    })).rejects.toThrow(/not verified/);
+    expect(phases).toEqual(["build", "stageStart", "stageStop"]);
+    expect(save).not.toHaveBeenCalled();
+  });
   it("requires all cutover and rollback adapters before running anything", async () => {
     const { plan } = await fixture();
     expect(() => validateStagedPlan({ ...plan, commands: { ...plan.commands, rollback: undefined } })).toThrow(/rollback/);

@@ -119,6 +119,11 @@ proxy/tunnel. A container does not replace authentication or network isolation.
 
 ### Managed Update Center actions
 
+Configured staged-v1 adapters can also be used by the
+[resumable release/deploy CLI](../docs/RELEASE-PIPELINE.md). Its state directory
+must equal this service's managed operation directory so browser and CLI
+updates share the same persistent lock.
+
 The Web Update Center can always compare releases, run preflight checks, and
 create private source backups. Update, restart, and rollback buttons remain
 disabled until the service operator provides explicit helper commands and

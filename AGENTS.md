@@ -37,6 +37,15 @@ version-only Git/JSON diffs, not a commit message. Existing tags are never moved
 a pre-versioned `v*` tag push must pass the same source/CI gate. There is no npm
 publish or automatic production deployment step.
 
+Documentation-only and CI-only changes normally end at merge; application
+versions and service restarts are for runtime changes. For an explicitly
+requested release plus deployment, `bash scripts/release.sh <tag> --deploy
+/absolute/operator-plan.json --execute` uses the existing staged adapters and
+shared managed-update lock. Repeat the same tag/plan after a recoverable error;
+do not repeat publication or discard saved progress. Uncertain cutover/crashed
+locks require the existing operator recovery procedure. See
+`docs/RELEASE-PIPELINE.md` for configuration and exact resume boundaries.
+
 Production setup: `bash setup.sh` treats `origin/main` as authoritative for Git
 checkouts. It runs `git fetch --prune origin main`, `git reset --hard
 origin/main`, and `git clean -fd`, then re-executes the fetched script. This

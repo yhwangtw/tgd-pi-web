@@ -377,6 +377,12 @@ bash scripts/release.sh vYYYY.MM.DD --dispatch  # Veröffentlichung anfordern
 
 Es gilt UTC; weitere Releases am selben Tag erhalten `-1`, `-2` usw. Lokal werden weder Build noch Versionsänderung oder Push ausgeführt. Der Workflow prüft die besprochene Source-SHA und vier erforderliche Main-CI-Jobs erneut, pusht Version-Commit/Tag atomar und erstellt das GitHub Release. E2E und die macOS-Installationsprüfung laufen beim PR. Die Veröffentlichung verlangt deren erfolgreiche PR-CI und einen identischen Quellbaum; main prüft weiterhin die Linux-Installation. Ohne passende PR-Nachweise ist ein vollständiger manueller CI-Lauf auf main erforderlich. Nur nachgewiesene reine Versionsänderungen dürfen CI erben. Fehlende, übersprungene, fehlgeschlagene oder laufende Pflichtprüfungen blockieren. Bestehende Tags können unverändert fortgesetzt werden; ein altes Release ersetzt kein neueres Latest. **Kein npm-Publish und kein Production-Deploy.** Siehe [Release, Wiederherstellung und Verifikation](./docs/RELEASING.md).
 
+Mit konfigurierten Staging-Adaptern führt
+`bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/plan.json --execute`
+Veröffentlichung, Warten, Deployment und Prüfung des öffentlichen Hosts aus.
+Ohne `--execute` wird nur geprüft. Derselbe Tag und Plan setzen gespeicherte
+Schritte fort. Siehe [Konfiguration und Wiederherstellung](./docs/RELEASE-PIPELINE.md).
+
 ## Lizenz
 
 MIT — siehe [`LICENSE`](./LICENSE).

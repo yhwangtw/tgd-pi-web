@@ -6,7 +6,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const help = `Usage: bash scripts/release.sh [vYYYY.MM.DD[-N]] [--dispatch]
 Default: read-only preflight for today's UTC date; no local build, edits, tag, or push.
 --dispatch: request release.yml on main after exact-SHA CI verification.
-The workflow rechecks the SHA and CI. A dispatch is not a completed release or deployment.`;
+The workflow rechecks the SHA and CI. A dispatch is not a completed release or deployment.
+For the resumable publish/deploy pipeline: --deploy /absolute/plan.json [--execute].`;
 
 export function main(argv, { run = (exe, args) => command(exe, args, root), api, now = new Date(), log = console.log } = {}) {
   if (argv.length === 1 && ["--help", "-h"].includes(argv[0])) { log(help); return; }

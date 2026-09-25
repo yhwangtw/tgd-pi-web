@@ -501,6 +501,13 @@ tags can be resumed without moving them or replacing a newer Latest release.
 This does **not** publish to npm or deploy production. See the
 [release, recovery and readback guide](./docs/RELEASING.md).
 
+With operator-configured staged deployment adapters, use
+`bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/plan.json --execute`
+to publish, wait, deploy and verify the public hostname. Omit `--execute` for
+read-only preflight; repeat the same tag/plan to resume completed stages.
+See [pipeline configuration and recovery limits](./docs/RELEASE-PIPELINE.md).
+Documentation-only and CI-only changes normally need only a merge.
+
 ## License
 
 MIT — see [`LICENSE`](./LICENSE).
