@@ -13,14 +13,19 @@ export async function deploymentFingerprint(plan, environment = process.env) {
     throw new Error('Candidate source changed; prepare a clean candidate before resuming');
   }
   const hash = createHash('sha256');
-  hash.update(JSON.stringify({ plan, node: process.version, platform: process.platform, arch: process.arch, environment }));
+  // Service adapters and health-check addresses are not build inputs. They run
+  // again on every attempt, including when the verified build can be reused.
+  const build = plan.commands.build;
+  hash.update(JSON.stringify({ schema: 2, stageDir: root, expected: plan.expected, build,
+    node: process.version, platform: process.platform, arch: process.arch, environment }));
   const artifactRoots = [join(root, '.next'), join(root, 'node_modules')];
   for (const path of artifactRoots) {
     const info = await lstat(path);
     if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Candidate build/dependency roots must be real directories');
   }
-  // Replacing an adapter at the same path also invalidates its previous build.
-  for (const path of [...new Set(Object.values(plan.commands).flat().filter(isAbsolute))].sort()) {
+  // Hash the executable and file arguments of the build command. Keep build
+  // adapters separate from stop/start/rollback scripts to avoid false misses.
+  for (const path of [...new Set(build.filter(isAbsolute))].sort()) {
     try {
       const resolved = await realpath(path);
       if ((await lstat(resolved)).isFile()) {

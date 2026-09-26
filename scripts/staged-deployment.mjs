@@ -8,11 +8,13 @@ import { serveEnvironment } from './serve-plan.mjs';
 import { matchesRunningIdentity, validateIdentityUrl } from './managed-update-runner.mjs';
 import { patchUpdateOperation, readUpdateOperation, writeExpectedUpdateIdentity } from './update-operation-store.mjs';
 import { deploymentFingerprint } from './deployment-fingerprint.mjs';
+import { assertDeploymentSpace, validateSpaceRequirements } from './deployment-space.mjs';
 
 const PHASES = ['build', 'stageStart', 'stageStop', 'stop', 'switch', 'start', 'rollback'];
 const nested = (parent, child) => { const path = relative(parent, child); return path === '' || (path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path)); };
 
 export function validateStagedPlan(plan) {
+  validateSpaceRequirements(plan?.minimumFreeBytes);
   if (!plan || !isAbsolute(plan.stageDir || '') || !isAbsolute(plan.liveDir || '')
     || nested(resolve(plan.liveDir), resolve(plan.stageDir)) || nested(resolve(plan.stageDir), resolve(plan.liveDir))) {
     throw new Error('Stage and live directories must be explicit, separate, non-nested paths');
@@ -77,6 +79,7 @@ export async function runStagedDeployment(input, env = process.env, dependencies
   const wait = dependencies.wait || (milliseconds => new Promise(done => setTimeout(done, milliseconds)));
   const attempts = dependencies.attempts || 60;
   const stopped = dependencies.assertCheckoutStopped || assertCheckoutStopped;
+  const space = dependencies.assertDeploymentSpace || assertDeploymentSpace;
   await stopped(stageDir);
   const fixtureDir = await realpath(await mkdtemp(join(tmpdir(), 'pi-staged-health-')));
   const stageUrl = new URL(plan.stageIdentityUrl);
@@ -102,7 +105,13 @@ export async function runStagedDeployment(input, env = process.env, dependencies
   }
   let stageStarted = false;
   try {
-    if (!reuseBuild) await step('build', true);
+    if (!reuseBuild) await space(plan, 'build');
+    await space(plan, 'prepare');
+    if (!reuseBuild) {
+      await step('build', true);
+      // Installation/build may consume space needed by prepared artifacts.
+      await space(plan, 'prepare');
+    }
     stageStarted = true; // Even a partially failing start must run stageStop.
     await step('stageStart', true);
     await waitForIdentity(plan.stageIdentityUrl, plan.expected, null, stageDir, stageEnv, read, wait, attempts);

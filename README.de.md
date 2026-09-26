@@ -386,6 +386,7 @@ Mit konfigurierten Staging-Adaptern führt
 Veröffentlichung, Warten, Deployment und Prüfung des öffentlichen Hosts aus.
 Ohne `--execute` wird nur geprüft. Derselbe Tag und Plan setzen gespeicherte
 Schritte fort. Siehe [Konfiguration und Wiederherstellung](./docs/RELEASE-PIPELINE.md).
+Freier Speicher wird vor Build und Bereitstellung geprüft. Ein separater Build-Adapter erlaubt, geprüfte Builds nach reinen Korrekturen am Dienststart oder -stopp wiederzuverwenden.
 
 ## Lizenz
 

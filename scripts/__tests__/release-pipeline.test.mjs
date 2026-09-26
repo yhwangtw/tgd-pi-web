@@ -37,7 +37,7 @@ async function fixture() {
     await hooks.execute('stop', staged.commands.stop, liveDir, env);
     return { status: 'succeeded', identity };
   });
-  const dependencies = { client, deploy, execute: vi.fn(), localIdentity: vi.fn(async () => identity),
+  const dependencies = { client, deploy, execute: vi.fn(), assertDeploymentSpace: vi.fn(), localIdentity: vi.fn(async () => identity),
     verifyPublic: vi.fn(async () => ({ origin: plan.publicOrigin, checks: ['running-identity', 'session-list'] })), wait: vi.fn(), log: vi.fn() };
   const options = { tag, sourceDir, execute: true, pollAttempts: 2, env: { NODE_ENV: 'test', PIWEB_RELEASE_PUBLIC_HEADERS_JSON: '{"Cookie":"private-fixture-cookie"}' } };
   const run = changes => runReleasePipeline(plan, { ...options, ...changes }, dependencies);
@@ -46,6 +46,14 @@ async function fixture() {
 }
 
 describe('resumable release and deployment', () => {
+  it('refuses low disk space before publication, adapters or operation locks', async () => {
+    const f = await fixture();
+    f.dependencies.assertDeploymentSpace.mockRejectedValue(new Error('insufficient disk space'));
+    await expect(f.run()).rejects.toThrow('insufficient disk space');
+    expect(f.client.dispatch).not.toHaveBeenCalled();
+    expect(f.dependencies.deploy).not.toHaveBeenCalled();
+    await expect(access(f.plan.stateDir)).rejects.toThrow();
+  });
   it('preflights without creating state, dispatching or running adapters', async () => {
     const f = await fixture();
     expect((await f.run({ execute: false })).status).toBe('preflight');
@@ -70,7 +78,7 @@ describe('resumable release and deployment', () => {
     f.dependencies.localIdentity.mockResolvedValue(previous);
     f.dependencies.execute.mockImplementation(async phase => { if (phase === 'start') startedLive = true; });
     f.dependencies.deploy = (plan, env, hooks) => runStagedDeployment(plan, env, {
-      ...hooks, assertCheckoutStopped: vi.fn(), attempts: 1, fingerprint: async () => 'fixture-build-hash',
+      ...hooks, assertCheckoutStopped: vi.fn(), assertDeploymentSpace: vi.fn(), attempts: 1, fingerprint: async () => 'fixture-build-hash',
       readIdentity: async (_url, environment) => environment.PIWEB_ENVIRONMENT === 'fixture'
         ? { ...f.identity, cwd: plan.stageDir, environment: 'fixture', agentDir: environment.PI_CODING_AGENT_DIR }
         : startedLive ? f.identity : previous,
@@ -92,7 +100,9 @@ describe('resumable release and deployment', () => {
     f.dependencies.verifyPublic.mockRejectedValueOnce(new Error('access login required'));
     await expect(f.run()).rejects.toThrow('access login');
     expect((await f.readState()).phase).toBe('public-check');
+    f.dependencies.assertDeploymentSpace.mockClear();
     await f.run();
+    expect(f.dependencies.assertDeploymentSpace.mock.calls.map(([, phase]) => phase)).toEqual(['records']);
     expect(f.client.dispatch).toHaveBeenCalledTimes(1);
     expect(f.client.prepare).toHaveBeenCalledTimes(1);
     expect(f.dependencies.deploy).toHaveBeenCalledTimes(1);

@@ -42,7 +42,7 @@ updates; the Update Center can display their operation records.
   "liveIdentityUrl": "http://127.0.0.1:30141/api/runtime/identity",
   "publicOrigin": "https://pi.example.com",
   "commands": {
-    "build": ["/absolute/operator/pi-web-deploy", "build-candidate"],
+    "build": ["/absolute/operator/pi-web-build"],
     "stageStart": ["/absolute/operator/pi-web-deploy", "start-candidate"],
     "stageStop": ["/absolute/operator/pi-web-deploy", "stop-candidate"],
     "stop": ["/absolute/operator/pi-web-deploy", "stop-live"],
@@ -62,6 +62,27 @@ Live commands receive the existing `PIWEB_STAGED_SOURCE_DIR` and
 Candidate commands run in the candidate cwd with the fixture environment and isolated agent data;
 candidate `.env` runtime files are rejected. Never copy live data or secrets
 into the candidate. No provider/model request is needed for health checks.
+
+Keep the build command in a separate file from service stop/start/rollback
+commands. Its executable and absolute file arguments are build inputs. A single
+shared script is supported, but changing any part of that file requires a new
+build. Imported build helpers should be part of the pinned candidate source or
+listed as absolute build-command arguments so their bytes are also checked.
+
+Space is checked before publication, before dependency installation, and again
+after building before starting the candidate. Defaults require 3 GiB free on
+the candidate filesystem and 2 GiB on the filesystem where live replacement
+artifacts are prepared, plus at least 64 MiB on progress-record and temporary
+filesystems. These are headroom estimates, not reservations against other apps.
+Operators can set `minimumFreeBytes: { "build": 3221225472,
+"prepare": 2147483648 }` in the plan to match their adapter's measured peak use.
+For example, an adapter that clones dependencies on the same APFS volume needs
+less preparation space than one that copies them. Adapters preparing files on
+another filesystem must also check that destination before copying.
+The check does not remove files or lower budgets automatically. Low space stops
+before cutover with available/required sizes; free space and resume the same tag.
+An unchanged cached build skips the build-space requirement, and public-only
+resumption checks progress/temp space only.
 
 For an authenticated local identity endpoint, supply the existing ephemeral
 `PIWEB_UPDATE_HEALTH_COOKIE`. For the public hostname, supply request headers
@@ -85,9 +106,11 @@ It never stores cookies, provider credentials or session-list content.
   Its annotated tag must contain the requested source, allowing only the
   workflow's version-only commit. An unrelated or moved tag is refused.
 - A successful isolated build is reused only while its source, executable build
-  files, installed dependency bytes, adapter files, Node/platform, plan and
-  allowlisted environment still match. Next's mutable cache is excluded.
-  Every cutover still starts a fresh isolated candidate and checks its identity.
+  files, installed dependency bytes, build-command files/arguments, Node/platform
+  and allowlisted build environment still match. Next's mutable cache is
+  excluded. Repairing a separate service adapter does not invalidate the build;
+  every cutover still reruns candidate health checks and current service adapters.
+  Older fingerprint formats require one rebuild before they can be reused.
 - A verified rollback may be retried without publishing again. If the live
   service changed after that failure, the pipeline stops for inspection.
 - After a successful deployment, public-check failure resumes with live identity
