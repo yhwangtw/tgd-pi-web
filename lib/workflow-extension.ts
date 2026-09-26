@@ -23,8 +23,11 @@ export function createWorkflowExtension(): InlineExtension {
 
     const render = (ctx: ExtensionContext) => {
       const { goal, plan } = state;
-      ctx.ui.setStatus("Goal", goal ? `${goal.status} · ${goal.tokens.toLocaleString()}${goal.tokenBudget ? ` / ${goal.tokenBudget.toLocaleString()}` : ""} tokens` : undefined);
-      ctx.ui.setWidget("Goal", goal ? [goal.objective, ...(goal.reason ? [goal.reason] : []), "/goal · /goal pause · /goal resume · /goal runs <count>"] : undefined);
+      // Terminal goal states clear the composer card: a completed or blocked
+      // goal must not keep occupying space above the editor.
+      const visibleGoal = goal && goal.status !== "complete" && goal.status !== "blocked" ? goal : null;
+      ctx.ui.setStatus("Goal", visibleGoal ? `${visibleGoal.status} · ${visibleGoal.tokens.toLocaleString()}${visibleGoal.tokenBudget ? ` / ${visibleGoal.tokenBudget.toLocaleString()}` : ""} tokens` : undefined);
+      ctx.ui.setWidget("Goal", visibleGoal ? [visibleGoal.objective, ...(visibleGoal.reason ? [visibleGoal.reason] : []), "/goal · /goal pause · /goal resume · /goal runs <count>"] : undefined);
       ctx.ui.setStatus("Plan", plan ? `${plan.status} · ${plan.steps.filter(s => s.status === "completed").length}/${plan.steps.length}` : undefined);
       ctx.ui.setWidget("Plan", plan ? [plan.title, ...plan.steps.map((s, i) => `${s.status === "completed" ? "✓" : s.status === "in_progress" ? "→" : "○"} ${i + 1}. ${s.text}`), "/plan · /plan execute · /plan cancel"] : undefined);
     };

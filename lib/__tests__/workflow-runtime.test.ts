@@ -47,7 +47,10 @@ describe("Goal and Plan on the real Pi SDK (offline faux model)", () => {
       expect(r.faux.state.callCount).toBe(3);
       expect(r.state()?.goal?.automaticRuns).toBe(1);
       expect(r.errors).toEqual([]);
-      expect(r.bridge.snapshot()).toEqual(expect.arrayContaining([expect.objectContaining({ type: "extension_ui_request", method: "setStatus", statusKey: "Goal" })]));
+      // A completed goal clears the composer card: snapshot() only returns
+      // live widgets, so no Goal entry must remain after completion.
+      expect(r.bridge.snapshot().filter((e) => e.type === "extension_ui_request"
+        && ((e as { statusKey?: string }).statusKey === "Goal" || (e as { widgetKey?: string }).widgetKey === "Goal"))).toEqual([]);
     } finally { await r.session.abort(); r.session.dispose(); }
   });
 
