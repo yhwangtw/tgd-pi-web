@@ -7,8 +7,7 @@ const job = (id: string) => workflow.match(new RegExp(`^  ${id}:\\n([\\s\\S]*?)(
 describe("runtime and installation CI contract", () => {
   it("runs real minimum/runtime Node versions on Linux and macOS", () => {
     const runtime = job("runtime-tests");
-    expect(runtime).toContain("os: [ubuntu-latest, macos-latest]");
-    expect(runtime).toContain("node: ['22.19.0', '23.4.0', '24', '26']");
+    expect(runtime).toContain("fromJSON(needs.scope.outputs.runtime)");
     expect(runtime).toContain("node-version: ${{ matrix.node }}");
     expect(runtime).toContain("runs-on: ${{ matrix.os }}");
     expect(runtime).toContain("run: npm ci");
@@ -18,7 +17,7 @@ describe("runtime and installation CI contract", () => {
   });
   it("runs Linux installation on every merge and both operating systems before merge or on request", () => {
     const smoke = job("installation-smoke");
-    expect(smoke).toContain(`fromJSON(github.event_name == 'push' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest"]')`);
+    expect(smoke).toContain("fromJSON(needs.scope.outputs.install)");
     expect(smoke).toContain("run: npm ci");
     expect(smoke).toContain("run: node scripts/ci-install-smoke.mjs");
   });
@@ -34,12 +33,12 @@ describe("runtime and installation CI contract", () => {
       expect(workflow.match(new RegExp(`^    name: ${name.replace(/&/g, "\\&")}$`, "gm"))).toHaveLength(1);
     }
     const aggregate = job("test");
-    expect(aggregate).toContain("needs: [runtime-tests, installation-smoke]");
+    expect(aggregate).toContain("needs: [scope, runtime-tests, installation-smoke, reuse, docs]");
     expect(aggregate).toContain("if: ${{ always() }}");
     expect(aggregate).toContain('test "$RUNTIME_RESULT" = success');
     expect(aggregate).toContain('test "$INSTALL_RESULT" = success');
-    expect(job("build")).not.toContain("needs:");
-    expect(job("e2e")).toContain("if: github.event_name != 'push'");
-    expect(job("e2e")).not.toContain("needs:");
+    expect(aggregate).toContain('test "$REUSE_RESULT" = success');
+    expect(job("e2e")).toContain("needs.scope.outputs.reuse != 'true'");
+    expect(job("reuse")).toContain("node scripts/ci-scope.mjs --verify-reuse");
   });
 });

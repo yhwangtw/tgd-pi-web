@@ -41,9 +41,9 @@ function completedRun(name: string, output: string): AgentRunCompletion {
 
 async function registeredTool(options: Parameters<typeof createSubagentExtension>[0] = {}) {
   let tool: ToolDefinition | undefined;
-  const extension = createSubagentExtension(options);
+  const extension = createSubagentExtension({ readLimits: () => ({ maxTurns: 0, maxCostUsd: 0, timeoutMs: 0 }), ...options });
   const factory = typeof extension === "function" ? extension : extension.factory;
-  await factory({ registerTool: (value: ToolDefinition) => { tool = value; } } as never);
+  await factory({ getActiveTools: () => ["read", "grep", "find", "ls", "bash", "edit", "write", "mcp_custom", "subagent"], registerTool: (value: ToolDefinition) => { tool = value; } } as never);
   if (!tool) throw new Error("Subagent tool was not registered");
   return tool;
 }
@@ -186,6 +186,38 @@ describe("built-in Web subagents", () => {
     expect(executor.mock.calls[1][0].task).toBe("Fix loader.ts");
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("Chain stopped at worker");
+  });
+
+  it("inherits only active parent tools and cannot raise configured budgets", async () => {
+    const executor = vi.fn(async request => completedRun(request.agent.name, "done"));
+    const tool = await registeredTool({ executor, readLimits: () => ({ maxTurns: 50, maxCostUsd: 4, timeoutMs: 60000 }) });
+    await executeTool(tool, { tasks: [
+      { agent: "worker", task: "A", limits: { maxCostUsd: 99, maxTurns: 0 } },
+      { agent: "worker", task: "B", tools: ["mcp_custom", "not_enabled", "subagent"], limits: { maxTurns: 10 } },
+    ] });
+    const [first, second] = executor.mock.calls.map(([request]) => request);
+    expect(first.agent.tools).toContain("mcp_custom");
+    expect(first.agent.tools).not.toContain("subagent");
+    expect(second.agent.tools).toEqual(["mcp_custom"]);
+    expect(first.limits).toEqual({ maxTurns: 50, maxCostUsd: 4, timeoutMs: 60000 });
+    expect(second.limits.maxTurns).toBe(10);
+    expect(first.budgetGroup).toEqual(second.budgetGroup);
+    expect(first.budgetGroup.maxCostUsd).toBe(4);
+  });
+
+  it("applies request-wide allocations to the shared cap and every task", async () => {
+    const executor = vi.fn(async request => completedRun(request.agent.name, "done"));
+    const tool = await registeredTool({ executor, readLimits: () => ({ maxCostUsd: 5 }) });
+    await executeTool(tool, { tools: ["read", "mcp_custom"], limits: { maxCostUsd: 2 }, tasks: [
+      { agent: "worker", task: "A", limits: { maxCostUsd: 10 } },
+      { agent: "worker", task: "B", tools: ["read", "write"], limits: { maxCostUsd: 1 } },
+    ] });
+    const [first, second] = executor.mock.calls.map(([request]) => request);
+    expect(first.budgetGroup.maxCostUsd).toBe(2);
+    expect(first.limits.maxCostUsd).toBe(2);
+    expect(second.limits.maxCostUsd).toBe(1);
+    expect(first.agent.tools).toEqual(["read", "mcp_custom"]);
+    expect(second.agent.tools).toEqual(["read"]);
   });
 
   it("requires confirmation before an untrusted project agent runs", async () => {

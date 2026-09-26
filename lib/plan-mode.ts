@@ -53,7 +53,7 @@ Rules:
 - Bash accepts only allowlisted read-only inspection commands.
 - Use ask_user only when a missing decision would materially change the plan.
 - Inspect the existing implementation before proposing changes and cite concrete files or symbols.
-- Save the ordered steps with update_plan, then finish with structured_output. Put a short conclusion in summary and the ordered implementation steps in actionItems.
+- Save the steps with update_plan and summarize naturally. Use structured_output only when a result card helps. Independent steps may run in parallel after execution is authorized.
 - Do not claim that the plan has been implemented.`;
 
 function normalizedToolSet(names: readonly string[]): string {
@@ -75,7 +75,17 @@ export function isPlanReadOnlyCommand(command: string): boolean {
   const trimmed = command.trim();
   if (!trimmed || SHELL_CONTROL_RE.test(trimmed)) return false;
   if (DESTRUCTIVE_PATTERNS.some((pattern) => pattern.test(trimmed))) return false;
-  const segments = trimmed.split("|").map((segment) => segment.trim()).filter(Boolean);
+  // Handle common read-only forms without allowing arbitrary interpreter code,
+  // git configuration overrides, sed scripts, or shell command substitution.
+  const normalized = trimmed.replace(/^git\s+(?:-C\s+(?:"[^"\n]+"|'[^'\n]+'|[^\s]+)\s+)+/, "git ");
+  const sed = normalized.match(/^sed\s+-n\s+(?:'\d+(?:,\d+)?p'|"\d+(?:,\d+)?p"|\d+(?:,\d+)?p)\s+(.+)$/);
+  if (sed) {
+    if (/[*?\[\]]/.test(sed[1])) return false;
+    // Only literal file arguments after a print expression; no extra scripts/options.
+    return /^(?:"[^"\n]+"|'[^'\n]+'|[^\s'"|]+)(?:\s+(?:"[^"\n]+"|'[^'\n]+'|[^\s'"|]+))*$/.test(sed[1])
+      && (sed[1].match(/"[^"\n]+"|'[^'\n]+'|[^\s]+/g) ?? []).every(file => !file.replace(/^['"]/, "").startsWith("-"));
+  }
+  const segments = normalized.split("|").map((segment) => segment.trim()).filter(Boolean);
   return segments.length > 0 && segments.every((segment) => SAFE_SEGMENT_PATTERNS.some((pattern) => pattern.test(segment)));
 }
 

@@ -366,16 +366,20 @@ Issues und Pull Requests sind willkommen.
 
 Übersetzungen der Anwendung liegen in `lib/i18n.tsx`. Neue Skins müssen semantische Design-Tokens verwenden, statt Farben in Komponenten fest zu codieren.
 
+
+Goal hat keine feste Fortsetzungsgrenze; `/goal --runs 50 <Ziel>` setzt sie, `0` deaktiviert sie. Plan unterstützt parallele Schritte und Markdown. Subagenten behalten gespeicherte Benutzerbudgets; die Kosten einer Delegation werden gemeinsam begrenzt. Worker erben nur aktive Tools des Elternagenten. Neue Budgets stehen standardmäßig auf `0`. Weitere Details stehen in der [englischen Funktionsbeschreibung](./README.md#agent-chat).
+
 ## Release
 
-Nach dem PR-Merge muss CI für exakt diesen `main`-Commit bestehen. Dann in einem sauberen, aktuellen Main-Checkout ausführen:
+Nach dem Merge CI für den exakten main-Commit abwarten. Der Aufruf funktioniert aus jedem Checkout; lokale Änderungen bleiben erhalten.
 
 ```bash
-bash scripts/release.sh                        # Nur prüfen, heutiges UTC-Datum
-bash scripts/release.sh vYYYY.MM.DD --dispatch  # Veröffentlichung anfordern
+bash scripts/release.sh                        # Vorprüfung, automatischer UTC-Tag
+bash scripts/release.sh --dispatch             # Veröffentlichung mit Auto-Tag
+bash scripts/release.sh vYYYY.MM.DD --dispatch  # optionaler expliziter Tag
 ```
 
-Es gilt UTC; weitere Releases am selben Tag erhalten `-1`, `-2` usw. Lokal werden weder Build noch Versionsänderung oder Push ausgeführt. Der Workflow prüft die besprochene Source-SHA und vier erforderliche Main-CI-Jobs erneut, pusht Version-Commit/Tag atomar und erstellt das GitHub Release. E2E und die macOS-Installationsprüfung laufen beim PR. Die Veröffentlichung verlangt deren erfolgreiche PR-CI und einen identischen Quellbaum; main prüft weiterhin die Linux-Installation. Ohne passende PR-Nachweise ist ein vollständiger manueller CI-Lauf auf main erforderlich. Nur nachgewiesene reine Versionsänderungen dürfen CI erben. Fehlende, übersprungene, fehlgeschlagene oder laufende Pflichtprüfungen blockieren. Bestehende Tags können unverändert fortgesetzt werden; ein altes Release ersetzt kein neueres Latest. **Kein npm-Publish und kein Production-Deploy.** Siehe [Release, Wiederherstellung und Verifikation](./docs/RELEASING.md).
+Remote main wird in einem temporären Checkout vorbereitet; UTC-Datum und Sequenz werden automatisch gewählt. Dokumentation erhält leichte Prüfungen, normale Änderungen repräsentative Laufzeiten, Kompatibilitätsänderungen und manuelle Läufe die vollständige Matrix. Main übernimmt erfolgreiche PR-Prüfungen nur bei identischem Quellbaum, andernfalls prüft es selbst. Veröffentlichung prüft CI und SHA erneut; bestehende Tags werden nie verschoben. Kein npm-Publish oder Production-Deploy. [Release und Wiederherstellung](./docs/RELEASING.md).
 
 Mit konfigurierten Staging-Adaptern führt
 `bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/plan.json --execute`

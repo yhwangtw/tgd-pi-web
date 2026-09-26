@@ -24,6 +24,8 @@ describe("Plan Mode", () => {
   it.each([
     "rg -n plan-mode lib | head -20",
     "git status --short",
+    'git -C "/tmp/my project" status --short',
+    "sed -n '1,20p' source.ts",
     "find components -maxdepth 2 -type f",
     "npm view react version",
     "curl -I https://example.com",
@@ -33,6 +35,10 @@ describe("Plan Mode", () => {
 
   it.each([
     "rm -rf build",
+    "sed -n '1p' -i source.ts",
+    "sed -n '1p' *",
+    "sed -n '1p' -e 'w changed.txt' source.ts",
+    "git -C /tmp checkout main",
     "git checkout -- app/page.tsx",
     "ls; touch changed.txt",
     "ls && npm test",

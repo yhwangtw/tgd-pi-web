@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -8,9 +9,10 @@ import {
   type InlineExtension,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { DEFAULT_SUBAGENT_LIMITS } from "./agent-run-limits";
+import { allocateRunLimits, DEFAULT_SUBAGENT_LIMITS } from "./agent-run-limits";
 import type {
   AgentRun,
+  AgentRunLimits,
   AgentRunCompletion,
   AgentRunInput,
   AgentRunWorkspace,
@@ -20,16 +22,6 @@ import type { AgentMessage } from "./types";
 const MAX_TASKS = 8;
 const MAX_OUTPUT_BYTES = 50 * 1024;
 
-const ALLOWED_AGENT_TOOLS = new Set([
-  "read",
-  "bash",
-  "edit",
-  "write",
-  "grep",
-  "find",
-  "ls",
-  "ask_user",
-]);
 
 export type SubagentScope = "builtin" | "user" | "project" | "all";
 export type SubagentSource = "builtin" | "user" | "project";
@@ -42,6 +34,7 @@ export interface SubagentDefinition {
   systemPrompt: string;
   source: SubagentSource;
   filePath?: string;
+  inheritTools?: boolean;
 }
 
 export interface SubagentRunRequest {
@@ -50,6 +43,8 @@ export interface SubagentRunRequest {
   cwd: string;
   model?: { provider: string; id: string };
   thinkingLevel?: string;
+  limits?: AgentRunLimits;
+  budgetGroup?: AgentRunInput["budgetGroup"];
 }
 
 export interface SubagentRunOptions {
@@ -87,13 +82,14 @@ export const BUILTIN_SUBAGENTS: readonly SubagentDefinition[] = [
   },
   {
     name: "worker",
+    inheritTools: true,
     description: "Implement one bounded task and verify the result.",
     tools: ["read", "bash", "edit", "write", "grep", "find", "ls"],
     source: "builtin",
     systemPrompt: [
       "You are the implementation worker subagent.",
       "Inspect before editing, keep changes tightly scoped to the delegated task, preserve unrelated work, and run proportional verification.",
-      "Do not publish, deploy, delete broad paths, or delegate to another agent. Make reasonable assumptions instead of asking the user.",
+      "Stay within the parent task and its existing authorization. Ask only for material missing information. Do not delegate to another agent.",
     ].join(" "),
   },
   {
@@ -114,6 +110,7 @@ type AgentFrontmatter = {
   description?: unknown;
   tools?: unknown;
   model?: unknown;
+  inheritTools?: unknown;
 };
 
 function normalizeTools(value: unknown, fallback: string[] = ["read", "grep", "find", "ls"]): string[] {
@@ -125,7 +122,7 @@ function normalizeTools(value: unknown, fallback: string[] = ["read", "grep", "f
   const tools = raw
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
-    .filter((item) => ALLOWED_AGENT_TOOLS.has(item) && item !== "subagent");
+    .filter((item) => /^[A-Za-z0-9_.:/-]{1,200}$/.test(item) && item !== "subagent");
   return [...new Set(tools)];
 }
 
@@ -151,6 +148,7 @@ function loadAgents(dir: string, source: "user" | "project"): SubagentDefinition
         name: agentName.slice(0, 80),
         description: description.slice(0, 500),
         tools: normalizeTools(parsed.frontmatter.tools),
+        ...(parsed.frontmatter.inheritTools === true ? { inheritTools: true } : {}),
         ...(typeof parsed.frontmatter.model === "string" && parsed.frontmatter.model.trim()
           ? { model: parsed.frontmatter.model.trim().slice(0, 500) }
           : {}),
@@ -251,7 +249,8 @@ async function defaultExecutor(
     prompt: composeSubagentPrompt(request.agent, request.task),
     toolNames: normalizeTools(request.agent.tools),
     workspace,
-    limits: { ...DEFAULT_SUBAGENT_LIMITS, ...(await import("./agent-run-store")).readAgentRunStore().subagentLimits },
+    limits: request.limits ?? DEFAULT_SUBAGENT_LIMITS,
+    ...(request.budgetGroup ? { budgetGroup: request.budgetGroup } : {}),
     ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.id } : {}),
     ...(request.thinkingLevel ? { thinkingLevel: request.thinkingLevel } : {}),
   };
@@ -287,9 +286,16 @@ function outcomeDetails(mode: "single" | "parallel" | "chain", outcomes: Delegat
   };
 }
 
+const AllocationSchema = Type.Object({
+  maxTurns: Type.Optional(Type.Integer({ minimum: 0 })),
+  maxCostUsd: Type.Optional(Type.Number({ minimum: 0 })),
+  timeoutMs: Type.Optional(Type.Integer({ minimum: 0, maximum: 2_147_483_647 })),
+});
 const TaskItem = Type.Object({
   agent: Type.String({ minLength: 1, maxLength: 80 }),
   task: Type.String({ minLength: 1, maxLength: 100_000 }),
+  tools: Type.Optional(Type.Array(Type.String())),
+  limits: Type.Optional(AllocationSchema),
 });
 
 const ScopeSchema = StringEnum(["builtin", "user", "project", "all"] as const, {
@@ -300,6 +306,8 @@ const ScopeSchema = StringEnum(["builtin", "user", "project", "all"] as const, {
 const SubagentParams = Type.Object({
   agent: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })),
   task: Type.Optional(Type.String({ minLength: 1, maxLength: 100_000 })),
+  tools: Type.Optional(Type.Array(Type.String())),
+  limits: Type.Optional(AllocationSchema),
   tasks: Type.Optional(Type.Array(TaskItem, { minItems: 1, maxItems: MAX_TASKS })),
   chain: Type.Optional(Type.Array(TaskItem, { minItems: 1, maxItems: MAX_TASKS })),
   agentScope: Type.Optional(ScopeSchema),
@@ -309,6 +317,7 @@ const SubagentParams = Type.Object({
 export function createSubagentExtension(options: {
   executor?: SubagentExecutor;
   discover?: typeof discoverSubagents;
+  readLimits?: () => AgentRunLimits;
 } = {}): InlineExtension {
   const executor = options.executor ?? defaultExecutor;
   const discover = options.discover ?? discoverSubagents;
@@ -328,6 +337,7 @@ export function createSubagentExtension(options: {
           "Delegate only concrete, bounded work that benefits from isolated context; keep simple work in the current agent.",
           "Use scout/planner/reviewer for read-only work and worker for changes. Do not recursively delegate.",
           "Use tasks to run independent work in parallel, including workers assigned disjoint files. Use chain when a task needs another task's output or edits; do not put dependent review-after-edit work in tasks.",
+          "Workers inherit active parent tools, including MCP tools. Optionally narrow the whole request or each task with tools and smaller limits; user caps cannot be raised. Cost caps are shared across this delegation request.",
           "Child sessions share this working directory. Do not edit the same files while a worker is running; independent checkouts must be prepared separately.",
         ],
         parameters: SubagentParams,
@@ -348,10 +358,10 @@ export function createSubagentExtension(options: {
           }
 
           const requested = hasSingle
-            ? [{ agent: params.agent as string, task: params.task as string }]
+            ? [{ agent: params.agent as string, task: params.task as string, tools: params.tools, limits: params.limits }]
             : hasParallel
-              ? params.tasks as Array<{ agent: string; task: string }>
-              : params.chain as Array<{ agent: string; task: string }>;
+              ? params.tasks as Array<{ agent: string; task: string; tools?: string[]; limits?: AgentRunLimits }>
+              : params.chain as Array<{ agent: string; task: string; tools?: string[]; limits?: AgentRunLimits }>;
           const unknown = [...new Set(requested.map((item) => item.agent).filter((name) => !byName.has(name)))];
           if (unknown.length) {
             return {
@@ -384,15 +394,26 @@ export function createSubagentExtension(options: {
             }
           }
 
+          const configuredLimits = { ...DEFAULT_SUBAGENT_LIMITS, ...(options.readLimits
+            ? options.readLimits() : (await import("./agent-run-store")).readAgentRunStore().subagentLimits) };
+          const delegationLimits = allocateRunLimits(configuredLimits, params.limits);
+          const budgetGroup = delegationLimits.maxCostUsd ? { id: randomUUID(), maxCostUsd: delegationLimits.maxCostUsd } : undefined;
+          const parentTools = new Set(pi.getActiveTools().filter(name => name !== "subagent"));
           const inheritedModel = ctx.model ? { provider: ctx.model.provider, id: ctx.model.id } : undefined;
-          const runOne = async (agentName: string, task: string, completed: DelegateOutcome[]) => {
-            const agent = byName.get(agentName)!;
+          const runOne = async (agentName: string, task: string, completed: DelegateOutcome[], allocation?: { tools?: string[]; limits?: AgentRunLimits }) => {
+            const definition = byName.get(agentName)!;
+            const allowed = (definition.inheritTools ? [...parentTools] : definition.tools)
+              .filter(name => parentTools.has(name) && (!params.tools || params.tools.includes(name)));
+            const selected = allocation?.tools ? allowed.filter(name => allocation.tools!.includes(name)) : allowed;
+            const agent = { ...definition, tools: selected };
             const completion = await executor({
               agent,
               task,
               cwd: ctx.cwd,
               model: inheritedModel,
               thinkingLevel: ctx.thinkingLevel,
+              limits: allocateRunLimits(delegationLimits, allocation?.limits),
+              budgetGroup,
             }, {
               signal,
               onUpdate: (run) => {
@@ -413,7 +434,7 @@ export function createSubagentExtension(options: {
           };
 
           if (hasSingle) {
-            const outcome = await runOne(params.agent as string, params.task as string, []);
+            const outcome = await runOne(params.agent as string, params.task as string, [], params);
             const failed = outcome.run.status !== "completed";
             return {
               content: [{ type: "text", text: failed ? `${outcome.agent} failed: ${outcome.run.error || outcome.output}` : outcome.output }],
@@ -424,9 +445,9 @@ export function createSubagentExtension(options: {
 
           if (hasParallel) {
             const outcomes: DelegateOutcome[] = [];
-            const tasks = params.tasks as Array<{ agent: string; task: string }>;
-            const runTask = async (item: { agent: string; task: string }) => {
-              const result = await runOne(item.agent, item.task, outcomes);
+            const tasks = params.tasks as Array<{ agent: string; task: string; tools?: string[]; limits?: AgentRunLimits }>;
+            const runTask = async (item: { agent: string; task: string; tools?: string[]; limits?: AgentRunLimits }) => {
+              const result = await runOne(item.agent, item.task, outcomes, item);
               outcomes.push(result);
               return result;
             };
@@ -446,9 +467,9 @@ export function createSubagentExtension(options: {
 
           const outcomes: DelegateOutcome[] = [];
           let previous = "";
-          for (const item of params.chain as Array<{ agent: string; task: string }>) {
+          for (const item of params.chain as Array<{ agent: string; task: string; tools?: string[]; limits?: AgentRunLimits }>) {
             const task = item.task.replace(/\{previous\}/g, previous);
-            const outcome = await runOne(item.agent, task, outcomes);
+            const outcome = await runOne(item.agent, task, outcomes, item);
             outcomes.push(outcome);
             if (outcome.run.status !== "completed") {
               return {

@@ -205,9 +205,9 @@ Subagent、Plan 與 Goal 由 Pi Web 維護，使用官方 Pi SDK 與 Extension A
 - 使用 `!command` 直接執行 shell；使用 `!!command` 讓結果不進入模型 context。
 - 在 session 中途切換模型與 thinking level。
 - Web runtime 內建第一方 `subagent` 工具，可把工作交給 scout、planner、worker 與 reviewer 的獨立對話，最多八項任務沿用現有 Agent 佇列執行；每個子對話都能在 Agent 面板檢查或取消。`tasks` 會平行執行獨立任務，包含 worker；實際同時執行數依 Agent 面板的共用併發上限（預設 3，可設 1–8）。子對話共用父對話的工作目錄，worker 應分配不同檔案；依賴前一步成果的任務，例如修改後再審查，使用 `chain` 依序執行。三種唯讀角色不提供 Shell。工具選擇須用 **繼承** 或在自訂工具中啟用 `subagent`；固定的核心工具預設組合不包含它。不需要全域 `pi` CLI。
-- **Goal 目標模式：** `/goal <目標>` 啟動對話專屬目標；`/goal --tokens 100k <目標>` 可加 token 預算。目標面板與 `/goal pause`、`/goal resume`、`/goal status`、`/goal budget 200k`、`/goal clear` 可控制執行。只有 Pi 完成當輪、沒有等待回答或排隊訊息時才續跑；自動續跑指令不會插入可見的聊天訊息。完成、受阻、模型錯誤、停止、預算用完、連續三次無工具且重複／空白的回覆，或 25 次自動續跑後會停止。暫停讓當前回覆結束；停止按鈕也會中止當前執行。預算計算供應商回報的非快取輸入與輸出 token，每次模型回覆後檢查，單次回覆可能超過剩餘額度；子代理另用自己的上限。瀏覽器重連保留執行狀態，重新建立 runtime／切換分支則先恢復成暫停。
-- **Plan 計畫模式：** `/plan <需求>` 限制工具進行探索，保存最多 30 個有序步驟。用計畫面板或 `/plan refine <調整>` 檢視、修改，再明確選擇 `/plan execute`。執行留在原對話，恢復先前工具，透過 `update_plan` 更新已驗證的進度；`/plan cancel` 保留對話。Goal／Plan 存在對話自訂紀錄中，壓縮後仍保留；進入規劃會暫停 Goal。Shell 篩選用來防止常見誤寫，並非作業系統沙箱。
-- **Agents → 子代理執行上限** 可設定新任務的時間、回合與回報費用（預設 30 分鐘、24 回合、5 美元；`0` 表示不限）。接近上限會提示，可直接延長原任務。費用依供應商回報，不等於帳戶實際扣款。
+- **Goal 目標模式：** `/goal <目標>` 啟動對話專屬目標；`/goal --tokens 100k <目標>` 可加 token 預算。目標面板與 `/goal pause`、`/goal resume`、`/goal status`、`/goal budget 200k`、`/goal clear` 可控制執行。只有 Pi 完成當輪、沒有等待回答或排隊訊息時才續跑；自動續跑指令不會插入可見的聊天訊息。完成、受阻、模型錯誤、停止、預算用完、連續三次無工具且重複／空白的回覆時會停止。預設沒有固定續跑次數；可用 `/goal --runs 50 <目標>` 或 `/goal runs 50` 設定上限，`0` 表示不限。暫停讓當前回覆結束；停止按鈕也會中止當前執行。預算計算供應商回報的非快取輸入與輸出 token，每次模型回覆後檢查，單次回覆可能超過剩餘額度；子代理另用自己的上限。瀏覽器重連保留執行狀態，重新建立 runtime／切換分支則先恢復成暫停。
+- **Plan 計畫模式：** `/plan <需求>` 限制工具進行探索，保存最多 30 個有序步驟。用計畫面板或 `/plan refine <調整>` 檢視、修改，再明確選擇 `/plan execute`。執行留在原對話，恢復先前工具，透過 `update_plan` 更新已驗證的進度，可同時標記多個獨立步驟進行中；一般 Markdown 摘要即可，結果卡片可選；`/plan cancel` 保留對話。Goal／Plan 存在對話自訂紀錄中，壓縮後仍保留；進入規劃會暫停 Goal。Shell 篩選用來防止常見誤寫，並非作業系統沙箱。
+- **Agents → 子代理執行上限** 可設定新任務的時間、回合與回報費用（預設無固定上限，`0` 表示不限，既有使用者設定保留）。時間與回合按代理計算，同次委派與重試共用費用上限。模型可分配較小預算，不能提高使用者上限。Worker 只繼承父代理已啟用的工具，包含 MCP／extensions；每項任務可再縮小工具範圍。接近上限會提示，可直接延長原任務。費用依供應商回報，不等於帳戶實際扣款；每次回覆後檢查，平行處理中的用量可能超過剩餘額度。
 - 內建 `ask_user` 工具，並支援 Pi extension 的 `select`、`confirm`、`input`、`editor` 對話框、通知、狀態與文字 Widget；等待中的決定可跨斷線重連保留。
 - 設定改為可收合、不阻擋操作的面板，輸入框持續可用。快速切換對話與重新整理會保留草稿，同一瀏覽器分頁會記住閱讀位置；仍在執行的任務不會因為暫時沒輸出而被閒置回收。
 - 敏感操作的確認不再限時閱讀，仍只限使用一次並核對目標；內容變更、服務重啟或待確認快取已滿時，需重新確認。
@@ -420,14 +420,15 @@ Compaction 會加入摘要並保留最近的訊息尾端，不會從 `.jsonl` �
 
 ## 發布
 
-PR 合併後，先等精確的 merged `main` 通過 CI，再從乾淨且已同步的 main checkout 執行：
+PR 合併後，等精確的 `main` 原始碼通過 CI；可從任何 checkout 執行，原本修改與私人檔案都會保留：
 
 ```bash
-bash scripts/release.sh                        # 唯讀檢查，預設 UTC 今天
-bash scripts/release.sh vYYYY.MM.DD --dispatch  # 明確送出發布請求
+bash scripts/release.sh                        # 檢查，自動選 UTC 版本
+bash scripts/release.sh --dispatch             # 使用自動版本發布
+bash scripts/release.sh vYYYY.MM.DD --dispatch  # 也可明確指定版本
 ```
 
-日期使用 UTC，同日後續版本加上 `-1`、`-2` 等流水號。入口不會在本機 build、改版本或推送；workflow 會再次核對已審閱的 source SHA 與四個必要的 main CI 工作，才原子推送版本 commit/tag 並發布 GitHub Release。E2E 與 macOS 安裝檢查在 PR 階段執行；發布程式會強制核對 PR 的成功 CI 與相同的原始碼內容，main 仍跑 Linux 安裝檢查。若 PR 證據不足，可在 main 手動跑一次完整 CI。只有經差異核對的純版本提交能沿用 CI；缺少、跳過、失敗或仍在執行的必要檢查都會阻擋。既有 tag 可續發，但不移動 tag，也不把較新的 Latest 換掉。這**不等於 npm 發布或正式部署**。詳見[發版、復原與驗證手冊](./docs/RELEASING.md)。
+入口自動準備乾淨的遠端 main 工作區，選擇下一個 UTC 日期／流水號。純文件採輕量 CI，一般修改測代表性環境，相容性修改或手動執行才跑完整矩陣。合併後原始碼完全相同才沿用最新成功的 PR 檢查，否則 main 自行驗證。發布時再核對 CI 與 source SHA，才原子發布版本 commit/tag。既有 tag 不移動。這**不等於 npm 發布或正式部署**。詳見[發版、復原與驗證手冊](./docs/RELEASING.md)。
 
 若已設定本機服務的 staged 部署 adapter，可用
 `bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/plan.json --execute`

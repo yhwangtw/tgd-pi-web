@@ -3,7 +3,7 @@ import { defineTool, type ExtensionAPI, type ExtensionContext, type InlineExtens
 import { Type } from "typebox";
 import { isPlanToolSelection } from "./plan-mode";
 import { TOOL_PRESET_DEFAULT, TOOL_PRESET_PLAN } from "./tool-selection";
-import { emptyWorkflow, GOAL_AUTOMATIC_RUN_LIMIT, parseTokenBudget, readWorkflow, WORKFLOW_ENTRY } from "./workflow-state";
+import { emptyWorkflow, parseTokenBudget, readWorkflow, WORKFLOW_ENTRY } from "./workflow-state";
 
 /** Uses only the SDK's RPC-safe UI, session entries, and settled lifecycle. */
 export function createWorkflowExtension(): InlineExtension {
@@ -24,7 +24,7 @@ export function createWorkflowExtension(): InlineExtension {
     const render = (ctx: ExtensionContext) => {
       const { goal, plan } = state;
       ctx.ui.setStatus("Goal", goal ? `${goal.status} · ${goal.tokens.toLocaleString()}${goal.tokenBudget ? ` / ${goal.tokenBudget.toLocaleString()}` : ""} tokens` : undefined);
-      ctx.ui.setWidget("Goal", goal ? [goal.objective, ...(goal.reason ? [goal.reason] : []), "/goal · /goal pause · /goal resume"] : undefined);
+      ctx.ui.setWidget("Goal", goal ? [goal.objective, ...(goal.reason ? [goal.reason] : []), "/goal · /goal pause · /goal resume · /goal runs <count>"] : undefined);
       ctx.ui.setStatus("Plan", plan ? `${plan.status} · ${plan.steps.filter(s => s.status === "completed").length}/${plan.steps.length}` : undefined);
       ctx.ui.setWidget("Plan", plan ? [plan.title, ...plan.steps.map((s, i) => `${s.status === "completed" ? "✓" : s.status === "in_progress" ? "→" : "○"} ${i + 1}. ${s.text}`), "/plan · /plan execute · /plan cancel"] : undefined);
     };
@@ -84,6 +84,13 @@ export function createWorkflowExtension(): InlineExtension {
         save(ctx);
         return;
       }
+      if (args.startsWith("runs ")) {
+        const limit = args.slice(5).trim();
+        if (!state.goal || !/^\d+$/.test(limit) || !Number.isSafeInteger(Number(limit))) throw new Error("Use /goal runs <count>; 0 disables the continuation cap.");
+        state.goal.automaticRunLimit = Number(limit);
+        save(ctx);
+        return;
+      }
       if (args.startsWith("budget ")) {
         const budget = parseTokenBudget(args.slice(7).trim());
         if (!state.goal || !budget) throw new Error("Use /goal budget <positive token count>, for example 100k.");
@@ -111,18 +118,27 @@ export function createWorkflowExtension(): InlineExtension {
       if (!ctx.isIdle() || ctx.hasPendingMessages()) throw new Error("Wait for the current response before starting a goal.");
       if (isPlanToolSelection(pi.getActiveTools())) throw new Error("Finish reviewing the plan before starting a goal.");
       let tokenBudget: number | undefined;
-      if (args.startsWith("--tokens")) {
-        const match = /^--tokens\s+(\S+)\s+([\s\S]+)$/.exec(args);
-        const parsed = match && parseTokenBudget(match[1]);
-        if (!match || !parsed) throw new Error("Use /goal --tokens 100k <objective>.");
-        tokenBudget = parsed;
-        args = match[2].trim();
+      let automaticRunLimit: number | undefined;
+      const seen = new Set<string>();
+      while (args.startsWith("--")) {
+        const match = /^(--tokens|--runs)\s+(\S+)\s+([\s\S]+)$/.exec(args);
+        if (!match || seen.has(match[1])) throw new Error("Use /goal [--tokens 100k] [--runs 50] <objective>.");
+        seen.add(match[1]);
+        if (match[1] === "--tokens") {
+          const parsed = parseTokenBudget(match[2]);
+          if (!parsed) throw new Error("Token budget must be positive, for example 100k.");
+          tokenBudget = parsed;
+        } else {
+          if (!/^\d+$/.test(match[2]) || !Number.isSafeInteger(Number(match[2]))) throw new Error("Continuation limit must be a nonnegative integer.");
+          automaticRunLimit = Number(match[2]);
+        }
+        args = match[3].trim();
       }
       if (!args || args.length > 4000) throw new Error("Goal must contain 1–4000 characters.");
       if (state.goal && state.goal.status !== "complete") {
         if (!ctx.hasUI || !await ctx.ui.confirm("Replace the current goal?", state.goal.objective)) return;
       }
-      state.goal = { id: randomUUID(), objective: args, status: "active", tokens: 0, automaticRuns: 0, ...(tokenBudget ? { tokenBudget } : {}) };
+      state.goal = { id: randomUUID(), objective: args, status: "active", tokens: 0, automaticRuns: 0, ...(tokenBudget ? { tokenBudget } : {}), ...(automaticRunLimit !== undefined ? { automaticRunLimit } : {}) };
       lastOutput = "";
       repeatedRuns = 0;
       ensureGoalTools();
@@ -183,7 +199,7 @@ export function createWorkflowExtension(): InlineExtension {
       commandBusy = true;
       try { await handler(args, ctx); } finally { commandBusy = false; continueGoal(ctx); }
     };
-    pi.registerCommand("goal", { description: "Manage a persistent goal: start, pause, resume, status, budget, clear", handler: command(goalCommand) });
+    pi.registerCommand("goal", { description: "Manage a persistent goal: start, pause, resume, status, budget, runs, clear", handler: command(goalCommand) });
     pi.registerCommand("plan", { description: "Create, review, refine and execute a saved plan", handler: command(planCommand) });
 
     pi.registerTool(defineTool({
@@ -194,7 +210,6 @@ export function createWorkflowExtension(): InlineExtension {
         status: Type.Union([Type.Literal("pending"), Type.Literal("in_progress"), Type.Literal("completed")]),
       }), { minItems: 1, maxItems: 30 }) }),
       async execute(_id, params, _signal, _update, ctx) {
-        if (params.steps.filter(s => s.status === "in_progress").length > 1) throw new Error("Keep at most one step in progress.");
         const planning = isPlanToolSelection(pi.getActiveTools());
         if (planning && params.steps.some(s => s.status !== "pending")) throw new Error("Planning steps remain pending until execution is requested.");
         state.plan = {
@@ -261,8 +276,8 @@ export function createWorkflowExtension(): InlineExtension {
       if (isPlanToolSelection(pi.getActiveTools()) || !pi.getActiveTools().includes("goal_status")) { pause(ctx, "Tool selection changed. Review it before resuming."); return; }
       repeatedRuns = !runHadTools && (!runOutput || runOutput === lastOutput) ? repeatedRuns + 1 : 0;
       lastOutput = runOutput;
-      if (repeatedRuns >= 3 || goal.automaticRuns >= GOAL_AUTOMATIC_RUN_LIMIT) {
-        pause(ctx, repeatedRuns >= 3 ? "Repeated responses without progress. Review before resuming." : "25 automatic continuations completed. Review before resuming.");
+      if (repeatedRuns >= 3 || (goal.automaticRunLimit && goal.automaticRuns >= goal.automaticRunLimit)) {
+        pause(ctx, repeatedRuns >= 3 ? "Repeated responses without progress. Review before resuming." : `${goal.automaticRunLimit} automatic continuations completed. Use /goal runs to adjust the cap or /goal resume to continue.`);
         return;
       }
       goal.automaticRuns++;

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { isDeepStrictEqual } from "node:util";
 
 export const REQUIRED_CI_JOBS = ["Lint & Typecheck", "Test", "Build", "Security Audit"];
-export const DEFERRED_CI_JOBS = ["E2E", "Archive and offline setup (macos-latest)"];
+export const DEFERRED_CI_JOBS = ["E2E"];
 const VERSION_FILES = ["package-lock.json", "package.json"];
 
 export function command(executable, args, cwd = process.cwd()) {
@@ -94,7 +94,7 @@ function assertRunUnchanged(prefix, run, api) {
   }
 }
 
-function checkPRCI(repository, sha, workflowId, api) {
+export function checkPRCI(repository, sha, workflowId, api = ghJson) {
   const recovery = "Run the full CI workflow manually on this main commit before releasing.";
   const prefix = `repos/${repository}`;
   const pulls = api(`${prefix}/commits/${sha}/pulls?per_page=100`, { paginate: true }).flat();
@@ -135,14 +135,16 @@ export function checkCI(repository, sha, api = ghJson) {
   const pages = api(`${prefix}/workflows/${workflow.id}/runs?head_sha=${sha}&per_page=100`, { paginate: true });
   const run = selectCIRun(pages.flatMap((page) => page.workflow_runs), repository, sha, workflow.id);
   const jobs = readJobs(prefix, run, api);
-  requireCIJobs(jobs, run);
+  const reused = jobs.some(job => job.name === "Reuse reviewed checks" && job.run_id === run.id
+    && job.head_sha === sha && job.status === "completed" && job.conclusion === "success");
+  requireCIJobs(jobs, run, reused ? ["Test", "Reuse reviewed checks"] : REQUIRED_CI_JOBS);
   // A full manual main run (or a historical full run) is sufficient itself.
   // Fast main runs must inherit the omitted checks from the same source tree.
   const fullMain = DEFERRED_CI_JOBS.every((name) => {
     const matches = jobs.filter((job) => job.name === name && job.run_id === run.id && job.head_sha === sha);
     return matches.length === 1 && matches[0].status === "completed" && matches[0].conclusion === "success";
   });
-  const pr = fullMain ? undefined : checkPRCI(repository, sha, workflow.id, api);
+  const pr = fullMain && !reused ? undefined : checkPRCI(repository, sha, workflow.id, api);
   assertRunUnchanged(prefix, run, api);
   return { sha, runId: run.id, attempt: run.run_attempt, url: `https://github.com/${repository}/actions/runs/${run.id}`, ...(pr ? { pr } : {}) };
 }

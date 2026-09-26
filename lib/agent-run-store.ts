@@ -77,7 +77,9 @@ function isAgentRun(value: unknown): value is AgentRun {
     && isOptionalString(item.error)
     && isReport(item.report)
     && isWorkspace(item.workspace)
-    && isLimits(item.limits);
+    && isLimits(item.limits)
+    && (item.budgetGroup === undefined || (!!item.budgetGroup && typeof item.budgetGroup.id === "string"
+      && Number.isFinite(item.budgetGroup.maxCostUsd) && item.budgetGroup.maxCostUsd > 0));
 }
 
 export function agentRunStorePath(): string {

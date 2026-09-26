@@ -812,7 +812,7 @@ export class AgentSessionWrapper {
         const handler = runner?.getCommand(command.command);
         if (!runner || !handler) throw new Error("Workflow extension is unavailable");
         const args = typeof command.args === "string" ? command.args : "";
-        if (this.cwd && !["pause", "status", "clear", "cancel"].includes(args.trim()) && !args.startsWith("budget ")) {
+        if (this.cwd && !["pause", "status", "clear", "cancel"].includes(args.trim()) && !args.startsWith("budget ") && !args.startsWith("runs ")) {
           await createSnapshot(this.cwd, this.inner.sessionId, `Before /${command.command}`).catch(() => {});
         }
         await handler.handler(args, runner.createCommandContext());

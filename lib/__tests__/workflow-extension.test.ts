@@ -102,13 +102,32 @@ describe("persistent Web goals and plans", () => {
     }
   });
 
-  it("pauses when responses repeat without work and caps automatic continuations", async () => {
+  it("pauses repeated responses but permits sustained progress beyond 25 continuations", async () => {
     const h = await harness(); await h.command("goal", "Fix it");
     for (let i = 0; i < 4; i++) { await h.emit("agent_start"); await h.message("Still working"); await h.emit("agent_settled"); }
     expect(h.state().goal).toMatchObject({ status: "paused", reason: expect.stringContaining("Repeated") });
     await h.command("goal", "resume");
     for (let i = 0; i < 26; i++) { await h.emit("agent_start"); await h.message(`Step ${i}`); await h.emit("agent_settled"); }
-    expect(h.state().goal).toMatchObject({ status: "paused", automaticRuns: 25 });
+    expect(h.state().goal).toMatchObject({ status: "active", automaticRuns: 26 });
+  });
+
+  it("honors optional continuation limits, persists them, and allows explicitly disabling them", async () => {
+    const h = await harness(); await h.command("goal", "--runs 2 --tokens 100k Fix it");
+    for (let i = 0; i < 3; i++) { await h.emit("agent_start"); await h.message(`Step ${i}`); await h.emit("agent_settled"); }
+    expect(h.state().goal).toMatchObject({ status: "paused", automaticRuns: 2, automaticRunLimit: 2 });
+    expect(readWorkflow(h.state())?.goal?.automaticRunLimit).toBe(2);
+    await h.command("goal", "runs 0"); await h.command("goal", "resume");
+    for (let i = 0; i < 4; i++) { await h.emit("agent_start"); await h.message(`More ${i}`); await h.emit("agent_settled"); }
+    expect(h.state().goal?.status).toBe("active");
+    await expect(h.command("goal", "runs -1")).rejects.toThrow("count");
+    await expect(h.command("goal", "--runs 1 --runs 2 work")).rejects.toThrow("Use /goal");
+  });
+
+  it("tracks independent active steps without switching tools into read-only mode", async () => {
+    const h = await harness();
+    await h.tool("update_plan", { title: "Parallel", steps: [{ text: "A", status: "in_progress" }, { text: "B", status: "in_progress" }] });
+    expect(h.state().plan?.steps.filter(s => s.status === "in_progress")).toHaveLength(2);
+    expect(h.active()).toContain("edit");
   });
 
   it("resumes once after a dialog closes if the last run settled while it was open", async () => {

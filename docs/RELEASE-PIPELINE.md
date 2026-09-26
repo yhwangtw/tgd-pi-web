@@ -12,9 +12,12 @@ bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/operator/release-plan.jso
 bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/operator/release-plan.json --execute
 ```
 
-Use the current UTC date for a new release, with `-1`, `-2`, etc. when necessary.
-**Repeat the same tag and plan to resume**, including on a later UTC day. A new
-request requires the usual clean, fetched main checkout and successful CI.
+The tag is optional: the helper selects the next UTC date/sequence and prepares
+remote main in an isolated checkout, preserving the caller's local work. If the
+same plan has one unfinished receipt, omitting the tag resumes it automatically;
+multiple unfinished receipts require an explicit tag. **Repeat the same tag and
+plan to resume**, including on a later UTC day. A new request still requires
+verified CI. Completed receipts remain idempotent when their tag is explicit.
 Resuming validates saved source/plan identities and reads current CI evidence;
 it does not require resetting the original checkout to the version commit or
 rerunning tests. These commands do not merge PRs or install service adapters.

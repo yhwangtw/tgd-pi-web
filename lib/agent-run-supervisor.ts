@@ -105,8 +105,16 @@ export class AgentRunSupervisor {
       ...(current.maxCostUsd ? { maxCostUsd: Math.min(Number.MAX_VALUE, Math.max(current.maxCostUsd * 2, active.costUsd + 5)) } : {}),
       timeoutMs: current.timeoutMs === 0 ? 0 : Math.min(2_147_483_647, (current.timeoutMs ?? MAX_RUN_MS) + 30 * 60_000),
     };
-    const updated = this.updateRun(runId, active.pendingDialogs.size ? "waiting_for_input" : "running", { limits, limitWarning: false });
+    const group = active.run.budgetGroup
+      ? { ...active.run.budgetGroup, maxCostUsd: Math.min(Number.MAX_VALUE, active.run.budgetGroup.maxCostUsd * 2) }
+      : undefined;
+    const updated = this.updateRun(runId, active.pendingDialogs.size ? "waiting_for_input" : "running", {
+      limits, limitWarning: false, ...(group ? { budgetGroup: group } : {}),
+    });
     if (!updated) throw new AgentRunConflictError("Run has already finished");
+    if (group) for (const member of this.active.values()) {
+      if (member.run.budgetGroup?.id === group.id) member.run.budgetGroup = { ...group };
+    }
     active.run.limits = limits;
     active.run.limitWarning = false;
     this.armDeadline(active);
@@ -114,7 +122,10 @@ export class AgentRunSupervisor {
   }
 
   private publishProgress(active: ActiveRun): void {
-    const warning = approachingRunLimit(active.run.limits, active.turns, active.costUsd, Date.now() - Date.parse(active.run.startedAt!));
+    const group = active.run.budgetGroup;
+    const groupCost = group ? this.groupCost(active.run) - (active.run.progress?.costUsd ?? 0) + active.costUsd : 0;
+    const warning = approachingRunLimit(active.run.limits, active.turns, active.costUsd, Date.now() - Date.parse(active.run.startedAt!))
+      || (!!group && groupCost >= group.maxCostUsd * .8);
     if (warning !== !!active.run.limitWarning || active.run.progress?.turns !== active.turns) {
       active.run.limitWarning = warning;
       active.run.progress = { turns: active.turns, costUsd: active.costUsd };
@@ -169,6 +180,9 @@ export class AgentRunSupervisor {
       ...(options.parentRunId ? { parentRunId: options.parentRunId } : {}),
     };
     mutateAgentRunStore((store) => {
+      // A user extension also applies to later chain steps/retries in this group.
+      const group = run.budgetGroup && store.runs.find(item => item.budgetGroup?.id === run.budgetGroup!.id)?.budgetGroup;
+      if (group) run.budgetGroup = { ...group };
       store.runs.unshift(run);
     });
     return cloneRun(run);
@@ -222,6 +236,7 @@ export class AgentRunSupervisor {
       toolNames: [...original.toolNames],
       workspace: original.workspace ? { ...original.workspace } : undefined,
       limits: original.limits ? { ...original.limits } : undefined,
+      budgetGroup: original.budgetGroup ? { ...original.budgetGroup } : undefined,
     }, {
       trigger: "retry",
       parentRunId: original.id,
@@ -255,10 +270,40 @@ export class AgentRunSupervisor {
       const run = store.runs.find((item) => item.id === runId);
       if (!run || TERMINAL_AGENT_RUN_STATUSES.has(run.status)) return null;
       Object.assign(run, patch, { status });
+      if (patch.budgetGroup) for (const member of store.runs) {
+        if (member.budgetGroup?.id === patch.budgetGroup.id) member.budgetGroup = { ...patch.budgetGroup };
+      }
       return cloneRun(run);
     });
     if (updated) this.waiters.get(runId)?.onUpdate?.(updated);
     return updated;
+  }
+
+  private groupCost(run: AgentRun): number {
+    if (!run.budgetGroup) return 0;
+    return readAgentRunStore().runs.filter(item => item.budgetGroup?.id === run.budgetGroup!.id)
+      .reduce((sum, item) => sum + (item.progress?.costUsd ?? item.report?.usage.cost ?? 0), 0);
+  }
+
+  private stopExhaustedGroup(run: AgentRun): boolean {
+    if (!run.budgetGroup || this.groupCost(run) < run.budgetGroup.maxCostUsd) return false;
+    const error = `Delegation reached its shared $${run.budgetGroup.maxCostUsd} cost limit`;
+    const stopped = mutateAgentRunStore(store => {
+      const affected = store.runs.filter(item => item.budgetGroup?.id === run.budgetGroup!.id && !TERMINAL_AGENT_RUN_STATUSES.has(item.status));
+      for (const item of affected) {
+        item.status = "failed"; item.error = error; item.finishedAt = new Date().toISOString();
+        const messages = this.active.get(item.id)?.messages;
+        if (messages) item.report = buildAgentRunReport(messages, item.startedAt, item.finishedAt);
+      }
+      return affected.map(cloneRun);
+    });
+    for (const item of stopped) {
+      const active = this.active.get(item.id);
+      this.cleanup(item.id);
+      void active?.session?.send({ type: "abort" }).catch(() => {});
+      this.resolveWaiter(item, active?.messages);
+    }
+    return true;
   }
 
   private drain(): void {
@@ -274,6 +319,7 @@ export class AgentRunSupervisor {
           return cloneRun(run);
         });
         if (!reserved) break;
+        if (this.stopExhaustedGroup(reserved)) continue;
         this.active.set(reserved.id, {
           run: reserved,
           messages: [],
@@ -330,7 +376,7 @@ export class AgentRunSupervisor {
       if (!await isTrustedAgentRunWorkspace(run.cwd)) {
         throw new Error("Workspace is no longer trusted; open it as a project before retrying");
       }
-      const started = await startRpcSession(`__daemon__${run.id}`, "", run.cwd, run.toolNames);
+      const started = await startRpcSession(`__daemon__${run.id}`, "", run.cwd, run.toolNames, { toolMode: "custom" });
       if (!this.active.has(run.id)) {
         await started.session.send({ type: "abort" }).catch(() => {});
         return;
@@ -365,6 +411,7 @@ export class AgentRunSupervisor {
           active.turns += 1;
           active.costUsd += message.usage?.cost.total ?? 0;
           this.publishProgress(active);
+          if (this.stopExhaustedGroup(run)) { this.drain(); return; }
           const turnsExceeded = !!run.limits?.maxTurns && active.turns > run.limits.maxTurns;
           const costExceeded = !!run.limits?.maxCostUsd && active.costUsd > run.limits.maxCostUsd;
           if (!turnsExceeded && !costExceeded) return;
