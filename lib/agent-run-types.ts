@@ -34,6 +34,8 @@ export interface AgentRunInput {
   toolNames: string[];
   workspace?: AgentRunWorkspace;
   limits?: AgentRunLimits;
+  /** Shared cost ceiling across one delegated single/parallel/chain request. */
+  budgetGroup?: { id: string; maxCostUsd: number };
 }
 
 export interface AgentRunReport {

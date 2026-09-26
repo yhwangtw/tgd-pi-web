@@ -1,6 +1,6 @@
 import type { AgentRunLimits } from "./agent-run-types";
 
-export const DEFAULT_SUBAGENT_LIMITS = { maxTurns: 24, maxCostUsd: 5, timeoutMs: 30 * 60_000 };
+export const DEFAULT_SUBAGENT_LIMITS = { maxTurns: 0, maxCostUsd: 0, timeoutMs: 0 };
 
 /** Zero explicitly disables a budget; omitted fields retain the caller's defaults. */
 export function isAgentRunLimits(value: unknown): value is AgentRunLimits {
@@ -16,4 +16,13 @@ export function approachingRunLimit(limits: AgentRunLimits | undefined, turns: n
   return !!limits && ((!!limits.maxTurns && turns >= limits.maxTurns * .8)
     || (!!limits.maxCostUsd && cost >= limits.maxCostUsd * .8)
     || (!!limits.timeoutMs && elapsed >= limits.timeoutMs * .8));
+}
+
+/** A model may allocate a smaller budget, never raise a user-configured cap. */
+export function allocateRunLimits(configured: AgentRunLimits, requested: AgentRunLimits = {}): AgentRunLimits {
+  return Object.fromEntries((["maxTurns", "maxCostUsd", "timeoutMs"] as const).map(key => {
+    const ceiling = configured[key] ?? 0;
+    const allocation = requested[key] ?? 0;
+    return [key, ceiling > 0 ? allocation > 0 ? Math.min(ceiling, allocation) : ceiling : allocation];
+  }));
 }

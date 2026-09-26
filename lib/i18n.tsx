@@ -19,7 +19,7 @@ const MESSAGES = {
   "interaction.minimize": { en: "Minimize panel", zh: "收合面板" },
   "interaction.expand": { en: "Expand panel", zh: "展開面板" },
   "agents.limits": { en: "Subagent budgets", zh: "子代理執行上限" },
-  "agents.limitsHint": { en: "Applies to new subagents. 0 means no limit; usage may continue to accrue.", zh: "套用至新的子代理。0 表示不限；費用可能持續累積。" },
+  "agents.limitsHint": { en: "New subagents: turns/time per agent, cost shared per delegation. 0 means no limit.", zh: "套用至新的子代理：次數與時間按代理計算，同次委派共用費用上限。0 表示不限。" },
   "agents.turns": { en: "Turns", zh: "回合" },
   "agents.costLimit": { en: "Reported cost (US$)", zh: "回報費用（美元）" },
   "agents.minutes": { en: "Minutes", zh: "分鐘" },

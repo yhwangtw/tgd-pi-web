@@ -363,16 +363,20 @@ Issue と pull request を歓迎します。
 
 アプリの翻訳は `lib/i18n.tsx` にあります。新しい skin では、component に色をハードコードせず semantic design tokens を使ってください。
 
+
+Goal に固定の継続回数制限はありません。`/goal --runs 50 <目標>` で指定でき、`0` は無制限です。Plan は並行ステップと Markdown を扱えます。子エージェントの既存予算を保持し、同じ委派の費用を共有します。Worker は親の有効なツールのみ継承します。新規予算の既定は `0` です。詳細は [英語版の機能説明](./README.md#agent-chat)を参照してください。
+
 ## リリース
 
-PR マージ後、その正確な `main` commit の CI 完了を待ち、同期済みのクリーンな main checkout から実行します。
+マージ後、正確な main の CI を待ちます。任意の checkout から実行でき、ローカル変更は保持されます。
 
 ```bash
-bash scripts/release.sh                        # 読み取り専用、UTC の今日
-bash scripts/release.sh vYYYY.MM.DD --dispatch  # 明示的に公開を要求
+bash scripts/release.sh                        # UTC タグを自動選択して事前確認
+bash scripts/release.sh --dispatch             # 自動タグで公開
+bash scripts/release.sh vYYYY.MM.DD --dispatch  # タグの明示指定も可能
 ```
 
-日付は UTC、同日の追加 release は `-1`、`-2` を付けます。ローカル build・バージョン変更・push は行いません。workflow は確認済み source SHA と main の必須 CI job 4 件を再検証し、version commit/tag を原子的に push して GitHub Release を公開します。E2E と macOS のインストール検証は PR で実行し、公開時に成功した PR CI と同一のソースツリーを必須とします。main では Linux のインストール検証を続けます。PR の証拠がない場合は main で完全な CI を手動実行します。実際の差分がバージョンだけの場合に限り CI を継承します。必須チェックの失敗・欠落・skip・実行中は公開を停止します。既存 tag は移動せず再開でき、古い release が新しい Latest を置き換えることもありません。**npm 公開や production deploy とは別です。** [手順・復元・結果確認](./docs/RELEASING.md)を参照してください。
+一時 checkout に remote main を準備し、UTC の日付・連番を自動選択します。文書のみは軽量検証、通常変更は代表環境、互換性変更と手動実行は全環境で検証します。main は同じソースツリーの成功した PR CI を再利用し、異なる場合は再検証します。公開時にも CI と SHA を確認し、既存タグは移動しません。npm 公開・本番デプロイは別です。[公開と復旧](./docs/RELEASING.md)。
 
 設定済みの staged deployment adapter がある場合は
 `bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/plan.json --execute`

@@ -122,8 +122,8 @@ describe("PR evidence for checks omitted on main", () => {
     head: { sha: headSha, ref: "feature", repo: { full_name: repository } } };
   const prRun = { ...run, id: 79, head_sha: headSha, head_branch: "feature", event: "pull_request", run_attempt: 1 };
   const prJobs = () => fullJobs().map((job) => ({ ...job, run_id: prRun.id, head_sha: headSha }));
-  function fixture({ pulls = [pull], headTree = tree, runs = [prRun], ciJobs = prJobs(), refresh = prRun, mainRefresh = run } = {}) {
-    const main = apiFixture({ ciJobs: jobs(), refresh: mainRefresh });
+  function fixture({ pulls = [pull], headTree = tree, runs = [prRun], ciJobs = prJobs(), refresh = prRun, mainRefresh = run, mainJobs = jobs() } = {}) {
+    const main = apiFixture({ ciJobs: mainJobs, refresh: mainRefresh });
     return vi.fn((endpoint, options) => {
       if (endpoint.includes(`/commits/${sha}/pulls?`)) return [pulls];
       if (endpoint.endsWith(`/git/commits/${sha}`)) return { sha, tree: { sha: tree } };
@@ -139,6 +139,13 @@ describe("PR evidence for checks omitted on main", () => {
     expect(checkCI(repository, sha, api).pr).toEqual({ number: 42, sha: headSha, runId: 79, attempt: 1,
       url: "https://github.com/owner/project/actions/runs/79" });
     expect(api.mock.calls.some(([endpoint]) => endpoint.includes("/runs/79/attempts/1/jobs?"))).toBe(true);
+  });
+  it("reuses all main checks only after independently verifying matching successful PR evidence", () => {
+    const mainJobs = ["Test", "Reuse reviewed checks"].map(name => ({ ...jobs()[0], name }));
+    expect(checkCI(repository, sha, fixture({ mainJobs })).pr.number).toBe(42);
+    expect(() => checkCI(repository, sha, fixture({ mainJobs, headTree: "d".repeat(40) }))).toThrow("differs");
+    expect(() => checkCI(repository, sha, fixture({ mainJobs, ciJobs: [] }))).toThrow("required job");
+    expect(() => checkCI(repository, sha, fixture({ mainJobs: [{ ...jobs()[0], name: "Test" }] }))).toThrow("Lint");
   });
   it.each([[], [{ ...pull, merged_at: null }], [{ ...pull, merge_commit_sha: headSha }],
     [{ ...pull, base: { ref: "develop", repo: { full_name: repository } } }], [pull, pull]].map((pulls) => ({ pulls })))(
@@ -366,7 +373,7 @@ console.log(JSON.stringify(body));\n`);
     expect(workflow).toContain('--latest="$LATEST"');
     expect(workflow).toContain("node scripts/release-latest.mjs");
     const helper = readFileSync(resolve("scripts/release.sh"), "utf8");
-    expect(helper).toContain('exec node "$SCRIPT_DIR/release.mjs" "$@"');
+    expect(helper).toContain('exec node "$SCRIPT_DIR/release-entry.mjs" "$@"');
     for (const forbidden of ["npm run build", "git push", "git tag", "Asia/Taipei", "npm install"]) expect(helper).not.toContain(forbidden);
     const ci = readFileSync(resolve(".github/workflows/ci.yml"), "utf8");
     for (const name of REQUIRED_CI_JOBS) expect(ci).toContain(`name: ${name}\n`);

@@ -1,5 +1,4 @@
 export const WORKFLOW_ENTRY = "pi-web-workflow-v1";
-export const GOAL_AUTOMATIC_RUN_LIMIT = 25;
 
 export interface GoalState {
   id: string;
@@ -8,6 +7,7 @@ export interface GoalState {
   tokens: number;
   tokenBudget?: number;
   automaticRuns: number;
+  automaticRunLimit?: number; // 0 or omitted: no fixed continuation cap
   reason?: string;
 }
 
@@ -43,6 +43,7 @@ export function readWorkflow(value: unknown): WorkflowState | null {
     || g.objective.length > 4000 || !["active", "paused", "blocked", "budget_limited", "complete"].includes(g.status)
     || !Number.isSafeInteger(g.tokens) || g.tokens < 0 || !Number.isSafeInteger(g.automaticRuns) || g.automaticRuns < 0
     || (g.tokenBudget !== undefined && (!Number.isSafeInteger(g.tokenBudget) || g.tokenBudget <= 0))
+    || (g.automaticRunLimit !== undefined && (!Number.isSafeInteger(g.automaticRunLimit) || g.automaticRunLimit < 0))
     || (g.reason !== undefined && typeof g.reason !== "string"))) return null;
   const p = state.plan;
   if (p !== null && (!p || typeof p.title !== "string" || p.title.length > 500

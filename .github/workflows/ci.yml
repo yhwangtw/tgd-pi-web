@@ -7,12 +7,69 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  scope:
+    name: Select checks
+    runs-on: ubuntu-latest
+    outputs:
+      profile: ${{ steps.scope.outputs.profile }}
+      reuse: ${{ steps.scope.outputs.reuse }}
+      runtime: ${{ steps.scope.outputs.runtime }}
+      install: ${{ steps.scope.outputs.install }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - id: scope
+        run: node scripts/ci-scope.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  reuse:
+    name: Reuse reviewed checks
+    needs: scope
+    if: needs.scope.outputs.reuse == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: node scripts/ci-scope.mjs --verify-reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  docs:
+    name: Documentation checks
+    needs: scope
+    if: needs.scope.outputs.profile == 'docs'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: node scripts/ci-scope.mjs --check-docs
+
   lint:
+    needs: scope
+    if: needs.scope.outputs.profile != 'docs' && needs.scope.outputs.reuse != 'true'
     name: Lint & Typecheck
     runs-on: ubuntu-latest
     steps:
@@ -46,14 +103,14 @@ jobs:
         run: npm run audit:capabilities
 
   runtime-tests:
+    needs: scope
+    if: needs.scope.outputs.profile != 'docs' && needs.scope.outputs.reuse != 'true'
     name: Runtime tests (Node ${{ matrix.node }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        node: ['22.19.0', '23.4.0', '24', '26']
+      matrix: ${{ fromJSON(needs.scope.outputs.runtime) }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -76,14 +133,15 @@ jobs:
         run: npm test
 
   installation-smoke:
+    needs: scope
+    if: needs.scope.outputs.profile != 'docs' && needs.scope.outputs.reuse != 'true'
     name: Archive and offline setup (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        # Linux still validates every merge; macOS is verified once on the PR.
-        os: ${{ fromJSON(github.event_name == 'push' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest"]') }}
+        os: ${{ fromJSON(needs.scope.outputs.install) }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -102,23 +160,37 @@ jobs:
       - name: Build source archive and offline checkout in isolated directories
         run: node scripts/ci-install-smoke.mjs
 
-  # Keep this exact name: the source-release gate requires one successful Test
-  # job. Failed, skipped or cancelled matrix cells must never inherit a green gate.
+  # Stable aggregate: every selected check must pass; skipped checks cannot stand
+  # in for a failed selection or an unverified reuse attempt.
   test:
     name: Test
     runs-on: ubuntu-latest
-    needs: [runtime-tests, installation-smoke]
+    needs: [scope, runtime-tests, installation-smoke, reuse, docs]
     if: ${{ always() }}
     steps:
-      - name: Require every runtime and installation result
+      - name: Require selected results
         env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          PROFILE: ${{ needs.scope.outputs.profile }}
+          REUSE: ${{ needs.scope.outputs.reuse }}
           RUNTIME_RESULT: ${{ needs.runtime-tests.result }}
           INSTALL_RESULT: ${{ needs.installation-smoke.result }}
+          REUSE_RESULT: ${{ needs.reuse.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
         run: |
-          test "$RUNTIME_RESULT" = success
-          test "$INSTALL_RESULT" = success
+          test "$SCOPE_RESULT" = success
+          if [ "$PROFILE" = docs ]; then
+            test "$DOCS_RESULT" = success
+          elif [ "$REUSE" = true ]; then
+            test "$REUSE_RESULT" = success
+          else
+            test "$RUNTIME_RESULT" = success
+            test "$INSTALL_RESULT" = success
+          fi
 
   build:
+    needs: scope
+    if: needs.scope.outputs.profile != 'docs' && needs.scope.outputs.reuse != 'true'
     name: Build
     runs-on: ubuntu-latest
     steps:
@@ -145,10 +217,10 @@ jobs:
         run: npm run audit:js-budget
 
   e2e:
+    needs: scope
+    if: needs.scope.outputs.profile != 'docs' && needs.scope.outputs.reuse != 'true'
     name: E2E
     runs-on: ubuntu-latest
-    # Run the browser suite on reviewed PRs, without rebuilding it after merge.
-    if: github.event_name != 'push'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -188,6 +260,8 @@ jobs:
           retention-days: 7
 
   audit:
+    needs: scope
+    if: needs.scope.outputs.profile != 'docs' && needs.scope.outputs.reuse != 'true'
     name: Security Audit
     runs-on: ubuntu-latest
     steps:

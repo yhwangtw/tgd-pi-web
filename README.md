@@ -206,9 +206,9 @@ Subagent, Plan, and Goal are Pi Web-maintained extensions built on the official 
 - Model and thinking-level switching during a session.
 - Tool access can inherit Pi/project defaults, use a preset, or select individual built-in, extension, and MCP tools.
 - A first-party `subagent` tool is installed with the Web runtime: delegate work in separate sessions to the built-in scout, planner, worker, and reviewer, run up to eight tasks through the existing Agent queue, and inspect or cancel every child session from the Agent dashboard. `tasks` runs independent children in parallel, including workers; the Agent panel's shared concurrency limit controls how many run at once (default 3, configurable from 1 to 8). Children share the parent's working directory, so assign workers disjoint files and use `chain` for dependencies such as reviewing a preceding worker's edits. The three read-only built-ins have no shell access. Use **Inherit** or explicitly enable `subagent` in custom tools; explicit core-tool presets do not include it. No global `pi` CLI is required.
-- **Goal:** `/goal <objective>` starts a session-owned objective; `/goal --tokens 100k <objective>` adds an optional budget. The Goal panel and `/goal pause`, `/goal resume`, `/goal status`, `/goal budget 200k`, and `/goal clear` manage it. Continuations run only after Pi fully settles, stay hidden in the transcript, and stop on completion, a blocker, model error, user stop, budget exhaustion, three repeated/empty tool-free responses, or 25 automatic continuations. Pause lets the current response finish; Stop also aborts it. Usage counts provider-reported uncached input plus output after each response, so a response can exceed the remaining budget. Child usage remains in the separate subagent budgets. Reopening a runtime/branch restores an active goal as paused; browser reconnects preserve the live runtime.
-- **Plan:** `/plan <request>` explores with restricted tools and saves up to 30 ordered steps. Review/refine through the Plan panel or `/plan refine <changes>`, then explicitly choose `/plan execute`; execution stays in the same session and restores the prior tool selection. `/plan cancel` leaves the conversation intact. The `update_plan` tool tracks verified progress. Goal and plan state survive compaction in custom session entries. Planning pauses an active Goal. Shell filtering prevents common accidental writes; it is not an operating-system sandbox.
-- **Agents → Subagent budgets** configures time, turns, and reported cost for new children (defaults: 30 minutes, 24 turns, US$5; `0` disables that limit). Active runs show a near-limit notice and can be extended without starting another session. Reported cost depends on provider usage data, not your billing balance.
+- **Goal:** `/goal <objective>` starts a session-owned objective; `/goal --tokens 100k <objective>` adds an optional budget. The Goal panel and `/goal pause`, `/goal resume`, `/goal status`, `/goal budget 200k`, and `/goal clear` manage it. Continuations run only after Pi fully settles, stay hidden in the transcript, and stop on completion, a blocker, model error, user stop, budget exhaustion, three repeated/empty tool-free responses. There is no fixed continuation cap; use `/goal --runs 50 <objective>` or `/goal runs 50` to set one (`0` disables it). Pause lets the current response finish; Stop also aborts it. Usage counts provider-reported uncached input plus output after each response, so a response can exceed the remaining budget. Child usage remains in the separate subagent budgets. Reopening a runtime/branch restores an active goal as paused; browser reconnects preserve the live runtime.
+- **Plan:** `/plan <request>` explores with restricted tools and saves up to 30 ordered steps. Review/refine through the Plan panel or `/plan refine <changes>`, then explicitly choose `/plan execute`; execution stays in the same session and restores the prior tool selection. `/plan cancel` leaves the conversation intact. The `update_plan` tool tracks verified progress, including independent steps running in parallel. Markdown summaries are accepted; result cards are optional. Goal and plan state survive compaction in custom session entries. Planning pauses an active Goal. Shell filtering prevents common accidental writes; it is not an operating-system sandbox.
+- **Agents → Subagent budgets** configures time, turns, and reported cost for new children (no fixed default caps; `0` disables a limit and saved user settings are preserved). Turns/time apply per child; cost is shared across one delegation including retries. The model may allocate smaller budgets, never increase user caps. Workers inherit only active parent tools, including MCP/extensions; task tool lists can narrow that access. Active runs show a near-limit notice and can be extended without starting another session. Reported cost depends on provider usage data, not your billing balance; checks occur after each response, so parallel in-flight usage can exceed the remaining budget.
 - A built-in `ask_user` tool plus Pi extension dialogs (`select`, `confirm`, `input`, and `editor`), notifications, status indicators, and text widgets; pending decisions survive reconnects.
 - Settings use collapsible, nonblocking panels; the composer stays available. Drafts survive rapid session switches and reloads, and reading positions are remembered within the browser tab. Quiet active sessions are not recycled by the idle timer.
 - Reviewed sensitive actions have no reading countdown. Confirmations remain single-use and target-bound; changed content, server restarts, or a full pending-review cache require another review.
@@ -481,24 +481,22 @@ Improve application translations in `lib/i18n.tsx`. New skins must use semantic 
 
 ## Release
 
-After a PR is merged and CI passes on the exact merged `main`, use a clean,
-up-to-date main checkout:
+After merging, wait for CI on the exact `main` source. Run from any checkout;
+local edits and private files are preserved:
 
 ```bash
-bash scripts/release.sh                        # read-only preflight, UTC today
-bash scripts/release.sh vYYYY.MM.DD --dispatch  # explicitly request publication
+bash scripts/release.sh                        # preflight, automatic UTC tag
+bash scripts/release.sh --dispatch             # publish with automatic tag
+bash scripts/release.sh vYYYY.MM.DD --dispatch  # optional explicit tag
 ```
 
-Use today's UTC date, adding `-1`, `-2`, etc. for later releases that day. The
-helper never builds or versions the local checkout. The workflow rechecks the
-reviewed source SHA and four required main CI jobs before atomically pushing the version
-commit/tag and publishing a GitHub Release. Only verified version-only commits
-inherit CI; skipped, failed, missing or pending required checks block publication. E2E
-and macOS installation run on PRs. Publication verifies their successful PR CI
-and matching source tree; main still runs Linux installation. A full manual
-main CI run is the fallback when PR evidence is unavailable. Existing
-tags can be resumed without moving them or replacing a newer Latest release.
-This does **not** publish to npm or deploy production. See the
+The helper prepares remote main in an isolated checkout and chooses the next UTC
+date/sequence. Documentation changes use lightweight CI; normal changes use
+representative runtimes, and compatibility changes/manual runs use the full
+matrix. Main reuses the latest successful PR checks only for an identical source
+tree, otherwise it runs checks itself. Publication independently rechecks CI and
+pins the source SHA before atomically publishing a version commit/tag. Existing
+tags never move. This does **not** publish to npm or deploy production. See the
 [release, recovery and readback guide](./docs/RELEASING.md).
 
 With operator-configured staged deployment adapters, use

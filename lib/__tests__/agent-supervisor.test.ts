@@ -83,6 +83,39 @@ describe("AgentRunSupervisor", () => {
     await supervisor.cancel(run.id);
   });
 
+  it("stops the whole delegation at its shared cost cap, including queued and retried tasks", async () => {
+    const children = [fakeSession(), fakeSession()];
+    children.forEach((child, i) => harness.startRpcSession.mockResolvedValueOnce({ session: child.session, realSessionId: `group-${i}` }));
+    const supervisor = new AgentRunSupervisor({ maxConcurrency: 2 });
+    const budgetGroup = { id: "shared", maxCostUsd: 1 };
+    const runs = ["A", "B", "C"].map(name => supervisor.enqueue({ ...input(name), budgetGroup, limits: { timeoutMs: 0 } }));
+    await vi.waitFor(() => expect(harness.store.runs.filter(r => r.sessionId)).toHaveLength(2));
+    children[0].emit({ type: "message_end", message: { role: "assistant", usage: { cost: { total: .6 } } } });
+    children[1].emit({ type: "message_end", message: { role: "assistant", usage: { cost: { total: .4 } } } });
+    expect(harness.store.runs.every(r => r.status === "failed" && r.error?.includes("shared $1"))).toBe(true);
+    children.forEach(child => expect(child.session.send).toHaveBeenCalledWith({ type: "abort" }));
+    supervisor.retry(runs[0].id);
+    expect(harness.startRpcSession).toHaveBeenCalledTimes(2);
+    expect(harness.store.runs[0].status).toBe("failed");
+    expect(harness.startRpcSession).toHaveBeenCalledWith(expect.any(String), "", expect.any(String), ["read", "grep"], { toolMode: "custom" });
+  });
+
+  it("warns on aggregate usage and extends a shared budget only through the user's action", async () => {
+    const children = [fakeSession(), fakeSession(), fakeSession()];
+    children.forEach((child, i) => harness.startRpcSession.mockResolvedValueOnce({ session: child.session, realSessionId: `extend-group-${i}` }));
+    const supervisor = new AgentRunSupervisor({ maxConcurrency: 2 });
+    const budgetGroup = { id: "extend-shared", maxCostUsd: 1 };
+    const runs = ["A", "B"].map(name => supervisor.enqueue({ ...input(name), budgetGroup, limits: { timeoutMs: 0 } }));
+    await vi.waitFor(() => expect(harness.store.runs.filter(r => r.sessionId)).toHaveLength(2));
+    children.forEach((child, i) => { if (i < 2) child.emit({ type: "message_end", message: { role: "assistant", usage: { cost: { total: .4 } } } }); });
+    expect(harness.store.runs.find(r => r.id === runs[1].id)?.limitWarning).toBe(true);
+    expect(supervisor.extend(runs[1].id).budgetGroup?.maxCostUsd).toBe(2);
+    children[0].emit({ type: "agent_end", messages: [] });
+    const later = supervisor.enqueue({ ...input("Later"), budgetGroup, limits: { timeoutMs: 0 } });
+    expect(later.budgetGroup?.maxCostUsd).toBe(2);
+    await supervisor.cancel(later.id); await supervisor.cancel(runs[1].id);
+  });
+
   it("persists user-chosen subagent budgets including explicit unlimited values", () => {
     const supervisor = new AgentRunSupervisor({ maxConcurrency: 0 });
     supervisor.setSubagentLimits({ maxTurns: 0, maxCostUsd: 0, timeoutMs: 0 });
