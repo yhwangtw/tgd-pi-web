@@ -177,6 +177,20 @@ describe("persistent Web goals and plans", () => {
     expect(h.api.sendUserMessage).toHaveBeenCalledTimes(1);
   });
 
+  it("clears the Goal widget and status when a goal completes or is blocked", async () => {
+    const h = await harness(); await h.command("goal", "Fix it"); await h.emit("agent_start");
+    const goalId = h.state().goal!.id;
+    expect(h.ctx.ui.setWidget).toHaveBeenCalledWith("Goal", expect.any(Array));
+    await h.tool("goal_status", { goalId, status: "complete", evidence: "All focused tests passed" });
+    expect(h.ctx.ui.setWidget).toHaveBeenCalledWith("Goal", undefined);
+    expect(h.ctx.ui.setStatus).toHaveBeenCalledWith("Goal", undefined);
+    const h2 = await harness(); await h2.command("goal", "Fix that"); await h2.emit("agent_start");
+    const goalId2 = h2.state().goal!.id;
+    await h2.tool("goal_status", { goalId: goalId2, status: "blocked", evidence: "Missing credentials" });
+    expect(h2.ctx.ui.setWidget).toHaveBeenCalledWith("Goal", undefined);
+    expect(h2.ctx.ui.setStatus).toHaveBeenCalledWith("Goal", undefined);
+  });
+
   it("retains the saved plan during refinement even after older conversation text is compacted", async () => {
     const h = await harness(); await h.command("plan", "Fix the loader");
     await h.tool("update_plan", { title: "Loader fix", steps: [{ text: "Change the parser", status: "pending" }] });
