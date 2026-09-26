@@ -76,7 +76,7 @@ Plan fields:
   "stageIdentityUrl": "http://127.0.0.1:30178/api/runtime/identity",
   "liveIdentityUrl": "http://127.0.0.1:30141/api/runtime/identity",
   "commands": {
-    "build": ["/absolute/operator-adapter", "build-candidate"],
+    "build": ["/absolute/build-adapter"],
     "stageStart": ["/absolute/operator-adapter", "start-candidate"],
     "stageStop": ["/absolute/operator-adapter", "stop-candidate"],
     "stop": ["/absolute/operator-adapter", "stop-live"],
@@ -90,6 +90,9 @@ Plan fields:
 This example is intentionally non-executable until real paths and SHA are
 provided. Stage and live directories must exist, be separate/non-nested after
 symlink resolution, and use different loopback health-check ports.
+Use a separate build adapter so service-only repairs can reuse verified builds.
+The optional `minimumFreeBytes` plan fields and disk preflight are described in
+the [release pipeline guide](./RELEASE-PIPELINE.md).
 
 Adapter responsibilities:
 
@@ -113,6 +116,10 @@ Adapter responsibilities:
    before `switch`. `switch` installs the already-built candidate while retaining
    a recoverable previous release; it must never build/reset a running checkout.
    `start` starts the exact service with its original agent-data configuration.
+   Unloading a service manager is not proof that its child processes exited.
+   Record the checkout's runtime PIDs, verify their current canonical cwd before
+   signaling, allow bounded graceful shutdown, then stop verified stragglers.
+   Never use a broad process-name kill or treat a closed port as sufficient proof.
 5. A failed switch, start, or identity check triggers stop → rollback → start,
    then verifies the previous version/SHA on a new healthy process. The update is
    still recorded as failed, with `rollbackVerified: true` when recovery passes.

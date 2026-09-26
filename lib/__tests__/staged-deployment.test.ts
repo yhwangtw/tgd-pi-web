@@ -2,7 +2,12 @@ import { access, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runStagedDeployment, validateStagedPlan } from "../../scripts/staged-deployment.mjs";
+import { runStagedDeployment as deploy, validateStagedPlan } from "../../scripts/staged-deployment.mjs";
+
+// Space behavior is injected so contract tests do not depend on the host disk.
+const runStagedDeployment: typeof deploy = (plan, env, dependencies) => deploy(plan, env, {
+  assertDeploymentSpace: vi.fn(), ...dependencies,
+});
 
 const roots: string[] = [];
 const sha = "a".repeat(40);
@@ -29,17 +34,39 @@ async function fixture() {
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 
 describe("staged deployment operator contract", () => {
+  it("does not start an adapter or touch live when build space is insufficient", async () => {
+    const { plan } = await fixture();
+    const execute = vi.fn();
+    await expect(runStagedDeployment(plan, fixtureEnv, {
+      execute, assertCheckoutStopped: vi.fn(),
+      assertDeploymentSpace: async (_plan: unknown, phase: string) => { if (phase === "build") throw new Error("insufficient build space"); },
+    })).rejects.toThrow("insufficient build space");
+    expect(execute).not.toHaveBeenCalled();
+  });
+  it("rechecks preparation space after building before starting any candidate or live process", async () => {
+    const { plan } = await fixture();
+    const phases: string[] = [];
+    let checks = 0;
+    await expect(runStagedDeployment(plan, fixtureEnv, {
+      execute: async (phase: string) => { phases.push(phase); }, assertCheckoutStopped: vi.fn(),
+      assertDeploymentSpace: async (_plan: unknown, phase: string) => { if (phase === "prepare" && ++checks === 2) throw new Error("build consumed preparation space"); },
+    })).rejects.toThrow("build consumed preparation space");
+    expect(phases).toEqual(["build"]);
+  });
   it("reuses an unchanged verified build but starts a fresh isolated health check before every cutover", async () => {
     const { plan, previous, candidate } = await fixture();
     const phases: string[] = [];
     const save = vi.fn();
+    const space = vi.fn();
     await runStagedDeployment(plan, fixtureEnv, {
       execute: async (phase: string) => { phases.push(phase); }, assertCheckoutStopped: vi.fn(), attempts: 1,
       readIdentity: identitySequence(candidate, previous, { ...candidate, cwd: plan.liveDir }),
       checkpoint: { fingerprint: "same-artifacts", save }, fingerprint: async () => "same-artifacts",
+      assertDeploymentSpace: space,
     });
     expect(phases).toEqual(["stageStart", "stageStop", "stop", "switch", "start"]);
     expect(save).toHaveBeenCalledWith("same-artifacts");
+    expect(space.mock.calls.map(([, phase]) => phase)).toEqual(["prepare"]);
   });
   it("rebuilds when cached artifacts changed, and never accepts a saved health result alone", async () => {
     const { plan, candidate } = await fixture();

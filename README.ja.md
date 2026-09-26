@@ -382,6 +382,7 @@ bash scripts/release.sh vYYYY.MM.DD --dispatch  # タグの明示指定も可能
 `bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/plan.json --execute`
 で公開・待機・デプロイ・公開ホスト確認を連続実行できます。`--execute` を省くと
 読み取り専用確認です。同じ tag と設定で再開できます。
+ビルドと配置前に空き容量を確認します。ビルド用スクリプトを分離すると、サービスの停止・起動だけの修正では検証済みビルドを再利用できます。
 [設定と復旧の制約](./docs/RELEASE-PIPELINE.md)を参照してください。
 
 ## ライセンス

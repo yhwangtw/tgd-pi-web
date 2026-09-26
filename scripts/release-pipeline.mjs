@@ -8,6 +8,7 @@ import { checkCI, command, ghJson, isVersionOnlyCommit, releaseVersions, reposit
 import { executeDeploymentCommand, runStagedDeployment, validateStagedPlan } from './staged-deployment.mjs';
 import { assertCheckoutStopped } from './runtime-guard.mjs';
 import { finishUpdateOperation, patchUpdateOperation, reserveUpdateOperation } from './update-operation-store.mjs';
+import { assertDeploymentSpace } from './deployment-space.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const delay = milliseconds => new Promise(done => setTimeout(done, milliseconds));
@@ -229,6 +230,14 @@ export async function runReleasePipeline(input, options = {}, dependencies = {})
     }
   }
   validateState();
+  const space = dependencies.assertDeploymentSpace || assertDeploymentSpace;
+  await space(plan, 'records');
+  if (state?.deployment?.status !== 'done') {
+    // Catch an impossible deployment before publishing or acquiring a lock.
+    // Cached candidates defer the build-space check until artifact comparison.
+    if (!state?.buildFingerprint) await space(plan, 'build');
+    await space(plan, 'prepare');
+  }
   const initial = state ? null : client.preflight(tag);
   if (!state) validateTag(tag); // New requests use today's UTC date; resume keeps its original tag.
   if (!state && client.release({ ...initial, tag })) throw new Error('Tag is already published; use its existing receipt or choose a new UTC sequence tag');

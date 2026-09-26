@@ -503,6 +503,8 @@ With operator-configured staged deployment adapters, use
 `bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/plan.json --execute`
 to publish, wait, deploy and verify the public hostname. Omit `--execute` for
 read-only preflight; repeat the same tag/plan to resume completed stages.
+Disk preflight catches insufficient build/copy space before cutover. Separate
+service adapters can be repaired without invalidating an unchanged verified build.
 See [pipeline configuration and recovery limits](./docs/RELEASE-PIPELINE.md).
 Documentation-only and CI-only changes normally need only a merge.
 

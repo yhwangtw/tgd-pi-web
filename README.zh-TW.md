@@ -434,6 +434,7 @@ bash scripts/release.sh vYYYY.MM.DD --dispatch  # 也可明確指定版本
 `bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/plan.json --execute`
 串接發布、等待完成、部署與正式網址檢查。省略 `--execute` 只做唯讀檢查；
 重複相同 tag／設定可接續已完成的階段。詳見[設定與中斷復原限制](./docs/RELEASE-PIPELINE.md)。
+部署前會檢查建置與準備檔案所需空間；建置與服務腳本分開後，只修停止／啟動程序可沿用已驗證的建置。
 純文件或 CI 規則調整通常合併即可生效，不必升版或重啟服務。
 
 ## 授權
