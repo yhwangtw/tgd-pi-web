@@ -64,15 +64,6 @@
   font-weight: var(--weight-medium);
 }
 .sessionTitleUnread { font-weight: var(--weight-semibold); }
-.srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-}
 .unreadDot {
   width: 7px;
   height: 7px;

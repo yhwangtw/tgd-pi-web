@@ -205,7 +205,7 @@ export function SessionItem({
             <div className={styles.titleRow}>
               {isUnread && <>
                 <span className={styles.unreadDot} title={t("session.unread")} aria-hidden="true" />
-                <span id={unreadLabelId} className={styles.srOnly}>{t("session.unread")}</span>
+                <span id={unreadLabelId} hidden>{t("session.unread")}</span>
               </>}
               {depth > 0 && (
                 <GitFork size={13} strokeWidth={1.8} className={styles.forkIndicator} aria-label={t("session.fork")} />
