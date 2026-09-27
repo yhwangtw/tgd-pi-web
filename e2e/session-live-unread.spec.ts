@@ -1,9 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const existing = "aaaa1111-2222-3333-4444-555566667777";
+const createdSessionFiles: string[] = [];
+test.afterEach(() => {
+  for (const path of createdSessionFiles.splice(0)) unlinkSync(path);
+});
 for (const width of [1440, 390]) {
   test(`${width}: external conversations and unread replies appear without reloading`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 900 });
@@ -31,6 +35,7 @@ for (const width of [1440, 390]) {
       message("answer", "question", timestamp + 1, "New external reply"),
     ];
     writeFileSync(path, rows.map(row => JSON.stringify(row)).join("\n") + "\n");
+    createdSessionFiles.push(path);
     const row = page.locator(`[data-session-row="${id}"]`);
     await expect(row).toBeVisible({ timeout: 12_000 });
     await expect(row).toHaveAttribute("data-unread", "true");
