@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useId } from "react";
 import type { SessionInfo } from "@/lib/types";
 import { workspaceStateLabel, type WorkspaceIdentity } from "@/lib/workspace-identity";
 import { formatSessionListTime, getSessionDisplayTitle, getSessionPreview, getSessionProjectName } from "./session-utils";
@@ -14,6 +14,7 @@ import styles from "./SessionItem.module.css";
 interface SessionItemProps {
   session: SessionInfo;
   isSelected: boolean;
+  isUnread?: boolean;
   onClick: () => void;
   onRenamed?: () => void;
   onDeleted?: (id: string) => void;
@@ -39,6 +40,7 @@ interface SessionItemProps {
 export function SessionItem({
   session,
   isSelected,
+  isUnread = false,
   onClick,
   onRenamed,
   onDeleted,
@@ -66,6 +68,7 @@ export function SessionItem({
   const [deleting, setDeleting] = useState(false);
   const [contextMenu, setContextMenu] = useState<SessionContextMenuPosition | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const unreadLabelId = useId();
   const overflowRef = useRef<HTMLButtonElement>(null);
   const { locale, t } = useI18n();
   const { theme } = useTheme();
@@ -146,11 +149,13 @@ export function SessionItem({
         onClick={confirmDelete || renaming ? undefined : onClick}
         onContextMenu={handleContextMenu}
         data-session-row={session.id}
+        data-unread={isUnread || undefined}
         data-session-order={listOrder}
         tabIndex={-1}
         role="option"
         aria-selected={isSelected}
         aria-label={accessibleTitle}
+        aria-describedby={isUnread ? unreadLabelId : undefined}
         className={["hover-group", !confirmDelete && !isSelected ? "hover-bg" : "", styles.item].filter(Boolean).join(" ")}
         style={{
           paddingLeft: depth > 0 ? depth * 12 + 14 : 14,
@@ -198,11 +203,15 @@ export function SessionItem({
           <div className={styles.grid}>
             {/* Row 1: title (with optional fork indicator) + overflow + collapse toggle */}
             <div className={styles.titleRow}>
+              {isUnread && <>
+                <span className={styles.unreadDot} title={t("session.unread")} aria-hidden="true" />
+                <span id={unreadLabelId} className={styles.srOnly}>{t("session.unread")}</span>
+              </>}
               {depth > 0 && (
                 <GitFork size={13} strokeWidth={1.8} className={styles.forkIndicator} aria-label={t("session.fork")} />
               )}
               <div
-                className={`${styles.sessionTitle} ${isSelected ? styles.sessionTitleSelected : styles.sessionTitleDefault}`}
+                className={`${styles.sessionTitle} ${isUnread ? styles.sessionTitleUnread : isSelected ? styles.sessionTitleSelected : styles.sessionTitleDefault}`}
                 title={details}
               >
                 {title}

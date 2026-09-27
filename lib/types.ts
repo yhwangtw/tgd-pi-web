@@ -194,6 +194,8 @@ export interface SessionInfo {
   firstMessage: string;
   /** Most recent readable user/assistant text, used as a conversation preview. */
   lastMessage?: string;
+  /** Latest user/assistant entry, for migration of existing read markers. */
+  lastMessageId?: string;
   parentSessionId?: string; // set if this session was forked from another
   ephemeral?: boolean; // live only; intentionally disappears after reload/server restart
 }

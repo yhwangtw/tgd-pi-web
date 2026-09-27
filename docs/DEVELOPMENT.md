@@ -182,6 +182,13 @@ future path is returned only after the file exists — Pi does not write a new
 session until its first assistant response, and opening that future path would
 otherwise manufacture a phantom session.
 
+The sidebar and command palette share one session-list store. It polls every
+five seconds while the page is visible, refreshes on focus/network recovery,
+and retains newly created local conversations until Pi persists them. Background
+refreshes do not flash the manual-refresh indicator. The sidebar's unread dot
+uses browser-local read receipts, advanced only to visible message timestamps;
+receipts also synchronize across tabs and reuse older transcript entry markers.
+
 ### AgentSession lifecycle (`lib/rpc-manager.ts`)
 - One `AgentSessionWrapper` per session id, keyed in `globalThis.__piSessions`
 - Idle timeout 10 min; concurrent `startRpcSession()` share a start Promise

@@ -1378,6 +1378,7 @@ const MESSAGES = {
   "chat.clearQuote": { en: "Remove quote", zh: "移除引用" },
   "chat.openQuote": { en: "Jump to quoted message", zh: "跳到引用訊息" },
   "chat.unread": { en: "New since your last visit", zh: "上次離開後的新內容" },
+  "session.unread": { en: "Unread messages", zh: "未讀訊息" },
   "chat.turns": { en: "Turns", zh: "對話回合" },
   "chat.bookmarks": { en: "Bookmarks", zh: "書籤" },
   "chat.noTurns": { en: "No turns yet", zh: "還沒有對話回合" },

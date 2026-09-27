@@ -33,6 +33,7 @@ interface RawSessionInfo {
   messageCount: number;
   firstMessage: string;
   lastMessage: string;
+  lastMessageId?: string;
   parentSessionPath?: string;
 }
 
@@ -81,6 +82,7 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
   let firstMessage = "";
   let lastMessage = "";
   let lastActivity = 0;
+  let lastMessageId: string | undefined;
 
   for (let i = 1; i < entries.length; i++) {
     const entry = entries[i];
@@ -95,6 +97,7 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
     messageCount++;
     if (!message || message.content == null) continue;
     if (message.role !== "user" && message.role !== "assistant") continue;
+    lastMessageId = typeof entry.id === "string" ? entry.id : undefined;
     const activity = typeof message.timestamp === "number"
       ? message.timestamp
       : new Date(entry.timestamp as string).getTime();
@@ -119,6 +122,7 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
     messageCount,
     firstMessage: firstMessage || "(no messages)",
     lastMessage,
+    lastMessageId,
     parentSessionPath: header.parentSession,
   };
 }
@@ -191,6 +195,7 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
       messageCount: info.messageCount,
       firstMessage: info.firstMessage,
       lastMessage: info.lastMessage,
+      lastMessageId: info.lastMessageId,
       parentSessionId: info.parentSessionPath ? pathToId.get(info.parentSessionPath) : undefined,
     };
   });
