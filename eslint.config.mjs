@@ -8,6 +8,7 @@ const eslintConfig = [
   {
     ignores: [
       "e2e/**",
+      ".agents/skills/impeccable/**",
       "playwright.config.ts",
       ".next/**",
       ".worktrees/**",
