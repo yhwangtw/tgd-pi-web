@@ -198,7 +198,7 @@
 .recoveredChevron {
   margin-left: auto;
   color: var(--text-dim);
-  transition: transform 0.15s ease;
+  transition: transform var(--motion-spatial-duration, 0.15s) ease;
 }
 .recoveredError[open] .recoveredChevron { transform: rotate(180deg); }
 .recoveredErrorDetail {
@@ -253,7 +253,7 @@
   opacity: 0;
   pointer-events: none;
   transform: translate(3px, 50%);
-  transition: opacity 0.12s ease, transform 0.12s ease;
+  transition: opacity 0.12s ease, transform var(--motion-spatial-duration, 0.12s) ease;
 }
 .mobileActionMenu {
   position: relative;
@@ -533,7 +533,7 @@
 
 .toolChevron {
   flex-shrink: 0;
-  transition: transform 0.15s;
+  transition: transform var(--motion-spatial-duration, 0.15s);
 }
 
 .toolInputPre {

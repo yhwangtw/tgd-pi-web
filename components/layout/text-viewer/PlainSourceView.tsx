@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { motionScrollBehavior } from "@/lib/motion";
 import styles from "./PlainSourceView.module.css";
 
 const CHUNK = 500;
@@ -30,7 +31,7 @@ export function PlainSourceView({ content, activeLine, diagnosticLines = {} }: P
   useEffect(() => {
     if (activeLine == null) return;
     const t = setTimeout(() => {
-      document.querySelector("[data-active-line]")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      document.querySelector("[data-active-line]")?.scrollIntoView({ block: "center", behavior: motionScrollBehavior() });
     }, 50);
     return () => clearTimeout(t);
   }, [activeLine, content]);

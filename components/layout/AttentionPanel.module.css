@@ -66,7 +66,7 @@
 .toolbarButton span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toolbarButton:disabled { cursor: default; opacity: .42; }
 .pushButton[aria-pressed="true"] { border-color: var(--color-accent-border); background: var(--color-accent-bg); color: var(--accent); }
-.refreshing svg { animation: attention-spin .85s linear infinite; }
+.refreshing svg { animation: attention-spin .85s linear var(--motion-loop-count, infinite); }
 .filters {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));

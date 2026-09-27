@@ -34,7 +34,7 @@
 
 .spinner {
   color: var(--accent);
-  animation: bash-spin 0.9s linear infinite;
+  animation: bash-spin 0.9s linear var(--motion-loop-count, infinite);
   flex-shrink: 0;
 }
 @keyframes bash-spin {

@@ -153,6 +153,10 @@
   transform-origin: center;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .dropRipple { display: none; }
+}
+
 .messageItem {
   min-width: 0;
   outline: none;
@@ -348,7 +352,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.runStatusSpin { animation: run-status-spin 1.1s linear infinite; }
+.runStatusSpin { animation: run-status-spin 1.1s linear var(--motion-loop-count, infinite); }
 
 @keyframes run-status-spin {
   to { transform: rotate(360deg); }

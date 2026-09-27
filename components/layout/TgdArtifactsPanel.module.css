@@ -58,14 +58,14 @@
 }
 .dirRow:hover { background: var(--bg-hover); color: var(--text); }
 .dirName { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.treeChevron { flex-shrink: 0; transition: transform 0.12s; }
+.treeChevron { flex-shrink: 0; transition: transform var(--motion-spatial-duration, 0.12s); }
 .treeChevron[data-open] { transform: rotate(90deg); }
 .treeLoading { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); color: var(--text-dim); }
 .refresh {
   margin-left: auto;
 }
 .refresh:disabled { opacity: 0.5; }
-.spinning { animation: tgdspin 0.8s linear infinite; }
+.spinning { animation: tgdspin 0.8s linear var(--motion-loop-count, infinite); }
 @keyframes tgdspin { to { transform: rotate(360deg); } }
 
 .body {

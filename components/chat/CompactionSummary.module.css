@@ -28,7 +28,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.chevron { color: var(--text-dim); transition: transform 0.15s ease; }
+.chevron { color: var(--text-dim); transition: transform var(--motion-spatial-duration, 0.15s) ease; }
 .card[open] .chevron { transform: rotate(180deg); }
 .body {
   padding: var(--space-2) var(--space-3) var(--space-3);

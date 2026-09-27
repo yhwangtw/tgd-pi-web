@@ -348,7 +348,7 @@
   height: 13px;
   border-radius: var(--radius-circle);
   background: var(--bg);
-  transition: transform 0.15s ease;
+  transition: transform var(--motion-spatial-duration, 0.15s) ease;
 }
 .flagToggleOn .flagKnob { transform: translateX(13px); }
 

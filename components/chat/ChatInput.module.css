@@ -463,7 +463,7 @@
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-tight);
-  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+  transition: background 0.15s, box-shadow 0.15s, transform var(--motion-spatial-duration, 0.1s);
   min-height: 36px;
 }
 

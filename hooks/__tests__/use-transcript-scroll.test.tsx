@@ -61,6 +61,7 @@ describe("useTranscriptScroll", () => {
     container = null;
     localStorage.clear();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
@@ -109,6 +110,12 @@ describe("useTranscriptScroll", () => {
   it("still follows the completed response when always-follow is enabled", async () => {
     await renderRun("always");
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "end" });
+  });
+
+  it("follows immediately when the reader requests reduced motion", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    await renderRun("always");
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "instant", block: "end" });
   });
 
   it("keeps only the filler required to prevent end-of-run scroll clamping", () => {

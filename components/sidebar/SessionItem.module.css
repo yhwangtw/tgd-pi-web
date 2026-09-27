@@ -106,7 +106,7 @@
   border: none;
   color: var(--text-dim);
   cursor: pointer;
-  transition: transform 0.15s, color 0.12s;
+  transition: transform var(--motion-spatial-duration, 0.15s), color 0.12s;
   border-radius: var(--radius-control-compact);
 }
 .collapseToggle:hover {

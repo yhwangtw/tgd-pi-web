@@ -972,6 +972,7 @@
     max-width: none !important;
     border-right: 0;
     box-shadow: none !important;
+    background: var(--bg-panel-opaque, var(--bg-panel));
   }
 
   .topBar {
@@ -1654,7 +1655,7 @@
   }
 
   :global(html[data-ui-style="trae"]) .sidebarContainer {
-    background: var(--bg-panel);
+    background: var(--bg-panel-opaque, var(--bg-panel));
   }
 
   :global(html[data-ui-style="trae"]) .mobileNav {

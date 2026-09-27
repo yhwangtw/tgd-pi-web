@@ -2,6 +2,7 @@
 
 import { useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import { getScrollFollowMode } from "@/lib/prefs";
+import { motionScrollBehavior } from "@/lib/motion";
 import { AT_BOTTOM, loadScrollPosition, saveScrollPosition } from "@/lib/scroll-memory";
 
 /**
@@ -54,7 +55,7 @@ export function useTranscriptScroll(
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+    messagesEndRef.current?.scrollIntoView({ behavior: motionScrollBehavior(behavior), block: "end" });
   }, []);
 
   const scrollUserMsgToTop = useCallback(() => {

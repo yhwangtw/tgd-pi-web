@@ -37,13 +37,13 @@
 
 .treeChevron {
   flex-shrink: 0;
-  transition: transform 0.1s;
+  transition: transform var(--motion-spatial-duration, 0.1s);
 }
 
 .loadingIcon {
   flex: 0 0 auto;
   color: var(--text-dim);
-  animation: explorer-spin 0.8s linear infinite;
+  animation: explorer-spin 0.8s linear var(--motion-loop-count, infinite);
 }
 
 @keyframes explorer-spin { to { transform: rotate(360deg); } }

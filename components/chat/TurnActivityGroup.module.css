@@ -84,7 +84,7 @@
 
 .chevron {
   flex: 0 0 auto;
-  transition: transform 120ms ease;
+  transition: transform var(--motion-spatial-duration, 120ms) ease;
 }
 
 .summary[aria-expanded="true"] .chevron { transform: rotate(180deg); }

@@ -133,6 +133,26 @@ test("always follows terminal output without an assistant text stream", async ({
   await expect(page.getByRole("button", { name: "Jump to bottom" })).toHaveCount(0);
 });
 
+test("Latest responds to reduced motion changes while preserving its destination", async ({ page, output }) => {
+  await output.open();
+  output.finish(longText("Motion preference tail"));
+  await expectTailVisible(page, "Motion preference tail");
+  await page.evaluate(() => {
+    const nativeScroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function(options) {
+      if (typeof options === "object") document.documentElement.dataset.lastScrollBehavior = options.behavior;
+      nativeScroll.call(this, options);
+    };
+  });
+  for (const reducedMotion of ["reduce", "no-preference", "reduce"] as const) {
+    await page.emulateMedia({ reducedMotion });
+    await page.locator("[data-transcript-scroll]").evaluate(node => { node.scrollTop = 0; });
+    await page.getByRole("button", { name: "Jump to bottom" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-last-scroll-behavior", reducedMotion === "reduce" ? "instant" : "smooth");
+    await expectTailVisible(page, "Motion preference tail");
+  }
+});
+
 test("preserve mode also applies to layout changes after a reply completes", async ({ page, output }) => {
   await output.open();
   output.finish(longText("Completed before preserving"));

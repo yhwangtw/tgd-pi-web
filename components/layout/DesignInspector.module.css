@@ -12,7 +12,7 @@
   border: 2px solid var(--accent);
   border-radius: var(--radius-control-compact);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--accent) 36%, transparent);
-  transition: left .08s ease, top .08s ease, width .08s ease, height .08s ease;
+  transition: left var(--motion-spatial-duration, .08s) ease, top var(--motion-spatial-duration, .08s) ease, width var(--motion-spatial-duration, .08s) ease, height var(--motion-spatial-duration, .08s) ease;
 }
 
 .toolbar {

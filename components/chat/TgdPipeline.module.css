@@ -61,7 +61,7 @@
 .mobileChevron {
   flex: 0 0 auto;
   color: var(--text-dim);
-  transition: transform 0.15s ease;
+  transition: transform var(--motion-spatial-duration, 0.15s) ease;
 }
 .mobileChevronOpen { transform: rotate(180deg); }
 

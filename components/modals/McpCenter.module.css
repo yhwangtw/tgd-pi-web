@@ -21,7 +21,7 @@
 .dot[data-state="connecting"] { background: var(--color-warning); }
 .toggle { display: grid; width: var(--control-touch); height: var(--control-touch); flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; cursor: pointer; }
 .toggle span { position: relative; display: block; width: 38px; height: 22px; border-radius: var(--radius-pill); background: var(--bg-subtle); box-shadow: inset 0 0 0 1px var(--border); }
-.toggle span::before { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: var(--radius-pill); background: var(--bg-elev-1); box-shadow: var(--color-shadow-sm); transition: transform var(--motion-fast) var(--ease-standard); }
+.toggle span::before { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: var(--radius-pill); background: var(--bg-elev-1); box-shadow: var(--color-shadow-sm); transition: transform var(--motion-spatial-duration, var(--motion-fast)) var(--ease-standard); }
 .toggle[data-on="true"] span { background: var(--accent); box-shadow: none; }
 .toggle[data-on="true"] span::before { transform: translateX(16px); }
 .toggle:disabled { cursor: not-allowed; opacity: .5; }

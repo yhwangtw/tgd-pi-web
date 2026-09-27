@@ -17,12 +17,19 @@
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-panel);
   box-shadow: var(--color-shadow-modal);
-  animation: appearance-in var(--motion-normal) var(--ease-standard);
+  animation: appearance-in var(--motion-feedback-duration, var(--motion-normal)) var(--ease-standard);
 }
 
 @keyframes appearance-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes appearance-in {
+    from { opacity: 0.6; }
+    to { opacity: 1; }
+  }
 }
 
 .panelHeader {

@@ -43,7 +43,7 @@
 
 .dot {
   flex-shrink: 0;
-  transition: transform 0.1s;
+  transition: transform var(--motion-spatial-duration, 0.1s);
 }
 
 .dotUser {
@@ -93,7 +93,7 @@
   width: 200px;
   z-index: 100;
   pointer-events: none;
-  transition: top 0.1s, opacity 0.1s;
+  transition: top var(--motion-spatial-duration, 0.1s), opacity 0.1s;
 }
 
 .tooltipNearest {

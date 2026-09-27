@@ -27,7 +27,7 @@
   color: var(--text);
   font-size: var(--text-sm);
   line-height: var(--leading-ui);
-  animation: toast-in var(--motion-normal) var(--ease-standard);
+  animation: toast-in var(--motion-feedback-duration, var(--motion-normal)) var(--ease-standard);
 }
 
 .icon {
@@ -91,8 +91,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .toast {
-    animation: none;
+  @keyframes toast-in {
+    from { opacity: 0.6; }
+    to { opacity: 1; }
   }
 }
 

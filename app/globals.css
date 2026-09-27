@@ -103,7 +103,7 @@
   --border: #cdd6d1;
   --text: #15231b;
   --text-muted: #52655a;
-  --text-dim: #66756d;
+  --text-dim: #56655d;
   --accent: #0b7f5f;
   --accent-fg: #ffffff;
   --accent-hover: #08684f;
@@ -350,7 +350,7 @@ html.dark {
   --border: #35423b;
   --text: #d7e1de;
   --text-muted: #9eafa8;
-  --text-dim: #73877f;
+  --text-dim: #8d9e98;
   --accent: #34d399;
   --accent-fg: #052e1b;
   --accent-hover: #6ee7b7;
@@ -469,7 +469,7 @@ html.dark[data-skin="trae"] {
   --border: #343438;
   --text: #f3f3f2;
   --text-muted: #b8b8bd;
-  --text-dim: #92939a;
+  --text-dim: #9e9fa5;
   --accent: #6557ec;
   --accent-fg: #ffffff;
   --accent-hover: #786bf5;
@@ -503,7 +503,7 @@ html[data-skin="industrial"] {
   --border: #d9d9d9;
   --text: #0a0a0a;
   --text-muted: #525252;
-  --text-dim: #a3a3a3;
+  --text-dim: #5e5e5e;
   --accent: #111111;
   --accent-fg: #ffffff;
   --accent-hover: #3f3f3f;
@@ -530,7 +530,7 @@ html.dark[data-skin="industrial"] {
   --border: #262626;
   --text: #ededed;
   --text-muted: #a3a3a3;
-  --text-dim: #666666;
+  --text-dim: #939393;
   --accent: #ededed;
   --accent-fg: #0a0a0a;
   --accent-hover: #ffffff;
@@ -556,8 +556,8 @@ html[data-skin="aurora"] {
   --bg-selected: #e1daf3;
   --border: #e4def2;
   --text: #1f1a2e;
-  --text-muted: #6b6485;
-  --text-dim: #a29ac0;
+  --text-muted: #58516e;
+  --text-dim: #5d5673;
   --accent: #7c3aed;
   --accent-fg: #ffffff;
   --accent-hover: #6d28d9;
@@ -584,7 +584,7 @@ html.dark[data-skin="aurora"] {
   --border: #2e2752;
   --text: #edeaf8;
   --text-muted: #a49cc8;
-  --text-dim: #6f689a;
+  --text-dim: #9b96bb;
   --accent: #a78bfa;
   --accent-fg: #131020;
   --accent-hover: #c4b5fd;
@@ -610,8 +610,8 @@ html[data-skin="editorial"] {
   --bg-selected: #d9cdb7;
   --border: #d2c6b1;
   --text: #28231d;
-  --text-muted: #685d4f;
-  --text-dim: #887c68;
+  --text-muted: #554b3e;
+  --text-dim: #5a5144;
   --accent: #9a4508;
   --accent-fg: #ffffff;
   --accent-hover: #7c3606;
@@ -638,7 +638,7 @@ html.dark[data-skin="editorial"] {
   --border: #493c2d;
   --text: #e8e0d2;
   --text-muted: #b1a58e;
-  --text-dim: #837763;
+  --text-dim: #a69c8a;
   --accent: #e8963e;
   --accent-fg: #171310;
   --accent-hover: #f5b569;
@@ -665,12 +665,14 @@ html[data-skin="glass"] {
   background: #e9edfb;
   --bg: rgba(255,255,255,0.42);
   --bg-panel: rgba(255,255,255,0.38);
+  /* Replacing the conversation on phones requires a solid reading surface. */
+  --bg-panel-opaque: #f0f2fc;
   --bg-hover: rgba(255,255,255,0.58);
   --bg-selected: rgba(255,255,255,0.75);
   --border: rgba(96,108,166,0.24);
   --text: #1d2033;
-  --text-muted: #565e7e;
-  --text-dim: #9aa1bd;
+  --text-muted: #252d45;
+  --text-dim: #303850;
   --accent: #5b5bd6;
   --accent-fg: #ffffff;
   --accent-hover: #4a4ac4;
@@ -705,12 +707,13 @@ html.dark[data-skin="glass"] {
   background: #0b0e1e;
   --bg: rgba(16,19,38,0.5);
   --bg-panel: rgba(22,26,50,0.45);
+  --bg-panel-opaque: #161a32;
   --bg-hover: rgba(255,255,255,0.07);
   --bg-selected: rgba(255,255,255,0.12);
   --border: rgba(160,170,255,0.17);
   --text: #edeffc;
-  --text-muted: #a6adcf;
-  --text-dim: #676e96;
+  --text-muted: #c5c9df;
+  --text-dim: #b0b6d4;
   --accent: #a5b4fc;
   --accent-fg: #0b0e1e;
   --accent-hover: #c7d2fe;
@@ -857,10 +860,12 @@ body {
 
 /* Respect reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-spatial-duration: 0ms;
+    --motion-loop-count: 0;
+    --motion-feedback-duration: 120ms;
+  }
   *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
   ::view-transition-old(root),
@@ -1070,7 +1075,11 @@ span.linenumber {
   border-radius: var(--radius-control-compact);
   background: linear-gradient(90deg, var(--bg-hover) 25%, var(--bg-selected) 50%, var(--bg-hover) 75%);
   background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer 1.5s ease-in-out var(--motion-loop-count, infinite);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line { background: var(--bg-selected); }
 }
 
 @keyframes drop-icon-float {
@@ -1114,6 +1123,22 @@ span.linenumber {
   to   { stroke-dashoffset: 0;  opacity: 1; }
 }
 
+/* Acknowledge drops and saves without zooming, drawing, or flashing a halo. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes drop-zone-in {
+    from { opacity: 0.6; }
+    to { opacity: 1; }
+  }
+  @keyframes saved-pop {
+    from { opacity: 0.6; }
+    to { opacity: 1; }
+  }
+  @keyframes saved-check-draw {
+    from { opacity: 0.6; }
+    to { opacity: 1; }
+  }
+}
+
 /* Desktop sidebar: animate width */
 @media (min-width: 1025px) {
   .sidebar-overlay-backdrop {
@@ -1126,7 +1151,7 @@ span.linenumber {
        and shift the next form off-screen. `clip` keeps the width animation
        without creating horizontal scroll state. */
     overflow: clip;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    transition: width var(--motion-spatial-duration, 0.2s) ease, min-width var(--motion-spatial-duration, 0.2s) ease;
   }
   .sidebar-container.sidebar-open {
     width: 260px;
@@ -1188,7 +1213,7 @@ span.linenumber {
   .right-panel-container {
     position: relative;
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    transition: width var(--motion-spatial-duration, 0.2s) ease, min-width var(--motion-spatial-duration, 0.2s) ease;
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
@@ -1260,7 +1285,7 @@ span.linenumber {
   }
   .right-panel-container {
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    transition: width var(--motion-spatial-duration, 0.2s) ease, min-width var(--motion-spatial-duration, 0.2s) ease;
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
@@ -1294,7 +1319,7 @@ span.linenumber {
     overflow: clip;
     transform: none !important;
     box-shadow: none !important;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    transition: width var(--motion-spatial-duration, 0.2s) ease, min-width var(--motion-spatial-duration, 0.2s) ease;
   }
   .sidebar-container.sidebar-open {
     width: var(--tablet-context-width);
@@ -1322,7 +1347,7 @@ span.linenumber {
     bottom: var(--safe-area-bottom);
     width: auto;
     max-width: none;
-    transition: transform 0.25s ease;
+    transition: transform var(--motion-spatial-duration, 0.25s) ease;
   }
   .sidebar-container.sidebar-open {
     transform: translateX(0);
