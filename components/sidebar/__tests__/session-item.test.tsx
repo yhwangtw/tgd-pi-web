@@ -17,6 +17,19 @@ async function render(showProject: boolean) {
 }
 
 describe("quiet conversation row", () => {
+  it("shows an accessible unread indicator and clears it after reading", async () => {
+    await render(false);
+    const props = { session, isSelected: false, onClick: vi.fn() };
+    await act(async () => root.render(<SessionItem {...props} isUnread />));
+    const row = container.querySelector('[role="option"]')!;
+    expect(row.getAttribute("data-unread")).toBe("true");
+    expect(document.getElementById(row.getAttribute("aria-describedby")!)?.textContent).toBe("Unread messages");
+    expect(container.querySelector('[class*="unreadDot"]')).not.toBeNull();
+    expect(container.querySelector('[class*="sessionTitleUnread"]')).not.toBeNull();
+    await act(async () => root.render(<SessionItem {...props} isUnread={false} />));
+    expect(row.hasAttribute("data-unread")).toBe(false);
+    expect(container.querySelector('[class*="unreadDot"]')).toBeNull();
+  });
   it.each([true, false])("shows project only in cross-project mode: %s", async showProject => {
     await render(showProject);
     const title = container.querySelector<HTMLElement>('[class*="sessionTitle"]')!;

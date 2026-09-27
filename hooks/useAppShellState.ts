@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
+import { forgetSession, rememberNewSession } from "@/lib/session-list-store";
 
 export interface SessionStats {
   tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -192,6 +193,7 @@ export function useAppShellState(): {
 
   const handleSessionCreated = useCallback(
     (session: SessionInfo) => {
+      rememberNewSession(session);
       setActiveCwd(session.cwd ?? null);
       setNewSessionCwd(null);
       setSelectedSession(session);
@@ -235,6 +237,7 @@ export function useAppShellState(): {
 
   const handleSessionDeleted = useCallback(
     (sessionId: string) => {
+      forgetSession(sessionId);
       setRefreshKey((k) => k + 1);
       const selected = selectedSessionRef.current;
       if (selected?.id !== sessionId) return;

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import type { SessionInfo } from "@/lib/types";
+import { useState, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { getSessionListSnapshot, getServerSessionListSnapshot, refreshSessionList, subscribeSessionList } from "@/lib/session-list-store";
 
 /**
  * Manages session list loading, pinned sessions, and refresh indicator.
@@ -9,31 +9,22 @@ import type { SessionInfo } from "@/lib/types";
  * @param refreshKey - When this number changes, sessions are reloaded (without loading spinner).
  */
 export function useSessions(refreshKey?: number) {
-  const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { allSessions, loading, error } = useSyncExternalStore(subscribeSessionList, getSessionListSnapshot, getServerSessionListSnapshot);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
   const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadSessions = useCallback(async (showLoading = false) => {
-    try {
-      if (showLoading) setLoading(true);
-      const res = await fetch("/api/sessions");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as { sessions: SessionInfo[] };
-      setAllSessions(data.sessions);
-      setError(null);
-      if (!showLoading) {
-        setSessionRefreshDone(true);
-        if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
-        sessionRefreshTimerRef.current = setTimeout(() => setSessionRefreshDone(false), 2000);
-      }
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      if (showLoading) setLoading(false);
+  const loadSessions = useCallback(async (showLoading = false, notify = true) => {
+    const success = await refreshSessionList(!showLoading);
+    if (success && !showLoading && notify) {
+      setSessionRefreshDone(true);
+      if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
+      sessionRefreshTimerRef.current = setTimeout(() => setSessionRefreshDone(false), 2000);
     }
+  }, []);
+
+  useEffect(() => () => {
+    if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
   }, []);
 
   const loadPins = useCallback(async () => {
@@ -113,7 +104,7 @@ export function useSessions(refreshKey?: number) {
   useEffect(() => {
     const isFirst = !initialLoadDone.current;
     initialLoadDone.current = true;
-    loadSessions(isFirst);
+    loadSessions(isFirst, false);
     loadPins();
     loadArchive();
   }, [loadSessions, loadPins, loadArchive, refreshKey]);

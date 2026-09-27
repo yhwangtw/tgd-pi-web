@@ -61,6 +61,7 @@ describe("listAllSessions", () => {
     expect(sessions[0].name).toBe("My Session");
     expect(sessions[0].messageCount).toBe(1);
     expect(sessions[0].firstMessage).toBe("hello world");
+    expect(sessions[0].lastMessageId).toBe("m1");
   });
 
   it("skips files whose first entry is not a session header", async () => {

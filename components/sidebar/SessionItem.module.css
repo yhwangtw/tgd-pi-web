@@ -63,6 +63,14 @@
 .sessionTitleSelected {
   font-weight: var(--weight-medium);
 }
+.sessionTitleUnread { font-weight: var(--weight-semibold); }
+.unreadDot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+  background: var(--color-accent);
+}
 
 .titleActions {
   display: flex;

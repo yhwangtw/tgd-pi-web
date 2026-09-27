@@ -8,6 +8,8 @@ import { PiAgentTitle } from "./PiAgentTitle";
 import { SessionItem } from "./SessionItem";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import { useSessions } from "@/hooks/useSessions";
+import { useSyncExternalStore } from "react";
+import { getServerSessionReadRevision, getSessionReadRevision, isSessionUnread, subscribeSessionReads } from "@/lib/session-read-state";
 import { useCwd } from "@/hooks/useCwd";
 import { useProjectSessionStart } from "@/hooks/useProjectSessionStart";
 import { useExplorer } from "@/hooks/useExplorer";
@@ -57,6 +59,7 @@ interface Props {
 
 export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onOpenDiff, onOpenParallel, parallelSessionIds, activeTagFilter: activeTagFilterProp, onSelectTagFilter, showExplorer = true }: Props) {
   const { allSessions, loading, error, pinnedIds, sessionRefreshDone, loadSessions, handlePinToggle, archivedIds, handleArchiveToggle } = useSessions(refreshKey);
+  useSyncExternalStore(subscribeSessionReads, getSessionReadRevision, getServerSessionReadRevision);
   const { state: cwdState, actions: cwdActions } = useCwd(onCwdChange);
   const { selectedCwd } = cwdState;
   const { setSelectedCwd, setDropdownOpen } = cwdActions;
@@ -430,6 +433,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         <SessionItem
           session={node.session}
           isSelected={sessionId === selectedSessionId}
+          isUnread={isSessionUnread(node.session)}
           onClick={() => onSelectSession(node.session)}
           onRenamed={loadSessions}
           onDeleted={(id) => {

@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import type { AgentMessage, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
+import { markSessionRead } from "@/lib/session-read-state";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle, type MessageQuote } from "./ChatInput";
 import { ExtensionUIPanel, ExtensionWidgets, PendingQuestionNotice } from "./ExtensionUIPanel";
@@ -467,7 +468,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       setUnreadMessageIndex(null);
       return;
     }
-    const lastReadId = localStorage.getItem(lastReadStorageKey);
+    let lastReadId: string | null = null;
+    try { lastReadId = localStorage.getItem(lastReadStorageKey); } catch { /* private mode */ }
     if (!lastReadId) { setUnreadMessageIndex(null); return; }
     const lastReadIndex = entryIds.indexOf(lastReadId);
     if (lastReadIndex < 0) { setUnreadMessageIndex(null); return; }
@@ -481,22 +483,31 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   // between the user's prompt and the reply in the same active visit.
   const visibleMessageIndicesRef = useRef(conversationLayout.displayIndices);
   const readEntryIdsRef = useRef(entryIds);
+  const readMessagesRef = useRef(messages);
   visibleMessageIndicesRef.current = conversationLayout.displayIndices;
   readEntryIdsRef.current = entryIds;
+  readMessagesRef.current = messages;
 
   const saveLastRead = useCallback(() => {
     const container = scrollContainerRef.current;
-    if (!container || !lastReadStorageKey) return;
+    if (!container || !lastReadStorageKey || document.visibilityState === "hidden") return;
     const bottom = container.getBoundingClientRect().bottom;
     let lastVisibleId: string | undefined;
+    let lastVisibleTime = 0;
     visibleMessageIndicesRef.current.forEach((messageIndex, visibleIndex) => {
       const element = messageRefs.current[visibleIndex];
       const entryId = readEntryIdsRef.current[messageIndex];
       if (element && element.getBoundingClientRect().top < bottom - 12 && entryId) {
         lastVisibleId = entryId;
+        const message = readMessagesRef.current[messageIndex];
+        if (message?.role === "user" || message?.role === "assistant") {
+          lastVisibleTime = Math.max(lastVisibleTime, message.timestamp ?? 0);
+        }
       }
     });
-    if (lastVisibleId) localStorage.setItem(lastReadStorageKey, lastVisibleId);
+    if (lastVisibleId) {
+      markSessionRead(lastReadStorageKey.slice("pi-last-read:".length), lastVisibleTime, lastVisibleId);
+    }
   }, [lastReadStorageKey, messageRefs, scrollContainerRef]);
 
   useEffect(() => {
@@ -510,11 +521,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     const onPageHide = () => saveLastRead();
     container.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", saveLastRead);
     return () => {
       if (timer) clearTimeout(timer);
       saveLastRead();
       container.removeEventListener("scroll", onScroll);
       window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", saveLastRead);
     };
   }, [lastReadStorageKey, saveLastRead, scrollContainerRef]);
 

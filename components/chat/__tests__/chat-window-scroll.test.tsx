@@ -88,6 +88,24 @@ it("follows a growing text stream", async () => {
   fixture.state.streamState = { isStreaming: true, streamingMessage: answer("longer") };
   await render(); expect(scrollIntoView).toHaveBeenCalled();
 });
+it("does not mark background messages read until the transcript becomes visible", async () => {
+  const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+  fixture.state.messages = [answer("A newly delivered reply")];
+  fixture.state.entryIds = ["unseen-answer"];
+  fixture.state.streamState = { isStreaming: false, streamingMessage: null };
+  fixture.state.agentRunning = false;
+  await act(async () => root.render(<ChatWindow session={{
+    id: "read-visibility", path: "", cwd: "/fixture", created: "", modified: "",
+    messageCount: 1, firstMessage: "Question",
+  }} newSessionCwd={null} />));
+  markerTop = 100;
+  await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+  expect(localStorage.getItem("pi-session-read:read-visibility")).toBeNull();
+  visibility.mockReturnValue("visible");
+  await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+  expect(localStorage.getItem("pi-session-read:read-visibility")).toBe("1");
+  expect(localStorage.getItem("pi-last-read:read-visibility")).toBe("unseen-answer");
+});
 it("follows the final committed message after the last throttled frame", async () => {
   await render(); scrollIntoView.mockClear(); markerTop = 800;
   fixture.state.messages = [...fixture.state.messages, answer("complete with final chunk")];
