@@ -63,6 +63,64 @@ for (const file of ROOTS.flatMap(sourceFiles)) {
 }
 
 const globals = fs.readFileSync("app/globals.css", "utf8");
+const themeRules = new Map();
+postcss.parse(globals, { from: "app/globals.css" }).walkRules((rule) => {
+  if (!/^:root$|^html\.dark(?:\[data-skin="[^"]+"\])?$|^html\[data-skin="[^"]+"\]$/.test(rule.selector)) return;
+  const declarations = themeRules.get(rule.selector) ?? {};
+  rule.walkDecls((declaration) => { declarations[declaration.prop] = declaration.value; });
+  themeRules.set(rule.selector, declarations);
+});
+
+function luminance(hex) {
+  const channels = hex.match(/[\da-f]{2}/gi).map((channel) => {
+    const value = Number.parseInt(channel, 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
+
+function contrastRatio(first, second) {
+  const [lighter, darker] = [luminance(first), luminance(second)].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+// Small metadata, excerpts, and hints use these secondary colors on opaque surfaces.
+// Check every palette so a theme edit cannot silently reintroduce unreadable text.
+const surfaces = ["--bg", "--bg-panel", "--bg-hover", "--bg-selected", "--user-bg", "--assistant-bg", "--tool-bg", "--bg-elev-1", "--bg-elev-2"];
+const skins = ["", ...[...themeRules.keys()].flatMap((selector) => {
+  const match = selector.match(/^html\[data-skin="([^"]+)"\]$/);
+  return match ? [match[1]] : [];
+})];
+for (const skin of skins) {
+  for (const dark of [false, true]) {
+    const palette = {
+      ...themeRules.get(":root"),
+      ...(dark ? themeRules.get("html.dark") : {}),
+      ...(skin ? themeRules.get(`html[data-skin="${skin}"]`) : {}),
+      ...(skin && dark ? themeRules.get(`html.dark[data-skin="${skin}"]`) : {}),
+    };
+    for (const textRole of ["--text-muted", "--text-dim"]) {
+      const foreground = palette[textRole];
+      if (!/^#[\da-f]{6}$/i.test(foreground ?? "")) {
+        violations.push(`${skin || "terminal"}: ${textRole} cannot be checked; expected an opaque six-digit hex color`);
+        continue;
+      }
+      for (const surface of [...surfaces, ...(palette["--bg-panel-opaque"] ? ["--bg-panel-opaque"] : [])]) {
+        const background = palette[surface];
+        // Translucent Glass surfaces require rendered-background inspection.
+        if (!/^#[\da-f]{6}$/i.test(background ?? "")) {
+          if (skin !== "glass") violations.push(`${skin || "terminal"}: ${surface} cannot be checked; expected an opaque six-digit hex color`);
+          continue;
+        }
+        const ratio = contrastRatio(foreground, background);
+        if (ratio < 4.5) {
+          violations.push(`${skin || "terminal"}${dark ? " dark" : " light"}: ${textRole} on ${surface} is ${ratio.toFixed(2)}:1 (needs 4.5:1)`);
+        }
+      }
+    }
+  }
+}
+
 for (const token of [
   "--type-display-size", "--type-body-size", "--type-ui-size", "--type-meta-size",
   "--control-compact", "--control-default", "--control-mobile",

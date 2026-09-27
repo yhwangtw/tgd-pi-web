@@ -89,7 +89,7 @@
 .barFill {
   background: var(--color-accent);
   height: 100%;
-  transition: width var(--motion-normal) var(--ease-standard);
+  transition: width var(--motion-spatial-duration, var(--motion-normal)) var(--ease-standard);
   border-radius: var(--radius-pill);
 }
 

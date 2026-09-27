@@ -594,7 +594,7 @@
   background: var(--color-success);
   color: var(--color-white);
   cursor: default;
-  animation: saved-pop 0.45s ease;
+  animation: saved-pop var(--motion-feedback-duration, 0.45s) ease;
 }
 
 .saveButton:disabled:not(.saveButtonSaved) {
@@ -606,7 +606,7 @@
 
 .saveCheckIcon {
   stroke-dasharray: 18;
-  animation: saved-check-draw 0.35s ease forwards;
+  animation: saved-check-draw var(--motion-feedback-duration, 0.35s) ease forwards;
   flex-shrink: 0;
 }
 

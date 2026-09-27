@@ -82,6 +82,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .root { transition: none; }
   .root:active:not(:disabled) { transform: none; }
 }

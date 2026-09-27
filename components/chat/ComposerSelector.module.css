@@ -110,7 +110,7 @@
   flex: 0 0 auto;
   margin-left: var(--space-optical);
   color: var(--text-dim);
-  transition: transform var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+  transition: transform var(--motion-spatial-duration, var(--motion-fast)) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
 }
 
 .triggerOpen .chevron {

@@ -39,7 +39,7 @@
   flex-shrink: 0;
 }
 .spinning {
-  animation: changes-spin 0.9s linear infinite;
+  animation: changes-spin 0.9s linear var(--motion-loop-count, infinite);
 }
 @keyframes changes-spin {
   to { transform: rotate(360deg); }
@@ -145,8 +145,8 @@
   color: var(--text);
 }
 
-.caretClosed { transform: rotate(-90deg); transition: transform 0.12s; }
-.caretOpen { transform: rotate(0deg); transition: transform 0.12s; }
+.caretClosed { transform: rotate(-90deg); transition: transform var(--motion-spatial-duration, 0.12s); }
+.caretOpen { transform: rotate(0deg); transition: transform var(--motion-spatial-duration, 0.12s); }
 
 .snapList {
   display: flex;

@@ -44,7 +44,7 @@
 .groupError .stateIcon,
 .failed { color: var(--color-error); }
 
-.spinner { animation: tool-run-spin 0.8s linear infinite; }
+.spinner { animation: tool-run-spin 0.8s linear var(--motion-loop-count, infinite); }
 
 .label {
   min-width: 0;
@@ -75,7 +75,7 @@
 .chevron {
   flex: 0 0 auto;
   color: var(--text-dim);
-  transition: transform 0.15s ease;
+  transition: transform var(--motion-spatial-duration, 0.15s) ease;
 }
 
 .summary[aria-expanded="true"] .chevron { transform: rotate(180deg); }

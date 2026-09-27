@@ -93,7 +93,7 @@
 .chevron {
   flex: 0 0 auto;
   color: var(--text-dim);
-  transition: transform var(--motion-fast) var(--ease-standard);
+  transition: transform var(--motion-spatial-duration, var(--motion-fast)) var(--ease-standard);
 }
 
 .details[open] .chevron { transform: rotate(180deg); }

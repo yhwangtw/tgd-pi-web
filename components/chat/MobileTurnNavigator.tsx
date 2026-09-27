@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { motionScrollBehavior } from "@/lib/motion";
 import styles from "./MobileTurnNavigator.module.css";
 
 export interface MobileTurnItem {
@@ -87,7 +88,7 @@ export function MobileTurnNavigator({ turns, scrollContainer, messageRefs }: Pro
                     type="button"
                     className={`${styles.turn} ${absoluteIndex === current ? styles.turnCurrent : ""}`}
                     onClick={() => {
-                      messageRefs.current[turn.visibleIndex]?.scrollIntoView({ block: "start", behavior: "smooth" });
+                      messageRefs.current[turn.visibleIndex]?.scrollIntoView({ block: "start", behavior: motionScrollBehavior() });
                       setOpen(false);
                     }}
                   >

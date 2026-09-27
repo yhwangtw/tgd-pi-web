@@ -53,7 +53,7 @@
   background: var(--bg);
   box-shadow: var(--color-shadow-dropdown);
   transform: translateY(-50%);
-  transition: left var(--motion-normal) var(--ease-standard);
+  transition: left var(--motion-spatial-duration, var(--motion-normal)) var(--ease-standard);
 }
 
 .toggleKnobOn {

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { AgentMessage, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
 import { markSessionRead } from "@/lib/session-read-state";
+import { motionScrollBehavior, prefersReducedMotion } from "@/lib/motion";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle, type MessageQuote } from "./ChatInput";
 import { ExtensionUIPanel, ExtensionWidgets, PendingQuestionNotice } from "./ExtensionUIPanel";
@@ -37,6 +38,7 @@ import { getRunError } from "@/hooks/use-agent-session-types";
 import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import styles from "./ChatWindow.module.css";
+import { WelcomeTypewriter } from "./WelcomeTypewriter";
 import { useI18n, type MsgKey } from "@/lib/i18n";
 import { QueuedFollowUps } from "./QueuedFollowUps";
 import { CompactionStatus } from "./CompactionStatus";
@@ -144,40 +146,6 @@ const TYPEWRITER_PHRASES = [
   "make it pretty.",
   "rubber-duck with me.",
 ];
-
-function Typewriter({ phrases }: { phrases: string[] }) {
-  const [phraseIdx, setPhraseIdx] = useState(() => Math.floor(Math.random() * phrases.length));
-  const [text, setText] = useState("");
-  const [deleting, setDeleting] = useState(false);
-  const [caretOn, setCaretOn] = useState(true);
-
-  useEffect(() => {
-    const blink = setInterval(() => setCaretOn((v) => !v), 530);
-    return () => clearInterval(blink);
-  }, []);
-
-  useEffect(() => {
-    const current = phrases[phraseIdx];
-    let timeout: ReturnType<typeof setTimeout>;
-    if (!deleting && text === current) {
-      timeout = setTimeout(() => setDeleting(true), 1800);
-    } else if (deleting && text === "") {
-      setDeleting(false);
-      setPhraseIdx((i) => (i + 1) % phrases.length);
-    } else {
-      const next = deleting ? current.slice(0, text.length - 1) : current.slice(0, text.length + 1);
-      timeout = setTimeout(() => setText(next), deleting ? 28 : 55);
-    }
-    return () => clearTimeout(timeout);
-  }, [text, deleting, phraseIdx, phrases]);
-
-  return (
-    <span className={styles.typewriterText}>
-      {text}
-      <span style={{ opacity: caretOn ? 1 : 0 }} className={styles.typewriterCaret}>▍</span>
-    </span>
-  );
-}
 
 /** Plain-text view of a message for in-conversation search. */
 function messageText(msg: AgentMessage): string {
@@ -404,10 +372,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     : null;
   const openQuotedMessage = useCallback((entryId: string) => {
     const target = document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(entryId)}"]`);
-    target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    target?.scrollIntoView({ block: "center", behavior: motionScrollBehavior() });
     target?.animate(
       [{ boxShadow: "0 0 0 3px var(--color-accent-border)" }, { boxShadow: "0 0 0 3px transparent" }],
-      { duration: 1200, easing: "ease-out" },
+      { duration: prefersReducedMotion() ? 120 : 1200, easing: "ease-out" },
     );
   }, []);
 
@@ -783,11 +751,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     // block:"end" — with the run spacer mounted below the marker, the default
     // block:"start" could scroll the content clean out of the viewport.
     if (agentRunning) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      messagesEndRef.current?.scrollIntoView({ behavior: motionScrollBehavior(), block: "end" });
     } else {
       setSpacerHeight(null);
       requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+        messagesEndRef.current?.scrollIntoView({ behavior: motionScrollBehavior(), block: "end" });
       });
     }
     followStreamRef.current = true;
@@ -869,7 +837,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     requestAnimationFrame(() => {
       const target = messageRefs.current[targetIndex];
       target?.focus({ preventScroll: true });
-      target?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      target?.scrollIntoView({ block: "nearest", behavior: motionScrollBehavior() });
     });
   }, [messageRefs, visibleKeys]);
 
@@ -944,14 +912,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           .find((button) => button.parentElement?.getAttribute("aria-label") === t("chat.workLog"));
         if (workLog?.getAttribute("aria-expanded") === "false") workLog.click();
       }
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      el.scrollIntoView({ block: "center", behavior: motionScrollBehavior() });
       el.animate(
         [
           { boxShadow: "0 0 0 3px var(--color-accent-border)", borderRadius: "var(--radius-card)" },
           { boxShadow: "0 0 0 3px transparent", borderRadius: "var(--radius-card)" },
         ],
-        { duration: reduceMotion ? 1 : 700, easing: "ease-out" },
+        { duration: prefersReducedMotion() ? 120 : 700, easing: "ease-out" },
       );
     }, 60);
   }, [findMatches, findScope, messageRefs, t, visibleKeys]);
@@ -980,7 +947,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       const target = pickTurnTarget(tops, e.key === "ArrowUp" ? "prev" : "next");
       if (target === null) return;
       e.preventDefault();
-      els[target].scrollIntoView({ block: "start", behavior: "smooth" });
+      els[target].scrollIntoView({ block: "start", behavior: motionScrollBehavior() });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -1157,7 +1124,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 <span className={styles.piSymbol}>π</span>
                 <span className={styles.titleText}>with tGD</span>
                 <span className={styles.typewriterContainer}>
-                  <Typewriter phrases={TYPEWRITER_PHRASES} />
+                  <WelcomeTypewriter phrases={TYPEWRITER_PHRASES} />
                 </span>
               </div>
               <div className={styles.versionColumn}>
