@@ -27,6 +27,32 @@ describe("ExtensionUIPanel", () => {
     return { onRespond };
   }
 
+  it("keeps healthy OpenViking recall counters out of the composer but shows failures", async () => {
+    const state: ExtensionUIState = {
+      dialogs: [],
+      statuses: { openviking: "OV ✓ · ↩3 · ✎ 12000 · pi-session" },
+      widgets: {},
+    };
+    await render(state);
+    expect(container!.querySelector('[data-testid="extension-status"]')).toBeNull();
+
+    await act(async () => root?.render(<ExtensionUIPanel state={{ ...state, statuses: {
+      ...state.statuses, build: "running",
+    } }} onRespond={vi.fn()} />));
+    expect(container!.textContent).toContain("build");
+    expect(container!.textContent).not.toContain("OV ✓");
+
+    await act(async () => root?.render(<ExtensionUIPanel state={{ ...state, statuses: {
+      ...state.statuses, openviking: "OV ✓ · tools ✗ · ↩3",
+    } }} onRespond={vi.fn()} />));
+    expect(container!.textContent).toContain("tools ✗");
+
+    await act(async () => root?.render(<ExtensionUIPanel state={{ ...state, statuses: {
+      ...state.statuses, openviking: "OV ✗ · ↩0",
+    } }} onRespond={vi.fn()} />));
+    expect(container!.textContent).toContain("OV ✗");
+  });
+
   it("keeps the question shortcut stable until pointer activation and supports keyboard clicks", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);

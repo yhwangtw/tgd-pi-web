@@ -32,6 +32,13 @@ function visibleStatuses(statuses: ExtensionUIState["statuses"]) {
     const text = stripTerminalFormatting(rawText);
     return [key, text] as const;
   }).filter(([key, text]) => {
+    // OpenViking publishes a persistent footer status after every recall.
+    // Its healthy counters are useful in a terminal, but in the web composer
+    // they look like a memory-injection notice that never goes away. Keep
+    // failure states visible so connection and MCP problems remain actionable.
+    if (key.toLocaleLowerCase() === "openviking") {
+      return !text.startsWith("OV ✓") || text.includes("tools ✗");
+    }
     if (key.toLocaleLowerCase() !== "telegram") return true;
     const normalized = text.trim().replace(/\s+/g, " ").toLocaleLowerCase();
     return normalized !== "connected" && normalized !== "telegram connected";
