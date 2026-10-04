@@ -30,8 +30,11 @@ function report(extra = {}) {
 describe("production audit policy", () => {
   it("recognizes the patched brace-expansion boundary", () => {
     expect(isPatchedBraceExpansion("5.0.7")).toBe(false);
-    expect(isPatchedBraceExpansion("5.0.8")).toBe(true);
-    expect(isPatchedBraceExpansion("5.0.9")).toBe(true);
+    expect(isPatchedBraceExpansion("5.0.8")).toBe(false);
+    expect(isPatchedBraceExpansion("5.0.9")).toBe(false);
+    expect(isPatchedBraceExpansion("5.0.10")).toBe(false);
+    expect(isPatchedBraceExpansion("5.0.11")).toBe(false);
+    expect(isPatchedBraceExpansion("5.0.12")).toBe(true);
   });
 
   it("blocks the former Pi brace-expansion exception", () => {

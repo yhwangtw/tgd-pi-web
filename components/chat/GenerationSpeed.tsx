@@ -33,6 +33,6 @@ export function StreamingSpeed({ message }: { message: AssistantMessage }) {
 export function CompletedSpeed({ metrics }: { metrics: GenerationMetrics }) {
   const { t } = useI18n();
   return <span className={styles.generationSpeed} data-testid="completed-speed" title={t("chat.speedAverageHelp")}>
-    {metrics.estimated && `${t("chat.speedApprox")} `}{metrics.tokens.toLocaleString()} tokens · {t("chat.speedAverage")} {metrics.estimated && `${t("chat.speedApprox")} `}{Math.round(metrics.tokens / metrics.seconds)} t/s
+    {metrics.estimated && `${t("chat.speedApprox")} `}{t("chat.speedTokenCount").replace("{count}", metrics.tokens.toLocaleString())} · {t("chat.speedAverage")} {metrics.estimated && `${t("chat.speedApprox")} `}{Math.round(metrics.tokens / metrics.seconds)} t/s
   </span>;
 }

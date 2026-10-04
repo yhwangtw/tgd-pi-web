@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// Pi 0.83.0 ships an npm-shrinkwrap that pins vulnerable brace-expansion 5.0.7
-// (GHSA-mh99-v99m-4gvg). Remove only that nested copy so Pi's minimatch
+// Pi ships an npm-shrinkwrap that can pin vulnerable brace-expansion versions
+// below 5.0.12 (including GHSA-q2hr-2g5m-vwhr). Remove only that nested copy so Pi's minimatch
 // resolves the project's explicit patched dependency. Delete this workaround
 // once the upstream Pi package ships a patched shrinkwrap.
 
@@ -35,7 +35,7 @@ export function isPatchedBraceExpansion(version) {
   if (!match) return false;
   const [, majorText, minorText, patchText] = match;
   const [major, minor, patch] = [majorText, minorText, patchText].map(Number);
-  return major > 5 || (major === 5 && (minor > 0 || patch >= 8));
+  return major > 5 || (major === 5 && (minor > 0 || patch >= 12));
 }
 
 export function resolvePiBraceExpansion(projectRoot = PROJECT_ROOT) {

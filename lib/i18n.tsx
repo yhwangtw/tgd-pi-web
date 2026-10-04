@@ -1422,6 +1422,7 @@ const MESSAGES = {
   "chat.speedWaiting": { en: "Generating", zh: "生成中" },
   "chat.speedApprox": { en: "~", zh: "約" },
   "chat.speedAverage": { en: "avg", zh: "平均" },
+  "chat.speedTokenCount": { en: "{count} tokens", zh: "{count} Token" },
   "chat.speedAverageHelp": { en: "This response only: output tokens divided by the observed generation duration, including waiting and thinking. Provider counts may include reasoning tokens. Timing is available only for fully observed live responses.", zh: "僅計算這則回覆：輸出 token 數除以完整觀察到的生成時間，包含等待與思考。供應商的輸出計數可能包含推理 token。只在完整觀察到即時生成時顯示。" },
   "chat.estimatedTokens": { en: "Estimated tokens while streaming", zh: "串流中的預估 Token 數" },
   "chat.edit": { en: "Edit", zh: "編輯" },
