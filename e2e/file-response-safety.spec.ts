@@ -135,7 +135,7 @@ for (const style of ["original", "trae"]) {
     for (const width of [1280, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.locator("html")).toHaveAttribute("data-font-size", "xlarge");
-      await expect(note.getByText(/Embedded scripts and assets only/)).toBeVisible();
+      await expect(note.getByText(/Project styles, images and scripts are bundled/)).toBeVisible();
       expect(await note.locator("summary").evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
       await expect.poll(() => note.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
       for (const label of ["Code", "Preview", "Ask Pi", "Inspector", "More file actions"]) {
