@@ -179,7 +179,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const localChatInputRef = useRef<ChatInputHandle>(null);
   const chatInputRef = providedChatInputRef ?? localChatInputRef;
   const {
-    loading, error, runtimeFailure, messages, entryIds, streamState,
+    loading, error, runtimeFailure, messages, entryIds, streamState, getGenerationMetrics,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
@@ -1075,6 +1075,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   return (
     <div
       className="relative flex h-full flex-col overflow-hidden"
+      data-chat-cwd={session?.cwd ?? newSessionCwd ?? undefined}
+      data-chat-session-id={session?.id}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -1330,6 +1332,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                   <MessageView
                     key={key}
                     message={msg}
+                    generationMetrics={getGenerationMetrics(msg)}
                     toolResults={toolResultsMap}
                     modelNames={modelNames}
                     entryId={entryIds[idx]}

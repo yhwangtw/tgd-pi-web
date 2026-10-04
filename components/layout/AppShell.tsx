@@ -49,7 +49,7 @@ import { useToast, showToast } from "@/hooks/useToast";
 import { useAttentionCenter } from "@/hooks/useAttentionCenter";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { onOpenFileRequest } from "@/lib/file-links";
-import type { FileOpenOrigin } from "@/lib/file-open";
+import type { FileOpenMode, FileOpenOrigin } from "@/lib/file-open";
 import { useI18n, translate } from "@/lib/i18n";
 import { setScrollFollowMode } from "@/lib/prefs";
 import { useTabTitle } from "@/lib/attention";
@@ -238,12 +238,12 @@ export function AppShell() {
     if (window.matchMedia("(max-width: 700px)").matches) setSidebarOpen(false);
   }, []);
 
-  const handleOpenFile = useCallback((filePath: string, fileName: string, gotoLine?: number, origin?: FileOpenOrigin) => {
+  const handleOpenFile = useCallback((filePath: string, fileName: string, gotoLine?: number, origin?: FileOpenOrigin, mode?: FileOpenMode) => {
     openFileTab({
       path: filePath,
       label: fileName,
       line: gotoLine,
-      mode: gotoLine ? "source" : "auto",
+      mode: gotoLine ? "source" : mode ?? "auto",
       origin: origin ?? { kind: "explorer" },
     });
     closeSidebarIfOverlay();
@@ -288,13 +288,18 @@ export function AppShell() {
   // we resolve relative → session cwd, confirm the file exists, then open it
   // in the right-panel viewer — a dead path gets a toast instead of a blank tab).
   useEffect(() => {
-    return onOpenFileRequest(async (link) => {
-      const cwdBase = effectiveCwdForPalette;
+    let pending: AbortController | null = null;
+    const unsubscribe = onOpenFileRequest(async (link) => {
+      pending?.abort();
+      const controller = new AbortController();
+      pending = controller;
+      const cwdBase = link.cwd ?? effectiveCwdForPalette;
       let abs = link.path;
       if (abs.startsWith("~/")) {
         // Expand against the real home dir — stripping the "~" would alias
         // ~/x to /x, which may exist and silently open the wrong file.
         const home = await fetchHomeDir();
+        if (controller.signal.aborted) return;
         if (!home) { showToast(t("files.resolveFailed").replace("{path}", link.path), { type: "warning" }); return; }
         abs = `${home.replace(/\/$/, "")}${abs.slice(1)}`;
       }
@@ -303,21 +308,25 @@ export function AppShell() {
         abs = `${cwdBase.replace(/\/$/, "")}/${abs.replace(/^\.\//, "")}`;
       }
       try {
-        const res = await fetch(`/api/files/${encodeFilePathForApi(abs)}?type=meta`);
+        const res = await fetch(`/api/files/${encodeFilePathForApi(abs)}?type=meta`, { signal: controller.signal });
         if (!res.ok) { showToast(t("files.notFound").replace("{path}", link.path), { type: "warning" }); return; }
       } catch {
+        if (controller.signal.aborted) return;
         showToast(t("files.notFound").replace("{path}", link.path), { type: "warning" });
         return;
       }
+      if (controller.signal.aborted) return;
       handleOpenFile(
         abs,
         abs.split("/").pop() ?? link.path,
         link.line,
         link.origin?.kind === "message"
-          ? { ...link.origin, sessionId: state.selectedSession?.id }
+          ? { ...link.origin, sessionId: link.origin.sessionId ?? state.selectedSession?.id }
           : link.origin,
+        link.mode,
       );
     });
+    return () => { pending?.abort(); unsubscribe(); };
   }, [effectiveCwdForPalette, handleOpenFile, state.selectedSession?.id, t]);
 
   const [shortcutsOpen, setShortcutsOpen] = useState(false);

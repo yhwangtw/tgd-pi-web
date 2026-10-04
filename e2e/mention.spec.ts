@@ -13,11 +13,12 @@ test.describe("@file mention", () => {
     const ta = page.locator("textarea").last();
     await ta.click();
 
-    // Bare @ lists the project root
+    // Bare @ lists the project root; the menu caps entries, so use a directory
+    // rather than relying on README's rank among files added by earlier specs.
     await ta.pressSequentially("@");
     const menu = page.getByTestId("file-mention-menu");
     await expect(menu).toBeVisible();
-    await expect(menu.getByText("README.md")).toBeVisible();
+    await expect(menu.getByText("src/", { exact: true })).toBeVisible();
 
     // Fuzzy search finds nested files by name
     await ta.pressSequentially("index");

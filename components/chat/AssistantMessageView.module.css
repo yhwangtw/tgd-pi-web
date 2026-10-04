@@ -42,30 +42,11 @@
   white-space: nowrap;
 }
 
-/* Token count */
-.tokenCount {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--text);
-}
-
-.tokenCountInner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-optical);
+.generationSpeed {
+  color: var(--text-muted);
   font-size: var(--text-xs);
-  font-weight: var(--weight-regular);
-}
-
-/* TPS badge — background is dynamic (depends on tps value), kept as inline style */
-.tpsBadge {
-  margin-left: 6px;
-  padding: var(--space-optical) var(--space-2);
-  border-radius: var(--radius-control-compact);
-  color: var(--color-white);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+  min-width: 14ch;
 }
 
 /* Blocks container */

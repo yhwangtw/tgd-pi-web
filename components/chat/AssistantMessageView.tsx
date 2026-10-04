@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
-  ArrowDown,
   Check,
   ChevronDown,
   Copy,
@@ -12,6 +11,8 @@ import {
   Reply,
   TriangleAlert,
 } from "lucide-react";
+import { StreamingSpeed, CompletedSpeed } from "./GenerationSpeed";
+import type { GenerationMetrics } from "@/lib/generation-metrics";
 import { MarkdownBody } from "./MarkdownBody";
 import type {
   AssistantMessage,
@@ -89,6 +90,7 @@ export function AssistantMessageView({
   suppressActivityBlocks,
   turnStartedAt,
   usageOverride,
+  generationMetrics,
   showUsage = true,
   showActions = true,
   onQuote,
@@ -109,6 +111,7 @@ export function AssistantMessageView({
   suppressActivityBlocks?: boolean;
   turnStartedAt?: number;
   usageOverride?: AssistantUsage;
+  generationMetrics?: GenerationMetrics;
   showUsage?: boolean;
   showActions?: boolean;
   onQuote?: (text: string) => void;
@@ -124,8 +127,6 @@ export function AssistantMessageView({
   });
   const blocks = useMemo(() => message.content ?? [], [message.content]);
   const [copied, setCopied] = useState(false);
-  const streamStartRef = useRef<number | null>(null);
-  const [tps, setTps] = useState<number | null>(null);
   const blocksRef = useRef(blocks);
   const rootRef = useRef<HTMLDivElement>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -181,7 +182,7 @@ export function AssistantMessageView({
   const footerUsage = usageOverride ?? message.usage;
   const showFooter = !isStreaming && (
     (showModelLabel && !!resolvedModelName)
-    || (showUsage && !!footerUsage)
+    || (showUsage && (!!footerUsage || !!generationMetrics))
     || (showActions && !!textContent)
     || !!time
     || canBookmark
@@ -248,8 +249,6 @@ export function AssistantMessageView({
         }
         return next;
       });
-      streamStartRef.current = null;
-      setTps(null);
       return;
     }
     const tick = () => {
@@ -275,17 +274,6 @@ export function AssistantMessageView({
         }
         return changed ? next : prev;
       });
-
-      let chars = 0;
-      for (const b of bs) {
-        if (b.type === "text") chars += (b as TextContent).text?.length ?? 0;
-        else if (b.type === "thinking") chars += (b as ThinkingContent).thinking?.length ?? 0;
-        else if (b.type === "toolCall") chars += JSON.stringify((b as ToolCallContent).input ?? {}).length;
-      }
-      if (chars === 0) return;
-      if (streamStartRef.current === null) streamStartRef.current = now;
-      const elapsed = (now - streamStartRef.current) / 1000;
-      if (elapsed > 0.5) setTps(chars / 4 / elapsed);
     };
     const id = setInterval(tick, 300);
     return () => clearInterval(id);
@@ -293,41 +281,9 @@ export function AssistantMessageView({
 
   return (
     <div ref={rootRef} data-testid="assistant-message" className={`hover-group ${styles.messageContainer}`}>
-      {/* Model label */}
-      {showModelLabel && isStreaming && <div className={styles.modelLabel}>
-        {resolvedModelName && (
-          <span className={styles.modelName}>{resolvedModelName}</span>
-        )}
-        {isStreaming && (() => {
-          let chars = 0;
-          for (const b of blocks) {
-            if (b.type === "text") chars += (b as TextContent).text?.length ?? 0;
-            else if (b.type === "thinking") chars += (b as ThinkingContent).thinking?.length ?? 0;
-            else if (b.type === "toolCall") chars += JSON.stringify((b as ToolCallContent).input ?? {}).length;
-          }
-          const est = Math.round(chars / 4);
-          return (
-            <>
-
-              {est > 0 && (
-                <span className={styles.tokenCount} title={t("chat.estimatedTokens")}>
-                  <span className={styles.tokenCountInner}>
-                    <ArrowDown size={10} strokeWidth={1.6} aria-hidden="true" />
-                    {est}
-                  </span>
-                  {tps !== null && (() => {
-                    const bg = tps >= 50 ? "var(--color-tps-fast)" : tps >= 30 ? "var(--color-tps-good)" : tps >= 15 ? "var(--color-tps-mid)" : "var(--color-tps-slow)";
-                    return (
-                      <span className={styles.tpsBadge} style={{ background: bg }}>
-                        {tps.toFixed(1)} t/s
-                      </span>
-                    );
-                  })()}
-                </span>
-              )}
-            </>
-          );
-        })()}
+      {isStreaming && <div className={styles.modelLabel}>
+        {showModelLabel && resolvedModelName && <span className={styles.modelName}>{resolvedModelName}</span>}
+        <StreamingSpeed message={message} />
       </div>}
 
       <div className={styles.blocksContainer}>
@@ -393,6 +349,7 @@ export function AssistantMessageView({
         {showModelLabel && resolvedModelName && !isStreaming && (
           <span className={styles.footerModel} title={resolvedModelName}>{resolvedModelName}</span>
         )}
+        {showUsage && generationMetrics && <CompletedSpeed metrics={generationMetrics} />}
         {showUsage && footerUsage && (
           <UsageDetails usage={footerUsage} />
         )}
@@ -821,7 +778,7 @@ function ToolDiffHeader({ path, onFocus }: { path: string; onFocus: () => void }
   const { t } = useI18n();
   return (
     <div className={`${styles.toolDiffPath} chrome-mono`}>
-      <button type="button" className={styles.toolDiffOpen} onClick={() => requestOpenFile({ path })} title={path}>{path}</button>
+      <button type="button" className={styles.toolDiffOpen} onClick={(event) => requestOpenFile({ path }, event.currentTarget)} title={path}>{path}</button>
       <button type="button" onClick={onFocus} title={t("code.focus")} aria-label={t("code.focus")}>
         <Maximize2 size={12} strokeWidth={1.8} aria-hidden="true" />
       </button>

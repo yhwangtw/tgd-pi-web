@@ -2,7 +2,7 @@
 
 import type { Pluggable, PluggableList } from "unified";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 // PrismAsync keeps the full language set but splits refractor + languages into
@@ -11,7 +11,7 @@ import { PrismAsync as SyntaxHighlighter } from "react-syntax-highlighter";
 import { Maximize2 } from "lucide-react";
 import { vs, vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useTheme } from "@/hooks/useTheme";
-import { looksLikeFilePath, requestOpenFile } from "@/lib/file-links";
+import { looksLikeFilePath, parseMarkdownFileLink, requestOpenFile } from "@/lib/file-links";
 import { encodeFilePathForApi, normalizeFilePathSlashes } from "@/lib/file-paths";
 import { useI18n } from "@/lib/i18n";
 import { parseOutputSegments } from "@/lib/output-design";
@@ -249,6 +249,7 @@ function MarkdownRenderer({
   return (
     <div className={["markdown-body", className].filter(Boolean).join(" ")}>
       <ReactMarkdown
+        urlTransform={(url, key) => key === "href" && parseMarkdownFileLink(url) ? url : defaultUrlTransform(url)}
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}
         components={{
@@ -267,11 +268,13 @@ function MarkdownRenderer({
             const link = looksLikeFilePath(raw);
             if (link) {
               const openFileLink = (element: HTMLElement) => {
+                // A Markdown link around inline code owns its destination.
+                if (element.closest("a")) return;
                 const entryId = element.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId;
                 requestOpenFile({
                   ...link,
                   origin: entryId ? { kind: "message", entryId } : undefined,
-                });
+                }, element);
               };
               return (
                 <code
@@ -281,7 +284,13 @@ function MarkdownRenderer({
                   tabIndex={0}
                   title={`Open ${link.path}`}
                   onClick={(event) => openFileLink(event.currentTarget)}
-                  onKeyDown={(event) => { if (event.key === "Enter") openFileLink(event.currentTarget); }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    const anchor = event.currentTarget.closest("a");
+                    if (anchor) anchor.click();
+                    else openFileLink(event.currentTarget);
+                  }}
                 >
                   {children}
                 </code>
@@ -309,13 +318,21 @@ function MarkdownRenderer({
             );
           },
           // External links open in a new tab (and get the ↗ marker via CSS).
-          a({ href, children, ...props }) {
-            const external = typeof href === "string" && /^https?:\/\//.test(href);
+          a({ href, children, node, ...props }) {
+            void node;
+            const link = parseMarkdownFileLink(href, sourceFilePath);
+            const external = typeof href === "string" && /^(?:https?:)?\/\//i.test(href);
             return (
               <a
                 href={href}
                 {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                 {...props}
+                onClick={link ? (event) => {
+                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  event.preventDefault();
+                  const entryId = event.currentTarget.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId;
+                  requestOpenFile({ ...link, origin: entryId ? { kind: "message", entryId } : undefined }, event.currentTarget);
+                } : undefined}
               >
                 {children}
               </a>

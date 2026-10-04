@@ -400,12 +400,27 @@ and raw terminal input remain unsupported and must not be reported as fully
 Web-compatible.
 
 ### File-path links in chat (`lib/file-links.ts`)
-Inline code that passes `looksLikeFilePath` (conservative: bare names need a
-known extension; `./ ../ / ~/` prefixes qualify; optional `:line`) renders as
-a clickable link in MarkdownBody. Clicks broadcast over a CustomEvent bus
-(`requestOpenFile`/`onOpenFileRequest`) because MarkdownBody is many layers
-below AppShell, which resolves relative → active cwd, verifies via
-`?type=meta` (toast on 404), and opens the viewer tab.
+Inline code that passes `looksLikeFilePath` and explicit Markdown file links
+open the right-side viewer. Markdown destinations support spaces, Unicode and
+line references; preview-document links resolve relative to that document.
+`requestOpenFile` captures the source ChatWindow's cwd and session from its
+DOM scope, so parallel panes do not inherit the primary conversation's cwd.
+AppShell verifies via `?type=meta`, cancels superseded requests, and opens the
+tab with its message origin. HTML defaults to preview; line navigation uses source.
+
+HTML previews fetch `?type=html-preview`, which bundles local styles, CSS
+imports, images, fonts and classic/ES-module scripts into data URLs. All reads
+stay inside the closest allowed project root, reject symlinks, and are bounded
+(8 MiB per file, 24 MiB total input, 100 files). The iframe retains an opaque
+origin and blocks external resources and API calls. The preview reloads after
+the watched HTML revision changes; manual reload refreshes asset-only changes.
+Loading completes on the iframe's load event, with cancellation and a 15-second
+timeout. Missing/unsupported assets are reported without hiding the document.
+
+Generation timing is measured only for fully observed live replies and saved
+in `pi-generation-metrics-v1` in browser storage (500 records, 90 days). Keys
+include session/model/timestamp and a content fingerprint; response text is
+never persisted by this feature. Storage failures fall back to memory.
 
 ### Git worktrees (`lib/worktrees.ts`, `/api/worktrees`)
 `git worktree list --porcelain` parsed by `parseWorktreePorcelain` (unit-

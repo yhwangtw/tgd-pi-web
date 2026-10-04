@@ -223,7 +223,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
       // Large files arrive as a guarded prefix and default to the fast plain
       // source view. Preview remains an explicit opt-in for that sample.
       const mode = initialModeRef.current;
-      if ((mode === "preview" || (mode === "auto" && d.language === "markdown")) && !d.truncated) {
+      if ((mode === "preview" || (mode === "auto" && (d.language === "markdown" || d.language === "html"))) && !d.truncated) {
         previewStartedAtRef.current = performance.now();
         setPreviewMode(true);
       }
@@ -239,7 +239,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
   useEffect(() => {
     if (editingRef.current || loadedFilePathRef.current !== filePath || !dataRef.current) return;
     const current = dataRef.current;
-    setPreviewMode(!current.truncated && (initialMode === "preview" || (initialMode === "auto" && current.language === "markdown")));
+    setPreviewMode(!current.truncated && (initialMode === "preview" || (initialMode === "auto" && (current.language === "markdown" || current.language === "html"))));
   }, [filePath, initialMode]);
 
   // A same-file jump must preserve the draft and an in-flight save.
@@ -780,7 +780,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
           <StructuredDataView content={data.content} kind={structuredKind} onGotoLine={(line) => { setStructuredMode(false); setFindQuery(`:${line}`); }} />
         ) : (isHtml || isMarkdown) && previewMode ? (
           <Suspense fallback={<div className={styles.previewLoading}>{t("files.renderingPreview")}</div>}>
-            <LazyPreviewView content={data.content} language={data.language} filePath={filePath} onRendered={handlePreviewRendered} />
+            <LazyPreviewView content={data.content} language={data.language} filePath={filePath} revision={data.version ?? changeCount} onRendered={handlePreviewRendered} />
           </Suspense>
         ) : usePlain ? (
           <PlainSourceView content={data.content} activeLine={activeLine} diagnosticLines={diagnosticLines} />

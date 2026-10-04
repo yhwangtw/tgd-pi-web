@@ -45,6 +45,7 @@ describe("session reconciliation and first-prompt ordering", () => {
     return null;
   }
   beforeEach(() => {
+    localStorage.clear();
     vi.useFakeTimers(); vi.stubGlobal("EventSource", FakeEventSource); vi.stubGlobal("fetch", harness.fetch);
     FakeEventSource.instances = []; serverMessages = []; serverStreaming = false;
     harness.send.mockReset(); harness.created.mockReset(); harness.toast.mockReset(); harness.fetch.mockReset();
@@ -58,6 +59,26 @@ describe("session reconciliation and first-prompt ordering", () => {
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it("retains live generation metrics after authoritative transcript replacement", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    await act(async () => current.handleAgentEventRef.current?.(snapshot([])));
+    await act(async () => current.handleAgentEventRef.current?.({ type: "message_start", message: { ...assistant, content: [] } }));
+    for (let i = 1; i <= 2; i++) {
+      await act(async () => vi.advanceTimersByTime(1000));
+      await act(async () => current.handleAgentEventRef.current?.({ type: "message_update", message: { ...assistant, content: [{ type: "text", text: "a".repeat(i * 20) }] } }));
+    }
+    await act(async () => current.handleAgentEventRef.current?.({ type: "message_end", message: assistant }));
+    expect(current.getGenerationMetrics(assistant)).toMatchObject({ seconds: 2, estimated: true });
+    await act(async () => current.handleAgentEventRef.current?.(snapshot([user, structuredClone(assistant)])));
+    expect(current.getGenerationMetrics(current.messages[1])).toMatchObject({ seconds: 2, estimated: true });
+    serverMessages = [user, assistant];
+    await act(async () => root.render(<Harness key="reload" selected={session} />));
+    expect(current.getGenerationMetrics(current.messages[1])).toMatchObject({ seconds: 2, estimated: true });
+    // ChatWindow is keyed by session in AppShell, so switching remounts the hook.
+    await act(async () => root.render(<Harness key="two" selected={{ ...session, id: "two" }} />));
+    expect(current.getGenerationMetrics(assistant)).toBeUndefined();
+  });
 
   it("reads the accepted thinking level back after changing models", async () => {
     await act(async () => root.render(<Harness selected={session} />));

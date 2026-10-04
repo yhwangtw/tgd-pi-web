@@ -253,6 +253,7 @@ MCP guide for API revisions, validation limits and saved-but-reload-failed warni
 - Incremental, read-only session index over local Pi `.jsonl` files.
 - Search, tags, pins, archive, auto-naming, HTML/Markdown export, and usage analytics.
 - Conversation find, user-turn navigation, bookmarks, minimap, long-message collapse, and optional always-follow streaming.
+- Streaming replies show a rolling estimate of visible-text tokens per second, independently of repeated model labels. Completed replies show their own average using provider output counts when available; estimates are marked. Fully observed measurements survive reloads in the same browser (up to 500 replies for 90 days), without storing response text. Unobserved historical replies have no fabricated timing.
 - Project switcher with recent projects, pins, discovery, filesystem completion, and linked git worktrees.
 - Reusable prompt templates alongside built-in `/tgd-*` commands.
 - Local hybrid semantic search spans session history, tGD artifacts, and project source, alongside exact filename/content search.
@@ -263,6 +264,8 @@ MCP guide for API revisions, validation limits and saved-but-reload-failed warni
 - The Files explorer has a visible **Upload files** button. Uploads never overwrite an existing filename.
 
 - Project tree, recursive filename search, text editing, Markdown/HTML/image preview, and clickable file paths in chat.
+- Markdown file links open in the right-side viewer, including Unicode/space-containing paths and line references. HTML and Markdown files default to preview from chat links or the file explorer; explicit source/line navigation and truncated files use source view. Relative links inside a Markdown preview resolve against that document. Website links continue to open in a new browser tab.
+- Parallel conversations resolve file links against their own project and retain the originating message. HTML previews update after file edits and show loading, failure and retry states. **Reload preview** also reloads referenced resources; unsupported or missing resources are listed instead of silently disappearing.
 - Git-aware badges, working-tree summary, per-file statistics, and `HEAD` versus worktree diffs.
 - Tool-call presentation for `edit` and `write` operations instead of raw JSON.
 - Allowed-root checks, path guards, `execFile` git calls, and response-size limits on file and git APIs.
@@ -297,10 +300,14 @@ edit endpoint does not create a deleted file.
 HTML previews run embedded scripts in an opaque-origin sandbox. The server
 applies Content Security Policy to raw HTML/SVG responses as well as the viewer,
 so opening a raw URL does not grant access to app cookies, storage or APIs.
-SVG and converted DOCX previews cannot execute scripts. Local/external script
-and asset dependencies, network requests, forms, popups and parent-page
-navigation are blocked; self-contained HTML and embedded data/blob media are
-supported. The viewer's **Isolated preview** disclosure explains these limits.
+SVG and converted DOCX previews cannot execute scripts. The HTML viewer bundles
+same-project CSS, images, fonts and classic/ES-module scripts into the isolated
+document. Literal local module imports and ordinary CSS imports are supported;
+custom import maps and computed module imports are not bundled. Missing or
+unsupported resources are listed in the preview. External dependencies, API
+requests, forms, popups and parent-page navigation remain blocked. Raw HTML
+URLs keep their stricter self-contained-only policy. The viewer's **Isolated
+preview** disclosure explains these limits.
 This is not an OS sandbox, and a standalone HTML tab can still navigate itself.
 
 API reads also check browser origin metadata, including navigation from an
