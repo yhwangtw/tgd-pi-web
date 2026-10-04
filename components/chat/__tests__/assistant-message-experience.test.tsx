@@ -29,6 +29,7 @@ describe("AssistantMessageView conversation chrome", () => {
     container?.remove();
     root = null;
     container = null;
+    vi.useRealTimers();
   });
 
   async function render(message: AssistantMessage, props: Partial<React.ComponentProps<typeof AssistantMessageView>> = {}) {
@@ -37,6 +38,28 @@ describe("AssistantMessageView conversation chrome", () => {
     root = createRoot(container);
     await act(async () => root?.render(<AssistantMessageView message={message} {...props} />));
   }
+
+  it("shows smoothed speed independently of repeated model labels, then removes stale speed", async () => {
+    vi.useFakeTimers();
+    await render({ ...baseMessage, content: [] }, { isStreaming: true, showModelLabel: false });
+    expect(container!.textContent).not.toContain("gpt-test");
+    expect(container!.querySelector('[data-testid="streaming-speed"]')).not.toBeNull();
+    for (let i = 1; i <= 2; i++) {
+      await act(async () => root!.render(<AssistantMessageView message={{ ...baseMessage, content: [{ type: "text", text: "a".repeat(i * 40) }] }} isStreaming showModelLabel={false} />));
+      await act(async () => vi.advanceTimersByTime(500));
+    }
+    expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).toBe("Writing · ~ 20 t/s");
+    await act(async () => vi.advanceTimersByTime(2000));
+    expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).not.toContain("t/s");
+    await act(async () => root!.render(<AssistantMessageView message={{ ...baseMessage, content: [{ type: "toolCall", toolCallId: "tool", toolName: "bash", input: { command: "x".repeat(1000) } }] }} isStreaming showModelLabel={false} />));
+    expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).toBe("Preparing tool");
+  });
+
+  it("shows measured response speed separately from aggregated turn usage", async () => {
+    await render({ ...baseMessage, content: [{ type: "text", text: "Answer" }] }, { generationMetrics: { tokens: 480, seconds: 20, estimated: false }, showModelLabel: false });
+    expect(container!.querySelector('[data-testid="completed-speed"]')!.textContent).toBe("480 tokens · avg 24 t/s");
+    expect(container!.querySelector('[data-testid="streaming-speed"]')).toBeNull();
+  });
 
   it("renders a recovered authentication failure as compact history, not an active alert", async () => {
     await render({ ...baseMessage, stopReason: "error", errorMessage: "No API key for provider: openai-codex" }, { authRecovered: true });

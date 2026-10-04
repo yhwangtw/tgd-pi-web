@@ -250,6 +250,13 @@ export async function GET(
         return handleMeta(filePath, stat);
       case "preview":
         return await handlePreview(filePath, stat);
+      case "html-preview": {
+        if (!stat.isFile() || !["html", "htm"].includes(getExt(filePath))) {
+          return NextResponse.json({ error: "HTML preview requires an HTML file" }, { status: 400 });
+        }
+        const { buildHtmlPreview } = await import("@/lib/html-preview");
+        return NextResponse.json(await buildHtmlPreview(filePath, allowedRoots), { headers: { "Cache-Control": "private, no-store" } });
+      }
       case "watch":
         return handleWatch(filePath, stat);
       case "list":

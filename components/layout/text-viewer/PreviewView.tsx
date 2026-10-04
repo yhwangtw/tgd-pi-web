@@ -2,9 +2,7 @@
 
 import { useEffect } from "react";
 import { MarkdownBody } from "@/components/chat/MarkdownBody";
-import { encodeFilePathForApi } from "@/lib/file-paths";
-import { useI18n } from "@/lib/i18n";
-import { isolatedPreviewDocument } from "@/lib/preview-policy";
+import { HtmlPreview } from "./HtmlPreview";
 import styles from "../TextFileViewer.module.css";
 
 interface Props {
@@ -12,40 +10,18 @@ interface Props {
   language: string;
   /** Absolute path of the previewed file — HTML preview renders via URL. */
   filePath?: string;
+  revision?: string | number;
   /** Fires after the lazy preview component commits its first rendered frame. */
   onRendered?: () => void;
 }
 
-export function PreviewView({ content, language, filePath, onRendered }: Props) {
-  const { t } = useI18n();
+export function PreviewView({ content, language, filePath, revision, onRendered }: Props) {
   useEffect(() => {
-    onRendered?.();
+    if (language !== "html") onRendered?.();
   }, [content, filePath, language, onRendered]);
 
-  if (language === "html" && filePath) {
-    // src (not srcDoc) so the browser streams the document itself — HTML
-    // preview works at any size, independent of the text-preview cap.
-    // Response CSP also protects direct URLs. The iframe is defense in depth.
-    return (
-      <iframe
-        src={`/api/files/${encodeFilePathForApi(filePath)}?type=raw`}
-        sandbox="allow-scripts"
-        referrerPolicy="no-referrer"
-        className={styles.htmlPreview}
-        title={t("files.htmlPreview")}
-      />
-    );
-  }
   if (language === "html") {
-    return (
-      <iframe
-        srcDoc={isolatedPreviewDocument(content)}
-        sandbox="allow-scripts"
-        referrerPolicy="no-referrer"
-        className={styles.htmlPreview}
-        title={t("files.htmlPreview")}
-      />
-    );
+    return <HtmlPreview content={content} filePath={filePath} revision={revision} onRendered={onRendered} />;
   }
   if (language === "markdown") {
     // Same renderer as chat messages — math, mermaid, code highlighting,

@@ -27,6 +27,19 @@ describe("versioned file editor API", () => {
   });
   afterEach(async () => { allowed.clear(); await rm(root, { recursive: true, force: true }); });
 
+  it("serves HTML bundles through the same project gate and disables caching", async () => {
+    file = path.join(root, "index.html");
+    await writeFile(file, '<h1>Preview</h1><script src="app.js"></script>');
+    await writeFile(path.join(root, "app.js"), 'document.body.dataset.ready="yes"');
+    const request = () => GET(new NextRequest(`http://localhost/api/files/${file}?type=html-preview`), params());
+    const response = await request();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect((await response.json()).html).toContain("data:text/javascript;base64,");
+    allowed.clear();
+    expect((await request()).status).toBe(403);
+  });
+
   it("loads large UTF-8 files incrementally without allowing a partial edit", async () => {
     await writeFile(file, "字".repeat(220_000));
     const first = await (await load()).json();

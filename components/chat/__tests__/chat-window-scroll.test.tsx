@@ -20,7 +20,7 @@ vi.mock("@/hooks/useAgentSession", () => ({ useAgentSession: () => {
   const running = useRef(fixture.state.agentRunning); running.current = fixture.state.agentRunning;
   const refs = useTranscriptScroll(fixture.state.messages.length, fixture.state.agentRunning, running);
   const handler = useRef(null);
-  return { ...fixture.state, ...refs, handleAgentEventRef: handler };
+  return { ...fixture.state, ...refs, handleAgentEventRef: handler, getGenerationMetrics: () => undefined };
 } }));
 vi.mock("@/hooks/useAudio", () => ({ useAudio: () => ({ soundEnabled: false }) }));
 vi.mock("@/components/chat/ChatInput", () => ({ ChatInput: () => null }));

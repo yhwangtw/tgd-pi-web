@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useReducer } from "react";
 import type { AgentMessage } from "@/lib/types";
+import { browserMetricsStorage, GenerationMetricsTracker } from "@/lib/generation-metrics";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { parseWorkflowCommand } from "@/lib/workflow-state";
@@ -73,6 +74,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [error, setError] = useState<string | null>(null);
   const [runtimeFailure, setRuntimeFailure] = useState<{ message: string; recoveryError?: string } | null>(null);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
+  const [generationMetrics] = useState(() => new GenerationMetricsTracker(browserMetricsStorage()));
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
@@ -265,6 +267,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   agentPhaseRef.current = agentPhase;
 
   const handleAgentEvent = useCallback((event: AgentEvent) => {
+    if (event.type !== "session_snapshot" || event.sessionId === sessionIdRef.current) {
+      generationMetrics.record(sessionIdRef.current, event, performance.now());
+    }
     if (handleCompactionEvent(event)) return;
     if (event.type === "connected") {
       // The server immediately follows this with a complete Web UI snapshot.
@@ -624,7 +629,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setRetryInfo(null);
         break;
     }
-  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef, reportModelUnavailable, handleCompactionEvent, reconcileCompaction]);
+  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef, reportModelUnavailable, handleCompactionEvent, reconcileCompaction, generationMetrics]);
   handleAgentEventRef.current = handleAgentEvent;
 
   useEffect(() => {
@@ -1278,6 +1283,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     data, loading, error, runtimeFailure, activeLeafId, messages, entryIds, streamState,
+    getGenerationMetrics: (message: AgentMessage) => generationMetrics.get(sessionIdRef.current, message),
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,

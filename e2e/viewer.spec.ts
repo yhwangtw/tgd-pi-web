@@ -85,7 +85,7 @@ test.describe("file viewer", () => {
     await expect(page.locator("[data-active-line]").first()).toContainText("item1498");
   });
 
-  test("keeps the HTML preview action inside a narrow right panel", async ({ page }) => {
+  test("opens HTML in preview by default and keeps controls inside a narrow right panel", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(MAIN);
     await expect(page.getByText("專案架構分析").first()).toBeVisible({ timeout: 20_000 });
@@ -96,6 +96,8 @@ test.describe("file viewer", () => {
     const preview = page.getByRole("button", { name: "Preview", exact: true });
     await expect(panel).toBeVisible();
     await expect(preview).toBeVisible();
+    await expect(preview).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator('iframe[title="HTML preview"]')).toBeVisible();
 
     const expectPreviewInsideView = async () => {
       await expect
@@ -117,6 +119,8 @@ test.describe("file viewer", () => {
     await page.setViewportSize({ width: 1024, height: 800 });
     await expectPreviewInsideView();
 
+    await page.getByRole("button", { name: "Code", exact: true }).click();
+    await expect(preview).toHaveAttribute("aria-pressed", "false");
     await preview.click();
     await expect(page.locator('iframe[title="HTML preview"]')).toBeVisible();
   });

@@ -34,6 +34,7 @@ export function createFixtures(root: string): { cwd: string } {
 
   // ── Demo git project ──────────────────────────────────────────────────
   writeFileSync(path.join(cwd, "README.md"), "# Demo project\n\nE2E fixture.\n");
+  writeFileSync(path.join(cwd, "成果 預覽.html"), "<!doctype html><html><body><h1>Linked HTML preview</h1></body></html>");
   writeFileSync(path.join(cwd, "src/index.ts"), "export const answer = 42;\n");
   writeFileSync(path.join(cwd, "data.json"), JSON.stringify({ project: "demo", features: { viewer: true, mobile: true }, count: 2 }, null, 2) + "\n");
   writeFileSync(path.join(cwd, "table.csv"), "name,status,count\nAlpha,active,2\nBeta,paused,10\n");
@@ -333,7 +334,7 @@ export default function reconnectFixture(pi) {
     ], usage: { input: 900, output: 300, cacheRead: 0, cacheWrite: 0, cost: { total: 0.008 } }, timestamp: 1751713220000 } },
     { type: "message", id: "e1000004", parentId: "e1000003", timestamp: "2026-07-05T11:00:22.000Z", message: { role: "toolResult", toolCallId: "tc_edit_1", content: [{ type: "text", text: "Edited src/index.ts" }], timestamp: 1751713222000 } },
     { type: "message", id: "e1000005", parentId: "e1000004", timestamp: "2026-07-05T11:00:24.000Z", message: { role: "toolResult", toolCallId: "tc_write_1", content: [{ type: "text", text: "Wrote src/utils.ts (3 lines)" }], timestamp: 1751713224000 } },
-    { type: "message", id: "e1000006", parentId: "e1000005", timestamp: "2026-07-05T11:00:30.000Z", message: { role: "assistant", content: [{ type: "text", text: "完成:`answer` 改為 100,`src/utils.ts` 新增 `clamp`。" }], usage: { input: 1300, output: 80, cacheRead: 900, cacheWrite: 0, cost: { total: 0.005 } }, timestamp: 1751713230000 } },
+    { type: "message", id: "e1000006", parentId: "e1000005", timestamp: "2026-07-05T11:00:30.000Z", message: { role: "assistant", content: [{ type: "text", text: "完成:`answer` 改為 100,`src/utils.ts` 新增 `clamp`。\n\n[查看程式](src/index.ts#L1) · [查看成果](<成果 預覽.html>)" }], usage: { input: 1300, output: 80, cacheRead: 900, cacheWrite: 0, cost: { total: 0.005 } }, timestamp: 1751713230000 } },
     { type: "session_info", id: "e1000007", parentId: "e1000006", name: "工具呼叫測試" },
   ];
   writeFileSync(
