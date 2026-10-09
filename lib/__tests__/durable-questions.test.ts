@@ -212,4 +212,25 @@ describe("durable Web questions", () => {
     expect(await durableQuestionSnapshot(harness, root)).toEqual([]);
     expect(f.events).toContainEqual(expect.objectContaining({ type: "extension_ui_closed", reason: "timeout" }));
   });
+
+  it("still expires when the deadline timer wakes early", async () => {
+    const f = fixture();
+    const { harness, root } = await f.open();
+    const realSetTimeout = globalThis.setTimeout;
+    let earlyWakeups = 0;
+    const timer = vi.spyOn(globalThis, "setTimeout").mockImplementation(((...args: Parameters<typeof setTimeout>) => {
+      const delay = args[1];
+      const wakeEarly = earlyWakeups === 0 && typeof delay === "number" && delay > 0 && delay <= 50;
+      if (wakeEarly) earlyWakeups++;
+      if (wakeEarly) args[1] = 0;
+      return realSetTimeout(...args);
+    }) as typeof setTimeout);
+    try {
+      const result = await waitForDurableHostQuestion(harness, root, { method: "input", title: "Deadline" }, { ...f.options, timeoutMs: 50 });
+      expect(earlyWakeups).toBe(1);
+      expect(result.outcome).toBe("timeout");
+      expect(await durableQuestionSnapshot(harness, root)).toEqual([]);
+      expect(f.events.filter(event => event.type === "extension_ui_closed")).toHaveLength(1);
+    } finally { timer.mockRestore(); }
+  });
 });

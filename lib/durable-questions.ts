@@ -191,6 +191,7 @@ async function waitForQuestion(api: QuestionOperations, owner: string, draft: Du
   if (!watch) throw new Error("Durable question document is missing");
   let timer: ReturnType<typeof setTimeout> | undefined;
   let abort: (() => void) | undefined;
+  let stopped = false;
   try {
     return await new Promise<DurableQuestionAnswer>((resolve, reject) => {
       abort = () => reject(new Error("Question invocation interrupted"));
@@ -202,10 +203,31 @@ async function waitForQuestion(api: QuestionOperations, owner: string, draft: Du
       };
       watch.start(async state => accept(state));
       accept(watch.value);
-      if (saved.expiresAt !== null) timer = setTimeout(() => { void expire().catch(reject); }, Math.max(0, saved.expiresAt - Date.now()));
+      if (saved.expiresAt !== null) {
+        const deadline = saved.expiresAt;
+        const scheduleExpiry = () => {
+          if (stopped) return;
+          timer = setTimeout(() => {
+            timer = undefined;
+            void (async () => {
+              await expire();
+              if (stopped) return;
+              const state = await api.snapshot(DurableQuestions, api.conversationId, context);
+              if (stopped) return;
+              accept(state ?? null);
+              // Timers can wake just before the wall-clock deadline. Keep the
+              // original deadline and re-arm instead of leaving a pending
+              // question with no future timeout callback.
+              if (state?.records[id]?.outcome === "pending") scheduleExpiry();
+            })().catch(reject);
+          }, Math.max(1, deadline - Date.now()));
+        };
+        scheduleExpiry();
+      }
       void watch.closed.then(result => { if (result.reason !== "stopped") reject(new Error("Question observer was closed")); });
     });
   } finally {
+    stopped = true;
     if (timer) clearTimeout(timer);
     if (abort) context.abortSignal?.removeEventListener("abort", abort);
     await watch.stop();
