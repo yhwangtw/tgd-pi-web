@@ -193,14 +193,14 @@ test.describe("file viewer", () => {
     await openReadme(page);
     await page.getByRole("button", { name: "Explorer", exact: true }).click();
     await page.getByRole("treeitem", { name: "data.json" }).click();
-    const readmeTab = page.locator('[class*="TabBar_tab"]').filter({ hasText: "README.md" }).first();
+    const readmeTab = page.getByRole("tab", { name: /README.md/ });
     await readmeTab.click({ button: "right" });
     await page.getByRole("menuitem", { name: "Open in split", exact: true }).click();
     await expect(page.getByTestId("file-split-pane")).toBeVisible();
 
     await page.reload();
-    await expect(page.locator('[class*="TabBar_tab"]').filter({ hasText: "README.md" }).first()).toBeVisible();
-    await expect(page.locator('[class*="TabBar_tab"]').filter({ hasText: "data.json" }).first()).toBeVisible();
+    await expect(page.getByRole("tab", { name: /README.md/ })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /data.json/ })).toBeVisible();
     await expect(page.getByTestId("file-split-pane")).toBeVisible();
   });
 

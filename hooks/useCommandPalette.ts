@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useRef } from "react";
+import { useI18n, type MsgKey } from "@/lib/i18n";
 import type { SessionInfo } from "@/lib/types";
 import type { SessionTags } from "./useTags";
 import type { Skin } from "@/lib/skin";
@@ -85,213 +86,212 @@ export interface PaletteCallbacks {
 
 // ── Built-in action list ───────────────────────────────────────────────────
 
-const ACTIONS: PaletteResult[] = [
+const ACTIONS: (Omit<PaletteResult, "title" | "subtitle"> & { title: MsgKey; subtitle: MsgKey })[] = [
   {
     id: "action:models",
     kind: "action",
-    title: "Open Models",
-    subtitle: "Configure providers, API keys, model selection",
-    keywords: "provider api key llm 模型 設定",
+    title: "palette.action.models.title",
+    subtitle: "palette.action.models.subtitle",
+    keywords: "Open Models Configure providers, API keys, model selection provider api key llm 模型 設定",
     hint: "⇧⌘M",
     data: { action: "settings:models" } as { action: PaletteActionId },
   },
   {
     id: "action:skills",
     kind: "action",
-    title: "Open Skills",
-    subtitle: "Browse and toggle installed agent skills",
-    keywords: "skill plugin extension 技能",
+    title: "palette.action.skills.title",
+    subtitle: "palette.action.skills.subtitle",
+    keywords: "Open Skills Browse and toggle installed agent skills skill plugin extension 技能",
     hint: "⌘/",
     data: { action: "settings:skills" } as { action: PaletteActionId },
   },
   {
     id: "action:extensions",
     kind: "action",
-    title: "Open Extensions",
-    subtitle: "Loaded pi extensions: commands, tools, flags, diagnostics",
-    keywords: "extension plugin command flag diagnostics 擴充",
+    title: "palette.action.extensions.title",
+    subtitle: "palette.action.extensions.subtitle",
+    keywords: "Open Extensions Loaded pi extensions: commands, tools, flags, diagnostics extension plugin command flag diagnostics 擴充",
     data: { action: "settings:extensions" } as { action: PaletteActionId },
   },
   {
     id: "action:prompts",
     kind: "action",
-    title: "Prompt templates",
-    subtitle: "Create and manage reusable prompts — insert with /name in the composer",
-    keywords: "prompt template snippet reusable 範本 常用 提示",
+    title: "palette.action.prompts.title",
+    subtitle: "palette.action.prompts.subtitle",
+    keywords: "Prompt templates Create and manage reusable prompts — insert with /name in the composer prompt template snippet reusable 範本 常用 提示",
     data: { action: "settings:prompts" } as { action: PaletteActionId },
   },
   {
     id: "action:analytics",
     kind: "action",
-    title: "Open Analytics",
-    subtitle: "Token usage and cost report for the active session",
-    keywords: "stats tokens cost 分析 統計 成本",
+    title: "palette.action.analytics.title",
+    subtitle: "palette.action.analytics.subtitle",
+    keywords: "Open Analytics Token usage and cost report for the active session stats tokens cost 分析 統計 成本",
     data: { action: "settings:analytics" } as { action: PaletteActionId },
   },
   {
     id: "action:appearance",
     kind: "action",
-    title: "Open Appearance",
-    subtitle: "Pick a skin and light/dark theme",
-    keywords: "skin theme appearance picker 外觀 皮膚 主題",
+    title: "palette.action.appearance.title",
+    subtitle: "palette.action.appearance.subtitle",
+    keywords: "Open Appearance Pick a skin and light/dark theme skin theme appearance picker 外觀 皮膚 主題",
     data: { action: "settings:appearance" } as { action: PaletteActionId },
   },
   {
     id: "action:toggle-theme",
     kind: "action",
-    title: "Toggle Theme",
-    subtitle: "Switch between light and dark mode",
-    keywords: "dark light mode appearance 主題 深色 淺色",
+    title: "palette.action.toggle-theme.title",
+    subtitle: "palette.action.toggle-theme.subtitle",
+    keywords: "Toggle Theme Switch between light and dark mode dark light mode appearance 主題 深色 淺色",
     data: { action: "view:toggle-theme" } as { action: PaletteActionId },
   },
   {
     id: "action:toggle-sidebar",
     kind: "action",
-    title: "Toggle Sidebar",
-    subtitle: "Show or hide the session sidebar",
+    title: "palette.action.toggle-sidebar.title",
+    subtitle: "palette.action.toggle-sidebar.subtitle",
     hint: "⌘B",
     data: { action: "view:toggle-sidebar" } as { action: PaletteActionId },
   },
   {
     id: "action:toggle-file-panel",
     kind: "action",
-    title: "Toggle File Panel",
-    subtitle: "Show or hide the file viewer panel",
+    title: "palette.action.toggle-file-panel.title",
+    subtitle: "palette.action.toggle-file-panel.subtitle",
     hint: "⌘\\",
     data: { action: "view:toggle-file-panel" } as { action: PaletteActionId },
   },
   {
     id: "action:ui-style-original",
     kind: "action",
-    title: "Interface: Original",
-    subtitle: "Use the original Pi Web component geometry",
-    keywords: "interface style original layout 介面 原版 版型",
+    title: "palette.action.ui-style-original.title",
+    subtitle: "palette.action.ui-style-original.subtitle",
+    keywords: "Interface: Original Use the original Pi Web component geometry Toggle File Panel Show or hide the file viewer panel Toggle Sidebar Show or hide the session sidebar interface style original layout 介面 原版 版型",
     data: { action: "ui-style:original" } as { action: PaletteActionId },
   },
   {
     id: "action:ui-style-trae",
     kind: "action",
-    title: "Interface: TRAE",
-    subtitle: "Use the quieter TRAE-inspired component geometry",
-    keywords: "interface style trae layout 介面 版型",
+    title: "palette.action.ui-style-trae.title",
+    subtitle: "palette.action.ui-style-trae.subtitle",
+    keywords: "Interface: TRAE Use the quieter TRAE-inspired component geometry interface style trae layout 介面 版型",
     data: { action: "ui-style:trae" } as { action: PaletteActionId },
   },
   {
     id: "action:skin-terminal",
     kind: "action",
-    title: "Color: Terminal",
-    subtitle: "Near-black with emerald",
-    keywords: "skin theme appearance emerald green 外觀 風格 綠",
+    title: "palette.action.skin-terminal.title",
+    subtitle: "palette.action.skin-terminal.subtitle",
+    keywords: "Color: Terminal Near-black with emerald skin theme appearance emerald green 外觀 風格 綠",
     data: { action: "skin:terminal" } as { action: PaletteActionId },
   },
   {
     id: "action:skin-trae",
     kind: "action",
-    title: "Color: TRAE Violet",
-    subtitle: "Neutral surfaces with a focused violet accent",
-    keywords: "skin theme color appearance trae violet purple 配色 紫",
+    title: "palette.action.skin-trae.title",
+    subtitle: "palette.action.skin-trae.subtitle",
+    keywords: "Color: TRAE Violet Neutral surfaces with a focused violet accent skin theme color appearance trae violet purple 配色 紫",
     data: { action: "skin:trae" } as { action: PaletteActionId },
   },
   {
     id: "action:skin-industrial",
     kind: "action",
-    title: "Color: Industrial",
-    subtitle: "Pure monochrome, high contrast",
-    keywords: "skin theme appearance mono black white 外觀 風格 黑白",
+    title: "palette.action.skin-industrial.title",
+    subtitle: "palette.action.skin-industrial.subtitle",
+    keywords: "Color: Industrial Pure monochrome, high contrast skin theme appearance mono black white 外觀 風格 黑白",
     data: { action: "skin:industrial" } as { action: PaletteActionId },
   },
   {
     id: "action:skin-aurora",
     kind: "action",
-    title: "Color: Aurora",
-    subtitle: "Deep violet with soft glow",
-    keywords: "skin theme appearance violet purple 外觀 風格 紫",
+    title: "palette.action.skin-aurora.title",
+    subtitle: "palette.action.skin-aurora.subtitle",
+    keywords: "Color: Aurora Deep violet with soft glow skin theme appearance violet purple 外觀 風格 紫",
     data: { action: "skin:aurora" } as { action: PaletteActionId },
   },
   {
     id: "action:skin-editorial",
     kind: "action",
-    title: "Color: Editorial",
-    subtitle: "Warm paper tones with burnt orange",
-    keywords: "skin theme appearance warm paper orange 外觀 風格 紙 橙",
+    title: "palette.action.skin-editorial.title",
+    subtitle: "palette.action.skin-editorial.subtitle",
+    keywords: "Color: Editorial Warm paper tones with burnt orange skin theme appearance warm paper orange 外觀 風格 紙 橙",
     data: { action: "skin:editorial" } as { action: PaletteActionId },
   },
   {
     id: "action:skin-glass",
     kind: "action",
-    title: "Color: Glass",
-    subtitle: "Frosted panels over an aurora gradient",
-    keywords: "skin theme appearance glass frost blur glassmorphism 外觀 風格 玻璃 磨砂",
+    title: "palette.action.skin-glass.title",
+    subtitle: "palette.action.skin-glass.subtitle",
+    keywords: "Color: Glass Frosted panels over an aurora gradient skin theme appearance glass frost blur glassmorphism 外觀 風格 玻璃 磨砂",
     data: { action: "skin:glass" } as { action: PaletteActionId },
   },
   {
     id: "action:toggle-chat-width",
     kind: "action",
-    title: "Toggle Wide Chat",
-    subtitle: "Switch the conversation between normal and wide width",
-    keywords: "width wide narrow layout 寬度",
+    title: "palette.action.toggle-chat-width.title",
+    subtitle: "palette.action.toggle-chat-width.subtitle",
+    keywords: "Toggle Wide Chat Switch the conversation between normal and wide width width wide narrow layout 寬度",
     data: { action: "view:toggle-chat-width" } as { action: PaletteActionId },
   },
   {
     id: "action:scroll-smart",
     kind: "action",
-    title: "Response Scroll: Smart Follow",
-    subtitle: "Follow new output until you scroll up to read",
-    keywords: "follow scroll stream smart auto 跟隨 捲動 智慧 自動",
+    title: "palette.action.scroll-smart.title",
+    subtitle: "palette.action.scroll-smart.subtitle",
+    keywords: "Response Scroll: Smart Follow Follow new output until you scroll up to read follow scroll stream smart auto 跟隨 捲動 智慧 自動",
     data: { action: "view:scroll-smart" } as { action: PaletteActionId },
   },
   {
     id: "action:scroll-always",
     kind: "action",
-    title: "Response Scroll: Always Follow",
-    subtitle: "Keep the latest streaming output visible, terminal-style",
-    keywords: "follow scroll stream pin tail always terminal 跟隨 捲動 黏底 永遠",
+    title: "palette.action.scroll-always.title",
+    subtitle: "palette.action.scroll-always.subtitle",
+    keywords: "Response Scroll: Always Follow Keep the latest streaming output visible, terminal-style follow scroll stream pin tail always terminal 跟隨 捲動 黏底 永遠",
     data: { action: "view:scroll-always" } as { action: PaletteActionId },
   },
   {
     id: "action:scroll-preserve",
     kind: "action",
-    title: "Response Scroll: Preserve Position",
-    subtitle: "Move only when you choose Jump to latest",
-    keywords: "follow scroll preserve reading position manual 保留位置 閱讀 手動",
+    title: "palette.action.scroll-preserve.title",
+    subtitle: "palette.action.scroll-preserve.subtitle",
+    keywords: "Response Scroll: Preserve Position Move only when you choose Jump to latest follow scroll preserve reading position manual 保留位置 閱讀 手動",
     data: { action: "view:scroll-preserve" } as { action: PaletteActionId },
   },
   {
     id: "action:new-session",
     kind: "action",
-    title: "New Session",
-    subtitle: "Start a fresh session in the active project",
-    keywords: "create new chat 新增",
+    title: "palette.action.new-session.title",
+    subtitle: "palette.action.new-session.subtitle",
+    keywords: "New Session Start a fresh session in the active project create new chat 新增",
     data: { action: "session:new" } as { action: PaletteActionId },
   },
   {
     id: "action:import-session",
     kind: "action",
-    title: "Import Pi Session",
-    subtitle: "Preview and import an allowed local .jsonl session",
-    keywords: "session import jsonl 匯入 對話",
+    title: "palette.action.import-session.title",
+    subtitle: "palette.action.import-session.subtitle",
+    keywords: "Import Pi Session Preview and import an allowed local .jsonl session session import jsonl 匯入 對話",
     data: { action: "session:import" } as { action: PaletteActionId },
   },
   {
     id: "action:open-parallel",
     kind: "action",
-    title: "Open Active Session in Parallel View",
-    subtitle: "Side-by-side comparison with the current session",
-    keywords: "split compare 並排 比較",
+    title: "palette.action.open-parallel.title",
+    subtitle: "palette.action.open-parallel.subtitle",
+    keywords: "Open Active Session in Parallel View Side-by-side comparison with the current session split compare 並排 比較",
     data: { action: "session:open-parallel" } as { action: PaletteActionId },
   },
   {
     id: "action:help",
     kind: "action",
-    title: "Keyboard Shortcuts",
-    subtitle: "Show all available hotkeys",
-    keywords: "hotkey help docs 快捷鍵 說明",
+    title: "palette.action.help.title",
+    subtitle: "palette.action.help.subtitle",
+    keywords: "Keyboard Shortcuts Show all available hotkeys hotkey help docs 快捷鍵 說明",
     data: { action: "help:shortcuts" } as { action: PaletteActionId },
   },
 ];
 
-// ── Static actions result list (ref-safe, doesn't change between renders) ──
-const ACTIONS_RESULTS: readonly PaletteResult[] = Object.freeze(ACTIONS);
+
 
 // ── Fuse-lite scoring: substring scoring, exact-prefix and word-boundary
 //    matches win ────────────────────────────────────────────────────────────
@@ -344,6 +344,7 @@ export function useCommandPalette({
   activeTag = null,
   onClearTag,
 }: UseCommandPaletteArgs): CommandPaletteApi {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const cbRef = useRef<PaletteCallbacks | null>(null);
 
@@ -363,7 +364,7 @@ export function useCommandPalette({
     for (const s of sessions) {
       const title = s.name?.trim() || s.firstMessage?.split("\n")[0]?.slice(0, 80) || s.id.slice(0, 8);
       const cwd = s.cwd ?? "";
-      const sub = `${cwd} · ${s.messageCount} msg${s.messageCount === 1 ? "" : "s"}`;
+      const sub = `${cwd} · ${s.messageCount} ${t(s.messageCount === 1 ? "sidebar.msg" : "sidebar.msgs")}`;
       all.push({
         id: `session:${s.id}`,
         kind: "session",
@@ -383,7 +384,7 @@ export function useCommandPalette({
         id: `tag:${tag}`,
         kind: "tag",
         title: `#${tag}`,
-        subtitle: `${count} session${count === 1 ? "" : "s"}`,
+        subtitle: t("palette.sessionCount").replace("{count}", String(count)),
         data: { tag, count },
       });
     }
@@ -393,14 +394,16 @@ export function useCommandPalette({
       all.push({
         id: "action:clear-tag",
         kind: "action",
-        title: `Clear tag filter (#${activeTag})`,
-        subtitle: "Show all sessions",
+        title: t("palette.clearTag").replace("{tag}", activeTag),
+        subtitle: t("palette.showAllSessions"),
         data: { action: "view:clear-tag" } as { action: PaletteActionId },
       });
     }
 
     // Built-in actions
-    all.push(...ACTIONS_RESULTS);
+    all.push(...ACTIONS.map((action) => ({ ...action, title: t(action.title), subtitle: t(action.subtitle),
+      keywords: `${action.keywords ?? ""} ${action.id.slice(7).replaceAll("-", " ")}`,
+    })));
 
     if (!query.trim()) {
       // The unified search panel uses this list for its Commands scope. Keep
@@ -426,7 +429,7 @@ export function useCommandPalette({
       .slice(0, 50)
       .map(({ r }) => r);
     return scored;
-  }, [sessions, tags, query, activeTag]);
+  }, [sessions, tags, query, activeTag, t]);
 
   const runAction = useCallback((r: PaletteResult) => {
     const cbs = cbRef.current;

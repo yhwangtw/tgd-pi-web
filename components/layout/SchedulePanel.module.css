@@ -39,7 +39,7 @@
   padding: 0 var(--space-2);
   background: var(--color-accent-bg);
   border-color: var(--color-accent-border-subtle);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: var(--text-xs);
 }
 .newButton:hover { background: var(--color-accent-bg-strong); }
@@ -194,7 +194,7 @@
 .runError { margin-top: 5px; color: var(--color-error-text); font-size: var(--text-2xs); line-height: var(--leading-snug); overflow-wrap: anywhere; }
 .noHistory { padding: var(--space-2); color: var(--text-dim); text-align: center; font-size: var(--text-xs); }
 
-.status_running { color: var(--accent); }
+.status_running { color: var(--accent-text); }
 .status_waiting_for_input { color: var(--color-warning-text-strong); background: var(--color-warning-bg); }
 .status_completed { color: var(--color-success); }
 .status_failed { color: var(--color-error-text); background: var(--color-error-bg); }
@@ -289,7 +289,7 @@
   font-size: var(--text-2xs);
   cursor: pointer;
 }
-.segmentActive { background: var(--color-accent-bg-strong); color: var(--accent); }
+.segmentActive { background: var(--color-accent-bg-strong); color: var(--accent-text); }
 
 .weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-1); }
 .weekday,
@@ -305,13 +305,13 @@
   font-size: var(--text-2xs);
   cursor: pointer;
 }
-.weekdayActive { border-color: var(--color-accent-border-focus); background: var(--color-accent-bg); color: var(--accent); }
+.weekdayActive { border-color: var(--color-accent-border-focus); background: var(--color-accent-bg); color: var(--accent-text); }
 
 .advanced { margin: 3px 0 12px; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control-prominent); background: var(--bg-elev-1); }
 .advancedBody { padding-top: var(--space-3); }
 .advancedBody .field:last-of-type { margin-bottom: 10px; }
 .checkbox { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-xs); }
-.checkbox input { accent-color: var(--accent); }
+.checkbox input { accent-color: var(--accent-text); }
 
 .formActions { display: flex; justify-content: flex-end; gap: var(--space-2); margin: 14px -12px -12px; padding: var(--space-2) var(--space-3); border-top: 1px solid var(--border); background: var(--bg-panel); }
 .primaryButton,

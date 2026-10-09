@@ -22,7 +22,7 @@
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  color: var(--color-accent);
+  color: var(--accent-text);
   background: var(--color-accent-bg);
   border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
   padding: var(--space-optical) var(--space-2);
@@ -51,7 +51,7 @@
 }
 .mobileSummary:hover { background: var(--bg-hover); }
 .mobileCurrent { display: flex; min-width: 0; align-items: baseline; gap: var(--space-2); }
-.mobileCurrentLabel { color: var(--accent); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.mobileCurrentLabel { color: var(--accent-text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .mobileFeature { display: none; }
 .mobileProgress {
   color: var(--text-dim);
@@ -133,7 +133,7 @@
 
 /* done — accent tint with a check */
 .done {
-  color: var(--color-accent);
+  color: var(--accent-text);
 }
 .done:hover {
   background: var(--color-accent-bg);
@@ -208,7 +208,7 @@
   }
   .mobileCurrentLabel {
     flex: 0 0 auto;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: var(--text-sm);
     font-weight: var(--weight-semibold);
   }
@@ -268,7 +268,7 @@
 }
 
 :global(html[data-ui-style="trae"]) .current {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--color-accent-border);
   background: var(--color-accent-bg);
 }

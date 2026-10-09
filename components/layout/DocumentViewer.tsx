@@ -104,7 +104,7 @@ export function DocumentViewer({ filePath, cwd }: { filePath: string; cwd?: stri
             key={previewUrl}
             src={previewUrl}
             sandbox={isPdf ? undefined : ""}
-            title={`Preview ${getFileName(filePath)}`}
+            title={`${t("files.preview")} ${getFileName(filePath)}`}
             className={iframeClass}
           />
         )}

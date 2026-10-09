@@ -95,6 +95,7 @@
 }
 
 :root {
+  --accent-text: var(--accent-hover);
   --font-scale: 1;
   --bg: #f8faf9;
   --bg-panel: #f0f3f1;
@@ -351,6 +352,7 @@ html.dark {
   --text: #d7e1de;
   --text-muted: #9eafa8;
   --text-dim: #8d9e98;
+  --accent-text: var(--accent);
   --accent: #34d399;
   --accent-fg: #052e1b;
   --accent-hover: #6ee7b7;
@@ -462,6 +464,7 @@ html[data-skin="trae"] {
 }
 
 html.dark[data-skin="trae"] {
+  --accent-text: #aaa0ff;
   --bg: #171719;
   --bg-panel: #202023;
   --bg-hover: #29292d;

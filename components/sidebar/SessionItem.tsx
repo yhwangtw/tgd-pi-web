@@ -152,7 +152,7 @@ export function SessionItem({
         data-unread={isUnread || undefined}
         data-session-order={listOrder}
         tabIndex={-1}
-        role="option"
+        role="row"
         aria-selected={isSelected}
         aria-label={accessibleTitle}
         aria-describedby={isUnread ? unreadLabelId : undefined}
@@ -166,6 +166,7 @@ export function SessionItem({
           opacity: deleting ? 0.5 : 1,
         }}
       >
+        <div role="gridcell">
         {confirmDelete ? (
           /* ── Delete confirmation: replaces grid with two flat buttons ── */
           <div className={styles.deleteRow}>
@@ -187,6 +188,7 @@ export function SessionItem({
           <div className={styles.renameRow}>
             <input
               ref={inputRef}
+              aria-label={t("session.rename")}
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
               onBlur={commitRename}
@@ -279,6 +281,7 @@ export function SessionItem({
             </div>
           </div>
         )}
+        </div>
       </div>
       {contextMenu && (
         <SessionContextMenu

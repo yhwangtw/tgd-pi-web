@@ -96,7 +96,7 @@
 .scopeActive {
   border-color: var(--border);
   background: var(--bg-selected);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Desktop sidebars are narrow enough that a single flex row clips the last

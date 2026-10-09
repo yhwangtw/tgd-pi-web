@@ -38,7 +38,7 @@ async function setup(page: Page, style: string, width: number, font: string) {
 for (const style of ["original", "trae"]) for (const width of [1440, 390, 320]) for (const font of ["small", "default", "xlarge"]) {
   test(`${style} ${width}px ${font}: two-line conversations retain context without technical clutter`, async ({ page }) => {
     const row = await setup(page, style, width, font);
-    const list = page.getByRole("listbox", { name: "Sessions" });
+    const list = page.getByRole("grid", { name: "Sessions" });
     await expect(row.locator('[class*="sessionTitle"]')).toHaveText("解析專案目錄");
     await expect(row.locator('[class*="sessionTitle"]')).toHaveAttribute("title", /demo-project/);
     await expect(row).not.toContainText("Not a Git repo");
@@ -111,7 +111,7 @@ test("long lists keep end-of-list actions inside the phone viewport", async ({ p
     await route.fulfill({ json: data });
   });
   await page.reload();
-  const list = page.getByRole("listbox", { name: "Sessions" });
+  const list = page.getByRole("grid", { name: "Sessions" });
   if (!await list.isVisible()) await page.locator('nav[class*="mobileNav"]').getByRole("button", { name: "Sessions", exact: true }).click();
   // Other suites create real fixture conversations too. Assert the 500-row
   // workload without assuming how many unrelated sessions came before it.

@@ -18,7 +18,7 @@ test.describe("file-path links in chat", () => {
         await route.fulfill({ response, json: { ...data, sessions: data.sessions.map((session: { id: string; cwd: string }) => session.id === "ffff1111-2222-3333-4444-555566667777" ? { ...session, cwd: parallelCwd } : session) } });
       });
       await page.goto("/?session=aaaa1111-2222-3333-4444-555566667777");
-      await page.getByRole("option", { name: "工具呼叫測試", exact: true }).click({ button: "right" });
+      await page.getByRole("row", { name: "工具呼叫測試", exact: true }).click({ button: "right" });
       await page.getByRole("menuitem", { name: "Open in parallel", exact: true }).click();
       const parallel = page.locator('[data-chat-session-id="ffff1111-2222-3333-4444-555566667777"]');
       await expect(parallel).toHaveAttribute("data-chat-cwd", parallelCwd);

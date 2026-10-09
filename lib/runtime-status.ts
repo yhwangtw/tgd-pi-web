@@ -98,6 +98,13 @@ export function deploymentSafetyFromEnv(env: NodeJS.ProcessEnv): DeploymentSafet
   };
 }
 
+export function runtimeUpdateCommands(embeddedVersion: string): RuntimeStatusReport["commands"] {
+  return {
+    updateGlobal: `npm install -g ${PI_PACKAGE}@${embeddedVersion}`,
+    updateProject: "npm ci",
+  };
+}
+
 export async function getRuntimeStatus(): Promise<RuntimeStatusReport> {
   const [webVersion, embeddedVersion, latest, globalCli] = await Promise.all([
     jsonVersion(join(process.cwd(), "package.json")),
@@ -122,10 +129,7 @@ export async function getRuntimeStatus(): Promise<RuntimeStatusReport> {
       releaseUrl: "https://github.com/earendil-works/pi/releases",
       error: latest.error,
     },
-    commands: {
-      updateGlobal: `npm install -g ${PI_PACKAGE}@latest`,
-      updateProject: `npm install ${PI_PACKAGE}@latest @earendil-works/pi-ai@latest`,
-    },
+    commands: runtimeUpdateCommands(embeddedVersion),
     deployment: deploymentSafetyFromEnv(process.env),
     capabilities: PRODUCT_CAPABILITIES,
   };

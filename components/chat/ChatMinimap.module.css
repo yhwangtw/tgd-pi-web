@@ -78,9 +78,20 @@
 }
 
 .tooltipLayer {
+  visibility: hidden;
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .container:hover .tooltipLayer { visibility: visible; }
+}
+
+.tooltipFocused { visibility: visible; opacity: 1; }
+
+@media (pointer: coarse) {
+  .tooltipLayer { display: none; }
 }
 
 .tooltip {

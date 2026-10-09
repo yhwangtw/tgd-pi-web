@@ -23,7 +23,7 @@
 .filter, .filterActive { min-height: 30px; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-control); cursor: pointer; font-size: var(--text-sm); }
 .filter { background: transparent; color: var(--text-muted); }
 .filter:hover { background: var(--bg-hover); color: var(--text); }
-.filterActive { background: var(--bg-selected); color: var(--accent); font-weight: var(--weight-semibold); }
+.filterActive { background: var(--bg-selected); color: var(--accent-text); font-weight: var(--weight-semibold); }
 .checkedAt { margin-left: auto; color: var(--text-dim); font-family: var(--font-mono); font-size: var(--text-xs); }
 .list { display: flex; flex-direction: column; gap: var(--space-2); }
 .provider { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--bg-panel); }

@@ -206,8 +206,7 @@
   align-items: center;
   gap: var(--space-1);
   margin-top: 4px;
-  /* Meta noise fades until the message is hovered */
-  opacity: 0.68;
+  opacity: 1;
   transition: opacity 0.15s;
   min-width: 0;
 }
@@ -661,7 +660,7 @@
     width: fit-content;
     max-width: 100%;
     min-height: 40px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: var(--space-optical);
     opacity: 1;
   }
@@ -722,6 +721,9 @@
   .timestamp {
     order: 2;
     margin-left: 2px;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .copyButton {
@@ -769,7 +771,7 @@
 :global(html[data-ui-style="trae"]) .footer {
   min-height: 26px;
   margin-top: 3px;
-  opacity: 0.78;
+  opacity: 1;
 }
 
 :global(html[data-ui-style="trae"]) .actionToolbar,

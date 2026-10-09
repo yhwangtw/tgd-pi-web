@@ -407,9 +407,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     // Inline rename/delete inputs keep their own arrow/Enter behavior.
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
     const row = target.closest<HTMLElement>("[data-session-row]");
+    if (target !== row && target !== e.currentTarget) return;
     const currentOrder = row?.dataset.sessionOrder === undefined ? -1 : Number(row.dataset.sessionOrder);
     if (e.key === "ArrowDown") { e.preventDefault(); focusSessionOrder(currentOrder < 0 ? 0 : currentOrder + 1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); focusSessionOrder(currentOrder < 0 ? orderedSessionIds.length - 1 : currentOrder - 1); }
+    else if (e.key === "Home") { e.preventDefault(); focusSessionOrder(0); }
+    else if (e.key === "End") { e.preventDefault(); focusSessionOrder(orderedSessionIds.length - 1); }
     else if ((e.key === "Enter" || e.key === " ") && target.dataset.sessionRow) {
       e.preventDefault();
       target.click();
@@ -577,7 +580,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       {/* Session list */}
       <div
         ref={listRef}
-        role="listbox"
+        role={orderedSessionIds.length > 0 && !loading && !error ? "grid" : "region"}
         aria-label={t("sidebar.sessions")}
         tabIndex={0}
         onKeyDown={handleListKeyDown}
@@ -617,7 +620,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           </div>
         )}
         {!loading && !error && !sessionSearchLoading && filteredSessions.length === 0 && (
-          <div className={styles.emptyMessage}>
+          <div className={styles.emptyMessage} role="status">
             {normalizedSessionQuery ? t("sidebar.noMatchingSessions") : t("sidebar.noSessions")}
           </div>
         )}

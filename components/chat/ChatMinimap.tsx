@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo, RefObject } from "react";
 import type { AgentMessage, AssistantMessage, TextContent } from "@/lib/types";
+import { useI18n } from "@/lib/i18n";
 import styles from "./ChatMinimap.module.css";
 
 interface Props {
@@ -70,6 +71,8 @@ interface NodeInfo {
 }
 
 export function ChatMinimap({ messages, streamingMessage, scrollContainer, messageRefs, bookmarkedIndices }: Props) {
+  const { t } = useI18n();
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [scrollRatio, setScrollRatio] = useState(0);
   const [viewportRatio, setViewportRatio] = useState(1);
   const [visible, setVisible] = useState(false);
@@ -274,7 +277,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
   return (
     <div
       ref={containerRef}
-      className={`hover-group ${styles.container}`}
+      className={styles.container}
       onMouseDown={handleMouseDown}
       onMouseLeave={() => { setMouseYRatio(null); }}
       onMouseMove={(e) => {
@@ -308,7 +311,9 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
             type="button"
             className={styles.node}
             style={{ top: `${dotTop}%` }}
-            aria-label={`Jump to ${isUser ? "user" : "assistant"} message ${node.visIdx + 1}${getMessagePreview(node.msg) ? `: ${getMessagePreview(node.msg).replace(/\s+/g, " ").slice(0, 64)}` : ""}`}
+            aria-label={`${t(isUser ? "minimap.jumpUser" : "minimap.jumpAssistant").replace("{index}", String(node.visIdx + 1))}${getMessagePreview(node.msg) ? `: ${getMessagePreview(node.msg).replace(/\s+/g, " ").slice(0, 64)}` : ""}`}
+            onFocus={() => setFocusedIndex(node.index)}
+            onBlur={() => setFocusedIndex(null)}
             onClick={(event) => {
               event.stopPropagation();
               messageRefs.current?.[node.visIdx]?.scrollIntoView({ block: "start", behavior: "auto" });
@@ -336,7 +341,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
       <div className={styles.centerLine} />
 
       {/* Tooltips for all nodes, collision-free positions — shown on hover via CSS */}
-      <div className={`hover-reveal ${styles.tooltipLayer}`}>
+      <div className={styles.tooltipLayer} aria-hidden="true">
         {nodes.map((node, i) => {
           const preview = getMessagePreview(node.msg);
           const color = getNodeColor(node.msg);
@@ -345,7 +350,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
           return (
             <div
               key={node.index}
-              className={`${styles.tooltip} ${isNearest ? styles.tooltipNearest : styles.tooltipFar}`}
+              className={`${styles.tooltip} ${isNearest ? styles.tooltipNearest : styles.tooltipFar} ${focusedIndex === node.index ? styles.tooltipFocused : ""}`}
               style={{
                 top: tooltipPositions[i],
                 borderTop: `1px solid ${isNearest ? color.border : "var(--border)"}`,

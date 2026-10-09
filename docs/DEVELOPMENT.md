@@ -554,7 +554,8 @@ Both routes gate `cwd` against the session allowed-roots set, use `execFile`
 `lib/i18n.tsx`: add keys to `MESSAGES`, use `t()` in components /
 `translate()` in non-reactive code. English is the default locale; zh-TW is
 partial (config modals intentionally untranslated). Palette actions carry
-Chinese `keywords` so both languages can search them.
+localized titles and descriptions, plus bilingual `keywords` so both languages
+can search them.
 
 ### CSS Design Tokens (`app/globals.css`)
 Semantic tokens with light/dark + per-skin variants. `chrome-mono` class =
@@ -592,3 +593,27 @@ Location: `~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`
 `entryIds[]` in `SessionContext` is a parallel array to `messages[]` — maps
 each displayed message back to its `.jsonl` entry id, used for fork and
 navigate_tree calls.
+
+## UI audit regressions and dependency patches
+
+`e2e/audit-regressions.spec.ts` checks narrow message actions, file-tab keyboard
+navigation, session-grid and empty-state semantics, provider labels, mobile
+focus restoration, persisted login language, rendered light/dark contrast,
+three-pane headers, coarse-pointer minimap behavior, keyboard scrolling of wide
+code and persistent Mermaid/code-focus state. It uses the same isolated
+fixtures as the rest of E2E; axe checks actual rendered controls.
+
+Keep ReactMarkdown's component renderers stable across parent updates. Recreating
+the component functions unmounts code blocks and diagrams, resetting their focus
+dialogs and preview state. Wide code blocks need a keyboard-focusable `pre` with
+a visible focus outline so Safari users can scroll them without a pointer.
+
+Security overrides preserve the tested Pi runtime versions. The local
+[sprintf-js patch](../vendor/sprintf-js/README.md) bounds formatting allocations
+because upstream has no published fix for GHSA-hp3w-g68c-fv3c. Keep its license and
+regression tests when updating it. The existing postinstall patch removes Pi's
+shrinkwrapped vulnerable brace-expansion copy; run normal `npm ci`, then audit
+production dependencies. Runtime-center commands align an optional global CLI
+with the embedded version and restore the lockfile with `npm ci` only while the
+checkout's server is stopped. Web updates use the managed update center or the
+release workflow.

@@ -202,6 +202,7 @@ export function RuntimeCenter() {
         <ul>{report.deployment.warnings.map((warning) => <li key={warning}>{warningLabel(warning)}</li>)}</ul>
       </section>
       <section className={styles.commands}>
+        <p>{t("runtime.updateProjectHint")}</p>
         <div><span>{t("runtime.updateGlobal")}</span><code>{report.commands.updateGlobal}</code><button type="button" onClick={() => copy(report.commands.updateGlobal)}>{t("runtime.copy")}</button></div>
         <div><span>{t("runtime.updateProject")}</span><code>{report.commands.updateProject}</code><button type="button" onClick={() => copy(report.commands.updateProject)}>{t("runtime.copy")}</button></div>
       </section>

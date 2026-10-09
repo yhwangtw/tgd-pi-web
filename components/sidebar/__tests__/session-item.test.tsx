@@ -21,7 +21,7 @@ describe("quiet conversation row", () => {
     await render(false);
     const props = { session, isSelected: false, onClick: vi.fn() };
     await act(async () => root.render(<SessionItem {...props} isUnread />));
-    const row = container.querySelector('[role="option"]')!;
+    const row = container.querySelector('[role="row"]')!;
     expect(row.getAttribute("data-unread")).toBe("true");
     expect(document.getElementById(row.getAttribute("aria-describedby")!)?.textContent).toBe("Unread messages");
     expect(container.querySelector('[class*="unreadDot"]')).not.toBeNull();
@@ -38,7 +38,7 @@ describe("quiet conversation row", () => {
     expect(title.title).toContain("/work/project");
     expect(container.querySelector('[class*="workspaceMeta"]')?.textContent ?? null).toBe(showProject ? "project" : null);
     expect(container.querySelector('[class*="previewRow"]')?.textContent).toContain("Changes are ready");
-    expect(container.querySelector('[role="option"]')?.getAttribute("aria-label")).toBe("Hi · project · 2026-09-12");
+    expect(container.querySelector('[role="row"]')?.getAttribute("aria-label")).toBe("Hi · project · 2026-09-12");
     expect(container.querySelectorAll("button")).toHaveLength(1);
   });
   it("retains pin and rename in a keyboard accessible, portalled menu", async () => {

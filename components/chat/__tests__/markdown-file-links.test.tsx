@@ -21,6 +21,22 @@ async function render(text: string, sourceFilePath?: string) {
   return opened;
 }
 describe("Markdown file link interaction", () => {
+  it("keeps code focus mode open when its Markdown parent rerenders", async () => {
+    const markdown = "```ts\nconst value = 1;\n```";
+    const scroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
+    try {
+      await render(markdown);
+      await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Open focus mode"]')!.click());
+      const dialog = document.querySelector('[role="dialog"]');
+      expect(dialog).not.toBeNull();
+      await act(async () => root.render(<MarkdownBody className="updated-parent">{markdown}</MarkdownBody>));
+      expect(document.querySelector('[role="dialog"]')).toBe(dialog);
+    } finally {
+      if (scroll) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scroll);
+      else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    }
+  });
   it("carries the originating parallel conversation's project and session", async () => {
     const opened = await render("[Source](src/index.ts)");
     container.dataset.chatCwd = "/projects/parallel";
