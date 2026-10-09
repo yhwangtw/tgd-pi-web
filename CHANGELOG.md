@@ -10,6 +10,7 @@ All notable changes to tGD-pi-web are documented here.
 ### Fixed
 - **Long conversation rendering.** Transcript rows no longer use CSS display locking; minimap and collapsible-message measurements are coalesced and scrolling reuses cached row positions. Desktop/mobile regression coverage includes a 780-message conversation.
 - **Durable package management.** The package center uses the active Durable session's settings and extension reload lifecycle, including sessions opened through their pre-migration URLs.
+- **Patched production dependencies.** MCP SDK, sharp, proxy-addr, and source-map-js now resolve to versions that pass the high/critical production audit.
 
 ### Changed
 - **Assistant message actions stay attached to message metadata.** The desktop quote, copy, and bookmark toolbar now opens beside Usage/time instead of floating at the far-right edge of the transcript; the compact mobile actions menu is unchanged.
