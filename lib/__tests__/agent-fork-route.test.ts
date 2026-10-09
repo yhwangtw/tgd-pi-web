@@ -3,6 +3,9 @@ import { expect, it, vi } from "vitest";
 const harness = vi.hoisted(() => ({ get: vi.fn(), send: vi.fn(), resolve: vi.fn(), start: vi.fn(), open: vi.fn() }));
 vi.mock("@/lib/rpc-manager", () => ({ getRpcSession: harness.get, startRpcSession: harness.start }));
 vi.mock("@/lib/session-reader", () => ({ resolveSessionPath: harness.resolve }));
+vi.mock("@/lib/durable-migration", () => ({ waitForSessionMigration: async (id: string) => id, migrateLegacySession: vi.fn() }));
+vi.mock("@/lib/durable-chat", () => ({ getDurableChat: vi.fn(), openDurableChat: vi.fn() }));
+vi.mock("@/lib/durable-session-store", () => ({ isDurableSessionId: () => false, readDurableProjection: vi.fn() }));
 vi.mock("@earendil-works/pi-coding-agent", () => ({ SessionManager: { open: harness.open } }));
 import { POST } from "../../app/api/agent/[id]/route";
 

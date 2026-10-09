@@ -41,7 +41,10 @@
       "dompurify": "3.4.14"
     },
     "jsdom": {
-      "undici": "7.29.0"
+      "undici": "7.29.1"
+    },
+    "@earendil-works/pi-durable": {
+      "@earendil-works/pi-ai": "1.0.0"
     },
     "next": {
       "postcss": "^8.5.18",
@@ -49,8 +52,11 @@
     }
   },
   "dependencies": {
+    "@earendil-works/chord": "1.0.0",
     "@earendil-works/pi-ai": "0.86.0",
+    "@earendil-works/pi-ai-durable": "npm:@earendil-works/pi-ai@1.0.0",
     "@earendil-works/pi-coding-agent": "0.86.0",
+    "@earendil-works/pi-durable": "1.0.0",
     "@lobehub/icons": "^5.6.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@radix-ui/react-dropdown-menu": "2.1.24",
@@ -65,6 +71,7 @@
     "next": "^16.3.8",
     "parse5": "8.0.1",
     "postcss": "8.5.25",
+    "proper-lockfile": "4.1.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
@@ -80,6 +87,7 @@
     "@next/bundle-analyzer": "^16.3.8",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^26.0.1",
+    "@types/proper-lockfile": "4.1.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-syntax-highlighter": "^15.5.13",

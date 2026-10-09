@@ -59,8 +59,7 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
     pending.container.scrollTop = pending.scrollTop;
     const restore = () => {
       // Re-apply after layout/scroll anchoring has settled but before paint.
-      // This also covers large disclosures whose content-visibility state
-      // changes in the same render.
+      // This also covers large disclosures whose height changes in this render.
       pending.container.scrollTop = pending.scrollTop;
       pending.container.style.overflowAnchor = pending.overflowAnchor;
       pendingScrollRef.current = null;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveSessionPath, listAllSessions, getSessionEntries } from "@/lib/session-reader";
 import { getSessionSearchMetadata, scoreSessionSearchHit, searchSessionEntries, type SessionSearchMatch, type SessionSearchStatus } from "@/lib/session-search";
+import { durableEntries, isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +46,9 @@ export async function GET(req: Request) {
     const hits: SearchHit[] = [];
 
     for (const s of slice) {
-      const filePath = await resolveSessionPath(s.id);
-      if (!filePath) continue;
+      const projection = isDurableSessionId(s.id) ? readDurableProjection(s.id) : undefined;
+      const filePath = isDurableSessionId(s.id) ? null : await resolveSessionPath(s.id);
+      if (!projection && !filePath) continue;
 
       let matchedIn: SearchHit["matchedIn"] = "messages";
 
@@ -64,7 +66,7 @@ export async function GET(req: Request) {
       // deliberately avoided because it may rewrite empty/corrupted files.
       let entries;
       try {
-        entries = getSessionEntries(filePath);
+        entries = projection ? durableEntries(projection.entries, projection.info.created) : getSessionEntries(filePath!);
       } catch {
         continue;
       }
@@ -80,8 +82,8 @@ export async function GET(req: Request) {
           created: s.created,
           modified: s.modified,
           messageCount: s.messageCount,
-          provider: metadata.provider,
-          modelId: metadata.modelId,
+          provider: metadata.provider ?? projection?.agent.model?.provider,
+          modelId: metadata.modelId ?? projection?.agent.model?.modelId,
           status: metadata.status,
           matchedIn,
           matches,

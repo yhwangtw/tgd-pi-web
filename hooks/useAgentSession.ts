@@ -46,6 +46,7 @@ import {
 export type { SessionData, AgentPhase, ThinkingLevelOption, ChatInputHandle, AttachedImage };
 
 interface LiveAgentState extends CompactionLiveState {
+  queuedFollowUps?: QueuedFollowUp[];
   isStreaming?: boolean;
   isCompacting?: boolean;
   autoCompactionEnabled?: boolean;
@@ -84,6 +85,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [customToolNames, setCustomToolNames] = useState<string[]>([]);
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [ephemeralNewSession, setEphemeralNewSession] = useState(false);
+  const [durableNewSession, setDurableNewSession] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [autoProviderFallback, setAutoProviderFallback] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -271,6 +273,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       generationMetrics.record(sessionIdRef.current, event, performance.now());
     }
     if (handleCompactionEvent(event)) return;
+    if (event.type === "queue_update") { setQueuedFollowUps(event.items as QueuedFollowUp[]); return; }
     if (event.type === "connected") {
       // The server immediately follows this with a complete Web UI snapshot.
       // Reset first so status/widgets removed while this tab was offline do
@@ -309,6 +312,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage);
       if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt);
       if (state?.thinkingLevel !== undefined) setThinkingLevel(state.thinkingLevel as ThinkingLevelOption);
+      if (state?.queuedFollowUps) setQueuedFollowUps(state.queuedFollowUps);
       const model = (event.state as { model?: { provider: string; id: string } } | undefined)?.model;
       if (model) setCurrentModelOverride({ provider: model.provider, modelId: model.id });
       setBashRun((event.bashRun as { command: string; output: string; running: boolean } | null) ?? null);
@@ -633,6 +637,22 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   handleAgentEventRef.current = handleAgentEvent;
 
   useEffect(() => {
+    const seen = new Set<string>();
+    const migrated = (event: Event) => {
+      const result = (event as CustomEvent<{ sourceId: string; sessionId: string; status: string; reason?: string }>).detail;
+      if (sessionIdRef.current !== result.sourceId && sessionIdRef.current !== result.sessionId) return;
+      if (result.status === "converted" && sessionIdRef.current !== result.sessionId) {
+        handleAgentEventRef.current?.({ type: "session_replaced", previousSessionId: result.sourceId, newSessionId: result.sessionId, migrated: true });
+      } else if (result.status === "deferred" && result.reason && !seen.has(result.reason)) {
+        seen.add(result.reason);
+        showToast(`${translate("toast.migrationDeferred")} ${result.reason}`, { type: "warning", duration: 8000 });
+      }
+    };
+    window.addEventListener("pi-session-migration", migrated);
+    return () => window.removeEventListener("pi-session-migration", migrated);
+  }, []);
+
+  useEffect(() => {
     const channel = createSessionReplacementChannel((replacement) => {
       if (sessionIdRef.current !== replacement.previousSessionId) return;
       sessionIdRef.current = replacement.newSessionId;
@@ -687,6 +707,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         toolMode: toolPreset,
         ...(toolNames === undefined ? {} : { toolNames }),
         ephemeral: ephemeralNewSession,
+        engine: durableNewSession ? "durable" : "legacy",
         ...(piImages?.length ? { images: piImages } : {}),
         ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.modelId } : {}),
         ...(thinkingLevel !== "auto" ? { thinkingLevel } : {}),
@@ -708,9 +729,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       messageCount: 1,
       firstMessage: message,
       ephemeral: ephemeralNewSession,
+      engine: durableNewSession ? "durable" : "legacy",
     });
     return result.sessionId;
-  }, [newSessionCwd, newSessionModel, catalogStatus, toolPreset, customToolNames, thinkingLevel, ephemeralNewSession, connectEvents, onSessionCreated]);
+  }, [newSessionCwd, newSessionModel, catalogStatus, toolPreset, customToolNames, thinkingLevel, ephemeralNewSession, durableNewSession, connectEvents, onSessionCreated]);
 
   const handleWorkflowCommand = useCallback(async (message: string): Promise<boolean> => {
     const command = parseWorkflowCommand(message);
@@ -901,17 +923,22 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleNavigate = useCallback(async (entryId: string) => {
     const sid = sessionIdRef.current;
     if (!sid) return;
+    if (sid.startsWith("dw_")) {
+      const result = await sendAgentCommand<{ newSessionId?: string }>(sid, { type: "navigate_tree", targetId: entryId });
+      if (result?.newSessionId) { sessionIdRef.current = result.newSessionId; onSessionForked?.(result.newSessionId); }
+      return;
+    }
     sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }).catch(() => {});
     setActiveLeafId(entryId);
     await loadContext(sid, entryId);
-  }, [loadContext]);
+  }, [loadContext, onSessionForked]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     setActiveLeafId(leafId);
     const sid = sessionIdRef.current;
     if (!sid) return;
     await loadContext(sid, leafId);
-    if (leafId) {
+    if (leafId && !sid.startsWith("dw_")) {
       sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }).catch(() => {});
     }
   }, [loadContext]);
@@ -1036,6 +1063,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!sid || queueUpdating) return false;
     setQueueUpdating(true);
     try {
+      if (sid.startsWith("dw_")) {
+        const saved = await sendAgentCommand<QueuedFollowUp[]>(sid, { type: "replace_queue", items: next });
+        setQueuedFollowUps(saved); return true;
+      }
       await sendAgentCommand(sid, { type: "clear_queue" });
       for (const item of next) {
         await sendAgentCommand(sid, {
@@ -1286,7 +1317,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     getGenerationMetrics: (message: AgentMessage) => generationMetrics.get(sessionIdRef.current, message),
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
-    retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,
+    retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, durableNewSession, setDurableNewSession, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, currentModel, displayModel, sessionStats,
     compactionStatus: compaction.view, compactionQueue: compaction.queue,
     handleRetryCompaction: compaction.retry,

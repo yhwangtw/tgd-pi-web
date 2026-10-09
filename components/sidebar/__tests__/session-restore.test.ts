@@ -14,6 +14,12 @@ const restoredSession: SessionInfo = {
 };
 
 describe("resolveSessionForRestore", () => {
+  it("resolves old bookmarks from a converted session without reopening the JSONL source", async () => {
+    const converted = { ...restoredSession, id: "dw_converted", sourceSessionId: "old" };
+    const fetcher = vi.fn();
+    await expect(resolveSessionForRestore("old", [converted], fetcher)).resolves.toEqual(converted);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("falls back to the session detail endpoint when the first session list misses the URL target", async () => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: true,

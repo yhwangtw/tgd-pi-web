@@ -1,3 +1,4 @@
+import { resolveMigratedSessionId } from "@/lib/session-migrations";
 import { NextResponse } from "next/server";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
@@ -20,7 +21,7 @@ function readPins(): PinsFile {
   if (!existsSync(path)) return { pinned: [] };
   try {
     const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<PinsFile>;
-    return { pinned: Array.isArray(raw.pinned) ? raw.pinned.filter((x): x is string => typeof x === "string") : [] };
+    return { pinned: Array.isArray(raw.pinned) ? [...new Set(raw.pinned.filter((x): x is string => typeof x === "string").map(resolveMigratedSessionId))] : [] };
   } catch {
     return { pinned: [] };
   }
@@ -46,8 +47,9 @@ export async function POST(req: Request) {
     if (typeof body.id !== "string" || !body.id) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
+    const id = resolveMigratedSessionId(body.id);
     const { pinned } = readPins();
-    const next = [body.id, ...pinned.filter((x) => x !== body.id)];
+    const next = [id, ...pinned.filter((x) => x !== id)];
     writePins({ pinned: next });
     return NextResponse.json({ pinned: next });
   } catch (error) {
@@ -63,8 +65,9 @@ export async function DELETE(req: Request) {
     if (typeof body.id !== "string" || !body.id) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
+    const id = resolveMigratedSessionId(body.id);
     const { pinned } = readPins();
-    const next = pinned.filter((x) => x !== body.id);
+    const next = pinned.filter((x) => x !== id);
     writePins({ pinned: next });
     return NextResponse.json({ pinned: next });
   } catch (error) {

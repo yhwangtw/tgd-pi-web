@@ -88,6 +88,28 @@ describe("SchedulePanel", () => {
     expect(document.body.querySelector('[data-testid="schedule-editor"]')).not.toBeNull();
     expect(document.body.querySelector<HTMLInputElement>('input[placeholder="/path/to/project"]')?.value).toBe("/tmp/project");
     expect(document.body.textContent).toContain("Read-only");
+    const execution = [...document.body.querySelectorAll("label")].find(label => label.textContent?.startsWith("Execution mode"))?.querySelector("select");
+    expect(execution?.value).toBe("standard");
+  });
+
+  it("shows and updates a schedule's durable execution mode through the normal editor", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json({ schedules: [{ ...schedule, engine: "durable" }], runs: [], serverTime: "" }));
+    await renderPanel(fetchMock as typeof fetch);
+    const edit = container!.querySelector<HTMLButtonElement>('button[aria-label="Edit schedule"]')!;
+    await act(async () => edit.click());
+    const execution = [...document.body.querySelectorAll("label")].find(label => label.textContent?.startsWith("Execution mode"))!.querySelector("select")!;
+    expect(execution.value).toBe("durable");
+    await act(async () => {
+      execution.value = "standard";
+      execution.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      document.querySelector<HTMLFormElement>('[data-testid="schedule-editor"]')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+    const request = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(request?.[0]).toBe("/api/schedules/schedule-1");
+    expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({ engine: "standard", toolNames: ["read", "grep", "find", "ls", "ask_user"] });
   });
 
   it("starts a manual run through the schedule endpoint", async () => {

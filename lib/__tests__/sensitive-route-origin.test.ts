@@ -24,6 +24,9 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
   getAgentDir: () => "/unused-origin-fixture",
 }));
 vi.mock("@/lib/rpc-manager", () => ({ getRpcSession: mocks.getRpcSession }));
+vi.mock("@/lib/durable-chat", () => ({ getDurableChat: vi.fn() }));
+vi.mock("@/lib/durable-migration", () => ({ waitForSessionMigration: async (id: string) => id }));
+vi.mock("@/lib/durable-session-store", () => ({ isDurableSessionId: () => false }));
 vi.mock("@/lib/npx", () => ({ runNpx: mocks.runNpx }));
 vi.mock("@/lib/session-reader", () => ({ listAllSessions: mocks.listAllSessions }));
 vi.mock("@/lib/file-security", () => ({ getAllowedRoots: mocks.getAllowedRoots }));

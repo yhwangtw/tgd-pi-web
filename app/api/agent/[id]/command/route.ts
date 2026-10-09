@@ -1,19 +1,35 @@
+import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
 import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
+import { getDurableChat, openDurableChat } from "@/lib/durable-chat";
+import { isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 
 // POST /api/agent/[id]/command - Execute an extension command
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const { id: requestedId } = await params;
+  const id = await waitForSessionMigration(requestedId);
 
   try {
     const body = await req.json() as { command: string; args?: string };
     const { command, args = "" } = body;
 
-    if (!command) {
+    if (typeof command !== "string" || !command || typeof args !== "string") {
       return NextResponse.json({ error: "command is required" }, { status: 400 });
+    }
+    if (isDurableSessionId(id)) {
+      const existing = getDurableChat(id);
+      if (!existing?.isAlive() && !readDurableProjection(id)) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      const chat = existing?.isAlive() ? existing : await openDurableChat(id);
+      if (!["goal", "plan"].includes(command) && !chat.getExtensionHost()?.runner.getCommand(command)) {
+        return NextResponse.json({ error: `Command "${command}" not found` }, { status: 404 });
+      }
+      const { createSnapshot } = await import("@/lib/git-snapshot");
+      await createSnapshot(chat.cwd, chat.sessionId, `Before /${command}`).catch(() => {});
+      await chat.send({ type: "prompt", message: `/${command}${args ? ` ${args}` : ""}`, requestId: req.headers.get("Idempotency-Key") ?? undefined });
+      return NextResponse.json({ success: true, command });
     }
 
     // Get or create session

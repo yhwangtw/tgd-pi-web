@@ -1388,38 +1388,20 @@ span.linenumber {
   border-radius: var(--radius-control-compact);
 }
 
-/* Long-transcript rendering: skip layout/paint for off-screen messages.
-   contain-intrinsic-size keeps scrollbar geometry stable. */
+/* Transcript rows are measured by scroll restoration, message disclosures and
+   the minimap. Keep them in normal layout: content-visibility display locking
+   conflicts with those descendant measurements and changes row geometry. */
 .msg-item {
   min-width: 0;
   max-width: 100%;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 120px;
   /* Breathing room when ⌥↑/⌥↓ aligns a turn to the viewport top */
   scroll-margin-top: 10px;
 }
 
-/* A streaming bubble becomes a committed msg-item at message_end. Keep the
-   current turn measured: substituting the history's 120px estimate here makes
-   the tail jump before scroll-follow can reconcile the completed response. */
-.msg-item[data-current-turn] {
-  content-visibility: visible;
-}
-
-/* content-visibility adds paint containment. Temporarily lift it while a
-   disclosure is open so upward-opening message menus and usage popovers are
-   not clipped to the message's own box. */
+/* Keep an open message menu above adjacent transcript rows. */
 .msg-item:has(details[open]) {
-  content-visibility: visible;
   position: relative;
   z-index: 370;
-}
-
-/* Long work logs must keep their real height while open. If content-visibility
-   substitutes the 120px intrinsic estimate as the message crosses the
-   viewport edge, the transcript scrollbar appears to jump backwards. */
-.msg-item:has([data-work-log-expanded="true"]) {
-  content-visibility: visible;
 }
 
 [data-transcript-scroll]:has([data-work-log-expanded="true"]) {

@@ -14,6 +14,7 @@ import {
   type AgentRun,
   type AgentRunCompletion,
   type AgentRunInput,
+  type AgentRunReport,
   type AgentRunStatus,
 } from "./agent-run-types";
 import type { WebExtensionUIEvent } from "./web-extension-ui";
@@ -23,6 +24,7 @@ import { buildAgentRunReport } from "./agent-run-report";
 import type { AgentMessage } from "./types";
 import { approachingRunLimit, isAgentRunLimits } from "./agent-run-limits";
 import type { AgentRunLimits } from "./agent-run-types";
+import type { DurableRunHandle } from "./durable-agent-run";
 
 const KEEP_ALIVE_MS = 30_000;
 const MAX_RUN_MS = 24 * 60 * 60_000;
@@ -31,6 +33,7 @@ interface ActiveRun {
   run: AgentRun;
   messages: AgentMessage[];
   session: AgentSessionWrapper | null;
+  durable: DurableRunHandle | null;
   unsubscribe: (() => void) | null;
   keepAlive: ReturnType<typeof setInterval> | null;
   timeout: ReturnType<typeof setTimeout> | null;
@@ -70,6 +73,11 @@ function eventRunError(event: AgentEvent): string | null {
 
 function cloneRun(run: AgentRun): AgentRun {
   return structuredClone(run);
+}
+
+async function abortExecution(active: ActiveRun | undefined): Promise<void> {
+  if (active?.durable) await active.durable.abort();
+  else await active?.session?.send({ type: "abort" });
 }
 
 export class AgentRunSupervisor {
@@ -139,7 +147,7 @@ export class AgentRunSupervisor {
     if (timeoutMs === 0) { active.timeout = null; return; }
     const remaining = Math.max(1, timeoutMs - (Date.now() - Date.parse(active.run.startedAt!)));
     active.timeout = setTimeout(() => {
-      void active.session?.send({ type: "abort" }).catch(() => {});
+      void abortExecution(active).catch(() => {});
       this.finish(active.run.id, "failed", "Agent run reached its time limit; results remain in the session", active.messages);
     }, remaining);
     active.timeout.unref?.();
@@ -227,6 +235,7 @@ export class AgentRunSupervisor {
       throw new AgentRunConflictError("Only terminal runs can be retried");
     }
     return this.enqueue({
+      ...(original.engine ? { engine: original.engine } : {}),
       name: original.name,
       cwd: original.cwd,
       prompt: original.prompt,
@@ -256,9 +265,7 @@ export class AgentRunSupervisor {
     if (!result) throw new AgentRunNotFoundError("Agent run not found");
 
     const active = this.active.get(runId);
-    if (active?.session) {
-      await active.session.send({ type: "abort" }).catch(() => {});
-    }
+    await abortExecution(active);
     if (active) this.cleanup(runId);
     this.resolveWaiter(result);
     this.drain();
@@ -300,7 +307,7 @@ export class AgentRunSupervisor {
     for (const item of stopped) {
       const active = this.active.get(item.id);
       this.cleanup(item.id);
-      void active?.session?.send({ type: "abort" }).catch(() => {});
+      void abortExecution(active).catch(() => {});
       this.resolveWaiter(item, active?.messages);
     }
     return true;
@@ -315,7 +322,7 @@ export class AgentRunSupervisor {
           const run = [...store.runs].reverse().find((item) => item.status === "queued");
           if (!run) return null;
           run.status = "running";
-          run.startedAt = new Date().toISOString();
+          run.startedAt ??= new Date().toISOString();
           return cloneRun(run);
         });
         if (!reserved) break;
@@ -324,6 +331,7 @@ export class AgentRunSupervisor {
           run: reserved,
           messages: [],
           session: null,
+          durable: null,
           unsubscribe: null,
           keepAlive: null,
           timeout: null,
@@ -338,14 +346,14 @@ export class AgentRunSupervisor {
     }
   }
 
-  private finish(runId: string, status: "completed" | "failed", error?: string, messages?: AgentMessage[]): void {
+  private finish(runId: string, status: "completed" | "failed", error?: string, messages?: AgentMessage[], usage?: AgentRunReport["usage"]): void {
     if (!this.active.has(runId)) return;
     const existing = readAgentRunStore().runs.find((run) => run.id === runId);
     const finishedAt = new Date().toISOString();
     const completed = this.updateRun(runId, status, {
       finishedAt,
       ...(error ? { error } : {}),
-      ...(messages ? { report: buildAgentRunReport(messages, existing?.startedAt, finishedAt) } : {}),
+      ...(messages ? { report: { ...buildAgentRunReport(messages, existing?.startedAt, finishedAt), ...(usage ? { usage } : {}) } } : {}),
     });
     this.cleanup(runId);
     if (completed) this.resolveWaiter(completed, messages);
@@ -375,6 +383,10 @@ export class AgentRunSupervisor {
     try {
       if (!await isTrustedAgentRunWorkspace(run.cwd)) {
         throw new Error("Workspace is no longer trusted; open it as a project before retrying");
+      }
+      if (run.engine === "durable") {
+        await this.executeDurable(active);
+        return;
       }
       const started = await startRpcSession(`__daemon__${run.id}`, "", run.cwd, run.toolNames, { toolMode: "custom" });
       if (!this.active.has(run.id)) {
@@ -456,6 +468,29 @@ export class AgentRunSupervisor {
     } catch (error) {
       this.finish(run.id, "failed", error instanceof Error ? error.message : String(error));
     }
+  }
+
+  private async executeDurable(active: ActiveRun): Promise<void> {
+    const { run } = active;
+    const { openDurableAgentRun } = await import("./durable-agent-run");
+    const durable = await openDurableAgentRun(run, {
+      currentRun: () => readAgentRunStore().runs.find(item => item.id === run.id) ?? { ...run, status: "cancelled" },
+      trusted: () => isTrustedAgentRunWorkspace(run.cwd),
+      onProgress: ({ turns, costUsd }) => {
+        if (!this.active.has(run.id)) return;
+        active.turns = turns;
+        active.costUsd = costUsd;
+        this.publishProgress(active);
+      },
+    });
+    active.durable = durable;
+    try {
+      if (!this.active.has(run.id)) { await durable.abort(); return; }
+      this.armDeadline(active);
+      const result = await durable.run();
+      active.messages = result.messages;
+      this.finish(run.id, result.error ? "failed" : "completed", result.error, result.messages, result.usage);
+    } finally { await durable.close(); }
   }
 }
 

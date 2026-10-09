@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { startRpcSession, type AgentEvent, type AgentSessionWrapper } from "./rpc-manager";
 import { nextScheduleRunAt } from "./schedule-core";
 import { mutateScheduleStore, readScheduleStore, reconcileInterruptedRuns } from "./schedule-store";
 import { ACTIVE_SCHEDULE_RUN_STATUSES, type AgentSchedule, type ScheduleRun, type ScheduleRunStatus, type SchedulerHealth } from "./schedule-types";
 import type { WebExtensionUIEvent } from "./web-extension-ui";
 import { isWebExtensionUIDialogRequest, isWebExtensionUIEvent } from "./web-extension-ui-types";
+import { durableSessionDirectory, durableSessionId } from "./durable-session-store";
 
 const MISSED_GRACE_MS = 60_000;
 const KEEP_ALIVE_MS = 4 * 60_000;
@@ -47,11 +50,17 @@ export class ScheduleRunner {
   private tickCount = 0;
   private missedRuns = 0;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private readonly durableExecutions = new Map<string, () => void>();
 
   start(): void {
     if (this.started) return;
     this.started = true;
     reconcileInterruptedRuns();
+    for (const run of readScheduleStore().runs) {
+      if (run.engine === "durable" && ACTIVE_SCHEDULE_RUN_STATUSES.has(run.status)) {
+        void this.executeDurable(structuredClone(run));
+      }
+    }
     this.heartbeat = setInterval(() => { this.lastHeartbeatAt = new Date().toISOString(); }, 30_000);
     this.heartbeat.unref?.();
     this.reschedule();
@@ -64,6 +73,7 @@ export class ScheduleRunner {
     this.timer = null;
     this.heartbeat = null;
     this.nextWakeAt = null;
+    for (const detach of this.durableExecutions.values()) detach();
   }
 
   getHealth(): SchedulerHealth {
@@ -187,6 +197,15 @@ export class ScheduleRunner {
         startedAt: now.toISOString(),
         status: "running",
       };
+      if (schedule.engine === "durable") {
+        run.engine = "durable";
+        run.sessionId = durableSessionId(run.id, 1);
+        run.execution = {
+          cwd: schedule.cwd, prompt: schedule.prompt, provider: schedule.provider,
+          modelId: schedule.modelId, thinkingLevel: schedule.thinkingLevel,
+          toolNames: [...schedule.toolNames],
+        };
+      }
       schedule.lastRunAt = now.toISOString();
       schedule.lastRunStatus = "running";
       schedule.updatedAt = now.toISOString();
@@ -198,7 +217,8 @@ export class ScheduleRunner {
       return { run: { ...run }, schedule: structuredClone(schedule) };
     });
     this.reschedule();
-    void this.execute(reserved.schedule, reserved.run.id);
+    if (reserved.run.engine === "durable") void this.executeDurable(structuredClone(reserved.run));
+    else void this.execute(reserved.schedule, reserved.run.id);
     return reserved.run;
   }
 
@@ -210,6 +230,90 @@ export class ScheduleRunner {
       const schedule = store.schedules.find((item) => item.id === run.scheduleId);
       if (schedule) schedule.lastRunStatus = status;
     });
+  }
+
+  private async executeDurable(run: ScheduleRun): Promise<void> {
+    if (this.durableExecutions.has(run.id)) return;
+    let session: Awaited<ReturnType<typeof import("./durable-chat")["openDurableChat"]>> | undefined;
+    let unsubscribe: (() => void) | undefined;
+    let keepAlive: ReturnType<typeof setInterval> | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let detached = false;
+    const pendingDialogs = new Set<string>();
+    const detach = () => {
+      detached = true;
+      unsubscribe?.();
+      if (keepAlive) clearInterval(keepAlive);
+      if (timeout) clearTimeout(timeout);
+      this.durableExecutions.delete(run.id);
+    };
+    this.durableExecutions.set(run.id, detach);
+    const finish = (status: "completed" | "failed", error?: string) => {
+      if (detached) return;
+      detach();
+      this.updateRun(run.id, status, { finishedAt: new Date().toISOString(), ...(error ? { error } : {}) });
+    };
+    const notify = () => {
+      void import("./web-push").then(({ sendWebPush }) => sendWebPush(`/?session=${encodeURIComponent(run.sessionId!)}`)).catch(() => {});
+    };
+    const expire = () => {
+      void session?.send({ type: "abort" }).catch(() => {});
+      finish("failed", "Scheduled run exceeded the 24-hour limit");
+    };
+    try {
+      if (!run.execution || run.sessionId !== durableSessionId(run.id, 1)) {
+        throw new Error("The durable schedule is missing its original execution settings");
+      }
+      const execution = run.execution;
+      const deadline = Date.parse(run.startedAt) + MAX_RUN_MS;
+      if (!Number.isFinite(deadline)) throw new Error("Invalid scheduled run start time");
+      const { createDurableChat, getDurableChat, openDurableChat } = await import("./durable-chat");
+      if (detached) return;
+      const existing = getDurableChat(run.sessionId);
+      const hasStore = existsSync(join(durableSessionDirectory(run.id), "bootstrap.json"));
+      if (Date.now() >= deadline && !existing && !hasStore) { expire(); return; }
+      session = existing ?? (hasStore
+        ? await openDurableChat(run.sessionId)
+        : await createDurableChat({ ...execution, group: run.id, scheduleDeadline: deadline }));
+      if (detached) return;
+      if (Date.now() >= deadline) { expire(); return; }
+      globalThis.__piAllowedRootsCache?.roots.add(execution.cwd);
+      unsubscribe = session.onEvent((rawEvent) => {
+        if (detached) return;
+        if (rawEvent.type === "session_restart") { detach(); return; }
+        const event = rawEvent as AgentEvent | WebExtensionUIEvent;
+        if (!isWebExtensionUIEvent(event)) return;
+        if (isWebExtensionUIDialogRequest(event)) {
+          pendingDialogs.add(event.id);
+          this.updateRun(run.id, "waiting_for_input");
+          notify();
+        } else if (event.type === "extension_ui_closed") {
+          pendingDialogs.delete(event.id);
+          if (pendingDialogs.size === 0) this.updateRun(run.id, "running");
+        }
+      });
+      // A recovered dialog is replayed by onEvent before this update.
+      if (pendingDialogs.size === 0) this.updateRun(run.id, "running");
+      keepAlive = setInterval(() => {
+        if (!session?.isAlive()) { detach(); return; }
+        void session.send({ type: "get_state" }).catch(() => {
+          // A host restart is recoverable; the next runner attaches to this receipt.
+          if (!session?.isAlive()) detach();
+        });
+      }, KEEP_ALIVE_MS);
+      keepAlive.unref?.();
+      timeout = setTimeout(expire, Math.max(1, deadline - Date.now()));
+      timeout.unref?.();
+      await session.send({ type: "prompt", message: execution.prompt,
+        requestId: `schedule:${run.id}`, awaitCompletion: true });
+      // agent_end is not a durable commit barrier. Only settlement confirms completion.
+      finish("completed");
+    } catch (error) {
+      if (detached) return;
+      if (session && !session.isAlive()) { detach(); return; }
+      notify();
+      finish("failed", error instanceof Error ? error.message : String(error));
+    }
   }
 
   private async execute(schedule: AgentSchedule, runId: string): Promise<void> {

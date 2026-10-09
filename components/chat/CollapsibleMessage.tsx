@@ -34,11 +34,23 @@ export function CollapsibleMessage({ collapsible, expanded, onToggle, children }
     if (!collapsible) return;
     const el = innerRef.current;
     if (!el) return;
-    const measure = () => setFullHeight(el.scrollHeight);
+    const measure = () => {
+      const height = el.scrollHeight;
+      setFullHeight((previous) => previous === height ? previous : height);
+    };
     measure();
-    const ro = new ResizeObserver(measure);
+    // Do not change layout from inside ResizeObserver delivery. Coalesce
+    // image/highlighter/disclosure resizes into the following animation frame.
+    let frame: number | null = null;
+    const ro = new ResizeObserver(() => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => { frame = null; measure(); });
+    });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
   }, [collapsible]);
 
   const { t } = useI18n();

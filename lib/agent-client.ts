@@ -22,6 +22,11 @@ export async function sendAgentCommand<T = unknown>(
   command: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<T> {
+  // Keep the receipt on the action object so a lost-ACK retry of that action
+  // cannot admit another Durable model run.
+  if (["prompt", "steer", "follow_up", "queue_compaction_prompt", "compact", "bash"].includes(String(command.type)) && !command.requestId) {
+    command.requestId = forkRequestKey();
+  }
   const res = await fetch(`/api/agent/${encodeURIComponent(sessionId)}`, {
     method: "POST",
     signal,
@@ -35,9 +40,11 @@ export async function sendAgentCommand<T = unknown>(
     success?: boolean;
     data?: T;
     error?: string;
+    migration?: { sourceId: string; sessionId: string; status: string; reason?: string };
   };
   if (!res.ok || body.error) {
     throw new Error(body.error ?? `HTTP ${res.status}`);
   }
+  if (body.migration && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("pi-session-migration", { detail: body.migration }));
   return body.data as T;
 }

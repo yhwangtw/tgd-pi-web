@@ -41,7 +41,13 @@ function sourceEntry(kind: ContextSourceEntry["kind"], path: string, content: st
   };
 }
 
-export function buildContextReport(session: AgentSessionLike, cwdOverride?: string): ContextReport {
+export type ContextReportSource = Pick<AgentSessionLike, "sessionId" | "model" | "resourceLoader" | "getActiveToolNames" | "getAllTools" | "getContextUsage"> & {
+  sessionManager: Pick<AgentSessionLike["sessionManager"], "getCwd">;
+  settingsManager: Pick<AgentSessionLike["settingsManager"], "isProjectTrusted">;
+  agent: { state?: { systemPrompt?: string } };
+};
+
+export function buildContextReport(session: ContextReportSource, cwdOverride?: string): ContextReport {
   const loader = session.resourceLoader;
   const skillsResult = loader?.getSkills();
   const promptsResult = loader?.getPrompts();

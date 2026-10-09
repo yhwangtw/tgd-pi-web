@@ -82,7 +82,7 @@ export function useTranscriptScroll(
         const saved = loadScrollPosition(memoryKey);
         const container = scrollContainerRef.current;
         if (saved !== undefined && saved !== AT_BOTTOM && container) {
-          // Content may not be laid out yet (content-visibility) — a single
+          // Fonts and async message content may not be laid out yet — a single
           // assignment can clamp to a smaller scrollHeight. Re-apply after
           // layout settles.
           container.scrollTop = saved;

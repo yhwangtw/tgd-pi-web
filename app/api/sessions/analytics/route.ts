@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveSessionPath, listAllSessions, readSessionFile } from "@/lib/session-reader";
 import { buildSessionAnalyticsReport, type AnalyticsSessionInput } from "@/lib/session-analytics";
+import { durableEntries, isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,14 @@ export async function GET() {
     const sessions = await listAllSessions();
     const readable: AnalyticsSessionInput[] = [];
     for (const session of sessions) {
+      if (isDurableSessionId(session.id)) {
+        const projection = readDurableProjection(session.id);
+        if (projection) readable.push({ ...session, entries: [
+          ...durableEntries(projection.entries, projection.info.created),
+          ...projection.entries.filter(entry => entry.kind === "pi.compaction").map(() => ({ type: "compaction" })),
+        ] as AnalyticsSessionInput["entries"] });
+        continue;
+      }
       const filePath = await resolveSessionPath(session.id);
       if (!filePath) continue;
       try {

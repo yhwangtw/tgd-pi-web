@@ -6,6 +6,7 @@ import type { AgentRunLimits } from "./agent-run-types";
 import { PI_THINKING_LEVELS } from "./thinking-levels";
 import {
   isAgentRunConcurrency,
+  DURABLE_AGENT_TOOLS,
   MAX_AGENT_RUN_CONCURRENCY,
   MIN_AGENT_RUN_CONCURRENCY,
 } from "./agent-run-types";
@@ -39,6 +40,9 @@ export async function validateAgentRunInput(value: unknown): Promise<AgentRunInp
     throw new AgentRunValidationError("JSON object is required");
   }
   const input = value as Record<string, unknown>;
+  if (input.engine !== undefined && input.engine !== "durable") {
+    throw new AgentRunValidationError("Unsupported agent engine");
+  }
   const name = requiredString(input.name, "name", 100);
   const cwd = requiredString(input.cwd, "cwd", 4_096);
   const prompt = requiredString(input.prompt, "prompt", 200_000);
@@ -73,7 +77,7 @@ export async function validateAgentRunInput(value: unknown): Promise<AgentRunInp
   }
 
   const toolNames = input.toolNames === undefined
-    ? [...DEFAULT_SCHEDULE_TOOLS]
+    ? DEFAULT_SCHEDULE_TOOLS.filter(tool => input.engine !== "durable" || tool !== "ask_user")
     : Array.isArray(input.toolNames)
       ? [...new Set(input.toolNames)]
       : null;
@@ -82,8 +86,12 @@ export async function validateAgentRunInput(value: unknown): Promise<AgentRunInp
   ))) {
     throw new AgentRunValidationError("toolNames contains an unsupported tool");
   }
+  if (input.engine === "durable" && toolNames.some(tool => !(DURABLE_AGENT_TOOLS as readonly string[]).includes(tool as string))) {
+    throw new AgentRunValidationError("Durable runs support read, grep, find, ls, bash, edit and write tools");
+  }
 
   return {
+    ...(input.engine === "durable" ? { engine: "durable" as const } : {}),
     name,
     cwd,
     prompt,

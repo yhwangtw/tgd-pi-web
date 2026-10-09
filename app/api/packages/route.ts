@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { DefaultPackageManager, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getRpcSession } from "@/lib/rpc-manager";
+import { getDurableChat } from "@/lib/durable-chat";
+import { waitForSessionMigration } from "@/lib/durable-migration";
+import { isDurableSessionId } from "@/lib/durable-session-store";
 import { consumePreparedPackageMutation, preparePackageMutation, type PackageMutationAction } from "@/lib/package-confirmation";
 import {
   buildPackageMutationPreview,
@@ -27,15 +30,20 @@ function assertSameOrigin(req: Request): void {
   }
 }
 
-function managerForSession(sessionId: string) {
-  const session = getRpcSession(sessionId);
+async function managerForSession(sessionId: string) {
+  const id = await waitForSessionMigration(sessionId);
+  const durable = isDurableSessionId(id) ? getDurableChat(id) : undefined;
+  const standard = isDurableSessionId(id) ? undefined : getRpcSession(id);
+  const session = durable ?? standard;
   if (!session?.isAlive()) throw new Error("Open an active session before managing packages");
+  const settingsManager = durable?.getServices()?.settingsManager ?? standard?.inner.settingsManager;
+  if (!settingsManager) throw new Error("Session resources are not ready; reopen the session before managing packages");
   return {
     session,
     manager: new DefaultPackageManager({
       cwd: session.cwd,
       agentDir: getAgentDir(),
-      settingsManager: session.inner.settingsManager,
+      settingsManager,
     }),
   };
 }
@@ -48,7 +56,7 @@ export async function GET(req: Request) {
   try {
     const sessionId = new URL(req.url).searchParams.get("sessionId") ?? "";
     if (!sessionId) return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
-    const { manager } = managerForSession(sessionId);
+    const { manager } = await managerForSession(sessionId);
     return NextResponse.json(snapshot(manager));
   } catch (error) {
     return NextResponse.json({ error: redactedErrorMessage(error) }, { status: 409 });
@@ -68,7 +76,7 @@ export async function POST(req: Request) {
     };
     const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
     if (!sessionId) return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
-    const { session, manager } = managerForSession(sessionId);
+    const { session, manager } = await managerForSession(sessionId);
 
     if (body.action === "check_updates") {
       const updates = await manager.checkForAvailableUpdates();

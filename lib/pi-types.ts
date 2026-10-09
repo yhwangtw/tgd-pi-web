@@ -37,6 +37,7 @@ export interface AgentSessionLike {
   readonly sessionId: string;
   readonly sessionFile: string | undefined;
   readonly isStreaming: boolean;
+  readonly pendingMessageCount?: number;
   readonly isCompacting: boolean;
   readonly autoCompactionEnabled: boolean;
   readonly autoRetryEnabled: boolean;

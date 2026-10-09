@@ -47,6 +47,18 @@ afterEach(() => {
 });
 
 describe("schedule-store", () => {
+  it("preserves a durable run's immutable execution and question state across restart while failing legacy work", () => {
+    const path = fixturePath();
+    const original = schedule();
+    const durable: ScheduleRun = { ...run("waiting_for_input"), id: "durable-run", engine: "durable", sessionId: "durable-session",
+      execution: { cwd: original.cwd, prompt: original.prompt, toolNames: ["read", "ask_user"] } };
+    writeScheduleStore({ version: 1, schedules: [{ ...original, engine: "durable", prompt: "Edited later" }], runs: [durable, run("running")] }, path);
+    expect(reconcileInterruptedRuns(path)).toBe(1);
+    const saved = readScheduleStore(path);
+    expect(saved.runs[0]).toEqual(durable);
+    expect(saved.schedules[0].engine).toBe("durable");
+    expect(saved.runs[1].status).toBe("failed");
+  });
   it("round-trips schedules through an atomic JSON file", () => {
     const path = fixturePath();
     writeScheduleStore({ version: 1, schedules: [schedule()], runs: [run("completed")] }, path);

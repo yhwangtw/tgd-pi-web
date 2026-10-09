@@ -17,6 +17,12 @@ afterEach(() => {
 });
 
 describe("agent run validation", () => {
+  it("opts into Durable explicitly and rejects unavailable interactive tools", async () => {
+    const base = { name: "Review", cwd: cwd(), prompt: "Inspect", engine: "durable" };
+    expect(await validateAgentRunInput(base)).toMatchObject({ engine: "durable", toolNames: ["read", "grep", "find", "ls"] });
+    await expect(validateAgentRunInput({ ...base, toolNames: ["ask_user"] })).rejects.toThrow(/Durable runs support/);
+    await expect(validateAgentRunInput({ ...base, engine: "unknown" })).rejects.toThrow(/engine/);
+  });
   it("accepts Pi's Max level but rejects unsupported Ultra", async () => {
     const base = { name: "Review", cwd: cwd(), prompt: "Inspect" };
     expect((await validateAgentRunInput({ ...base, thinkingLevel: "max" })).thinkingLevel).toBe("max");

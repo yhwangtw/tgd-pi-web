@@ -169,11 +169,11 @@ export function useAppShellState(): {
         suppressCwdBumpRef.current = true;
         setTimeout(() => { suppressCwdBumpRef.current = false; }, 0);
       }
-      if (!isRestore) {
+      if (!isRestore || session.sourceSessionId === initialSessionId) {
         router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
       }
     },
-    [router],
+    [router, initialSessionId],
   );
 
   const handleNewSession = useCallback(

@@ -86,6 +86,8 @@ interface Props {
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   ephemeral?: boolean;
   onEphemeralChange?: (enabled: boolean) => void;
+  durable?: boolean;
+  onDurableChange?: (enabled: boolean) => void;
   soundEnabled?: boolean;
   onSoundToggle?: () => void;
   /** Project cwd — enables the `@file` mention autocomplete. */
@@ -202,6 +204,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   ephemeral = false, onEphemeralChange,
+  durable = false, onDurableChange,
   soundEnabled, onSoundToggle,
   cwd,
   persistKey,
@@ -1218,6 +1221,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <span className={styles.mobileControlLabel}>{t("input.scrollMode")}</span>
               <ScrollFollowSelector />
             </div>
+
+            {!isStreaming && onDurableChange && (
+              <div className={styles.mobileLabeledControl}>
+                <span className={styles.mobileControlLabel}>{t("input.sessionEngine")}</span>
+                <button type="button" onClick={() => onDurableChange(!durable)} aria-label={t(durable ? "input.durable" : "input.standard")} aria-pressed={durable} className={durable ? styles.autoCompactButtonOn : styles.autoCompactButtonOff} title={t("input.durableHint")}>
+                  <span className={styles.autoCompactDot} aria-hidden />
+                  <span>{t(durable ? "input.durable" : "input.standard")}</span>
+                </button>
+              </div>
+            )}
 
             {!isStreaming && onEphemeralChange && (
               <div className={styles.mobileLabeledControl}>

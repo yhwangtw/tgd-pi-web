@@ -19,6 +19,7 @@ export interface AgentSchedule {
   name: string;
   cwd: string;
   prompt: string;
+  engine?: "durable";
   timing: ScheduleTiming;
   timezone: string;
   enabled: boolean;
@@ -34,6 +35,10 @@ export interface AgentSchedule {
   lastRunStatus?: ScheduleRunStatus;
 }
 
+/** Frozen at reservation, so edits cannot change an interrupted run's request. */
+export type ScheduleExecution = Pick<AgentSchedule,
+  "cwd" | "prompt" | "provider" | "modelId" | "thinkingLevel" | "toolNames">;
+
 export interface ScheduleRun {
   id: string;
   scheduleId: string;
@@ -44,6 +49,8 @@ export interface ScheduleRun {
   finishedAt?: string;
   status: ScheduleRunStatus;
   sessionId?: string;
+  engine?: "durable";
+  execution?: ScheduleExecution;
   error?: string;
 }
 
@@ -57,6 +64,7 @@ export interface ScheduleInput {
   name: string;
   cwd: string;
   prompt: string;
+  engine?: "durable";
   timing: ScheduleTiming;
   timezone: string;
   enabled?: boolean;

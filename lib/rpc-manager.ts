@@ -13,7 +13,6 @@ import { AgentEventLog, type AgentStreamRecord, type ReplayStatus } from "./agen
 import { CompactionController } from "./compaction-controller";
 import type { QueuedFollowUp } from "./queued-follow-ups";
 import type { SessionEntry } from "./types";
-import { isWebExtensionUIDialogRequest } from "./web-extension-ui-types";
 import { createSnapshot } from "./git-snapshot";
 import { readWorkflow, WORKFLOW_ENTRY } from "./workflow-state";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
@@ -569,6 +568,26 @@ export class AgentSessionWrapper {
     return this._alive;
   }
 
+  private migrating = false;
+  private admittedCommands = 0;
+  migrationBusyReason(): string | undefined {
+    if (this.migrating || this.admittedCommands || this.isReplacementPending() || this.runActive || this.inner.isStreaming
+      || this.inner.isCompacting || this.inner.pendingMessageCount || this.compaction.state?.status === "running"
+      || this.compactionQueue.length || this.flushingCompactionQueue || this.bashRunning || this.activeTools.size
+      || this.webExtensionUI?.hasPendingDialogs()) return "The conversation has work or a question in progress; conversion will be retried when idle.";
+  }
+  reserveMigration(): () => void {
+    const reason = this.migrationBusyReason();
+    if (reason) throw new Error(reason);
+    this.migrating = true;
+    return () => { this.migrating = false; };
+  }
+  completeMigration(target: { sessionId: string; cwd: string; sessionFile: string }): void {
+    this.emitEvent({ type: "session_replaced", previousSessionId: this.sessionId, newSessionId: target.sessionId,
+      cwd: target.cwd, sessionFile: target.sessionFile, migrated: true });
+    this.destroy();
+  }
+
   start(): void {
     this.subscribeCurrentSession();
     this.resetIdleTimer();
@@ -580,7 +599,7 @@ export class AgentSessionWrapper {
       // Silence is not idleness: a model/tool may be working without events.
       // Pending decisions also need to survive while the user works elsewhere.
       if (this.runActive || this.inner.isStreaming || this.inner.isCompacting || this.compaction.state?.status === "running" || this.flushingCompactionQueue || this.bashRunning
-        || this.webExtensionUI?.snapshot().some(isWebExtensionUIDialogRequest)) {
+        || this.webExtensionUI?.hasPendingDialogs()) {
         this.resetIdleTimer();
         return;
       }
@@ -773,6 +792,11 @@ export class AgentSessionWrapper {
   }
 
   async send(command: Record<string, unknown>): Promise<unknown> {
+    if (this.migrating) throw new Error("Session conversion is in progress; retry the command shortly");
+    this.admittedCommands++;
+    try { return await this.performCommand(command); } finally { this.admittedCommands--; }
+  }
+  private async performCommand(command: Record<string, unknown>): Promise<unknown> {
     this.resetIdleTimer();
     const type = command.type as string;
 
@@ -1349,3 +1373,5 @@ export async function startRpcSession(
   locks.set(sessionId, starting);
   return starting;
 }
+
+export function isRpcSessionStarting(id: string): boolean { return getLocks().has(id); }
