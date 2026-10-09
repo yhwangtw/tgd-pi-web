@@ -65,7 +65,12 @@ test.describe("session tags", () => {
     const reopenedFilters = page.getByRole("dialog", { name: "Conversation filters" });
     await reopenedFilters.getByRole("button", { name: /filtertest/ }).click();
     await reopenedFilters.getByRole("button", { name: "Done", exact: true }).click();
+    // A cleared filter restores the full virtualized list, where this older
+    // fixture may be outside the rendered window. Search brings it into view.
+    const search = page.getByRole("textbox", { name: "Search conversations", exact: true });
+    await search.fill("失敗的執行");
     await expect(page.getByText("失敗的執行").first()).toBeVisible();
+    await search.fill("專案架構分析");
     const remove = page.locator("[class*=tagChip]", { hasText: "#filtertest" }).first()
       .getByRole("button", { name: "Remove #filtertest" });
     await remove.click();
