@@ -161,10 +161,17 @@ test("session grid keeps row selection and independent menus accessible, includi
 
 for (const theme of ["light", "dark"]) test(`${theme}: custom provider fields and delete controls are accessible`, async ({ page }) => {
   await preferences(page, "trae", "default", "zh", theme);
+  await page.route("**/api/provider-health", route => route.fulfill({ json: {
+    checkedAt: "2026-10-09T00:00:00.000Z",
+    summary: { ready: 0, needsAuth: 0, warning: 0, invalid: 0, total: 0 },
+    coverage: { credentialReadiness: "checked", localCatalog: "checked", quotaAndBilling: "not_checked", upstreamAvailability: "not_checked" },
+    providers: [],
+  } }));
   await main(page);
   await page.getByRole("button", { name: "模型", exact: true }).click();
   const models = page.getByRole("dialog", { name: "模型", exact: true });
-  await models.getByRole("button", { name: "新增 Provider", exact: true }).click();
+  await expect(models.getByTestId("provider-health").getByRole("button", { name: "新增 Provider", exact: true })).toBeVisible();
+  await models.getByTestId("models-config-nav").getByRole("button", { name: "新增 Provider", exact: true }).click();
   await page.getByRole("button", { name: /OpenAI \/ Anthropic 相容端點/ }).click();
   await expect(models.getByRole("combobox", { name: "API", exact: true })).toBeVisible();
   await accessible(page, ["select-name", "label", "nested-interactive", "color-contrast"]);
