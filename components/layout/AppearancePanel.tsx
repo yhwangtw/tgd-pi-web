@@ -14,6 +14,7 @@ import styles from "./AppearancePanel.module.css";
 
 interface Props {
   onClose: () => void;
+  returnFocus?: HTMLElement | null;
 }
 
 /**
@@ -21,7 +22,7 @@ interface Props {
  * palette, theme, and readability preferences. Changes apply instantly for
  * live preview; Esc or clicking outside closes.
  */
-export function AppearancePanel({ onClose }: Props) {
+export function AppearancePanel({ onClose, returnFocus }: Props) {
   const { skin, setSkin } = useSkin();
   const { isDark, toggleTheme } = useTheme();
   const { fontSize, setFontSize } = useFontSize();
@@ -86,9 +87,10 @@ export function AppearancePanel({ onClose }: Props) {
     return () => {
       document.body.style.overflow = oldOverflow;
       document.removeEventListener("keydown", onKey);
-      previous?.focus();
+      const target = returnFocus ?? previous;
+      if (target?.isConnected) target.focus({ preventScroll: true });
     };
-  }, [onClose]);
+  }, [onClose, returnFocus]);
 
   return (
     <>

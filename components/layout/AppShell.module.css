@@ -94,12 +94,12 @@
 .railButtonActive {
   --rail-indicator-surface: var(--color-accent-bg);
   background: var(--color-accent-bg);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .railButtonActive:hover:not(:disabled) {
   --rail-indicator-surface: var(--color-accent-bg-strong);
   background: var(--color-accent-bg-strong);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .railSpacer {
   flex: 1;
@@ -123,6 +123,12 @@
 }
 
 /* ── Top bar ── */
+.topBarContainer {
+  container-type: inline-size;
+  container-name: conversation;
+  flex-shrink: 0;
+}
+
 .topBar {
   display: flex;
   align-items: center;
@@ -189,7 +195,7 @@
   overflow: hidden;
   border-radius: var(--radius-pill);
   background: var(--color-accent-bg);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: var(--text-2xs);
   font-weight: var(--weight-semibold);
   text-overflow: ellipsis;
@@ -318,6 +324,8 @@
 }
 
 .sessionMenuButton {
+  flex-shrink: 0;
+  white-space: nowrap;
   display: inline-flex;
   height: 34px;
   align-items: center;
@@ -362,7 +370,7 @@
   text-align: left;
 }
 .sessionMenuItem:hover { background: var(--bg-hover); }
-.sessionMenuItemActive { background: var(--color-accent-bg); color: var(--accent); }
+.sessionMenuItemActive { background: var(--color-accent-bg); color: var(--accent-text); }
 .sessionMenuItem:disabled { color: var(--text-dim); cursor: not-allowed; }
 .sessionMenuItem:disabled:hover { background: transparent; }
 .sessionMenuItem span { font-size: var(--text-sm); font-weight: var(--weight-semibold); }
@@ -499,7 +507,7 @@
 }
 .systemButtonActive {
   background: var(--color-accent-bg);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ── Session stats ── */
@@ -773,7 +781,7 @@
   border: 1px solid var(--color-accent-border-subtle);
   border-radius: var(--radius-control);
   background: var(--color-accent-bg-strong);
-  color: var(--accent);
+  color: var(--accent-text);
   font: inherit;
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
@@ -798,7 +806,7 @@
   height: 22px;
   border-radius: var(--radius-control-compact);
   background: var(--color-accent-bg-strong);
-  color: var(--accent);
+  color: var(--accent-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -845,7 +853,7 @@
   border: 1px solid var(--color-accent-border);
   border-radius: var(--radius-control);
   background: var(--color-accent-bg);
-  color: var(--color-accent);
+  color: var(--accent-text);
   font-size: var(--text-xs);
   cursor: pointer;
 }
@@ -1195,7 +1203,7 @@
   }
 
   .mobileNavButtonActive {
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--color-accent-bg);
   }
 
@@ -1318,7 +1326,7 @@
     place-items: center;
     border-radius: var(--radius-pill);
     background: var(--color-accent-bg);
-    color: var(--accent);
+    color: var(--accent-text);
     font-family: var(--font-ui);
     font-size: var(--text-2xs);
     font-weight: var(--weight-medium);
@@ -1332,7 +1340,7 @@
 
   .mobileMoreActionActive {
     background: var(--color-accent-bg);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   /* Text editing owns this layout until focus leaves the whole composer.
@@ -1531,6 +1539,8 @@
 :global(html[data-ui-style="trae"]) .topBarButton,
 :global(html[data-ui-style="trae"]) .commandPaletteTrigger,
 :global(html[data-ui-style="trae"]) .sessionMenuButton {
+  flex-shrink: 0;
+  white-space: nowrap;
   border-radius: var(--radius-pill);
 }
 
@@ -1674,7 +1684,7 @@
 
   :global(html[data-ui-style="trae"]) .mobileNavButtonActive {
     background: transparent;
-    color: var(--accent);
+    color: var(--accent-text);
     font-weight: var(--weight-semibold);
   }
 
@@ -1701,4 +1711,11 @@
 
 @media (max-width: 380px) {
   .detachedLabel { display: none; }
+}
+
+@container conversation (min-width: 320px) and (max-width: 640px) {
+  .sessionStats { display: none; }
+  .sessionIdentity { gap: var(--space-2); padding-right: 0; }
+  .workspaceIdentity { max-width: 60%; }
+  .workspaceBranch { max-width: 100px; }
 }

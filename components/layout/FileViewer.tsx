@@ -1,6 +1,7 @@
 "use client";
 
 import { encodeFilePathForApi, getFileName } from "@/lib/file-paths";
+import { useI18n } from "@/lib/i18n";
 import { ImageViewer } from "./ImageViewer";
 import { AudioViewer } from "./AudioViewer";
 import { DocumentViewer } from "./DocumentViewer";
@@ -63,7 +64,8 @@ function isDocumentPreviewPath(filePath: string): boolean {
   return DOCUMENT_PREVIEW_EXTS.has(getFileExt(filePath));
 }
 
-export function DownloadLink({ filePath, label = "Download" }: { filePath: string; label?: string }) {
+export function DownloadLink({ filePath, label }: { filePath: string; label?: string }) {
+  const { t } = useI18n();
   const encoded = encodeFilePathForApi(filePath);
   return (
     <a
@@ -71,7 +73,7 @@ export function DownloadLink({ filePath, label = "Download" }: { filePath: strin
       download={getFileName(filePath)}
       className={styles.downloadLink}
     >
-      {label}
+      {label ?? t("files.downloadFile")}
     </a>
   );
 }

@@ -21,7 +21,7 @@ test.describe("left rail", () => {
   test("finds conversations across projects without switching folders first", async ({ page }) => {
     await openMain(page);
 
-    const sessionList = page.getByRole("listbox", { name: "Sessions" });
+    const sessionList = page.getByRole("grid", { name: "Sessions" });
     const scope = page.getByRole("group", { name: "Conversation scope" });
     const search = page.getByRole("textbox", { name: "Search conversations" });
 
@@ -59,7 +59,7 @@ test.describe("left rail", () => {
     expect(projectBox?.height).toBeGreaterThanOrEqual(44);
 
     await search.fill("billing migration");
-    await expect(page.getByRole("listbox", { name: "Sessions" }).getByText("跨專案歷史對話", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("grid", { name: "Sessions" }).getByText("跨專案歷史對話", { exact: true })).toBeVisible({ timeout: 10_000 });
 
     const width = await page.evaluate(() => ({
       viewport: window.innerWidth,

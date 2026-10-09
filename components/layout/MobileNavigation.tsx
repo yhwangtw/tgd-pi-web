@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import {
   BarChart3,
   Bell,
@@ -35,12 +35,13 @@ interface Props {
   onOpenSkills: () => void;
   skillsDisabled: boolean;
   onOpenExtensions: () => void;
-  onOpenAppearance: () => void;
+  onOpenAppearance: (returnFocus?: HTMLElement | null) => void;
   onOpenDesignMode?: () => void;
   attentionUnreadCount?: number;
 }
 
 interface NavButtonProps {
+  buttonRef?: Ref<HTMLButtonElement>;
   active?: boolean;
   icon: ReactNode;
   label: string;
@@ -48,9 +49,10 @@ interface NavButtonProps {
   expanded?: boolean;
 }
 
-function NavButton({ active, icon, label, onClick, expanded }: NavButtonProps) {
+function NavButton({ active, icon, label, onClick, expanded, buttonRef }: NavButtonProps) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       className={`${s.mobileNavButton} ${active ? s.mobileNavButtonActive : ""}`}
       onClick={onClick}
@@ -107,6 +109,7 @@ export function MobileNavigation({
   attentionUnreadCount = 0,
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLButtonElement>(null);
   const { t } = useI18n();
   const secondaryViewActive = panelOpen && ["attention", "agents", "schedule", "changes", "tgd"].includes(panelView);
 
@@ -161,6 +164,7 @@ export function MobileNavigation({
         />
         <NavButton
           active={moreOpen || secondaryViewActive}
+          buttonRef={moreRef}
           expanded={moreOpen}
           label={t("mobile.more")}
           onClick={() => setMoreOpen(!moreOpen)}
@@ -192,7 +196,7 @@ export function MobileNavigation({
               <MoreAction label={t("sidebar.models")} onClick={() => run(onOpenModels)} icon={<Cpu size={20} strokeWidth={1.8} />} />
               <MoreAction label={t("sidebar.skills")} disabled={skillsDisabled} onClick={() => run(onOpenSkills)} icon={<Layers3 size={20} strokeWidth={1.8} />} />
               <MoreAction label={t("extensions.title")} onClick={() => run(onOpenExtensions)} icon={<Puzzle size={20} strokeWidth={1.8} />} />
-              <MoreAction label={t("appearance.title")} onClick={() => run(onOpenAppearance)} icon={<Palette size={20} strokeWidth={1.8} />} />
+              <MoreAction label={t("appearance.title")} onClick={() => run(() => onOpenAppearance(moreRef.current))} icon={<Palette size={20} strokeWidth={1.8} />} />
               {onOpenDesignMode && <MoreAction label={t("topbar.designMode")} onClick={() => run(() => onOpenDesignMode())} icon={<Box size={20} strokeWidth={1.8} />} />}
             </div>
           </div>

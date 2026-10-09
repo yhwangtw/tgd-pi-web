@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { deploymentSafetyFromEnv } from "../runtime-status";
+import { deploymentSafetyFromEnv, runtimeUpdateCommands } from "../runtime-status";
+
+it("keeps update instructions on the checkout's tested Pi version and lockfile", () => {
+  const commands = runtimeUpdateCommands("0.86.0");
+  expect(commands.updateGlobal).toBe("npm install -g @earendil-works/pi-coding-agent@0.86.0");
+  expect(commands.updateProject).toBe("npm ci");
+  expect(Object.values(commands).join(" ")).not.toContain("@latest");
+});
 
 describe("deploymentSafetyFromEnv", () => {
   it("reports a production instance with separate secrets as remote-ready", () => {

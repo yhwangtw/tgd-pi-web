@@ -105,13 +105,13 @@ test("draft and reading position survive navigation and reload", async ({ page }
   // outside the virtualized sidebar. Find it through the actual search UI.
   const search = page.getByRole("textbox", { name: "Search conversations", exact: true });
   await search.fill("結構化輸出設計");
-  await page.getByRole("listbox", { name: "Sessions", exact: true }).getByRole("option", { name: /^結構化輸出設計/ }).click();
+  await page.getByRole("grid", { name: "Sessions", exact: true }).getByRole("row", { name: /^結構化輸出設計/ }).click();
   await expect(composer).toHaveValue("");
   await composer.fill("Unsaved second conversation");
   await search.fill("專案架構分析");
   // Runtime import/fork tests can leave a conversation with the same title.
   // Select the original fixture identity, not an arbitrary matching name.
-  await page.getByRole("listbox", { name: "Sessions", exact: true })
+  await page.getByRole("grid", { name: "Sessions", exact: true })
     .locator('[data-session-row="aaaa1111-2222-3333-4444-555566667777"]').click();
   await expect(composer).toHaveValue("Unsaved first conversation");
   await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeCloseTo(readingPosition, 0);

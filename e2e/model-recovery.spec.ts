@@ -89,7 +89,7 @@ async function expectDesktopModels(page: Page, name: string, absent?: string) {
 }
 
 async function switchToArchive(page: Page) {
-  await page.getByRole("listbox", { name: "Sessions", exact: true }).getByText("跨專案歷史對話", { exact: true }).click();
+  await page.getByRole("grid", { name: "Sessions", exact: true }).getByText("跨專案歷史對話", { exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`session=${ARCHIVE_ID}`));
 }
 

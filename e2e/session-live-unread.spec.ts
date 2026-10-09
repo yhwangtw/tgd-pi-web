@@ -18,7 +18,7 @@ for (const width of [1440, 390]) {
     await page.goto(`/?session=${existing}`);
     await expect(page.getByTestId("app-shell")).toHaveAttribute("data-hydrated", "true");
     const openSidebar = async () => {
-      if (width < 700 && !await page.getByRole("listbox", { name: "Sessions" }).isVisible()) {
+      if (width < 700 && !await page.getByRole("grid", { name: "Sessions" }).isVisible()) {
         await page.locator('nav[class*="mobileNav"]').getByRole("button", { name: "Sessions", exact: true }).click();
       }
     };

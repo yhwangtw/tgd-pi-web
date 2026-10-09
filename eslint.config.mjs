@@ -14,6 +14,7 @@ const eslintConfig = [
       ".worktrees/**",
       "coverage/**",
       "node_modules/**",
+      "vendor/sprintf-js/index.cjs", // Licensed upstream source; security patch has regression coverage.
     ],
   },
   ...coreWebVitals,

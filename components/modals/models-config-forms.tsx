@@ -1,22 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { createContext, useContext, useId, useState, useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 import { useI18n } from "@/lib/i18n";
 import styles from "./models-config-forms.module.css";
 
+const FieldId = createContext<string | undefined>(undefined);
+
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const id = useId();
   return (
     <div className={styles.field}>
-      <label className={styles.label}>{label}</label>
-      {children}
+      <label className={styles.label} htmlFor={id}>{label}</label>
+      <FieldId.Provider value={id}>{children}</FieldId.Provider>
     </div>
   );
 }
 
 export function TextInput({ value, onChange, placeholder, mono, ariaLabel, ariaInvalid, describedBy }: { value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean; ariaLabel?: string; ariaInvalid?: boolean; describedBy?: string }) {
-  return <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+  const id = useContext(FieldId);
+  return <input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
     aria-label={ariaLabel} aria-invalid={ariaInvalid} aria-describedby={describedBy}
     className={`${styles.input} ${mono ? styles.mono : ""}`} />;
 }
@@ -43,6 +47,7 @@ export function SecretTextInput({
   ariaLabel?: string;
 }) {
   const { t } = useI18n();
+  const id = useContext(FieldId);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -52,6 +57,7 @@ export function SecretTextInput({
   return (
     <div className={styles.secretWrap} style={style}>
       <input
+        id={id}
         type={visible ? "text" : "password"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -74,13 +80,15 @@ export function SecretTextInput({
 }
 
 export function NumInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={styles.input} />;
+  const id = useContext(FieldId);
+  return <input id={id} type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={styles.input} />;
 }
 
 export function Select({ value, onChange, options, required }: { value: string; onChange: (v: string) => void; options: readonly string[]; required?: boolean }) {
   const { t } = useI18n();
+  const id = useContext(FieldId);
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
+    <select id={id} value={value} onChange={(e) => onChange(e.target.value)}
       className={`${styles.input} ${value ? "" : styles.selectEmpty}`}>
       {!required && <option value="">{t("models.inheritNone")}</option>}
       {options.map((o) => <option key={o} value={o}>{o}</option>)}

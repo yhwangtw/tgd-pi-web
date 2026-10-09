@@ -35,7 +35,7 @@ import { AppearancePanel } from "./AppearancePanel";
 import { IconRail, type PanelView } from "./IconRail";
 import { MobileNavigation } from "./MobileNavigation";
 import { ShortcutsDialog } from "./ShortcutsDialog";
-import { TabBar } from "./TabBar";
+import { TabBar, fileTabId, filePanelId } from "./TabBar";
 import { BranchNavigator, hasSessionBranches } from "../chat/BranchNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppShellState } from "@/hooks/useAppShellState";
@@ -103,6 +103,8 @@ export function AppShell() {
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [sessionImportOpen, setSessionImportOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const appearanceReturnFocus = useRef<HTMLElement | null>(null);
+  const closeAppearance = useCallback(() => { setAppearanceOpen(false); appearanceReturnFocus.current = null; }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const sidebarOpenRef = useRef(sidebarOpen);
   const autoCollapsedSidebarRef = useRef(false);
@@ -801,7 +803,7 @@ export function AppShell() {
         onOpenSkills={() => setSkillsConfigOpen(true)}
         skillsDisabled={!panelCwd}
         onOpenExtensions={() => setExtensionsConfigOpen(true)}
-        onOpenAppearance={() => setAppearanceOpen(true)}
+        onOpenAppearance={(returnFocus) => { appearanceReturnFocus.current = returnFocus ?? null; setAppearanceOpen(true); }}
         onOpenDesignMode={() => setDesignModeOpen(true)}
         attentionUnreadCount={attention.unreadCount}
       />
@@ -829,6 +831,7 @@ export function AppShell() {
       <div className={s.centerPanel}>
         <RuntimeIdentityBar />
         {/* Top bar with sidebar toggle */}
+        <div className={s.topBarContainer}>
         <div ref={topBarRef} className={s.topBar} data-testid="top-bar">
           <button
             type="button"
@@ -1146,6 +1149,7 @@ export function AppShell() {
           </button>
         </div>
 
+        </div>
         {/* Portalled to body because the top bar's backdrop-filter creates a
             stacking context that would otherwise let chat messages paint over
             this fixed panel. */}
@@ -1359,11 +1363,14 @@ export function AppShell() {
         }
         {/* File content */}
         <div className={s.rightPanelContent}>
+          {fileTabs.filter((tab) => tab.id !== activeFileTabId).map((tab) => (
+            <div key={tab.id} role="tabpanel" id={filePanelId(tab.id)} aria-labelledby={fileTabId(tab.id)} hidden />
+          ))}
           {diffFile && panelCwd ? (
             <DiffPanel key={`${panelCwd}:${diffFile}`} cwd={panelCwd} path={diffFile} onClose={() => setDiffFile(null)} onAnnotate={handleDiffAnnotation} />
           ) : activeFileTab?.filePath ? (
             <div className={`${s.fileWorkspace} ${splitFileTab ? s.fileWorkspaceSplit : ""}`}>
-              <div className={s.fileWorkspacePane}>
+              <div className={s.fileWorkspacePane} role="tabpanel" id={filePanelId(activeFileTab.id)} aria-labelledby={fileTabId(activeFileTab.id)} tabIndex={0}>
                 <FileViewer
                   filePath={activeFileTab.filePath}
                   visible={rightPanelOpen}
@@ -1436,7 +1443,7 @@ export function AppShell() {
         }}
       /></Suspense>
     )}
-    {appearanceOpen && <AppearancePanel onClose={() => setAppearanceOpen(false)} />}
+    {appearanceOpen && <AppearancePanel returnFocus={appearanceReturnFocus.current} onClose={closeAppearance} />}
     {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
     <DesignInspector active={designModeOpen && showChat} onClose={() => setDesignModeOpen(false)} onCapture={handleDesignCapture} />
     {/* Toast notifications — mount once at app root */}

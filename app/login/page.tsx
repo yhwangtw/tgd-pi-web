@@ -71,10 +71,14 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
+  const { t } = useI18n();
   // useSearchParams needs a Suspense boundary under the app router.
   return (
+    <>
+    <title>{t("login.title")}</title>
     <Suspense fallback={null}>
       <LoginForm />
     </Suspense>
+    </>
   );
 }

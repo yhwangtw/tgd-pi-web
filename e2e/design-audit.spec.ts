@@ -42,6 +42,7 @@ async function auditControls(page: Page, root: Locator, context: string, mobile:
     "select",
     "[role='button']",
     "[role='option']",
+    "[data-session-row]",
     "[role='treeitem']",
     "[role='menuitem']",
     "[role='tab']",
@@ -424,7 +425,7 @@ test("Original and TRAE share one semantic radius contract with distinct geometr
         return {
           ...values,
           railButton: radiusOf("[class*='railButton']"),
-          sessionCard: radiusOf("[role='option'][aria-selected='true']"),
+          sessionCard: radiusOf("[data-session-row][aria-selected='true']"),
           composerSurface: radiusOf("[class*='inputWrapper']"),
         };
       });

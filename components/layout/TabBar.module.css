@@ -1,11 +1,14 @@
 .tabBar {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
+  grid-auto-columns: max-content;
+  align-items: center;
   background: var(--bg-panel);
   overflow-x: auto;
   flex-shrink: 0;
   height: 36px;
 }
+
+.tabList { display: contents; }
 
 .tab {
   display: flex;
@@ -13,7 +16,7 @@
   gap: var(--space-2);
   height: 36px;
   padding-left: var(--space-3);
-  padding-right: var(--space-2);
+  padding-right: calc(var(--space-2) + var(--control-compact) + var(--space-2));
   border-right: 1px solid var(--border);
   cursor: pointer;
   font-size: var(--text-sm);
@@ -28,6 +31,26 @@
 .tabActive {
   background: var(--bg);
   color: var(--text);
+}
+
+.tabSelect {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tabSelect:focus-visible {
+  outline: 2px solid var(--color-accent-border-focus);
+  outline-offset: -2px;
 }
 
 .tabInactive {
@@ -66,6 +89,9 @@
 }
 
 .closeBtn {
+  justify-self: end;
+  margin-right: var(--space-2);
+  z-index: 1;
   flex-shrink: 0;
 }
 .pinned,
@@ -103,13 +129,13 @@
   height: 36px;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
+  padding: 0 var(--space-2);
   background: var(--trae-canvas);
 }
 :global(html[data-ui-style="trae"]) .tab {
   height: 30px;
   min-width: 88px;
-  padding: 0 var(--space-2) 0 var(--space-2);
+  padding: 0 calc(var(--space-2) + var(--control-compact) + var(--space-2)) 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-control);
 }
@@ -126,6 +152,7 @@
   .tab,
   :global(html[data-ui-style="trae"]) .tab {
     height: var(--control-touch);
+    padding-right: calc(var(--space-2) + var(--control-touch) + var(--space-2));
   }
 
   .tabMenuItem {
