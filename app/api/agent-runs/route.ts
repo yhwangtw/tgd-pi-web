@@ -1,5 +1,6 @@
 import { ensureAgentRunSupervisor } from "@/lib/agent-run-supervisor";
 import { readAgentRunStore } from "@/lib/agent-run-store";
+import { listDurableChildRuns } from "@/lib/durable-session-store";
 import type { AgentRunStatus } from "@/lib/agent-run-types";
 import {
   AgentRunValidationError,
@@ -59,7 +60,7 @@ export async function GET(req: Request): Promise<Response> {
 
   const cwd = url.searchParams.get("cwd");
   const query = url.searchParams.get("q")?.trim().toLocaleLowerCase() ?? "";
-  const baseRuns = readAgentRunStore().runs.filter((run) => {
+  const baseRuns = [...readAgentRunStore().runs, ...listDurableChildRuns()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).filter((run) => {
     if (cwd && run.cwd !== cwd) return false;
     if (!query) return true;
     return `${run.name}\n${run.cwd}\n${run.prompt}`.toLocaleLowerCase().includes(query);

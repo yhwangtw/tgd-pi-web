@@ -1,10 +1,10 @@
-import { buildContextEntries, buildSessionContext as piBuildSessionContext, getAgentDir, migrateSessionEntries, parseSessionEntries, sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
-import type { SessionEntry, SessionHeader, SessionInfo, SessionContext, SessionTreeNode, AgentMessage } from "./types";
-import type { SessionEntry as PiSessionEntry } from "@earendil-works/pi-coding-agent";
-import { normalizeToolCalls } from "./normalize";
+import { resolveMigratedSessionId } from "./session-migrations";
+import { getAgentDir, migrateSessionEntries, parseSessionEntries } from "@earendil-works/pi-coding-agent";
+import type { SessionEntry, SessionHeader, SessionInfo, SessionTreeNode } from "./types";
 import { readFileSync } from "fs";
 import { readdir, readFile, stat } from "fs/promises";
 import { join } from "path";
+import { isDurableSessionId, listDurableSessions } from "./durable-session-store";
 
 export { getAgentDir };
 
@@ -128,6 +128,7 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
 }
 
 export async function listAllSessions(): Promise<SessionInfo[]> {
+  const durable = listDurableSessions();
   const sessionsDir = getSessionsDir();
   const cache = getInfoCache();
 
@@ -135,7 +136,7 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
   try {
     topLevel = await readdir(sessionsDir, { withFileTypes: true });
   } catch {
-    return [];
+    return durable.sort((a, b) => Date.parse(b.modified) - Date.parse(a.modified));
   }
 
   const files: string[] = [];
@@ -182,7 +183,7 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
   for (const info of infos) pathToId.set(info.path, info.id);
 
   const pathCache = getPathCache();
-  return infos.map((info) => {
+  const legacy = infos.map((info) => {
     // Populate path cache so resolveSessionPath works without a full scan
     pathCache.set(info.id, info.path);
     return {
@@ -199,6 +200,7 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
       parentSessionId: info.parentSessionPath ? pathToId.get(info.parentSessionPath) : undefined,
     };
   });
+  return [...legacy.filter(info => resolveMigratedSessionId(info.id) === info.id), ...durable].map(info => ({ ...info, parentSessionId: info.parentSessionId ? resolveMigratedSessionId(info.parentSessionId) : undefined })).sort((a, b) => Date.parse(b.modified) - Date.parse(a.modified));
 }
 
 // ============================================================================
@@ -215,6 +217,9 @@ function getPathCache(): Map<string, string> {
 }
 
 export async function resolveSessionPath(sessionId: string): Promise<string | null> {
+  // SQLite projections are not Pi JSONL files; legacy callers must not open or
+  // rewrite a Durable store through SessionManager.
+  if (isDurableSessionId(sessionId)) return null;
   const cached = getPathCache().get(sessionId);
   if (cached) {
     try {
@@ -303,39 +308,7 @@ export function buildTree(entries: SessionEntry[]): SessionTreeNode[] {
   return roots;
 }
 
-export function buildSessionContext(entries: SessionEntry[], leafId?: string | null): SessionContext {
-  const byId = new Map<string, SessionEntry>();
-  for (const e of entries) byId.set(e.id, e);
-
-  const piEntries = entries as unknown as PiSessionEntry[];
-  const piIndex = byId as unknown as Map<string, PiSessionEntry>;
-  const piCtx = piBuildSessionContext(piEntries, leafId, piIndex);
-  const messages: AgentMessage[] = [];
-  const entryIds: string[] = [];
-
-  // Pi 0.86 can project one compaction entry into both system state and a
-  // summary. Use its projection for both arrays so fork/edit targets stay
-  // aligned after compaction, branching, and hidden system/tool updates.
-  for (const entry of buildContextEntries(piEntries, leafId, piIndex)) {
-    for (const message of sessionEntryToContextMessages(entry)) {
-      if (message.role === "system") continue;
-      const raw = message as unknown as Record<string, unknown>;
-      messages.push(raw.role === "compactionSummary" ? {
-        role: "user",
-        content: `*The conversation history before this point was compacted into the following summary:*\n\n${raw.summary ?? ""}`,
-        timestamp: raw.timestamp as number | undefined,
-      } : normalizeToolCalls(message as AgentMessage));
-      entryIds.push(entry.id);
-    }
-  }
-
-  return {
-    messages,
-    entryIds,
-    thinkingLevel: piCtx.thinkingLevel,
-    model: piCtx.model,
-  };
-}
+export { buildSessionContext } from "./session-context";
 
 export function getLeafId(entries: SessionEntry[]): string | null {
   if (entries.length === 0) return null;

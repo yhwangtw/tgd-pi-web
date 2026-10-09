@@ -92,6 +92,21 @@
       "evidence": ["lib/structured-output-extension.ts", "components/chat/StructuredOutputCard.tsx"]
     },
     {
+      "id": "durable-background-agents",
+      "title": { "en": "Durable background agents (experimental)", "zh": "可恢復背景代理（實驗性）" },
+      "summary": {
+        "en": "Opt-in official Pi Durable runs save checkpoints in SQLite and resume after restart with selected file and shell tools. Chat extensions are not migrated.",
+        "zh": "可選用官方 Pi Durable 將檢查點保存於 SQLite，重啟後接續背景任務，支援所選檔案與命令工具；聊天擴充尚未遷移。"
+      },
+      "foundation": "pi-sdk",
+      "webSupport": "adapted",
+      "packaging": "built-in",
+      "globalPiCliRequired": false,
+      "backgroundServerRequired": true,
+      "trust": "workspace",
+      "evidence": ["lib/durable-agent-run.ts", "components/layout/AgentRunForm.tsx"]
+    },
+    {
       "id": "embedded-subagents",
       "title": { "en": "Embedded subagents", "zh": "內嵌子代理" },
       "summary": {

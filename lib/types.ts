@@ -184,6 +184,9 @@ export interface SessionTreeNode {
 }
 
 export interface SessionInfo {
+  /** Original JSONL identity, retained for bookmarks and read markers. */
+  sourceSessionId?: string;
+  engine?: "legacy" | "durable";
   path: string;
   id: string;
   cwd: string;

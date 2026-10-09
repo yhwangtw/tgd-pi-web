@@ -581,3 +581,32 @@ describe("AgentSessionWrapper extension lifecycle", () => {
     wrapper.destroy();
   });
 });
+
+
+describe("legacy migration admission", () => {
+  it("blocks new commands while reserved and releases them when verification fails", async () => {
+    const inner = { sessionId: "migrating", sessionFile: "", dispose: vi.fn(), pendingMessageCount: 0 } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner);
+    try {
+      expect(wrapper.migrationBusyReason()).toBeUndefined();
+      const release = wrapper.reserveMigration();
+      await expect(wrapper.send({ type: "get_state" })).rejects.toThrow("conversion is in progress");
+      release();
+      await expect(wrapper.send({ type: "get_state" })).resolves.toMatchObject({ sessionId: "migrating" });
+      Object.assign(inner, { pendingMessageCount: 1 });
+      expect(wrapper.migrationBusyReason()).toBeDefined();
+    } finally { wrapper.destroy(); }
+  });
+  it("does not consume a pending editor instruction when checking for unanswered questions", async () => {
+    const bridge = new WebExtensionUIBridge({ theme: {} as never });
+    const inner = { sessionId: "pending", sessionFile: "", dispose: vi.fn() } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner, "", undefined, [], undefined, bridge);
+    try {
+      bridge.setEditorText("Keep my draft");
+      const answer = bridge.select("Choose", ["A", "B"]);
+      expect(wrapper.migrationBusyReason()).toBeDefined();
+      expect(bridge.snapshot()).toContainEqual(expect.objectContaining({ method: "set_editor_text", text: "Keep my draft" }));
+      wrapper.destroy(); await answer;
+    } finally { wrapper.destroy(); }
+  });
+});

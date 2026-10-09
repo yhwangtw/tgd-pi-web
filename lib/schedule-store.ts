@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { ACTIVE_SCHEDULE_RUN_STATUSES, type AgentSchedule, type ScheduleRun, type ScheduleStore } from "./schedule-types";
+import { ACTIVE_SCHEDULE_RUN_STATUSES, type AgentSchedule, type ScheduleExecution, type ScheduleRun, type ScheduleStore } from "./schedule-types";
 
 const MAX_RUNS = 500;
 const RUN_STATUSES = new Set(["running", "waiting_for_input", "completed", "failed", "skipped"]);
@@ -10,6 +10,15 @@ const RUN_TRIGGERS = new Set(["scheduled", "manual"]);
 
 function isOptionalString(value: unknown): boolean {
   return value === undefined || typeof value === "string";
+}
+
+function isExecution(value: unknown): value is ScheduleExecution {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<ScheduleExecution>;
+  return typeof item.cwd === "string" && typeof item.prompt === "string"
+    && Array.isArray(item.toolNames) && item.toolNames.every(tool => typeof tool === "string")
+    && isOptionalString(item.provider) && isOptionalString(item.modelId)
+    && (!!item.provider === !!item.modelId) && isOptionalString(item.thinkingLevel);
 }
 
 function isTiming(value: unknown): boolean {
@@ -37,6 +46,7 @@ function isSchedule(value: unknown): value is AgentSchedule {
   const item = value as Partial<AgentSchedule>;
   return typeof item.id === "string" && typeof item.name === "string"
     && typeof item.cwd === "string" && typeof item.prompt === "string"
+    && (item.engine === undefined || item.engine === "durable")
     && isTiming(item.timing)
     && typeof item.timezone === "string" && typeof item.enabled === "boolean"
     && (item.missedRunPolicy === "run_once" || item.missedRunPolicy === "skip")
@@ -56,7 +66,9 @@ function isRun(value: unknown): value is ScheduleRun {
     && typeof item.scheduleName === "string" && typeof item.startedAt === "string"
     && typeof item.scheduledFor === "string" && RUN_STATUSES.has(item.status ?? "")
     && RUN_TRIGGERS.has(item.trigger ?? "") && isOptionalString(item.finishedAt)
-    && isOptionalString(item.sessionId) && isOptionalString(item.error);
+    && isOptionalString(item.sessionId) && isOptionalString(item.error)
+    && (item.engine === undefined || item.engine === "durable")
+    && (item.execution === undefined || isExecution(item.execution));
 }
 
 export function readScheduleStore(path = scheduleStorePath()): ScheduleStore {
@@ -100,6 +112,7 @@ export function reconcileInterruptedRuns(path = scheduleStorePath(), now = new D
   let changed = 0;
   for (const run of store.runs) {
     if (!ACTIVE_SCHEDULE_RUN_STATUSES.has(run.status)) continue;
+    if (run.engine === "durable") continue;
     run.status = "failed";
     run.finishedAt = now.toISOString();
     run.error = "The server restarted before this run completed";

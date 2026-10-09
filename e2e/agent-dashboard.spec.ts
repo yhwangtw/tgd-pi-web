@@ -131,7 +131,7 @@ test("AC-4.2: coding access is explicit and the run remains queued in the daemon
   await page.getByTestId("agent-new-run").click();
   await page.getByLabel("Run name").fill("Build dashboard");
   await page.getByLabel("Prompt").fill("Implement and verify the dashboard");
-  await page.getByText("Model and tool access", { exact: true }).click();
+  await page.getByText("Execution, model and tools", { exact: true }).click();
   await page.getByRole("button", { name: "Coding", exact: true }).click();
   await expect(page.getByText(/may edit files and run shell commands/)).toBeVisible();
 

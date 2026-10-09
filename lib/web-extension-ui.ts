@@ -271,6 +271,8 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
     this.acceptDialogs = true;
   }
 
+  hasPendingDialogs(): boolean { return this.pending.size > 0; }
+
   snapshot(): WebExtensionUIEvent[] {
     this.pruneReceipts();
     const editorTextEvent = this.editorTextEvent;

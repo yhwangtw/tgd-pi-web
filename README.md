@@ -187,6 +187,7 @@ This table is generated from `lib/capabilities.json`; it is the product contract
 | **Plan Mode** | Official Extension API | Web adapter | Not required | Normal Web runtime | Trusted workspace |
 | **Goal Mode** | Official Extension API | Web adapter | Not required | Required | Trusted workspace |
 | **Structured Output** | Official Extension API | Web adapter | Not required | Normal Web runtime | None |
+| **Durable background agents (experimental)** | Official Pi SDK | Web adapter | Not required | Required | Trusted workspace |
 | **Embedded subagents** | Official Pi SDK | Web adapter | Not required | Normal Web runtime | Trusted workspace |
 | **MCP connections** | Official Extension API | Web adapter | Not required | Normal Web runtime | Trusted endpoint/command |
 | **Scheduled agents** | Official Pi SDK | Web adapter | Not required | Required | Operator configuration |
@@ -198,22 +199,26 @@ This table is generated from `lib/capabilities.json`; it is the product contract
 
 ### Agent chat
 
-Subagent, Plan, and Goal are Pi Web-maintained extensions built on the official Pi SDK and Extension API. They are Web integrations, not unmodified upstream extension packages; Pi SDK upgrades still require compatibility validation here.
+Subagent, Plan, and Goal are Pi Web-maintained integrations using official Pi APIs: standard conversations use the Extension API, while Durable conversations use native tasks, documents and hooks. They are not unmodified upstream extension packages; Pi SDK upgrades still require compatibility validation here.
+
+**Durable conversations (preview):** Before sending a new conversation, open **More composer controls** and select **Durable (preview)**. It saves execution in SQLite and connects chat, branches, Goal/Plan, subagents, MCP and pending questions to the official Pi Durable harness. New Standard conversations remain Standard. Existing JSONL conversations automatically convert on their first idle continuation, with the original file retained and old bookmarks redirected; incompatible or busy sessions stay Standard with an explanation. Reconnecting a Durable conversation can resume unfinished work; listing, searching and exporting saved history do not. Temporary conversations stay in memory. The Schedule Center also offers **Resume after restart (experimental)**. See [Durable usage and limits](docs/DURABLE.md), including extension compatibility and recovery behavior.
+
+**Durable background tasks (experimental):** **Agents → New run → Execution, model and tools → Resume after restart** remains a separate, narrower runner for the selected file and shell tools. Its activity viewer, cancellation and retry use saved checkpoints; it does not install the conversation's MCP, interactive questions or workflow extensions. Interrupted model requests may be resent and incur usage, and recovery does not guarantee exactly-once external effects. See [background runner details](docs/DEVELOPMENT.md#durable-background-runs-experimental).
 
 - Live SSE streaming with connect-before-prompt delivery.
 - Prompt, steer, follow-up queue, retry, bash, and context compaction.
 - Direct shell mode with `!command`; use `!!command` to omit the result from model context.
 - Model and thinking-level switching during a session.
 - Tool access can inherit Pi/project defaults, use a preset, or select individual built-in, extension, and MCP tools.
-- A first-party `subagent` tool is installed with the Web runtime: delegate work in separate sessions to the built-in scout, planner, worker, and reviewer, run up to eight tasks through the existing Agent queue, and inspect or cancel every child session from the Agent dashboard. `tasks` runs independent children in parallel, including workers; the Agent panel's shared concurrency limit controls how many run at once (default 3, configurable from 1 to 8). Children share the parent's working directory, so assign workers disjoint files and use `chain` for dependencies such as reviewing a preceding worker's edits. The three read-only built-ins have no shell access. Use **Inherit** or explicitly enable `subagent` in custom tools; explicit core-tool presets do not include it. No global `pi` CLI is required.
-- **Goal:** `/goal <objective>` starts a session-owned objective; `/goal --tokens 100k <objective>` adds an optional budget. The Goal panel and `/goal pause`, `/goal resume`, `/goal status`, `/goal budget 200k`, and `/goal clear` manage it. Continuations run only after Pi fully settles, stay hidden in the transcript, and stop on completion, a blocker, model error, user stop, budget exhaustion, three repeated/empty tool-free responses. There is no fixed continuation cap; use `/goal --runs 50 <objective>` or `/goal runs 50` to set one (`0` disables it). Pause lets the current response finish; Stop also aborts it. Usage counts provider-reported uncached input plus output after each response, so a response can exceed the remaining budget. Child usage remains in the separate subagent budgets. Reopening a runtime/branch restores an active goal as paused; browser reconnects preserve the live runtime.
-- **Plan:** `/plan <request>` explores with restricted tools and saves up to 30 ordered steps. Review/refine through the Plan panel or `/plan refine <changes>`, then explicitly choose `/plan execute`; execution stays in the same session and restores the prior tool selection. `/plan cancel` leaves the conversation intact. The `update_plan` tool tracks verified progress, including independent steps running in parallel. Markdown summaries are accepted; result cards are optional. Goal and plan state survive compaction in custom session entries. Planning pauses an active Goal. Shell filtering prevents common accidental writes; it is not an operating-system sandbox.
+- In standard conversations, a first-party `subagent` tool is installed with the Web runtime: delegate work in separate sessions to the built-in scout, planner, worker, and reviewer, run up to eight tasks through the existing Agent queue, and inspect or cancel every child session from the Agent dashboard. `tasks` runs independent children in parallel, including workers; the Agent panel's shared concurrency limit controls how many run at once (default 3, configurable from 1 to 8). Children share the parent's working directory, so assign workers disjoint files and use `chain` for dependencies such as reviewing a preceding worker's edits. The three read-only built-ins have no shell access. Use **Inherit** or explicitly enable `subagent` in custom tools; explicit core-tool presets do not include it. No global `pi` CLI is required.
+- **Goal:** `/goal <objective>` starts a session-owned objective; `/goal --tokens 100k <objective>` adds an optional budget. The Goal panel and `/goal pause`, `/goal resume`, `/goal status`, `/goal budget 200k`, and `/goal clear` manage it. Continuations run only after Pi fully settles, stay hidden in the transcript, and stop on completion, a blocker, model error, user stop, budget exhaustion, three repeated/empty tool-free responses. There is no fixed continuation cap; use `/goal --runs 50 <objective>` or `/goal runs 50` to set one (`0` disables it). Pause lets the current response finish; Stop also aborts it. Usage counts provider-reported uncached input plus output after each response, so a response can exceed the remaining budget. Child usage remains in the separate subagent budgets. Reopening a standard runtime or creating a branch restores an active goal as paused; browser reconnects preserve live state. Durable restart behavior follows its saved state and [recovery semantics](docs/DURABLE.md#storage-and-recovery).
+- **Plan:** `/plan <request>` explores with restricted tools and saves up to 30 ordered steps. Review/refine through the Plan panel or `/plan refine <changes>`, then explicitly choose `/plan execute`; execution stays in the same session and restores the prior tool selection. `/plan cancel` leaves the conversation intact. The `update_plan` tool tracks verified progress, including independent steps running in parallel. Markdown summaries are accepted; result cards are optional. Goal and plan state survive compaction in standard session entries or native Durable documents. Planning pauses an active Goal. Shell filtering prevents common accidental writes; it is not an operating-system sandbox.
 - **Agents → Subagent budgets** configures time, turns, and reported cost for new children (no fixed default caps; `0` disables a limit and saved user settings are preserved). Turns/time apply per child; cost is shared across one delegation including retries. The model may allocate smaller budgets, never increase user caps. Workers inherit only active parent tools, including MCP/extensions; task tool lists can narrow that access. Active runs show a near-limit notice and can be extended without starting another session. Reported cost depends on provider usage data, not your billing balance; checks occur after each response, so parallel in-flight usage can exceed the remaining budget.
 - A built-in `ask_user` tool plus Pi extension dialogs (`select`, `confirm`, `input`, and `editor`), notifications, status indicators, and text widgets; pending decisions survive reconnects.
 - Settings use collapsible, nonblocking panels; the composer stays available. Drafts survive rapid session switches and reloads, and reading positions are remembered within the browser tab. Quiet active sessions are not recycled by the idle timer.
 - Reviewed sensitive actions have no reading countdown. Confirmations remain single-use and target-bound; changed content, server restarts, or a full pending-review cache require another review.
 - Large text previews load in 256 KiB chunks up to 2 MiB, with full-file open/download links. Partial previews cannot be saved over the original file.
-- Pi extension session commands (`newSession`, `fork`, and `switchSession`) use the native `AgentSessionRuntime`; the Web UI follows the replacement session and reconnects SSE to it.
+- In standard conversations, Pi extension session commands (`newSession`, `fork`, and `switchSession`) use the native `AgentSessionRuntime`; the Web UI follows the replacement session and reconnects SSE to it.
 - Replacement failures restore the previous runtime, active-session conflicts are rejected before switching, and every open tab follows the same replacement. Extensions settings expose live runtime diagnostics.
 - Import a Pi `.jsonl` through a preview-first dialog that validates its header, effective cwd, allowed roots, symlinks, size, and destination collision before switching.
 - Per-run error cards, stall warnings, notifications, completion sound, and React-owned tab status.
@@ -403,11 +408,16 @@ The launcher creates a private provenance marker in a new empty preview director
 | `auth.json` | Per-provider API credentials managed by Pi |
 | Project picker | Selects and validates the active working directory |
 
-Session files remain in Pi's native format:
+Standard sessions retain Pi's native format:
 
 ```text
 ~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl
 ```
+
+Opt-in Durable conversations and scheduled runs use private stores under
+`<agent-dir>/durable-sessions/<group>/`; temporary conversations write no store.
+Durable background tasks use `<agent-dir>/durable-runs/<run-id>/`.
+See [storage and recovery](docs/DURABLE.md#storage-and-recovery).
 
 ## Architecture
 
@@ -422,7 +432,7 @@ Browser                    Next.js server             AgentSessionRuntime
   └─ GET /api/tgd/artifacts ────▶│ sibling tGD directory      │
 ```
 
-Read-only browsing parses session files without creating an `AgentSession`. Sending a message creates one in-process runtime wrapper per active session and streams events over SSE. Pi owns session replacement; the wrapper rebinds cwd-scoped services, extensions, registry keys, and event subscriptions to the new `AgentSession`.
+The diagram shows the standard runtime. Its read-only history parsing does not create an `AgentSession`; sending a message creates an in-process wrapper, and Pi owns its session replacement lifecycle. Opt-in Durable conversations use one harness per SQLite store, with separate conversations for branches and children, while adapting events to the same Web interface. Lists, search and exports read saved projections without resuming a harness. [Durable architecture and limits](docs/DURABLE.md) describes the second path.
 
 ## Project Structure
 

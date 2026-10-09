@@ -113,7 +113,9 @@ test("long lists keep end-of-list actions inside the phone viewport", async ({ p
   await page.reload();
   const list = page.getByRole("listbox", { name: "Sessions" });
   if (!await list.isVisible()) await page.locator('nav[class*="mobileNav"]').getByRole("button", { name: "Sessions", exact: true }).click();
-  await expect(page.locator('[data-total-session-rows]')).toHaveAttribute("data-total-session-rows", /50\d/);
+  // Other suites create real fixture conversations too. Assert the 500-row
+  // workload without assuming how many unrelated sessions came before it.
+  await expect.poll(async () => Number(await page.locator('[data-total-session-rows]').getAttribute("data-total-session-rows"))).toBeGreaterThanOrEqual(500);
   // The virtualizer settles its measured row size after hydration. Keep the
   // test at the tail while that estimate is replaced by real geometry.
   await expect.poll(() => list.evaluate(el => {

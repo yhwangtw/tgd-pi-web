@@ -6,6 +6,7 @@ import type { AgentRun } from "./agent-run-types";
 import type { ScheduleRun } from "./schedule-types";
 import type { SessionInfo } from "./types";
 import { redactSensitiveText } from "./redaction";
+import { durableEntries, isDurableSessionId, readDurableProjection } from "./durable-session-store";
 
 export type AttentionSource = "agent" | "schedule" | "session";
 export type AttentionSeverity = "warning" | "error" | "success";
@@ -31,8 +32,10 @@ const SESSION_ERROR_AGE_MS = 14 * 24 * 60 * 60 * 1_000;
 const RECENT_COMPLETION_AGE_MS = 24 * 60 * 60 * 1_000;
 const SESSION_SCAN_LIMIT = 60;
 
-function assistantErrorFromSession(path: string): { message: string; at?: string } | null {
-  const { entries } = readSessionFile(path);
+function assistantErrorFromSession(session: SessionInfo): { message: string; at?: string } | null {
+  const projection = isDurableSessionId(session.id) ? readDurableProjection(session.id) : undefined;
+  if (isDurableSessionId(session.id) && !projection) return null;
+  const entries = projection ? durableEntries(projection.entries, projection.info.created) : readSessionFile(session.path).entries;
   for (let index = entries.length - 1; index >= 0; index--) {
     const entry = entries[index];
     if (entry.type !== "message" || entry.message.role !== "assistant") continue;
@@ -118,7 +121,7 @@ export function buildAttentionItems(input: {
     .slice(0, SESSION_SCAN_LIMIT);
   for (const session of sessions) {
     if (representedSessions.has(session.id)) continue;
-    const error = assistantErrorFromSession(session.path);
+    const error = assistantErrorFromSession(session);
     if (!error) continue;
     items.push({
       id: `session:${session.id}:${error.at ?? session.modified}`,

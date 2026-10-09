@@ -1,3 +1,4 @@
+import { resolveMigratedSessionId } from "@/lib/session-migrations";
 import { NextResponse } from "next/server";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
@@ -23,7 +24,8 @@ function readTags(): TagsFile {
     if (raw.tags && typeof raw.tags === "object") {
       for (const [k, v] of Object.entries(raw.tags)) {
         if (Array.isArray(v)) {
-          tags[k] = v.filter((x): x is string => typeof x === "string").map((x) => x.toLowerCase());
+          const id = resolveMigratedSessionId(k);
+          tags[id] = [...new Set([...(tags[id] ?? []), ...v.filter((x): x is string => typeof x === "string").map((x) => x.toLowerCase())])];
         }
       }
     }
@@ -59,13 +61,14 @@ export async function POST(req: Request) {
     if (typeof body.tag !== "string" || !body.tag.trim()) {
       return NextResponse.json({ error: "tag is required" }, { status: 400 });
     }
+    const id = resolveMigratedSessionId(body.id);
     const tag = normalizeTag(body.tag);
     const data = readTags();
-    const existing = data.tags[body.id] ?? [];
+    const existing = data.tags[id] ?? [];
     if (existing.includes(tag)) {
       return NextResponse.json({ tags: data.tags, unchanged: true });
     }
-    data.tags[body.id] = [...existing, tag].slice(0, 16);
+    data.tags[id] = [...existing, tag].slice(0, 16);
     writeTags(data);
     return NextResponse.json({ tags: data.tags });
   } catch (error) {
@@ -83,11 +86,12 @@ export async function DELETE(req: Request) {
     if (typeof body.tag !== "string") {
       return NextResponse.json({ error: "tag is required" }, { status: 400 });
     }
+    const id = resolveMigratedSessionId(body.id);
     const tag = normalizeTag(body.tag);
     const data = readTags();
-    const existing = data.tags[body.id] ?? [];
-    data.tags[body.id] = existing.filter((t) => t !== tag);
-    if (data.tags[body.id].length === 0) delete data.tags[body.id];
+    const existing = data.tags[id] ?? [];
+    data.tags[id] = existing.filter((t) => t !== tag);
+    if (data.tags[id].length === 0) delete data.tags[id];
     writeTags(data);
     return NextResponse.json({ tags: data.tags });
   } catch (error) {

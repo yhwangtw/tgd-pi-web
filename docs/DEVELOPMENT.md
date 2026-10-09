@@ -11,16 +11,21 @@ with `npm i -D --no-save @playwright/test`; a preinstalled browser can be select
 with `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`. E2E files are excluded from the
 normal TypeScript/lint scope so offline installations do not need Playwright.
 
-Offscreen transcript text uses `content-visibility` and may count as hidden in
-Playwright. Use `toBeAttached` or scroll before visibility assertions. UI text uses
-the Unicode ellipsis (`Message…`, `Filter files…`).
+Transcript rows use normal layout because scroll restoration, disclosures and
+the minimap measure their geometry. Do not add `content-visibility` to these rows:
+display locking conflicts with descendant measurement and changes scroll anchors.
+Minimap geometry is cached between layout changes; scrolling only updates its
+viewport indicator, with observer work coalesced into animation frames. Scroll
+before visibility assertions for offscreen controls. UI text uses the Unicode
+ellipsis (`Message…`, `Filter files…`).
 
 ## Workflow and delegation
 
 Goal has no fixed continuation count. `/goal --runs 50 <objective>` or
 `/goal runs 50` sets one; `0` removes it. Token budgets, explicit stop/pause,
 errors and repeated responses without progress still stop continuation. Reopening
-a runtime restores goals paused. Plan permits independent `in_progress` steps and
+a standard runtime restores goals paused; Durable resumes saved state when work
+is explicitly resumed (see [recovery semantics](DURABLE.md#storage-and-recovery)). Plan permits independent `in_progress` steps and
 ordinary Markdown summaries; `structured_output` is optional. Explicit `/plan`
 remains read-only until execution is requested.
 
@@ -40,6 +45,69 @@ also extends its shared cost cap; model-supplied allocations cannot do so.
 
 ## Architecture
 
+### Durable conversations and schedules (preview)
+
+The current integration is documented in [Durable usage and limits](DURABLE.md).
+The [pre-integration audit](DURABLE-INTEGRATION-AUDIT.md) remains historical evidence;
+its migration checklist does not describe the implementation status today.
+
+`POST /api/agent/new` selects the native path only for `engine: "durable"`.
+`lib/durable-chat.ts` owns one official Harness per store; branches and native
+subagents use conversations in that harness. `lib/durable-session-store.ts`
+projects saved entries for the existing session, search, analytics and export APIs.
+Read-only history endpoints do not call `resume()`. SSE reconnect and the schedule
+runner can resume unfinished work. An ephemeral chat uses MemoryStorage.
+
+Goal/Plan, MCP and questions register as native Durable extensions. The
+`lib/durable-extension-host.ts` bridge runs Pi's ExtensionRunner against a
+read-only SessionManager projection, without creating another AgentSession model
+loop. This is a compatibility surface, not a promise that every third-party
+extension works. External memory capture still depends on the extension's own
+watermark/idempotency. Production OpenViking has not been exercised through this
+path; the offline tests use an extension fixture for its lifecycle contracts.
+
+JSONL imports first open in the standard runtime. Older conversations convert on
+an idle prompt through `lib/durable-migration.ts`; `session-migrations.ts` publishes
+the verified alias, and `durable-legacy.ts` preserves the tree and reconstructs the
+selected model context. New Standard conversations carry a persistent opt-out.
+They do not flatten the imported history into Durable or replace its source store.
+
+### Durable background runs (experimental)
+
+This is the separate Agents-dashboard runner. Its smaller tool surface is
+distinct from the Durable conversation/schedule path above.
+
+`AgentRunInput.engine: "durable"` selects official Pi Durable 1.0.0 for a new
+background run. Missing `engine` preserves the normal coding-agent path.
+`lib/durable-agent-run.ts` owns one Harness/SQLite database per run under
+`<agent-dir>/durable-runs/<uuid>/`. A process lease prevents concurrent owners;
+a crashed owner's lease can take up to 15 seconds to recover. Run directories
+are private (0700), databases and the atomic display projection are 0600.
+
+The supervisor requeues active Durable runs on boot and preserves the original
+start time, budgets, model selection in the conversation, and submission ID.
+`submit(requestId: run.id)` resumes the admitted submission; it does not replay
+the whole prompt. Terminal runs stay terminal. A retry is a distinct new run.
+The harness records every tool intent and result; only read/grep/find/ls are
+marked safe to replay. Writes, edits and shell commands are never automatically
+replayed after interruption. The model sees the interruption and can issue new
+calls, so exactly-once admission does not imply exactly-once external effects.
+
+`pi-ai-durable` is an npm alias of official `@earendil-works/pi-ai` 1.0.0.
+`lib/durable-models.ts` bridges its chat contract to the existing Pi ModelRuntime
+so credentials, custom endpoints and OAuth locking remain canonical. This
+version boundary needs its regression test when either Pi version changes.
+Core file/shell tools and project instructions are supported. Conversation extensions,
+MCP, ask_user, subagents and Goal/Plan are not installed in this harness.
+
+The Agent card's activity viewer reads a projection of the latest 200 committed
+entries; full history remains in SQLite. GET never opens/resumes a harness.
+Model errors, explicit cancellation, expired budgets and revoked workspace
+trust stop execution. Interrupted model calls may be resent and billed again.
+The default background-run wall-clock limit remains 24 hours; explicit limits
+are honored across restarts. Code tests use Pi's official faux provider with
+isolated storage, including a real SIGKILL during a side-effecting tool.
+
 ```
 Browser                Next.js Server          AgentSessionRuntime (in-process)
   │                        │                               │
@@ -56,8 +124,11 @@ Browser                Next.js Server          AgentSessionRuntime (in-process)
   └─ GET /api/git/file-diff▶ HEAD vs worktree contents     │
 ```
 
-**Session browsing** (read-only): parses `.jsonl` files via `lib/session-reader.ts` — no AgentSession created.
-**Sending a message**: `startRpcSession()` in `lib/rpc-manager.ts` creates an `AgentSessionRuntime` in-process. The runtime owns the active `AgentSession` and native new/switch/fork replacement lifecycle.
+The diagram shows the standard runtime. **Session browsing** parses `.jsonl` files
+and Durable read projections via `lib/session-reader.ts`, without creating or
+resuming an agent. **Sending a standard message** uses `startRpcSession()` in
+`lib/rpc-manager.ts`; `AgentSessionRuntime` owns its new/switch/fork lifecycle.
+The Durable route dispatches to `DurableChat.send()` instead.
 
 ### Layout (post-redesign)
 
@@ -71,8 +142,8 @@ Icon rail (44px, `AppShell`) → contextual panel (Sessions | Schedules | Files 
 app/api/
   sessions/…                      list/read/patch/delete, context, export(+md),
                                   search, tags, pins, analytics
-  agent/new/route.ts              POST { cwd, message, toolNames?, provider?, modelId? }
-  agent/[id]/route.ts             GET state | POST any command (see rpc-manager)
+  agent/new/route.ts              POST { cwd, message, engine?, toolNames?, provider?, modelId? }
+  agent/[id]/route.ts             GET state | POST command (standard or Durable)
   agent/[id]/events/route.ts      GET SSE stream (30s comment heartbeats)
   agent/[id]/import/route.ts      POST preview/import a validated Pi JSONL
   agent/[id]/summarize/route.ts   POST — auto-naming (skips named sessions)
@@ -220,18 +291,21 @@ receipts also synchronize across tabs and reuse older transcript entry markers.
   `child_process` dependencies and breaks production builds. Never start the
   runner during `phase-production-build`.
 - The global `ScheduleRunner` owns one nearest-deadline timer. On restart it
-  marks persisted running/waiting runs failed, then applies each schedule's
-  catch-up-once or skip policy. A schedule can never have overlapping runs.
+  marks standard running/waiting runs failed and reconnects unfinished Durable
+  runs with their original execution settings and request ID. Missed occurrences
+  follow the schedule's catch-up-once or skip policy. A schedule cannot overlap.
 - Once/daily/weekly/cron calculations are dependency-free and IANA-timezone
   aware, including DST gaps/repeated minutes. Cron is the standard five-field
   form; DOM/DOW use the usual OR rule when both fields are restricted.
-- A run creates a normal persisted Pi session with the configured cwd/model/
-  thinking/tools. The runner sends `prompt` with `awaitCompletion:true`; normal
+- A standard run creates a persisted Pi JSONL session; `engine: "durable"` creates
+  a Durable conversation with the configured cwd/model/thinking/tools. The runner
+  sends `prompt` with `awaitCompletion:true`; normal
   browser prompts remain fire-and-forget. Do not remove that distinction — an
   immediate model/setup rejection otherwise leaves a run stuck as `running`.
 - Dialog requests (`ask_user`, select/confirm/input/editor) change the run to
   `waiting_for_input`. Opening its session replays the pending request; a
-  keepalive prevents the normal 10-minute idle shutdown while it waits.
+  keepalive prevents the standard runtime's idle shutdown. Durable questions and
+  answers survive a host restart, with the original 24-hour run deadline retained.
 - This is an in-process local scheduler: the production Node server must stay
   running for on-time execution. It is intentionally not an OS daemon.
 

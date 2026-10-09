@@ -85,8 +85,8 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
   const allMessagesRef = useRef(allMessages);
   allMessagesRef.current = allMessages;
 
-  const updatePositionsRef = useRef<() => void>(null!);
-  updatePositionsRef.current = () => {
+  const updateViewportRef = useRef<() => void>(null!);
+  updateViewportRef.current = () => {
     const scrollEl = scrollContainer.current;
     if (!scrollEl) return;
 
@@ -102,6 +102,18 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
       setScrollRatio(scrollEl.scrollTop / scrollable);
       setViewportRatio(clientH / totalH);
     }
+  };
+
+  const updatePositionsRef = useRef<() => void>(null!);
+  updatePositionsRef.current = () => {
+    const scrollEl = scrollContainer.current;
+    if (!scrollEl) return;
+    updateViewportRef.current();
+    const totalH = scrollEl.scrollHeight;
+    // Read the container once, before the row measurements. Scrolling does
+    // not change absolute row positions, so only layout changes run this pass.
+    const containerTop = scrollEl.getBoundingClientRect().top;
+    const scrollTop = scrollEl.scrollTop;
 
     // Build node positions from real DOM refs
     const refs = messageRefs.current;
@@ -121,8 +133,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
 
       if (el && totalH > 0) {
         const elRect = el.getBoundingClientRect();
-        const containerRect = scrollEl.getBoundingClientRect();
-        const top = elRect.top - containerRect.top + scrollEl.scrollTop;
+        const top = elRect.top - containerTop + scrollTop;
         const h = elRect.height;
         newNodes.push({
           topRatio: top / totalH,
@@ -133,31 +144,52 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
         });
       }
     }
-    setNodes(newNodes);
+    setNodes((previous) => previous.length === newNodes.length && previous.every((node, index) => {
+      const next = newNodes[index];
+      return node.msg === next.msg && node.visIdx === next.visIdx
+        && node.topRatio === next.topRatio && node.heightRatio === next.heightRatio;
+    }) ? previous : newNodes);
   };
 
-  const updatePositions = useCallback(() => updatePositionsRef.current(), []);
+  const frameRef = useRef<number | null>(null);
+  const measurePendingRef = useRef(false);
+  const scheduleUpdate = useCallback((measurePositions: boolean) => {
+    measurePendingRef.current ||= measurePositions;
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      const measure = measurePendingRef.current;
+      measurePendingRef.current = false;
+      if (measure) updatePositionsRef.current();
+      else updateViewportRef.current();
+    });
+  }, []);
 
   useEffect(() => {
     const el = scrollContainer.current;
     if (!el) return;
-    el.addEventListener("scroll", updatePositions, { passive: true });
-    const ro = new ResizeObserver(updatePositions);
+    const onScroll = () => scheduleUpdate(false);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    const ro = new ResizeObserver(() => scheduleUpdate(true));
     ro.observe(el);
     // Also observe the scroll content for height changes
     if (el.firstElementChild) ro.observe(el.firstElementChild);
-    updatePositions();
+    scheduleUpdate(true);
     return () => {
-      el.removeEventListener("scroll", updatePositions);
+      el.removeEventListener("scroll", onScroll);
       ro.disconnect();
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+      measurePendingRef.current = false;
     };
-  }, [scrollContainer, updatePositions]);
+  }, [scrollContainer, scheduleUpdate]);
 
-  // Re-measure when message count changes (new messages arrive)
+  // Same-length session/branch replacements also need fresh nodes. Stream
+  // content resizes are covered by the observer without scanning on every token.
+  const hasStreamingMessage = !!streamingMessage;
   useEffect(() => {
-    const t = setTimeout(updatePositions, 50);
-    return () => clearTimeout(t);
-  }, [messages.length, updatePositions]);
+    scheduleUpdate(true);
+  }, [messages, hasStreamingMessage, scheduleUpdate]);
 
   const scrollToMinimapRatio = useCallback((viewportTopRatio: number) => {
     const el = scrollContainer.current;

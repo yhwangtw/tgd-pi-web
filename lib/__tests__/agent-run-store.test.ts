@@ -35,6 +35,23 @@ afterEach(() => {
 });
 
 describe("agent-run-store", () => {
+  it("requeues only active opt-in Durable runs and preserves budgets and cancellation", () => {
+    const path = fixturePath();
+    const startedAt = "2026-07-26T01:01:00.000Z";
+    writeAgentRunStore({ version: 1, runs: [
+      { ...run("running", "durable"), engine: "durable", startedAt, limits: { maxCostUsd: 2 }, progress: { turns: 3, costUsd: 1 } },
+      { ...run("cancelled", "cancelled"), engine: "durable" },
+      { ...run("completed", "done"), engine: "durable" },
+      run("running", "standard"),
+    ] }, path);
+    reconcileInterruptedAgentRuns(path);
+    expect(readAgentRunStore(path).runs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "durable", status: "queued", recoveryCount: 1, startedAt, progress: { turns: 3, costUsd: 1 }, limits: { maxCostUsd: 2 } }),
+      expect.objectContaining({ id: "cancelled", status: "cancelled" }),
+      expect.objectContaining({ id: "done", status: "completed" }),
+      expect.objectContaining({ id: "standard", status: "interrupted" }),
+    ]));
+  });
   it("AC-1.1: round-trips daemon runs through an atomic private JSON file", () => {
     const path = fixturePath();
     const store: AgentRunStore = { version: 1, runs: [run("completed")] };

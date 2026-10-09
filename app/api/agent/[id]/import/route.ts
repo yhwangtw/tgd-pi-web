@@ -1,9 +1,13 @@
+import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
 import { getAllowedRoots } from "@/lib/file-security";
 import { getRpcSession, SessionRuntimeConflictError, startRpcSession, type AgentSessionWrapper } from "@/lib/rpc-manager";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { inspectSessionImport, SessionImportValidationError } from "@/lib/session-import";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { randomUUID } from "node:crypto";
+import { isDurableSessionId } from "@/lib/durable-session-store";
+import { openDurableChat } from "@/lib/durable-chat";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +24,8 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
+  const { id: requestedId } = await params;
+  const id = await waitForSessionMigration(requestedId);
   try {
     const body = await req.json() as { action?: "preview" | "import"; path?: string; cwdOverride?: string };
     if (body.action !== "preview" && body.action !== "import") {
@@ -30,6 +35,22 @@ export async function POST(
       return NextResponse.json({ error: "path is required" }, { status: 400 });
     }
 
+    if (isDurableSessionId(id)) {
+      const source = await openDurableChat(id);
+      if (source.getState().isStreaming) return NextResponse.json({ error: "Wait for the current response before importing a session" }, { status: 409 });
+      // JSONL imports retain their complete original tree and SDK extension
+      // entries in the standard runtime. The Durable source remains intact.
+      const destination = SessionManager.inMemory(source.cwd).getSessionDir();
+      const preview = await inspectSessionImport(body.path, await getAllowedRoots(), destination,
+        typeof body.cwdOverride === "string" && body.cwdOverride.trim() ? body.cwdOverride : undefined);
+      if (body.action === "preview") return NextResponse.json({ preview });
+      const { session } = await startRpcSession(`__import__${randomUUID()}`, "", source.cwd);
+      try {
+        const result = await session.importSession(preview.sourcePath, preview.cwd === preview.headerCwd ? undefined : preview.cwd);
+        if (result.cancelled) session.destroy();
+        return NextResponse.json({ preview, result });
+      } catch (error) { session.destroy(); throw error; }
+    }
     const session = await ensureSession(id);
     if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
     const preview = await inspectSessionImport(

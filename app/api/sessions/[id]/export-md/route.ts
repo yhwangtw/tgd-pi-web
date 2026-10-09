@@ -1,7 +1,10 @@
+import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { readFileSync, existsSync } from "fs";
 import { redactSensitiveText, redactSensitiveValue } from "@/lib/redaction";
+import { getDurableChat } from "@/lib/durable-chat";
+import { durableEntries, isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +30,9 @@ function extractText(content: unknown): string {
     return content
       .map((b) => {
         if (typeof b === "string") return b;
-        const o = b as { type: string; text?: string };
+        const o = b as { type: string; text?: string; thinking?: string };
         if (o.type === "text") return o.text ?? "";
-        if (o.type === "thinking") return `*[thinking]*\n${o.text ?? ""}`;
+        if (o.type === "thinking") return `*[thinking]*\n${o.thinking ?? o.text ?? ""}`;
         if (o.type === "toolCall") {
           const tc = o as { name?: string; toolName?: string; input?: unknown };
           return `*[tool call: ${tc.name ?? tc.toolName ?? "?"}]*\n\`\`\`json\n${JSON.stringify(redactSensitiveValue(tc.input ?? {}), null, 2)}\n\`\`\``;
@@ -54,14 +57,23 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const { id: requestedId } = await params;
+  const id = await waitForSessionMigration(requestedId);
   try {
-    const filePath = await resolveSessionPath(id);
-    if (!filePath || !existsSync(filePath)) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    let content: string;
+    if (isDurableSessionId(id)) {
+      const live = getDurableChat(id);
+      const projection = live?.isAlive() ? live.getProjection() : readDurableProjection(id);
+      if (!projection || projection.deleted) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      content = [
+        { type: "session", version: 3, id, cwd: projection.info.cwd, timestamp: projection.info.created, parentSession: projection.info.parentSessionId },
+        ...durableEntries(projection.entries, projection.info.created),
+      ].map(entry => JSON.stringify(entry)).join("\n");
+    } else {
+      const filePath = await resolveSessionPath(id);
+      if (!filePath || !existsSync(filePath)) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      content = readFileSync(filePath, "utf8");
     }
-
-    const content = readFileSync(filePath, "utf8");
 
     let header: { id: string; cwd: string; timestamp: string; parentSession?: string } | null = null;
     const messages: MessageEntry[] = [];

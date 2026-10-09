@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useI18n, type MsgKey } from "@/lib/i18n";
 import {
   ACTIVE_AGENT_RUN_STATUSES,
@@ -8,6 +9,8 @@ import {
   type AgentRun,
 } from "@/lib/agent-run-types";
 import s from "./AgentDashboardPanel.module.css";
+
+const DurableRunTranscript = dynamic(() => import("./DurableRunTranscript").then(module => module.DurableRunTranscript));
 
 const STATUS_KEYS: Record<AgentRun["status"], MsgKey> = {
   queued: "agents.status.queued",
@@ -33,6 +36,7 @@ interface Props {
 export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCancel, onRetry, onExtend, onOpenSession }: Props) {
   const { locale, t } = useI18n();
   const [reportOpen, setReportOpen] = useState(false);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const active = run.status === "queued" || ACTIVE_AGENT_RUN_STATUSES.has(run.status);
   const terminal = TERMINAL_AGENT_RUN_STATUSES.has(run.status);
   const repair = run.status === "failed" || run.status === "interrupted";
@@ -45,6 +49,7 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
 
   return (
     <article className={`${s.card} ${run.status === "waiting_for_input" ? s.cardWaiting : ""}`} data-status={run.status} data-testid="agent-run-card">
+      {transcriptOpen && <DurableRunTranscript run={run} onClose={() => setTranscriptOpen(false)} />}
       <div className={s.cardHeader}>
         {run.sessionId && onToggleSelect && (
           <input
@@ -57,6 +62,7 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
         )}
         <span className={`${s.statusDot} ${s[`status_${run.status}`]}`} aria-hidden="true" />
         <strong className={s.cardTitle}>{run.name}</strong>
+        {run.engine === "durable" && <span className={s.subagentBadge}>{t("agents.durableBadge")}</span>}
         {run.trigger === "subagent" && <span className={s.subagentBadge}>{t("agents.subagent")}</span>}
         {run.workspace?.branch && <span className={`${s.branch} chrome-mono`}>{run.workspace.branch}</span>}
       </div>
@@ -68,6 +74,7 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
         <p className={s.promptPreview}>{run.prompt}</p>
         <div className={`${s.path} chrome-mono`} title={run.cwd}>{run.cwd}</div>
         {run.error && <div className={s.runError} role="status">{run.error}</div>}
+        {!!run.recoveryCount && <p>{t("agents.recovered")}: {run.recoveryCount}</p>}
         {active && run.limitWarning && <p role="status">{t("agents.limitNear")}</p>}
         {run.progress && <p>{t("agents.turns")}: {run.progress.turns} · {new Intl.NumberFormat(locale === "zh" ? "zh-TW" : "en", { style: "currency", currency: "USD" }).format(run.progress.costUsd)}</p>}
         {run.report && (
@@ -87,7 +94,8 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
         )}
       </div>
       <div className={s.cardActions}>
-        {ACTIVE_AGENT_RUN_STATUSES.has(run.status) && onExtend && <button type="button" disabled={busy} onClick={() => onExtend(run)}>{t("agents.extend")}</button>}
+        {run.engine === "durable" && <button type="button" onClick={() => setTranscriptOpen(true)}>{t("agents.openTranscript")}</button>}
+        {!run.durableConversation && ACTIVE_AGENT_RUN_STATUSES.has(run.status) && onExtend && <button type="button" disabled={busy} onClick={() => onExtend(run)}>{t("agents.extend")}</button>}
         {run.sessionId && (
           <button type="button" onClick={() => void onOpenSession(run.sessionId as string)}>
             {t("agents.openSession")}
@@ -98,7 +106,7 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
             {t("agents.cancel")}
           </button>
         )}
-        {terminal && (
+        {terminal && !run.durableConversation && (
           <button type="button" className={repair ? s.repairButton : undefined} disabled={busy} onClick={() => onRetry(run)}>
             {t("agents.retry")}
           </button>

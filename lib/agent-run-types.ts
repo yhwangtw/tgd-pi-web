@@ -25,6 +25,8 @@ export interface AgentRunWorkspace {
 }
 
 export interface AgentRunInput {
+  /** Opt-in official Pi Durable execution. Existing runs use the coding agent. */
+  engine?: "durable";
   name: string;
   cwd: string;
   prompt: string;
@@ -48,6 +50,9 @@ export interface AgentRunReport {
 }
 
 export interface AgentRun extends AgentRunInput {
+  /** Read-only dashboard projection of a child owned by a chat Harness. */
+  durableConversation?: boolean;
+  recoveryCount?: number;
   limitWarning?: boolean;
   progress?: { turns: number; costUsd: number };
   id: string;
@@ -61,6 +66,14 @@ export interface AgentRun extends AgentRunInput {
   error?: string;
   report?: AgentRunReport;
 }
+
+export interface DurableRunTranscript {
+  messages: import("./types").AgentMessage[];
+  truncated: boolean;
+  updatedAt: string;
+}
+
+export const DURABLE_AGENT_TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls"] as const;
 
 export interface AgentRunStore {
   version: 1;

@@ -11,7 +11,7 @@ export async function resolveSessionForRestore(
   sessions: SessionInfo[],
   fetcher: RestoreFetcher = fetch,
 ): Promise<SessionInfo | null> {
-  const listed = sessions.find((session) => session.id === sessionId);
+  const listed = sessions.find((session) => session.id === sessionId || session.sourceSessionId === sessionId);
   if (listed) return listed;
 
   const response = await fetcher(`/api/sessions/${encodeURIComponent(sessionId)}`);

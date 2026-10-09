@@ -39,3 +39,10 @@ it("continues in memory when storage is unavailable", () => {
   state.markSessionRead("one", Date.parse(modified), "answer");
   expect(state.isSessionUnread(session)).toBe(false);
 });
+
+it("reuses source receipts after automatic conversion while new native replies stay unread", () => {
+  state.markSessionRead("old", Date.parse(modified), "answer");
+  const migrated = { ...session, id: "dw_new", sourceSessionId: "old" };
+  expect(state.isSessionUnread(migrated)).toBe(false);
+  expect(state.isSessionUnread({ ...migrated, modified: "2026-09-27T01:00:01.000Z", lastMessageId: "durable:2" })).toBe(true);
+});

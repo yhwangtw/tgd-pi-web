@@ -36,7 +36,7 @@ const nextConfig: NextConfig = {
   // Match the existing 50 MiB file API limit plus multipart overhead. Upload
   // clients send one file per request; Next's default proxy cap is only 10 MiB.
   experimental: { proxyClientMaxBodySize: "52mb" },
-  serverExternalPackages: ["@earendil-works/pi-coding-agent", "@earendil-works/pi-ai"],
+  serverExternalPackages: ["@earendil-works/pi-coding-agent", "@earendil-works/pi-ai", "@earendil-works/pi-ai-durable", "@earendil-works/pi-durable", "@earendil-works/chord"],
   allowedDevOrigins: ['192.168.*.*'],
   env: {
     NEXT_PUBLIC_APP_VERSION: version,

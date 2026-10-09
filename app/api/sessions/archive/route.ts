@@ -1,3 +1,4 @@
+import { resolveMigratedSessionId } from "@/lib/session-migrations";
 import { NextResponse } from "next/server";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
@@ -20,7 +21,7 @@ function readArchive(): ArchiveFile {
   if (!existsSync(path)) return { archived: [] };
   try {
     const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<ArchiveFile>;
-    return { archived: Array.isArray(raw.archived) ? raw.archived.filter((x): x is string => typeof x === "string") : [] };
+    return { archived: Array.isArray(raw.archived) ? [...new Set(raw.archived.filter((x): x is string => typeof x === "string").map(resolveMigratedSessionId))] : [] };
   } catch {
     return { archived: [] };
   }
@@ -45,9 +46,10 @@ export async function POST(req: Request) {
     if (typeof body.id !== "string" || !body.id) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
+    const id = resolveMigratedSessionId(body.id);
     const { archived } = readArchive();
-    if (!archived.includes(body.id)) {
-      writeArchive({ archived: [body.id, ...archived] });
+    if (!archived.includes(id)) {
+      writeArchive({ archived: [id, ...archived] });
     }
     return NextResponse.json(readArchive());
   } catch (error) {
@@ -62,8 +64,9 @@ export async function DELETE(req: Request) {
     if (typeof body.id !== "string" || !body.id) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
+    const id = resolveMigratedSessionId(body.id);
     const { archived } = readArchive();
-    writeArchive({ archived: archived.filter((x) => x !== body.id) });
+    writeArchive({ archived: archived.filter((x) => x !== id) });
     return NextResponse.json(readArchive());
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

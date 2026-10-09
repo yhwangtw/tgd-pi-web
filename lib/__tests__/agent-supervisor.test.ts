@@ -5,6 +5,7 @@ const harness = vi.hoisted(() => ({
   store: { version: 1, runs: [] } as AgentRunStore,
   persistError: null as Error | null,
   startRpcSession: vi.fn(),
+  openDurableAgentRun: vi.fn(),
   trusted: true,
 }));
 
@@ -20,6 +21,8 @@ vi.mock("../agent-run-store", () => ({
 vi.mock("../rpc-manager", () => ({
   startRpcSession: harness.startRpcSession,
 }));
+
+vi.mock("../durable-agent-run", () => ({ openDurableAgentRun: harness.openDurableAgentRun }));
 
 vi.mock("../agent-run-workspace", () => ({
   isTrustedAgentRunWorkspace: vi.fn(async () => harness.trusted),
@@ -61,10 +64,43 @@ beforeEach(() => {
   harness.store = { version: 1, runs: [] };
   harness.persistError = null;
   harness.startRpcSession.mockReset();
+  harness.openDurableAgentRun.mockReset();
   harness.trusted = true;
 });
 
 describe("AgentRunSupervisor", () => {
+  it("sends opt-in runs to Durable and reports its full persisted usage", async () => {
+    const handle = {
+      run: vi.fn(async () => ({ messages: [], usage: { inputTokens: 90, outputTokens: 10, cost: 2 } })),
+      abort: vi.fn(async () => {}), close: vi.fn(async () => {}),
+    };
+    harness.openDurableAgentRun.mockResolvedValue(handle);
+    const supervisor = new AgentRunSupervisor({ maxConcurrency: 1 });
+    const run = supervisor.enqueue({ ...input("Durable"), engine: "durable" });
+    await vi.waitFor(() => expect(harness.store.runs[0].status).toBe("completed"));
+    expect(harness.startRpcSession).not.toHaveBeenCalled();
+    expect(harness.store.runs[0].report?.usage).toEqual({ inputTokens: 90, outputTokens: 10, cost: 2 });
+    expect(handle.close).toHaveBeenCalledOnce();
+    const retry = supervisor.retry(run.id);
+    expect(retry.engine).toBe("durable");
+    expect(retry.id).not.toBe(run.id);
+    await vi.waitFor(() => expect(handle.close).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not start a Durable submission cancelled during initialization", async () => {
+    let initialized!: (value: unknown) => void;
+    harness.openDurableAgentRun.mockImplementation(() => new Promise(resolve => { initialized = resolve; }));
+    const supervisor = new AgentRunSupervisor({ maxConcurrency: 1 });
+    const run = supervisor.enqueue({ ...input("Cancel opening"), engine: "durable" });
+    await vi.waitFor(() => expect(harness.openDurableAgentRun).toHaveBeenCalledOnce());
+    await supervisor.cancel(run.id);
+    const handle = { run: vi.fn(), abort: vi.fn(async () => {}), close: vi.fn(async () => {}) };
+    initialized(handle);
+    await vi.waitFor(() => expect(handle.close).toHaveBeenCalledOnce());
+    expect(handle.run).not.toHaveBeenCalled();
+    expect(handle.abort).toHaveBeenCalledOnce();
+    expect(harness.store.runs[0].status).toBe("cancelled");
+  });
   it("warns near the budget and extends an active run without replacing its session", async () => {
     const child = fakeSession();
     harness.startRpcSession.mockResolvedValue({ session: child.session, realSessionId: "extend-session" });

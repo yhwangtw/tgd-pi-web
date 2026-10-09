@@ -182,7 +182,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     loading, error, runtimeFailure, messages, entryIds, streamState, getGenerationMetrics,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
-    retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
+    retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, durableNewSession, setDurableNewSession, contextUsage, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
     compactionStatus, compactionQueue, handleCheckCompaction, handleDismissCompaction, handleClearCompactionQueue, handleRetryCompaction,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,
@@ -1041,6 +1041,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       retryInfo={retryInfo}
       ephemeral={ephemeralNewSession}
       onEphemeralChange={isNew ? setEphemeralNewSession : undefined}
+      durable={isNew ? durableNewSession : session?.engine === "durable" || session?.id.startsWith("dw_")}
+      onDurableChange={isNew ? setDurableNewSession : undefined}
       soundEnabled={soundEnabled}
       onSoundToggle={onSoundToggle}
       cwd={tgdCwd}

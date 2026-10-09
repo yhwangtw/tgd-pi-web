@@ -58,6 +58,7 @@ function isAgentRun(value: unknown): value is AgentRun {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<AgentRun>;
   return typeof item.id === "string"
+    && (item.engine === undefined || item.engine === "durable")
     && typeof item.name === "string"
     && typeof item.cwd === "string"
     && typeof item.prompt === "string"
@@ -143,6 +144,14 @@ export function reconcileInterruptedAgentRuns(
   let changed = 0;
   for (const run of store.runs) {
     if (!ACTIVE_AGENT_RUN_STATUSES.has(run.status)) continue;
+    if (run.engine === "durable") {
+      run.status = "queued";
+      run.recoveryCount = (run.recoveryCount ?? 0) + 1;
+      delete run.finishedAt;
+      delete run.error;
+      changed++;
+      continue;
+    }
     run.status = "interrupted";
     run.finishedAt = now.toISOString();
     run.error = "The agent daemon restarted before this run completed";

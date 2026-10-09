@@ -116,6 +116,13 @@ for (const style of ["original", "trae"]) {
 
   test(`${style}: project and excerpt share one quiet line with scaled virtual rows`, async ({ page }) => {
     await page.addInitScript(style => localStorage.setItem("pi-ui-style", style), style);
+    // Keep both rows under inspection in view regardless of conversations
+    // created by earlier suites; long-list virtualization has its own test.
+    await page.route("**/api/sessions", async route => {
+      const data = await (await route.fetch()).json();
+      data.sessions = data.sessions.filter((session: { id: string }) => [SID, "bbbb1111-2222-3333-4444-555566667777"].includes(session.id));
+      await route.fulfill({ json: data });
+    });
     await page.setViewportSize({ width: 1440, height: 900 });
     await openSession(page);
     const row = page.locator(`[data-session-row="${SID}"]`);

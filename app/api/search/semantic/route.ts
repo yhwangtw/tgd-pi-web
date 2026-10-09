@@ -4,6 +4,7 @@ import { getAllowedRoots } from "@/lib/file-security";
 import { getSessionEntries, listAllSessions, resolveSessionPath } from "@/lib/session-reader";
 import { readTgdArtifacts } from "@/lib/tgd-artifacts";
 import { rankSemanticDocuments, type SemanticDocument } from "@/lib/semantic-search";
+import { durableEntries, isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,12 @@ function messageText(message: unknown): string {
 async function sessionDocuments(cwd: string | null): Promise<SemanticDocument[]> {
   const sessions = (await listAllSessions()).filter((session) => !cwd || session.cwd === cwd).slice(0, 120);
   return (await Promise.all(sessions.map(async (session) => {
-    const path = await resolveSessionPath(session.id);
-    if (!path) return null;
+    const projection = isDurableSessionId(session.id) ? readDurableProjection(session.id) : undefined;
+    const path = isDurableSessionId(session.id) ? null : await resolveSessionPath(session.id);
+    if (!projection && !path) return null;
     try {
-      const text = getSessionEntries(path).filter((entry) => entry.type === "message").map((entry) => messageText((entry as { message?: unknown }).message)).filter(Boolean).join("\n").slice(0, 80_000);
+      const entries = projection ? durableEntries(projection.entries, projection.info.created) : getSessionEntries(path!);
+      const text = entries.filter((entry) => entry.type === "message").map((entry) => messageText((entry as { message?: unknown }).message)).filter(Boolean).join("\n").slice(0, 80_000);
       return { id: `session:${session.id}`, source: "session" as const, title: session.name || session.firstMessage || session.id.slice(0, 8), text, sessionId: session.id, modified: session.modified };
     } catch { return null; }
   }))).filter((document): document is NonNullable<typeof document> => Boolean(document));

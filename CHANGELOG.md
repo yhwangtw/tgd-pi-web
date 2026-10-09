@@ -4,6 +4,15 @@ All notable changes to tGD-pi-web are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Durable conversations and background work.** Pi Durable now powers persistent chat, owned subagents, Goal/Plan state, questions, MCP tools, and scheduled runs. Existing eligible conversations migrate on an idle continuation, preserving the original JSONL, history, branches, bookmarks, and old links without replaying tools. Standard sessions remain available for incompatible extensions.
+
+### Fixed
+- **Long conversation rendering.** Transcript rows no longer use CSS display locking; minimap and collapsible-message measurements are coalesced and scrolling reuses cached row positions. Desktop/mobile regression coverage includes a 780-message conversation.
+- **Durable package management.** The package center uses the active Durable session's settings and extension reload lifecycle, including sessions opened through their pre-migration URLs.
+- **Patched production dependencies.** MCP SDK, sharp, proxy-addr, and source-map-js now resolve to versions that pass the high/critical production audit.
+- **Question timeouts cannot stall after an early timer wakeup.** Pending Durable dialogs recheck their saved deadline and retain a future timeout until they are answered or expire.
+
 ### Changed
 - **Assistant message actions stay attached to message metadata.** The desktop quote, copy, and bookmark toolbar now opens beside Usage/time instead of floating at the far-right edge of the transcript; the compact mobile actions menu is unchanged.
 - **Pi runtime upgraded to the official 0.84.2 release.** Model discovery, API-key login, OAuth, logout, tool registration, usage accounting, and active-session model selection use Pi's canonical runtime; dependencies stay exactly pinned so production does not drift during install.

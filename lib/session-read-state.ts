@@ -49,10 +49,10 @@ export function markSessionRead(id: string, timestamp: number, entryId?: string)
 
 export function isSessionUnread(session: SessionInfo): boolean {
   if (session.ephemeral || session.messageCount === 0) return false;
-  if (readTime(session.id) >= Date.parse(session.modified)) return false;
+  if (Math.max(readTime(session.id), session.sourceSessionId ? readTime(session.sourceSessionId) : 0) >= Date.parse(session.modified)) return false;
   // Reuse read markers saved by older versions when they reach the latest message.
   try {
-    if (session.lastMessageId && localStorage.getItem(`pi-last-read:${session.id}`) === session.lastMessageId) return false;
+    if (session.lastMessageId && [session.id, session.sourceSessionId].some(id => id && localStorage.getItem(`pi-last-read:${id}`) === session.lastMessageId)) return false;
   } catch { /* private mode */ }
   return true;
 }

@@ -1,8 +1,10 @@
+import { keepStandardSession } from "@/lib/session-migrations";
 import { NextResponse } from "next/server";
 import { existsSync } from "fs";
 import { randomUUID } from "node:crypto";
 import { startRpcSession } from "@/lib/rpc-manager";
 import type { ToolSelectionMode } from "@/lib/tool-selection";
+import { createDurableChat } from "@/lib/durable-chat";
 
 // POST /api/agent/new  body: { cwd: string; type: string; message: string; ... }
 // Creates a Pi session. The Web client uses deferPrompt to subscribe before
@@ -21,10 +23,21 @@ export async function POST(req: Request) {
     }
 
     // Use a one-time key so startRpcSession's lock doesn't conflict with real session ids
-    const { provider, modelId, toolNames, toolMode, thinkingLevel, ephemeral, deferPrompt, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; toolMode?: ToolSelectionMode; thinkingLevel?: string; ephemeral?: boolean; deferPrompt?: boolean; [key: string]: unknown };
+    const { provider, modelId, toolNames, toolMode, thinkingLevel, ephemeral, deferPrompt, engine, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; toolMode?: ToolSelectionMode; thinkingLevel?: string; ephemeral?: boolean; deferPrompt?: boolean; engine?: string; [key: string]: unknown };
+    if (engine !== undefined && engine !== "durable" && engine !== "legacy") {
+      return NextResponse.json({ error: "Unknown session engine" }, { status: 400 });
+    }
+    if (engine === "durable") {
+      const session = await createDurableChat({ cwd, provider, modelId, toolNames, toolMode, thinkingLevel, ephemeral: ephemeral === true });
+      globalThis.__piAllowedRootsCache?.roots.add(cwd);
+      const result = deferPrompt === true ? null : await session.send(promptCommand as { type: string; [key: string]: unknown });
+      return NextResponse.json({ success: true, sessionId: session.sessionId, ephemeral: ephemeral === true, deferred: deferPrompt === true, data: result });
+    }
 
     const tempKey = `__new__${randomUUID()}`;
     const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames, { ephemeral: ephemeral === true, toolMode });
+
+    if (ephemeral !== true) keepStandardSession(realSessionId);
 
     // Keep the files-route allowed-roots cache (see app/api/files/[...path]/route.ts)
     // in sync so the new cwd is immediately readable via /api/files. Without this,

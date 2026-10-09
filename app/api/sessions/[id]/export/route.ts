@@ -1,13 +1,16 @@
+import { waitForSessionMigration } from "@/lib/durable-migration";
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { basename, dirname, join } from "path";
 import { promisify } from "util";
 import { fileURLToPath } from "url";
 import { NextResponse } from "next/server";
 import { resolveSessionPath } from "@/lib/session-reader";
-import { redactSensitiveText } from "@/lib/redaction";
+import { redactSensitiveText, redactSensitiveValue } from "@/lib/redaction";
+import { getDurableChat } from "@/lib/durable-chat";
+import { durableEntries, isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 
 const execFileAsync = promisify(execFile);
 
@@ -47,12 +50,23 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-
+  const { id: requestedId } = await params;
+  const id = await waitForSessionMigration(requestedId);
+  let tempDir: string | undefined;
   try {
-    const filePath = await resolveSessionPath(id);
-    if (!filePath) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    let filePath: string | null;
+    if (isDurableSessionId(id)) {
+      const live = getDurableChat(id);
+      const projection = live?.isAlive() ? live.getProjection() : readDurableProjection(id);
+      if (!projection || projection.deleted) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      tempDir = mkdtempSync(join(tmpdir(), "pi-web-export-"));
+      filePath = join(tempDir, `${id}.jsonl`);
+      const entries = [{ type: "session", version: 3, id, cwd: projection.info.cwd, timestamp: projection.info.created },
+        ...durableEntries(projection.entries, projection.info.created)];
+      writeFileSync(filePath, `${entries.map(entry => JSON.stringify(entry)).join("\n")}\n`, { mode: 0o600 });
+    } else {
+      filePath = await resolveSessionPath(id);
+      if (!filePath) return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
     const cliPath = await getPiCliPath();
@@ -60,8 +74,7 @@ export async function GET(
       return NextResponse.json({ error: "pi CLI not found" }, { status: 500 });
     }
 
-    const tempDir = join(tmpdir(), "pi-web-export");
-    mkdirSync(tempDir, { recursive: true });
+    tempDir ??= mkdtempSync(join(tmpdir(), "pi-web-export-"));
 
     const sessionBase = basename(filePath, ".jsonl");
     const fileName = `pi-session-${sessionBase}.html`;
@@ -79,7 +92,16 @@ export async function GET(
         maxBuffer: 1024 * 1024,
       });
 
-      const html = redactSensitiveText(readFileSync(outputPath, "utf8"));
+      // Pi's standalone exporter embeds the transcript as base64 JSON. Redact
+      // that payload before encoding it again; scanning the HTML alone cannot
+      // see credentials inside the transcript.
+      const html = redactSensitiveText(readFileSync(outputPath, "utf8").replace(
+        /(<script\b[^>]*\bid="session-data"[^>]*>)([^<]*)(<\/script>)/,
+        (_match, opening: string, encoded: string, closing: string) => {
+          const data = JSON.parse(Buffer.from(encoded.trim(), "base64").toString("utf8"));
+          return `${opening}${Buffer.from(JSON.stringify(redactSensitiveValue(data))).toString("base64")}${closing}`;
+        },
+      ));
       return new Response(html, {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
@@ -92,5 +114,7 @@ export async function GET(
     }
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
+  } finally {
+    if (tempDir) rmSync(tempDir, { recursive: true, force: true });
   }
 }

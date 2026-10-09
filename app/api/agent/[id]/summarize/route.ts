@@ -1,5 +1,8 @@
+import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
 import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
+import { isDurableSessionId } from "@/lib/durable-session-store";
+import { openDurableChat } from "@/lib/durable-chat";
 
 interface PiMessage {
   role: string;
@@ -10,9 +13,11 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const { id: requestedId } = await params;
+  const id = await waitForSessionMigration(requestedId);
 
   try {
+    if (isDurableSessionId(id)) return NextResponse.json(await (await openDurableChat(id)).summarize());
     let session = getRpcSession(id);
     if (!session?.isAlive()) {
       const { resolveSessionPath } = await import("@/lib/session-reader");

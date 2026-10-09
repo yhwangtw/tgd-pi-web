@@ -131,7 +131,8 @@ test("subagent budgets are editable and persist without starting any run", async
   await dashboard.getByRole("spinbutton", { name: "Reported cost (US$)", exact: true }).fill("3.50");
   await dashboard.getByRole("spinbutton", { name: "Minutes", exact: true }).fill("45");
   await dashboard.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(dashboard.getByRole("status")).toContainText("Saved");
+  // Other runs may also expose status messages (for example a cancelled run).
+  await expect(dashboard.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
   const after = await (await page.request.get("/api/agent-runs")).json();
   expect(after.subagentLimits).toEqual({ maxTurns: 0, maxCostUsd: 3.5, timeoutMs: 2_700_000 });
   expect(after.runs.map((run: { id: string }) => run.id)).toEqual(before.runs.map((run: { id: string }) => run.id));

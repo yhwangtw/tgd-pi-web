@@ -1,8 +1,17 @@
+import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
 import { getRpcSession, startRpcSession, type AgentSessionWrapper } from "@/lib/rpc-manager";
 import { buildExtensionsReport, collectExtensionResources } from "@/lib/extensions-info";
+import { getDurableChat, openDurableChat } from "@/lib/durable-chat";
+import { isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 
 export const dynamic = "force-dynamic";
+
+async function ensureDurable(id: string) {
+  const existing = getDurableChat(id);
+  if (existing?.isAlive()) return existing;
+  return readDurableProjection(id) ? openDurableChat(id) : null;
+}
 
 // Get (or revive from file) the in-process agent session — same pattern as
 // the command route: extensions live on the session's ExtensionRunner.
@@ -24,8 +33,13 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
+  const { id: requestedId } = await params;
+  const id = await waitForSessionMigration(requestedId);
   try {
+    if (isDurableSessionId(id)) {
+      const chat = await ensureDurable(id);
+      return chat ? NextResponse.json(await chat.getExtensionsReport()) : NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
     const session = await ensureSession(id);
     if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
     const runner = session.inner.extensionRunner;
@@ -53,9 +67,33 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
+  const { id: requestedId } = await params;
+  const id = await waitForSessionMigration(requestedId);
   try {
     const body = await req.json() as { action?: string; name?: string; value?: boolean | string; shortcut?: string };
+
+    if (isDurableSessionId(id)) {
+      if (body.action === "run_shortcut" && !body.shortcut) return NextResponse.json({ error: "shortcut is required" }, { status: 400 });
+      if (body.action === "set_flag" && (!body.name || body.value === undefined)) return NextResponse.json({ error: "name and value are required" }, { status: 400 });
+      if (!["run_shortcut", "set_flag", "reload"].includes(body.action ?? "")) return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+      const chat = await ensureDurable(id);
+      if (!chat) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      if (body.action === "reload") {
+        await chat.reloadExtensions();
+        return NextResponse.json({ ok: true, reloaded: true });
+      }
+      const runner = chat.getExtensionHost()?.runner;
+      if (!runner) return NextResponse.json({ error: "Extensions not loaded" }, { status: 500 });
+      if (body.action === "set_flag") {
+        runner.setFlagValue(body.name!, body.value!);
+        return NextResponse.json({ ok: true });
+      }
+      const extensions = chat.getServices()?.resourceLoader.getExtensions().extensions ?? [];
+      const registration = extensions.flatMap(extension => [...extension.shortcuts.values()]).find(shortcut => shortcut.shortcut === body.shortcut);
+      if (!registration) return NextResponse.json({ error: "Shortcut not found" }, { status: 404 });
+      await registration.handler(runner.createContext());
+      return NextResponse.json({ ok: true, shortcut: body.shortcut });
+    }
 
     if (body.action === "run_shortcut") {
       if (!body.shortcut) return NextResponse.json({ error: "shortcut is required" }, { status: 400 });
