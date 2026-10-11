@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 
 /**
  * Right panel width: draggable splitter, persisted in localStorage.
- * `rightWidth === null` means "use the CSS default (42%)".
+ * `rightWidth === null` means "use the CSS default (38%)".
  */
 export function useRightPanelWidth() {
   const [rightWidth, setRightWidth] = useState<number | null>(() => {
@@ -27,7 +27,7 @@ export function useRightPanelWidth() {
     // moved, so a plain click / the clicks of a double-click never re-save.
     let latest: number | null = null;
     const onMove = (ev: MouseEvent) => {
-      const max = Math.round(window.innerWidth * 0.7);
+      const max = window.innerWidth - 500;
       const w = Math.min(Math.max(window.innerWidth - ev.clientX, 320), max);
       latest = w;
       setRightWidth(w);
@@ -49,5 +49,21 @@ export function useRightPanelWidth() {
     try { localStorage.removeItem("pi-right-width"); } catch { /* ignore */ }
   }, []);
 
-  return { rightWidth, draggingRight, startRightResize, resetRightWidth };
+  const resizeRightByKeyboard = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Home" || event.key === "Enter") {
+      event.preventDefault();
+      resetRightWidth();
+      return;
+    }
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const current = event.currentTarget.parentElement?.getBoundingClientRect().width ?? window.innerWidth * 0.38;
+    const step = event.shiftKey ? 80 : 24;
+    const max = Math.max(320, window.innerWidth - 500);
+    const next = Math.min(max, Math.max(320, current + (event.key === "ArrowLeft" ? step : -step)));
+    setRightWidth(next);
+    try { localStorage.setItem("pi-right-width", String(next)); } catch { /* ignore */ }
+  }, [resetRightWidth]);
+
+  return { rightWidth, draggingRight, startRightResize, resetRightWidth, resizeRightByKeyboard };
 }

@@ -70,4 +70,22 @@ describe("AgentDashboardPanel", () => {
     }));
     expect(select!.value).toBe("5");
   });
+
+  it("distinguishes a filtered empty list and restores completed history with Clear filters", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({
+      runs: [{ id: "done", name: "Completed fixture", cwd: "/fixture", prompt: "Test", status: "completed", createdAt: "2026-10-10T00:00:00Z" }],
+      maxConcurrency: 3,
+    })));
+    container = document.createElement("div"); document.body.append(container); root = createRoot(container);
+    await act(async () => root?.render(<AgentDashboardPanel defaultCwd="/fixture" onOpenSession={vi.fn()} />));
+    expect(container.textContent).toContain("Completed fixture");
+    const active = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "0Active")!;
+    await act(async () => active.click());
+    expect(container.textContent).toContain("No matching runs");
+    expect(container.textContent).not.toContain("No background runs yet");
+    const clear = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Clear filters")!;
+    await act(async () => clear.click());
+    expect(container.textContent).toContain("Completed fixture");
+    expect(container.textContent).not.toContain("No matching runs");
+  });
 });

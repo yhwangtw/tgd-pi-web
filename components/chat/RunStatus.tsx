@@ -15,6 +15,7 @@ export function phaseLabel(phase: AgentPhase, translate?: (key: MsgKey) => strin
       if (names.length <= 3) return `Running ${names.join(", ")}...`;
       return `Running ${names.slice(0, 2).join(", ")} (+${names.length - 2})...`;
     }
+    if (phase?.kind === "stopping") return "Stopping…";
     if (phase?.kind === "waiting_model") return "Waiting for model...";
     return "Thinking...";
   }
@@ -26,14 +27,15 @@ export function phaseLabel(phase: AgentPhase, translate?: (key: MsgKey) => strin
     if (names.length <= 3) return `${running} ${names.join(", ")}…`;
     return `${running} ${names.slice(0, 2).join(", ")} (+${names.length - 2})…`;
   }
+  if (phase?.kind === "stopping") return translate("chat.stopping");
   if (phase?.kind === "waiting_model") return translate("chat.waitingModel");
   return translate("chat.thinkingStatus");
 }
 
-export type RunStatusState = "normal" | "delayed" | "stalled" | "reconnecting";
+export type RunStatusState = "normal" | "delayed" | "stalled" | "reconnecting" | "connecting";
 
 export function runStatusState(progress: RunProgressState): RunStatusState {
-  return progress.connection === "reconnecting" ? "reconnecting" : progress.attention;
+  return progress.connection !== "connected" ? progress.connection : progress.attention;
 }
 
 function Elapsed({ since }: { since: number }) {
@@ -59,7 +61,7 @@ export function RunStatus({
   const { t } = useI18n();
   const state = runStatusState(progress);
   const toolRun = phase?.kind === "running_tools";
-  const label = state === "reconnecting"
+  const label = phase?.kind === "stopping" ? t("chat.stopping") : state === "connecting" ? t("chat.connecting") : state === "reconnecting"
     ? t("chat.reconnecting")
     : state === "stalled"
       ? t("chat.takingLonger")

@@ -80,7 +80,10 @@ export default function reconnectFixture(pi) {
       if (model.provider !== provider || model.baseUrl !== baseUrl) throw new Error("Unexpected fixture provider");
       const user = [...context.messages].reverse().find(message => message.role === "user");
       const text = typeof user?.content === "string" ? user.content : (user?.content ?? []).map(part => part.text ?? "").join("");
-      const match = /^E2E_RECONNECT:(complete|delayed|error|question|outside):([a-z0-9-]{1,80})$/.exec(text);
+      const delegated = text.startsWith("<delegated_role ") && text.includes("<delegated_task>")
+        ? text.split("<delegated_task>")[1].split("</delegated_task>")[0].trim() : null;
+      const fixtureText = delegated ?? text;
+      const match = /^E2E_RECONNECT:(complete|delayed|error|question|outside|subagents):([a-z0-9-]{1,80})$/.exec(fixtureText);
       const message = { role: "assistant", api: model.api, provider, model: model.id,
         content: [], stopReason: "stop", timestamp: Date.now(),
         usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
@@ -89,6 +92,27 @@ export default function reconnectFixture(pi) {
         try {
           if (!match) throw new Error("Only named reconnect fixture prompts are accepted");
           const [, mode, token] = match;
+          if (mode === "subagents") {
+            const result = context.messages.at(-1);
+            if (result?.role === "toolResult" && result.toolName === "subagent") {
+              const partial = token.startsWith("partial-");
+              if (result.isError !== partial) throw new Error("Subagent error contract was not persisted");
+              message.content = [{ type: "text", text: "Fixture delegation verified " + token + "." }];
+              stream.push({ type: "start", partial: message });
+              stream.push({ type: "done", reason: "stop", message });
+            } else {
+              const toolCall = { type: "toolCall", id: "fixture-subagents-" + token, name: "subagent", arguments: { tasks: [
+                { agent: "scout", task: "E2E_RECONNECT:delayed:child-a-" + token },
+                { agent: "scout", task: "E2E_RECONNECT:" + (token.startsWith("partial-") ? "error" : "delayed") + ":child-b-" + token },
+              ] } };
+              message.content = [toolCall]; message.stopReason = "toolUse";
+              stream.push({ type: "start", partial: message });
+              stream.push({ type: "toolcall_start", contentIndex: 0, partial: message });
+              stream.push({ type: "toolcall_end", contentIndex: 0, toolCall, partial: message });
+              stream.push({ type: "done", reason: "toolUse", message });
+            }
+            return;
+          }
           if (mode === "outside") {
             const result = context.messages.at(-1);
             if (result?.role === "toolResult" && result.toolName === "read") {
@@ -133,7 +157,7 @@ export default function reconnectFixture(pi) {
           stream.push({ type: "text_delta", contentIndex: 0, delta: message.content[0].text, partial: message });
           if (mode === "delayed") await new Promise((resolve, reject) => {
             const abort = () => { clearTimeout(timer); reject(new Error("Fixture run aborted")); };
-            const timer = setTimeout(() => { options?.signal?.removeEventListener("abort", abort); resolve(); }, 5000);
+            const timer = setTimeout(() => { options?.signal?.removeEventListener("abort", abort); resolve(); }, token.startsWith("queue-fix-") ? 30_000 : 5000);
             if (options?.signal?.aborted) abort();
             else options?.signal?.addEventListener("abort", abort, { once: true });
           });

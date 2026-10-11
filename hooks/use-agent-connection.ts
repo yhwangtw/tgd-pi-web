@@ -51,11 +51,20 @@ export function useAgentEvents(
   // Resolves `false` when the stream isn't ready
   // yet (failsafe timeout / connect error) — a broken stream never blocks the
   // caller, but it can tell the difference and log it.
-  const connectEvents = useCallback((sid: string, forceReconnect = false): Promise<boolean> => {
+  const connectEvents = useCallback((sid: string, forceReconnect = false, signal?: AbortSignal): Promise<boolean> => {
+    if (signal?.aborted) return Promise.resolve(false);
+    const wait = (pending: Promise<boolean>): Promise<boolean> => {
+      if (!signal) return pending;
+      return new Promise(resolve => {
+        const abort = () => resolve(false);
+        signal.addEventListener("abort", abort, { once: true });
+        pending.then(ok => { signal.removeEventListener("abort", abort); resolve(signal.aborted ? false : ok); });
+      });
+    };
     if (!mountedRef.current) return Promise.resolve(false);
     const current = eventSourceRef.current;
     if (!forceReconnect && current && sessionRef.current === sid && current.readyState !== EventSource.CLOSED) {
-      return readyRef.current ? Promise.resolve(true) : pendingReadyRef.current ?? Promise.resolve(false);
+      return readyRef.current ? Promise.resolve(true) : wait(pendingReadyRef.current ?? Promise.resolve(false));
     }
     if (sessionRef.current !== sid) {
       cursorRef.current = null;
@@ -70,6 +79,7 @@ export function useAgentEvents(
     reconnectTimerRef.current = null;
     current?.close();
     readyRef.current = false;
+    setConnectionState(cursorRef.current ? "reconnecting" : "connecting");
     const url = `/api/agent/${encodeURIComponent(sid)}/events${cursorRef.current ? `?cursor=${encodeURIComponent(cursorRef.current)}` : ""}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
@@ -82,14 +92,19 @@ export function useAgentEvents(
         resolve(ok);
       };
       settlePendingRef.current = settle;
-      failSafeRef.current = setTimeout(() => settle(false), 1_500);
+      failSafeRef.current = setTimeout(() => {
+        readyRef.current = false;
+        es.close();
+        if (eventSourceRef.current === es) eventSourceRef.current = null;
+        settle(false);
+      }, 30_000);
       es.onopen = () => {
         if (eventSourceRef.current !== es) return;
-        setConnectionState("connected");
+        // HTTP open alone is not an initialized runtime.
       };
       es.onmessage = (e) => {
         if (eventSourceRef.current !== es) return;
-        setConnectionState("connected");
+        if (readyRef.current) setConnectionState("connected");
         try {
           const event = JSON.parse(e.data) as AgentEvent;
           const snapshot = event.type === "session_snapshot";
@@ -105,6 +120,7 @@ export function useAgentEvents(
             return;
           }
           if (snapshot) {
+            setConnectionState("connected");
             readyRef.current = true;
             reconnectAttemptRef.current = 0;
             reconnectStartedAtRef.current = null;
@@ -142,7 +158,7 @@ export function useAgentEvents(
       };
     });
     pendingReadyRef.current = pending;
-    return pending;
+    return wait(pending);
   }, [agentRunningRef, handleAgentEventRef]);
 
   useEffect(() => {

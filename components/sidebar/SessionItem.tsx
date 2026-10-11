@@ -2,19 +2,22 @@
 
 import { useState, useCallback, useRef, useId } from "react";
 import type { SessionInfo } from "@/lib/types";
+import type { AttentionItem } from "@/lib/attention-center";
+import { updateSessionName } from "@/lib/session-list-store";
 import { workspaceStateLabel, type WorkspaceIdentity } from "@/lib/workspace-identity";
 import { formatSessionListTime, getSessionDisplayTitle, getSessionPreview, getSessionProjectName } from "./session-utils";
 import { getTagStyle } from "@/lib/tag-colors";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/lib/i18n";
 import { SessionContextMenu, type SessionContextMenuPosition } from "./SessionContextMenu";
-import { ChevronDown, GitFork, MoreHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, Clock3, CirclePause, GitFork, MoreHorizontal, Trash2, TriangleAlert } from "lucide-react";
 import styles from "./SessionItem.module.css";
 
 interface SessionItemProps {
   session: SessionInfo;
   isSelected: boolean;
   isUnread?: boolean;
+  attentionStatus?: AttentionItem["status"];
   onClick: () => void;
   onRenamed?: () => void;
   onDeleted?: (id: string) => void;
@@ -41,6 +44,7 @@ export function SessionItem({
   session,
   isSelected,
   isUnread = false,
+  attentionStatus,
   onClick,
   onRenamed,
   onDeleted,
@@ -69,9 +73,14 @@ export function SessionItem({
   const [contextMenu, setContextMenu] = useState<SessionContextMenuPosition | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const unreadLabelId = useId();
+  const attentionLabelId = useId();
   const overflowRef = useRef<HTMLButtonElement>(null);
   const { locale, t } = useI18n();
   const { theme } = useTheme();
+  const statusLabel = attentionStatus === "waiting_for_input" ? t("session.waitingForInput")
+    : attentionStatus === "failed" ? t("session.failed")
+    : attentionStatus === "interrupted" ? t("session.interrupted") : null;
+  const StatusIcon = attentionStatus === "waiting_for_input" ? Clock3 : attentionStatus === "failed" ? TriangleAlert : CirclePause;
 
   // Keep disambiguation available to assistive technology and tooltips without
   // repeating project names and full dates in the visible conversation title.
@@ -94,11 +103,13 @@ export function SessionItem({
     setRenaming(false);
     if (name === (session.name ?? "")) return;
     try {
-      await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
+      if (!response.ok) return;
+      updateSessionName(session.id, name);
       onRenamed?.();
     } catch {
       // ignore
@@ -155,7 +166,8 @@ export function SessionItem({
         role="row"
         aria-selected={isSelected}
         aria-label={accessibleTitle}
-        aria-describedby={isUnread ? unreadLabelId : undefined}
+        aria-describedby={[isUnread ? unreadLabelId : null, statusLabel ? attentionLabelId : null].filter(Boolean).join(" ") || undefined}
+        data-attention-status={statusLabel ? attentionStatus : undefined}
         className={["hover-group", !confirmDelete && !isSelected ? "hover-bg" : "", styles.item].filter(Boolean).join(" ")}
         style={{
           paddingLeft: depth > 0 ? depth * 12 + 14 : 14,
@@ -248,6 +260,9 @@ export function SessionItem({
             </div>
 
             <div className={styles.previewRow}>
+              {statusLabel && <span id={attentionLabelId} className={styles.attentionStatus} data-status={attentionStatus} title={statusLabel}>
+                <StatusIcon size={12} strokeWidth={1.8} aria-hidden /><span>{statusLabel}</span>
+              </span>}
               {showProject && <>
                 <span className={styles.workspaceMeta} title={`${session.cwd} · ${branch}`}>{repository}</span>
                 <span className={styles.metaDivider} aria-hidden>·</span>

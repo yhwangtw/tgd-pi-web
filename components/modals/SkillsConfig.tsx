@@ -6,7 +6,7 @@ import { DialogShell } from "@/components/ui/DialogShell";
 import { IconButton } from "@/components/ui/IconButton";
 import { useI18n } from "@/lib/i18n";
 import type { Skill } from "./skills-config-types";
-import { shortenPath, sourceLabel } from "./skills-config-types";
+import { sourceLabel } from "./skills-config-types";
 import { SkillDetail } from "./SkillDetail";
 import { AddSkillPanel } from "./AddSkillPanel";
 import styles from "./SkillsConfig.module.css";
@@ -102,7 +102,8 @@ export function SkillsConfig({
     <DialogShell
       open
       title={t("skills.title")}
-      description={shortenPath(cwd)}
+      description={cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? cwd}
+      descriptionDetail={cwd}
       onClose={onClose}
       size="wide"
       mobileMode="fullscreen"

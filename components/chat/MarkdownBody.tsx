@@ -2,6 +2,7 @@
 
 import type { Pluggable, PluggableList } from "unified";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
@@ -231,6 +232,8 @@ export function MarkdownBody({ children, className, isStreaming, allowSafeHtml =
   );
 }
 
+const MarkdownContext = createContext<{ isStreaming?: boolean; sourceFilePath?: string }>({});
+
 function MarkdownRenderer({
   markdown,
   className,
@@ -246,103 +249,104 @@ function MarkdownRenderer({
   remarkPlugins: PluggableList;
   rehypePlugins: PluggableList;
 }) {
-  // Stable renderer types preserve code and diagram state across parent updates.
   const components = useMemo<Components>(() => ({
-    code({ className, children, node: markdownNode, ...props }) {
-      void markdownNode;
-      const lang = className?.replace("language-", "").toLowerCase() ?? "";
-      const raw = String(children);
-      const isBlock = className?.includes("language-") || raw.includes("\n");
-      if (isBlock) {
-        if (lang === "mermaid") {
-          return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
-        }
-        return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} plain={isStreaming} />;
-      }
-      // File-path-looking inline code opens in the right-panel viewer.
-      const link = looksLikeFilePath(raw);
-      if (link) {
-        const openFileLink = (element: HTMLElement) => {
-          // A Markdown link around inline code owns its destination.
-          if (element.closest("a")) return;
-          const entryId = element.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId;
-          requestOpenFile({
-            ...link,
-            origin: entryId ? { kind: "message", entryId } : undefined,
-          }, element);
-        };
-        return (
-          <code
-            {...props}
-            className={`${styles.inlineCode} ${styles.fileLink}`}
-            role="link"
-            tabIndex={0}
-            title={`Open ${link.path}`}
-            onClick={(event) => openFileLink(event.currentTarget)}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter") return;
-              event.preventDefault();
-              const anchor = event.currentTarget.closest("a");
-              if (anchor) anchor.click();
-              else openFileLink(event.currentTarget);
-            }}
-          >
-            {children}
-          </code>
-        );
-      }
-      return (
-        <code
-          {...props}
-          className={styles.inlineCode}
-        >
-          {children}
-        </code>
-      );
-    },
-    pre({ children }) {
-      return <>{children}</>;
-    },
-    // Wide tables scroll in their own wrapper instead of squishing the
-    // column layout (or overflowing the bubble).
-    table({ children, ...props }) {
-      return (
-        <div className="md-table-wrap">
-          <table {...props}>{children}</table>
-        </div>
-      );
-    },
-    // External links open in a new tab (and get the ↗ marker via CSS).
-    a({ href, children, node, ...props }) {
-      void node;
-      const link = parseMarkdownFileLink(href, sourceFilePath);
-      const external = typeof href === "string" && /^(?:https?:)?\/\//i.test(href);
-      return (
-        <a
-          href={href}
-          {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-          {...props}
-          onClick={link ? (event) => {
-            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-            event.preventDefault();
-            const entryId = event.currentTarget.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId;
-            requestOpenFile({ ...link, origin: entryId ? { kind: "message", entryId } : undefined }, event.currentTarget);
-          } : undefined}
-        >
-          {children}
-        </a>
-      );
-    },
-    img({ alt, ...props }) {
-      const src = resolveMarkdownImageSource(typeof props.src === "string" ? props.src : undefined, sourceFilePath);
-      // Arbitrary README badge hosts cannot be declared up front for next/image.
-      // eslint-disable-next-line @next/next/no-img-element
-      return <img {...props} src={src} alt={alt ?? ""} loading="lazy" decoding="async" referrerPolicy="no-referrer" />;
-    },
-  }), [isStreaming, sourceFilePath]);
-
+          code: function MarkdownCode({ className, children, node: markdownNode, ...props }) {
+            const { isStreaming } = useContext(MarkdownContext);
+            void markdownNode;
+            const lang = className?.replace("language-", "").toLowerCase() ?? "";
+            const raw = String(children);
+            const isBlock = className?.includes("language-") || raw.includes("\n");
+            if (isBlock) {
+              if (lang === "mermaid") {
+                return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
+              }
+              return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} plain={isStreaming} />;
+            }
+            // File-path-looking inline code opens in the right-panel viewer.
+            const link = looksLikeFilePath(raw);
+            if (link) {
+              const openFileLink = (element: HTMLElement) => {
+                // A Markdown link around inline code owns its destination.
+                if (element.closest("a")) return;
+                const entryId = element.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId;
+                requestOpenFile({
+                  ...link,
+                  origin: entryId ? { kind: "message", entryId } : undefined,
+                }, element);
+              };
+              return (
+                <code
+                  {...props}
+                  className={`${styles.inlineCode} ${styles.fileLink}`}
+                  role="link"
+                  tabIndex={0}
+                  title={`Open ${link.path}`}
+                  onClick={(event) => openFileLink(event.currentTarget)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    const anchor = event.currentTarget.closest("a");
+                    if (anchor) anchor.click();
+                    else openFileLink(event.currentTarget);
+                  }}
+                >
+                  {children}
+                </code>
+              );
+            }
+            return (
+              <code
+                {...props}
+                className={styles.inlineCode}
+              >
+                {children}
+              </code>
+            );
+          },
+          pre({ children }) {
+            return <>{children}</>;
+          },
+          // Wide tables scroll in their own wrapper instead of squishing the
+          // column layout (or overflowing the bubble).
+          table({ children, ...props }) {
+            return (
+              <div className="md-table-wrap">
+                <table {...props}>{children}</table>
+              </div>
+            );
+          },
+          // External links open in a new tab (and get the ↗ marker via CSS).
+          a: function MarkdownLink({ href, children, node, ...props }) {
+            const { sourceFilePath } = useContext(MarkdownContext);
+            void node;
+            const link = parseMarkdownFileLink(href, sourceFilePath);
+            const external = typeof href === "string" && /^(?:https?:)?\/\//i.test(href);
+            return (
+              <a
+                href={href}
+                {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                {...props}
+                onClick={link ? (event) => {
+                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  event.preventDefault();
+                  const entryId = event.currentTarget.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId;
+                  requestOpenFile({ ...link, origin: entryId ? { kind: "message", entryId } : undefined }, event.currentTarget);
+                } : undefined}
+              >
+                {children}
+              </a>
+            );
+          },
+          img: function MarkdownImage({ alt, ...props }) {
+            const { sourceFilePath } = useContext(MarkdownContext);
+            const src = resolveMarkdownImageSource(typeof props.src === "string" ? props.src : undefined, sourceFilePath);
+            // Arbitrary README badge hosts cannot be declared up front for next/image.
+            // eslint-disable-next-line @next/next/no-img-element
+            return <img {...props} src={src} alt={alt ?? ""} loading="lazy" decoding="async" referrerPolicy="no-referrer" />;
+          },
+  }), []);
   return (
-    <div className={["markdown-body", className].filter(Boolean).join(" ")}>
+    <MarkdownContext.Provider value={{ isStreaming, sourceFilePath }}><div className={["markdown-body", className].filter(Boolean).join(" ")}>
       <ReactMarkdown
         urlTransform={(url, key) => key === "href" && parseMarkdownFileLink(url) ? url : defaultUrlTransform(url)}
         remarkPlugins={remarkPlugins}
@@ -351,7 +355,7 @@ function MarkdownRenderer({
       >
         {markdown}
       </ReactMarkdown>
-    </div>
+    </div></MarkdownContext.Provider>
   );
 }
 

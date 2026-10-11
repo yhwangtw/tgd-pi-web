@@ -65,3 +65,8 @@
   .overlay[data-modeless] .dialog { width: 100%; height: auto; max-height: 55dvh; border: 1px solid var(--border-subtle); border-radius: var(--radius-dialog); }
   .collapse { min-width: var(--control-touch); min-height: var(--control-touch); }
 }
+
+.descriptionDetail { color: var(--text-muted); font-size: var(--text-xs); margin-top: var(--space-1); }
+.descriptionDetail summary { cursor: pointer; width: fit-content; }
+.descriptionDetail p { overflow-wrap: anywhere; user-select: text; }
+@media (max-width: 700px) { .descriptionDetail summary { min-height: 44px; display: flex; align-items: center; } }

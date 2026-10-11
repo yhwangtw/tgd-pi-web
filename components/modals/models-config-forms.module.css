@@ -19,7 +19,7 @@
   outline: 0;
   background: var(--bg-panel);
   color: var(--text);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
 }
 
@@ -90,3 +90,5 @@
   }
 
 }
+
+@media (max-width: 700px) { .input { font-size: var(--text-input-mobile); min-height: 44px; } }

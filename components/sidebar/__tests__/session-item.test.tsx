@@ -17,6 +17,19 @@ async function render(showProject: boolean) {
 }
 
 describe("quiet conversation row", () => {
+  it("keeps unread and action-required states distinct, then removes a resolved status", async () => {
+    await render(false);
+    const props = { session, isSelected: false, isUnread: true, onClick: vi.fn() };
+    await act(async () => root.render(<SessionItem {...props} attentionStatus="waiting_for_input" />));
+    const row = container.querySelector('[role="row"]')!;
+    const descriptions = row.getAttribute("aria-describedby")!.split(" ").map(id => document.getElementById(id)?.textContent);
+    expect(descriptions).toEqual(["Unread messages", "Needs input"]);
+    expect(row.getAttribute("data-attention-status")).toBe("waiting_for_input");
+    await act(async () => root.render(<SessionItem {...props} attentionStatus="completed" />));
+    expect(row.hasAttribute("data-attention-status")).toBe(false);
+    expect(container.textContent).not.toContain("Needs input");
+    expect(row.getAttribute("data-unread")).toBe("true");
+  });
   it("shows an accessible unread indicator and clears it after reading", async () => {
     await render(false);
     const props = { session, isSelected: false, onClick: vi.fn() };

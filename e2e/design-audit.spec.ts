@@ -508,7 +508,7 @@ async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: bool
   // Settings and analysis are modeless panels; explicit close keeps background
   // keyboard work intact instead of intercepting Escape from the composer.
   const modals = [
-    { label: "Analytics", desktopTrigger: "Token usage and cost report", dialog: "Session Analytics" },
+    { label: "Analytics", desktopTrigger: "Token usage and cost report", dialog: "Usage analytics" },
     { label: "Models", desktopTrigger: /^Models/, dialog: "Models" },
     { label: "Skills", desktopTrigger: /^Skills/, dialog: "Skills" },
     { label: "Extensions", desktopTrigger: "Extensions", dialog: "Extensions" },

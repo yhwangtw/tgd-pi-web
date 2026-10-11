@@ -11,7 +11,7 @@ import {
 import { buildSessionContext, buildTree, cacheSessionPath, getLeafId } from "./session-reader";
 import { AgentEventLog, type AgentStreamRecord, type ReplayStatus } from "./agent-event-log";
 import { CompactionController } from "./compaction-controller";
-import type { QueuedFollowUp } from "./queued-follow-ups";
+import { normalizeQueuedFollowUps, type QueuedFollowUp } from "./queued-follow-ups";
 import type { SessionEntry } from "./types";
 import { createSnapshot } from "./git-snapshot";
 import { readWorkflow, WORKFLOW_ENTRY } from "./workflow-state";
@@ -121,6 +121,9 @@ export class AgentSessionWrapper {
   // reads/commands. Keep them finite even for long-running replacement chains.
   private readonly streamAliases = new Map<string, number>();
   private streamingMessage: unknown = null;
+  private queuedMessages: QueuedFollowUp[] = [];
+  private pendingQueueItem: QueuedFollowUp | null = null;
+  private queueCommandTail: Promise<void> = Promise.resolve();
   private runActive: boolean | null = null;
   private lastRunError: string | null = null;
   private lastAgentEndCursor: string | null = null;
@@ -668,7 +671,8 @@ export class AgentSessionWrapper {
       autoCompactionEnabled: this.inner.autoCompactionEnabled,
       autoRetryEnabled: this.inner.autoRetryEnabled,
       model: model ? { id: model.id, provider: model.provider } : undefined,
-      messageCount: 0, pendingMessageCount: 0,
+      messageCount: 0, pendingMessageCount: this.queuedMessages.length,
+      queuedFollowUps: this.queuedMessages,
       contextUsage: contextUsage ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens } : null,
       systemPrompt: this.inner.systemPrompt ?? "",
       thinkingLevel: this.inner.agent?.state?.thinkingLevel ?? "off",
@@ -693,6 +697,18 @@ export class AgentSessionWrapper {
   }
 
   private emitEvent(event: AgentEvent | WebExtensionUIEvent): void {
+    if (event.type === "queue_update") {
+      const pending = this.pendingQueueItem;
+      if (pending) {
+        // Input hooks/templates may expand text before SDK emits its string-only queue.
+        const texts = (event as AgentEvent)[pending.deliveryMode === "steer" ? "steering" : "followUp"];
+        if (Array.isArray(texts) && typeof texts.at(-1) === "string") {
+          this.queuedMessages = [...this.queuedMessages.filter(item => item.id !== pending.id), { ...pending, message: texts.at(-1) as string }];
+        }
+      }
+      this.queuedMessages = normalizeQueuedFollowUps(event as AgentEvent, this.queuedMessages);
+      event = { ...event, items: this.queuedMessages };
+    }
     if (["compaction_start", "compaction_end", "auto_compaction_start", "auto_compaction_end"].includes(event.type)) {
       this.compaction.observe(event as AgentEvent);
       event = { ...event, webManaged: true } as AgentEvent;
@@ -794,7 +810,21 @@ export class AgentSessionWrapper {
   async send(command: Record<string, unknown>): Promise<unknown> {
     if (this.migrating) throw new Error("Session conversion is in progress; retry the command shortly");
     this.admittedCommands++;
-    try { return await this.performCommand(command); } finally { this.admittedCommands--; }
+    try {
+      if (["steer", "follow_up", "replace_queue", "clear_queue"].includes(String(command.type))) {
+        const operation = this.queueCommandTail.then(() => this.performCommand(command));
+        this.queueCommandTail = operation.then(() => {}, () => {});
+        return await operation;
+      }
+      return await this.performCommand(command);
+    } finally { this.admittedCommands--; }
+  }
+
+  private reconcileSdkQueue() {
+    const sdk = this.inner as unknown as { steeringMessages?: string[]; followUpMessages?: string[] };
+    if (Array.isArray(sdk.steeringMessages) && Array.isArray(sdk.followUpMessages)) {
+      this.emitEvent({ type: "queue_update", steering: sdk.steeringMessages, followUp: sdk.followUpMessages });
+    }
   }
   private async performCommand(command: Record<string, unknown>): Promise<unknown> {
     this.resetIdleTimer();
@@ -976,16 +1006,47 @@ export class AgentSessionWrapper {
         return null;
       }
 
-      case "steer": {
-        const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
+      case "steer":
+      case "follow_up": {
+        const images = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
+        const item: QueuedFollowUp = { id: typeof command.queueId === "string" ? command.queueId : globalThis.crypto.randomUUID(),
+          message: String(command.message), deliveryMode: type === "steer" ? "steer" : "followUp", ...(images?.length ? { images } : {}) };
+        this.queuedMessages = [...this.queuedMessages, item];
+        this.pendingQueueItem = item;
+        try {
+          if (type === "steer") await this.inner.steer(item.message, images);
+          else await this.inner.followUp(item.message, images);
+        } catch (error) {
+          this.queuedMessages = this.queuedMessages.filter(candidate => candidate.id !== item.id);
+          throw error;
+        } finally { this.pendingQueueItem = null; this.reconcileSdkQueue(); }
         return null;
       }
 
-      case "follow_up": {
-        const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
-        return null;
+      case "replace_queue": {
+        const next = normalizeQueuedFollowUps({ items: command.items });
+        if (!Array.isArray(command.items) || next.length !== command.items.length || new Set(next.map(item => item.id)).size !== next.length) throw new Error("Invalid queued messages");
+        if (!this.inner.isStreaming || next.some(item => !this.queuedMessages.some(queued => queued.id === item.id))) throw new Error("Queued messages have already been delivered");
+        // One server operation: no network gap between clearing and re-enqueueing.
+        const clear = (this.inner as unknown as { clearQueue: () => unknown }).clearQueue;
+        clear.call(this.inner);
+        this.queuedMessages = [];
+        try {
+          for (const item of next) {
+            if (!this.queuedMessages.some(candidate => candidate.id === item.id)) this.queuedMessages = [...this.queuedMessages, item];
+            this.pendingQueueItem = item;
+            const images = item.images?.map(image => ({ type: "image" as const, ...image }));
+            if (item.deliveryMode === "steer") await this.inner.steer(item.message, images);
+            else await this.inner.followUp(item.message, images);
+          }
+        } catch (error) {
+          // Snapshot exposes what actually survived, rather than pretending the swap succeeded.
+          this.queuedMessages = this.queuedMessages.filter(item => item.id !== this.pendingQueueItem?.id);
+          this.emitEvent({ type: "queue_update", items: this.queuedMessages });
+          throw error;
+        } finally { this.pendingQueueItem = null; this.reconcileSdkQueue(); }
+        this.emitEvent({ type: "queue_update", items: this.queuedMessages });
+        return this.queuedMessages;
       }
 
       case "get_tools": {

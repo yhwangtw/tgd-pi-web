@@ -23,3 +23,5 @@
 
 :global(html[data-ui-style="trae"]) .action { border-radius: var(--radius-control); }
 :global(html[data-ui-style="trae"]) .actionActive { background: var(--color-warning-bg); }
+
+@media (max-width: 700px), (pointer: coarse) { .action { min-width: 44px; min-height: 44px; } }

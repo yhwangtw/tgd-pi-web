@@ -48,3 +48,5 @@
   .drawer { position: absolute; inset: auto 0 0; width: 100%; min-width: 0; height: min(68%, 600px); border-left: 0; border-top: 1px solid var(--border); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; box-shadow: var(--color-shadow-modal); }
   .header, .tab, .tabActive, .row, .commit, .fix { min-height: var(--control-touch); }
 }
+
+@media (max-width: 700px), (pointer: coarse) { .header button, .tab, .tabActive, .symbolSearch button { min-height: 44px; } .header button { width: 44px; } .symbolSearch { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .symbolSearch input { grid-column: 1 / -1; min-height: 44px; font-size: var(--text-input-mobile); } }

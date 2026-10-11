@@ -610,3 +610,72 @@ describe("legacy migration admission", () => {
     } finally { wrapper.destroy(); }
   });
 });
+
+describe("official SDK queue adapter", () => {
+  it("serializes overlapping input hooks and reports only the items that survived a failed edit", async () => {
+    let listener!: (event: { type: string; [key: string]: unknown }) => void;
+    let followUp: string[] = [];
+    let release!: () => void; let started!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const begun = new Promise<void>(resolve => { started = resolve; });
+    const emit = () => listener({ type: "queue_update", steering: [], followUp });
+    const inner = { sessionId: "concurrent", sessionFile: "", isStreaming: true, dispose: vi.fn(),
+      get steeringMessages() { return []; }, get followUpMessages() { return followUp; },
+      subscribe: (callback: typeof listener) => { listener = callback; return () => {}; },
+      followUp: async (text: string) => {
+        if (text === "first") { started(); await gate; }
+        if (text === "reject") throw new Error("Rejected by input hook");
+        followUp.push(`expanded ${text}`); emit();
+      },
+      clearQueue: () => { followUp = []; emit(); },
+    } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner); wrapper.start();
+    try {
+      const first = wrapper.send({ type: "follow_up", message: "first", queueId: "first", images: [{ data: "first-image", mimeType: "image/png" }] });
+      const second = wrapper.send({ type: "follow_up", message: "second", queueId: "second" });
+      await begun; expect(followUp).toEqual([]); release(); await Promise.all([first, second]);
+      const queued = (wrapper.getStreamSnapshot().state as { queuedFollowUps: Array<{ id: string; message: string }> }).queuedFollowUps;
+      expect(queued).toMatchObject([{ id: "first", message: "expanded first", images: [{ data: "first-image" }] }, { id: "second", message: "expanded second" }]);
+      await expect(wrapper.send({ type: "replace_queue", items: [{ ...queued[0], message: "edited" }, { ...queued[1], message: "reject" }] })).rejects.toThrow("Rejected");
+      expect((wrapper.getStreamSnapshot().state as { queuedFollowUps: unknown[] }).queuedFollowUps).toMatchObject([{ id: "first", message: "expanded edited" }]);
+      expect(followUp).toEqual(["expanded edited"]);
+    } finally { wrapper.destroy(); }
+  });
+
+  it("keeps identity, modes and attachments through edits, reorder, removal and reconnect", async () => {
+    let listener!: (event: { type: string; [key: string]: unknown }) => void;
+    let steering: string[] = []; let followUp: string[] = [];
+    const emit = () => listener({ type: "queue_update", steering, followUp });
+    const inner = { sessionId: "queue", sessionFile: "", isStreaming: true, dispose: vi.fn(),
+      get steeringMessages() { return steering; }, get followUpMessages() { return followUp; },
+      subscribe: (callback: typeof listener) => { listener = callback; return () => {}; },
+      steer: async (text: string) => { steering = [...steering, text]; emit(); },
+      followUp: async (text: string) => { if (text === "handled") return; followUp = [...followUp, text === "/template" ? "Expanded template" : text]; emit(); },
+      clearQueue: () => { steering = []; followUp = []; emit(); },
+    } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner); wrapper.start();
+    try {
+      await wrapper.send({ type: "steer", message: "urgent", queueId: "steer" });
+      await wrapper.send({ type: "follow_up", message: "/template", queueId: "first", images: [{ data: "image", mimeType: "image/png" }] });
+      await wrapper.send({ type: "follow_up", message: "second", queueId: "second", images: [{ data: "second-image", mimeType: "image/png" }] });
+      const queued = (wrapper.getStreamSnapshot().state as { queuedFollowUps: Array<{ id: string; message: string; deliveryMode: string; images?: unknown[] }> }).queuedFollowUps;
+      expect(queued).toMatchObject([{ id: "steer", deliveryMode: "steer" }, { id: "first", message: "Expanded template", images: [{ data: "image" }] }, { id: "second", images: [{ data: "second-image" }] }]);
+      await wrapper.send({ type: "follow_up", message: "handled", queueId: "handled" });
+      expect((wrapper.getStreamSnapshot().state as { queuedFollowUps: unknown[] }).queuedFollowUps).toEqual(queued);
+      await expect(wrapper.send({ type: "replace_queue", items: [queued[0], queued[0]] })).rejects.toThrow("Invalid");
+      const saved = await wrapper.send({ type: "replace_queue", items: [queued[0], { ...queued[2], message: "edited second" }, queued[1]] });
+      expect(saved).toMatchObject([{ id: "steer" }, { id: "second", images: [{ data: "second-image" }] }, { id: "first", images: [{ data: "image" }] }]);
+      expect(followUp).toEqual(["edited second", "Expanded template"]);
+      const expanded = await wrapper.send({ type: "replace_queue", items: [queued[0], { ...queued[2], message: "/template" }, queued[1]] });
+      expect(expanded).toMatchObject([{ id: "steer" }, { id: "second", message: "Expanded template" }, { id: "first", message: "Expanded template" }]);
+      await wrapper.send({ type: "replace_queue", items: [queued[0], queued[1]] });
+      expect(followUp).toEqual(["Expanded template"]);
+      const records: Record<string, unknown>[] = [];
+      const stop = wrapper.onStreamEvent(record => records.push(JSON.parse(record.data)), null); stop();
+      expect(records.find(record => record.type === "session_snapshot")).toMatchObject({ state: { queuedFollowUps: [{ id: "steer" }, { id: "first" }] } });
+      await wrapper.send({ type: "clear_queue" });
+      expect((wrapper.getStreamSnapshot().state as { queuedFollowUps: unknown[] }).queuedFollowUps).toEqual([]);
+      await expect(wrapper.send({ type: "replace_queue", items: queued })).rejects.toThrow("already been delivered");
+    } finally { wrapper.destroy(); }
+  });
+});

@@ -466,8 +466,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
   const sendToAgent = useCallback((action: "explain" | "review" | "fix" | "context") => {
     if (!onSendToAgent) return;
     onSendToAgent(buildFileAgentPrompt(action, relativePath, selection));
-    showToast(selection ? `${t("files.addedLines")} ${selection.startLine}–${selection.endLine}` : t("files.addedFile"), { type: "success" });
-  }, [onSendToAgent, relativePath, selection, t]);
+  }, [onSendToAgent, relativePath, selection]);
 
   const handleTextSelection = useCallback(() => {
     const selected = window.getSelection();
@@ -783,7 +782,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
             <LazyPreviewView content={data.content} language={data.language} filePath={filePath} revision={data.version ?? changeCount} onRendered={handlePreviewRendered} />
           </Suspense>
         ) : usePlain ? (
-          <PlainSourceView content={data.content} activeLine={activeLine} diagnosticLines={diagnosticLines} />
+          <PlainSourceView content={data.content} wrapLines={wrapLines} activeLine={activeLine} diagnosticLines={diagnosticLines} />
         ) : (
           <SourceView content={data.content} language={data.language} wrapLines={wrapLines} activeLine={activeLine} diagnosticLines={diagnosticLines} />
         )}

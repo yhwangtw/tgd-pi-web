@@ -45,7 +45,7 @@
   outline: none;
   background: var(--bg);
   color: var(--text);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
 }
 
 .input:focus {

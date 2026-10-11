@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ExtensionUIPanel, PendingQuestionNotice } from "../ExtensionUIPanel";
+import { ExtensionUIPanel, PendingQuestionNotice, ExtensionWidgets } from "../ExtensionUIPanel";
 import type { ExtensionUIState } from "@/hooks/use-extension-ui";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -70,6 +70,23 @@ describe("ExtensionUIPanel", () => {
     // Keyboard activation dispatches click without pointerdown.
     await act(async () => button.click());
     expect(onShow).toHaveBeenCalledTimes(2);
+  });
+
+  it("only offers actions valid for the current workflow state", async () => {
+    await render({ dialogs: [], statuses: {}, widgets: {} });
+    const run = vi.fn().mockResolvedValue(true);
+    const state: ExtensionUIState = { dialogs: [], statuses: { Goal: "paused · 0 tokens", Plan: "complete · 2/2" }, widgets: { Goal: { placement: "aboveEditor", lines: ["Ship goal"] }, Plan: { placement: "aboveEditor", lines: ["Ready plan", "✓ Done"] } } };
+    await act(async () => root?.render(<ExtensionWidgets state={state} placement="aboveEditor" bare onWorkflowCommand={run} />));
+    expect(container!.textContent).toContain("Resume");
+    expect(container!.textContent).not.toContain("Pause");
+    expect(container!.textContent).not.toContain("Execute plan");
+    expect(container!.textContent).toContain("New plan");
+    await act(async () => root?.render(<ExtensionWidgets state={{ ...state, statuses: { Goal: "active · 1 tokens", Plan: "ready · 0/2" } }} placement="aboveEditor" bare onWorkflowCommand={run} />));
+    expect(container!.textContent).toContain("Pause");
+    expect(container!.textContent).not.toContain("Resume");
+    const execute = Array.from(container!.querySelectorAll("button")).find(button => button.textContent?.includes("Execute"))!;
+    await act(async () => execute.click());
+    expect(run).toHaveBeenCalledWith("/plan execute");
   });
 
   it("submits a selected extension option", async () => {

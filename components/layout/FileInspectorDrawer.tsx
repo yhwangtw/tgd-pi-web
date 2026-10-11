@@ -120,10 +120,11 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
   };
 
   const findSymbol = async (mode: "definition" | "references") => {
-    if (!cwd || !symbol.trim()) return;
+    if (!cwd || !symbol.trim() || loading) return;
     setLoading(true); setError(""); setSymbolMode(mode);
     try {
-      const response = await fetch(`${endpoint("outline")}&mode=${mode}&symbol=${encodeURIComponent(symbol.trim())}`);
+      const params = new URLSearchParams({ cwd, path: relativePath, mode, symbol: symbol.trim() });
+      const response = await fetch(`/api/files/insights?${params}`);
       const payload = await response.json() as { matches?: SymbolMatch[]; error?: string };
       if (!response.ok || payload.error) throw new Error(payload.error ?? `HTTP ${response.status}`);
       setSymbolMatches(payload.matches ?? []);
@@ -139,12 +140,12 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
       </div>
       <div className={styles.body}>
         {loading && <div className={styles.empty}>{t("common.loading")}</div>}
-        {error && <div className={styles.error}>{error}</div>}
-        {!loading && !error && tab === "outline" && <>
+        {error && <div className={styles.error} role="alert">{error}</div>}
+        {tab === "outline" && <>
           <form className={styles.symbolSearch} onSubmit={(event) => { event.preventDefault(); void findSymbol("definition"); }}>
             <input value={symbol} onChange={(event) => setSymbol(event.target.value)} placeholder={t("files.inspector.findSymbol")} aria-label={t("files.inspector.symbol")} />
-            <button type="submit" disabled={!symbol.trim()}>{t("files.inspector.definition")}</button>
-            <button type="button" disabled={!symbol.trim()} onClick={() => void findSymbol("references")}>{t("files.inspector.references")}</button>
+            <button type="submit" disabled={loading || !symbol.trim()}>{t("files.inspector.definition")}</button>
+            <button type="button" disabled={loading || !symbol.trim()} onClick={() => void findSymbol("references")}>{t("files.inspector.references")}</button>
           </form>
           {symbolMatches && <div className={styles.list} aria-label={t(symbolMode === "definition" ? "files.inspector.definitionResults" : "files.inspector.referenceResults")}>
             {symbolMatches.length === 0 ? <div className={styles.empty}>{t(symbolMode === "definition" ? "files.inspector.noDefinition" : "files.inspector.noReferences")}</div> : symbolMatches.map((match, index) => <button key={`${match.path}:${match.line}:${index}`} className={styles.symbolResult} onClick={() => match.path === relativePath ? onGotoLine(match.line) : requestOpenFile({ path: match.path, line: match.line })}><span className="chrome-mono">{match.path}:{match.line}</span><span>{match.preview}</span></button>)}

@@ -43,7 +43,7 @@ async function registeredTool(options: Parameters<typeof createSubagentExtension
   let tool: ToolDefinition | undefined;
   const extension = createSubagentExtension({ readLimits: () => ({ maxTurns: 0, maxCostUsd: 0, timeoutMs: 0 }), ...options });
   const factory = typeof extension === "function" ? extension : extension.factory;
-  await factory({ getActiveTools: () => ["read", "grep", "find", "ls", "bash", "edit", "write", "mcp_custom", "subagent"], registerTool: (value: ToolDefinition) => { tool = value; } } as never);
+  await factory({ on: () => () => {}, getActiveTools: () => ["read", "grep", "find", "ls", "bash", "edit", "write", "mcp_custom", "subagent"], registerTool: (value: ToolDefinition) => { tool = value; } } as never);
   if (!tool) throw new Error("Subagent tool was not registered");
   return tool;
 }
@@ -242,5 +242,22 @@ describe("built-in Web subagents", () => {
     expect(confirm).toHaveBeenCalledOnce();
     expect(executor).not.toHaveBeenCalled();
     expect(result.content[0].text).toMatch(/cancelled/i);
+  });
+});
+
+
+describe("Pi SDK tool result contract", () => {
+  it("propagates partial failure without discarding structured child reports", async () => {
+    let handler!: (event: Record<string, unknown>) => unknown;
+    const extension = createSubagentExtension();
+    const factory = typeof extension === "function" ? extension : extension.factory;
+    await factory({ registerTool: () => {}, on: (type: string, callback: typeof handler) => { if (type === "tool_result") handler = callback; } } as never);
+    const reports = { runs: [{ status: "completed", report: { summary: "ok" } }, { status: "failed", error: "offline" }] };
+    expect(handler({ toolName: "subagent", details: reports, isError: false })).toEqual({ isError: true });
+    expect(reports.runs[0].report?.summary).toBe("ok");
+    expect(handler({ toolName: "subagent", details: { runs: [{ status: "completed" }] } })).toBeUndefined();
+    expect(handler({ toolName: "other", details: reports })).toBeUndefined();
+    expect(handler({ toolName: "subagent", details: { failed: true, runs: [] } })).toEqual({ isError: true });
+    expect(handler({ toolName: "subagent", details: { runs: [{ status: "cancelled" }] } })).toEqual({ isError: true });
   });
 });

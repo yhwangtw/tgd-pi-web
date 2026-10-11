@@ -67,6 +67,20 @@ describe("Markdown file link interaction", () => {
     container.querySelector("a")!.click();
     expect(opened.mock.calls[0][0]).toMatchObject({ path: "/workspace/demo.html", mode: "preview" });
   });
+  it("preserves code focus state through parent updates and stream completion", async () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+    const text = "```typescript\nconst audit = true;\n```";
+    await render(text);
+    const focus = container.querySelector<HTMLButtonElement>('[aria-label="Open focus mode"]')!;
+    await act(async () => focus.click());
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    await act(async () => root.render(<MarkdownBody isStreaming>{text}</MarkdownBody>));
+    expect(document.querySelector('[role="dialog"]')).toBe(dialog);
+    await act(async () => root.render(<MarkdownBody>{text}</MarkdownBody>));
+    expect(document.querySelector('[role="dialog"]')).toBe(dialog);
+  });
+
   it("preserves external links and filters unsafe schemes", async () => {
     const opened = await render('[Website](https://example.com) [Unsafe](javascript:alert)');
     const anchors = container.querySelectorAll("a");

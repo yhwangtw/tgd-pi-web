@@ -1,3 +1,4 @@
+import { goalActions, planActions } from "./workflow-actions";
 import { randomUUID } from "node:crypto";
 import { defineTool, type ExtensionAPI, type ExtensionContext, type InlineExtension } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -77,7 +78,7 @@ export function createWorkflowExtension(): InlineExtension {
       if (!args) {
         if (!ctx.hasUI) { render(ctx); return; }
         if (!state.goal) args = (await ctx.ui.input("Goal", "What should Pi complete?"))?.trim() ?? "";
-        else args = (await ctx.ui.select(`${state.goal.status}: ${state.goal.objective}`, ["status", "pause", "resume", "clear"])) ?? "";
+        else args = (await ctx.ui.select(`${state.goal.status}: ${state.goal.objective}`, goalActions(state.goal.status))) ?? "";
         if (!args) return;
       }
       if (args === "status") { render(ctx); ctx.ui.notify(state.goal ? `${state.goal.status}: ${state.goal.objective}` : "No goal. Use /goal <objective>.", "info"); return; }
@@ -154,10 +155,11 @@ export function createWorkflowExtension(): InlineExtension {
       if (!args) {
         if (!ctx.hasUI) { render(ctx); return; }
         args = state.plan
-          ? (await ctx.ui.select(state.plan.title, ["status", "execute", "refine", "cancel"])) ?? ""
+          ? (await ctx.ui.select(state.plan.title, planActions(state.plan.status))) ?? ""
           : (await ctx.ui.input("Plan", "What should Pi plan?"))?.trim() ?? "";
         if (!args) return;
       }
+      if (args === "new") { args = (await ctx.ui.input("Plan", "What should Pi plan?"))?.trim() ?? ""; if (!args) return; }
       if (args === "status") { render(ctx); return; }
       if (!ctx.isIdle() || ctx.hasPendingMessages()) throw new Error("Wait for the current response before changing the plan.");
       if (args === "cancel") {

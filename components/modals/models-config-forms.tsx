@@ -88,7 +88,7 @@ export function Select({ value, onChange, options, required }: { value: string; 
   const { t } = useI18n();
   const id = useContext(FieldId);
   return (
-    <select id={id} value={value} onChange={(e) => onChange(e.target.value)}
+    <select id={id} required={required} value={value} onChange={(e) => onChange(e.target.value)}
       className={`${styles.input} ${value ? "" : styles.selectEmpty}`}>
       {!required && <option value="">{t("models.inheritNone")}</option>}
       {options.map((o) => <option key={o} value={o}>{o}</option>)}

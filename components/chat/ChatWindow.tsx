@@ -465,7 +465,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     visibleMessageIndicesRef.current.forEach((messageIndex, visibleIndex) => {
       const element = messageRefs.current[visibleIndex];
       const entryId = readEntryIdsRef.current[messageIndex];
-      if (element && element.getBoundingClientRect().top < bottom - 12 && entryId) {
+      if (element && element.getBoundingClientRect().bottom <= bottom + 12 && entryId) {
         lastVisibleId = entryId;
         const message = readMessagesRef.current[messageIndex];
         if (message?.role === "user" || message?.role === "assistant") {

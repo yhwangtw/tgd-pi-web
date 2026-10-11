@@ -95,3 +95,29 @@ it("refreshes nodes for a same-length replacement and cancels pending work on un
   await act(async () => root.render(null));
   expect(frames.size).toBe(0); expect(observers.size).toBe(0);
 });
+
+it("previews only the keyboard-focused message in a thousand-message history", async () => {
+  await render(); await flush();
+  expect(host.querySelectorAll(`.${styles.tooltip}`)).toHaveLength(0);
+  const buttons = host.querySelectorAll<HTMLButtonElement>("button");
+  await act(async () => buttons[500].focus());
+  expect(host.querySelectorAll(`.${styles.tooltip}`)).toHaveLength(1);
+  expect(host.querySelector(`.${styles.tooltip}`)?.textContent).toBe("Question 500");
+  await act(async () => buttons[501].focus());
+  expect(host.querySelectorAll(`.${styles.tooltip}`)).toHaveLength(1);
+  expect(host.querySelector(`.${styles.tooltip}`)?.textContent).toBe("Question 501");
+  await act(async () => buttons[501].blur());
+  expect(host.querySelectorAll(`.${styles.tooltip}`)).toHaveLength(0);
+});
+
+it("jumps to the preview nearest a pointer in overlapping hit areas while preserving keyboard targets", async () => {
+  await render(); await flush();
+  host.querySelector<HTMLElement>(`.${styles.container}`)!.getBoundingClientRect = () => rect(0, 600);
+  rows.forEach(row => { row.scrollIntoView = vi.fn(); });
+  const buttons = host.querySelectorAll<HTMLButtonElement>("button");
+  await act(async () => buttons[900].dispatchEvent(new MouseEvent("click", { clientY: 300, detail: 1, bubbles: true })));
+  expect(rows[500].scrollIntoView).toHaveBeenCalledOnce();
+  expect(rows[900].scrollIntoView).not.toHaveBeenCalled();
+  await act(async () => buttons[900].click());
+  expect(rows[900].scrollIntoView).toHaveBeenCalledOnce();
+});

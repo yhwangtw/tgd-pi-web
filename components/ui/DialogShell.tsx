@@ -12,6 +12,7 @@ export function DialogShell({
   open,
   title,
   description,
+  descriptionDetail,
   onClose,
   canClose = true,
   size = "default",
@@ -27,6 +28,7 @@ export function DialogShell({
   open: boolean;
   title: string;
   description?: string;
+  descriptionDetail?: string;
   onClose: () => void;
   canClose?: boolean;
   size?: "compact" | "default" | "wide" | "xwide";
@@ -97,6 +99,7 @@ export function DialogShell({
           <div>
             <h2 id={titleId}>{title}</h2>
             {description && <p id={descriptionId}>{description}</p>}
+            {descriptionDetail && <details className={styles.descriptionDetail}><summary>{t("common.details")}</summary><p>{descriptionDetail}</p></details>}
           </div>
           <div className={styles.headerActions}>
             {headerActions}

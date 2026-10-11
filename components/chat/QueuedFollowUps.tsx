@@ -86,14 +86,14 @@ export function QueuedFollowUps({ items, busy, wide, onRemove, onUpdate, onMove,
               ) : (
                 <>
                   <button type="button" className={styles.message} onClick={() => beginEdit(item)} title={item.message || t("chat.queueEdit")} disabled={busy}>
-                    <span>{item.message || t("input.attachImage")}</span>
+                    <span>{item.deliveryMode === "steer" && <strong>{t("chat.queueSteer")} · </strong>}{item.message || t("input.attachImage")}</span>
                     {!!item.images?.length && <small>{item.images.length} {t("chat.queueImages")}</small>}
                   </button>
                   <div className={styles.actions}>
-                    <button type="button" onClick={() => void onMove(item.id, -1)} disabled={busy || index === 0} aria-label={t("chat.queueMoveUp")} title={t("chat.queueMoveUp")}>
+                    <button type="button" onClick={() => void onMove(item.id, -1)} disabled={busy || index === 0 || (item.deliveryMode ?? "followUp") !== (items[index - 1]?.deliveryMode ?? "followUp")} aria-label={t("chat.queueMoveUp")} title={t("chat.queueMoveUp")}>
                       <ChevronUp size={12} aria-hidden />
                     </button>
-                    <button type="button" onClick={() => void onMove(item.id, 1)} disabled={busy || index === items.length - 1} aria-label={t("chat.queueMoveDown")} title={t("chat.queueMoveDown")}>
+                    <button type="button" onClick={() => void onMove(item.id, 1)} disabled={busy || index === items.length - 1 || (item.deliveryMode ?? "followUp") !== (items[index + 1]?.deliveryMode ?? "followUp")} aria-label={t("chat.queueMoveDown")} title={t("chat.queueMoveDown")}>
                       <ChevronDown size={12} aria-hidden />
                     </button>
                     <button type="button" onClick={() => beginEdit(item)} disabled={busy} aria-label={t("chat.queueEdit")} title={t("chat.queueEdit")}>

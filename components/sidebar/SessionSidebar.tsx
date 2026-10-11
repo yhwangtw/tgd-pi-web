@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { SessionInfo } from "@/lib/types";
+import type { AttentionItem } from "@/lib/attention-center";
 import { FileExplorer } from "./FileExplorer";
 import { getRecentCwds, getSessionDateGroup, getSessionProjectName, buildSessionDisplayTitles, buildSessionTree, findSessionTreeNode, flattenSessionTree, shortenCwd, type FlatSessionTreeNode, type SessionSortMode } from "./session-utils";
 import { PiAgentTitle } from "./PiAgentTitle";
@@ -29,6 +30,7 @@ import styles from "./SessionSidebar.module.css";
 
 const SORT_MODE_KEY = "pi-session-sort";
 const SESSION_SCOPE_KEY = "pi-session-scope";
+const EMPTY_ATTENTION_ITEMS: readonly AttentionItem[] = [];
 type SessionScope = "all" | "project";
 
 type VirtualSessionRow =
@@ -55,11 +57,13 @@ interface Props {
   onSelectTagFilter?: (tag: string | null) => void;
   /** The Files rail view owns the tree now; pass false to hide the embedded one. */
   showExplorer?: boolean;
+  attentionItems?: readonly AttentionItem[];
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onOpenDiff, onOpenParallel, parallelSessionIds, activeTagFilter: activeTagFilterProp, onSelectTagFilter, showExplorer = true }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onOpenDiff, onOpenParallel, parallelSessionIds, activeTagFilter: activeTagFilterProp, onSelectTagFilter, showExplorer = true, attentionItems = EMPTY_ATTENTION_ITEMS }: Props) {
   const { allSessions, loading, error, pinnedIds, sessionRefreshDone, loadSessions, handlePinToggle, archivedIds, handleArchiveToggle } = useSessions(refreshKey);
-  useSyncExternalStore(subscribeSessionReads, getSessionReadRevision, getServerSessionReadRevision);
+  const readRevision = useSyncExternalStore(subscribeSessionReads, getSessionReadRevision, getServerSessionReadRevision);
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const { state: cwdState, actions: cwdActions } = useCwd(onCwdChange);
   const { selectedCwd } = cwdState;
   const { setSelectedCwd, setDropdownOpen } = cwdActions;
@@ -76,13 +80,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const setActiveTagFilter = onSelectTagFilter ?? setLocalActiveTagFilter;
   const [sessionScope, setSessionScope] = useState<SessionScope>("all");
   const [sessionQuery, setSessionQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const normalizedSessionQuery = sessionQuery.trim();
   const {
     sessionHits,
     loading: sessionSearchLoading,
     error: sessionSearchError,
+    refresh: refreshSessionSearch,
   } = useUnifiedSearchResults(null, normalizedSessionQuery, "sessions", false);
+
+  const refreshConversations = useCallback(() => {
+    void loadSessions();
+    void refreshSessionSearch();
+  }, [loadSessions, refreshSessionSearch]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -221,7 +232,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     [allSessions, archivedSet, selectedCwd, sessionScope],
   );
 
-  const filteredSessions = useMemo(() => {
+  const baseSessions = useMemo(() => {
     let list = sessionScope === "project" && selectedCwd
       ? allSessions.filter((s) => s.cwd === selectedCwd)
       : allSessions;
@@ -249,12 +260,31 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     return list;
   }, [allSessions, selectedCwd, sessionScope, activeTagFilter, tags, showArchived, archivedSet, normalizedSessionQuery, sessionSearchError, sessionSearchLoading, sessionHits]);
 
+  // isSessionUnread reads the external read store; its revision invalidates this memo.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const filteredSessions = useMemo(() => unreadOnly ? baseSessions.filter(isSessionUnread) : baseSessions, [baseSessions, unreadOnly, readRevision]);
+  const unreadCount = baseSessions.filter(isSessionUnread).length;
+
   // Build parent-child tree within the filtered set
   const sessionTree = useMemo(() => buildSessionTree(filteredSessions, sortMode), [filteredSessions, sortMode]);
   const displayTitles = useMemo(() => buildSessionDisplayTitles(filteredSessions, 52), [filteredSessions]);
   const workspaceCwds = useMemo(() => [...new Set(filteredSessions.map((session) => session.cwd).filter(Boolean))], [filteredSessions]);
   const workspaceIdentities = useWorkspaceIdentities(workspaceCwds, refreshKey ?? 0);
-  const activeFilterCount = Number(Boolean(activeTagFilter)) + Number(showArchived);
+  const activeFilterCount = Number(Boolean(activeTagFilter)) + Number(showArchived) + Number(unreadOnly);
+  const hasSearchFilters = Boolean(normalizedSessionQuery || activeFilterCount);
+  const clearSearchFilters = () => {
+    setSessionQuery(""); setActiveTagFilter(null); setShowArchived(false); setUnreadOnly(false);
+    searchInputRef.current?.focus();
+  };
+  const attentionBySession = useMemo(() => {
+    const latest = new Map<string, AttentionItem>();
+    for (const item of attentionItems) {
+      if (!item.sessionId) continue;
+      const previous = latest.get(item.sessionId);
+      if (!previous || Date.parse(item.occurredAt) >= Date.parse(previous.occurredAt)) latest.set(item.sessionId, item);
+    }
+    return latest;
+  }, [attentionItems]);
 
   // Pinned conversations stay outside the virtualized chronological list.
   // Recursive lookup also allows a fork itself to be pinned (the previous
@@ -370,7 +400,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     if (!listRef.current) return;
     listRef.current.scrollTop = 0;
     updateVirtualViewport();
-  }, [activeTagFilter, normalizedSessionQuery, sessionScope, showArchived, sortMode, updateVirtualViewport]);
+  }, [activeTagFilter, normalizedSessionQuery, sessionScope, showArchived, sortMode, unreadOnly, updateVirtualViewport]);
   const virtualRowHeights = useMemo(
     () => virtualRows.map((row) => row.type === "group" ? virtualViewport.groupHeight : virtualViewport.rowHeight),
     [virtualRows, virtualViewport.groupHeight, virtualViewport.rowHeight],
@@ -437,6 +467,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           session={node.session}
           isSelected={sessionId === selectedSessionId}
           isUnread={isSessionUnread(node.session)}
+          attentionStatus={attentionBySession.get(sessionId)?.status}
           onClick={() => onSelectSession(node.session)}
           onRenamed={loadSessions}
           onDeleted={(id) => {
@@ -483,7 +514,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               {t("sidebar.new")}
             </button>
             <button
-              onClick={() => loadSessions(false)}
+              onClick={refreshConversations}
               className={`${styles.refreshButton} ${sessionRefreshDone ? styles.refreshButtonDone : styles.refreshButtonDefault} ${sessionRefreshDone ? "" : "hover-bg-selected-accent"}`}
               title={t("sidebar.refresh")}
             >
@@ -506,6 +537,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             <Search size={14} strokeWidth={2} />
           </span>
           <input
+            ref={searchInputRef}
             value={sessionQuery}
             onChange={(event) => setSessionQuery(event.target.value)}
             onKeyDown={(event) => {
@@ -570,11 +602,25 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             className={`${styles.filterButton} ${activeFilterCount > 0 ? styles.filterButtonActive : ""}`}
             aria-label={t("sidebar.filters")}
             title={t("sidebar.filters")}
+            aria-haspopup="dialog"
+            aria-expanded={filtersOpen}
           >
             <SlidersHorizontal size={15} strokeWidth={1.8} aria-hidden />
             {activeFilterCount > 0 && <span className={styles.filterCount}>{activeFilterCount}</span>}
           </button>
         </div>
+        <button type="button" className={`${styles.unreadFilter} ${unreadOnly ? styles.unreadFilterActive : ""}`}
+          aria-pressed={unreadOnly} onClick={() => setUnreadOnly(value => !value)}>
+          <span className={styles.unreadIndicator} aria-hidden />{t("sidebar.unreadOnly")} <strong>{unreadCount}</strong>
+        </button>
+        {hasSearchFilters && <div className={styles.activeFilters} aria-label={t("sidebar.filters")}>
+          {normalizedSessionQuery && <span className={styles.filterChip} title={normalizedSessionQuery}>
+            <Search size={12} aria-hidden /><span>{normalizedSessionQuery}</span>
+          </span>}
+          {activeTagFilter && <span className={styles.filterChip} title={activeTagFilter}><span>{activeTagFilter}</span></span>}
+          {showArchived && <span className={styles.filterChip}><span>{t("sidebar.showArchived")}</span></span>}
+          <button type="button" className={styles.clearInlineFilters} onClick={clearSearchFilters}>{t("sidebar.clearFilters")}</button>
+        </div>}
       </div>
 
       {/* Session list */}
@@ -612,6 +658,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         {error && (
           <div className={styles.errorMessage}>
             {error}
+            <button type="button" className={styles.clearInlineFilters} onClick={refreshConversations}>{t("sidebar.refresh")}</button>
           </div>
         )}
         {!loading && !error && sessionSearchLoading && normalizedSessionQuery.length >= 2 && (
@@ -621,7 +668,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         )}
         {!loading && !error && !sessionSearchLoading && filteredSessions.length === 0 && (
           <div className={styles.emptyMessage} role="status">
-            {normalizedSessionQuery ? t("sidebar.noMatchingSessions") : t("sidebar.noSessions")}
+            <span>{hasSearchFilters ? t("sidebar.noMatchingSessions") : t("sidebar.noSessions")}</span>
+            {hasSearchFilters && <button type="button" className={styles.clearInlineFilters} onClick={clearSearchFilters}>{t("sidebar.clearFilters")}</button>}
           </div>
         )}
         {pinnedNodes.length > 0 && (

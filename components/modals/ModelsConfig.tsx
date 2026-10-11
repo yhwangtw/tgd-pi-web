@@ -610,7 +610,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       <DialogShell
         open
         title={t("models.title")}
-        description={configPath ?? t("models.pathUnavailable")}
+        description={configPath?.split(/[\\/]/).filter(Boolean).at(-1) ?? t("models.pathUnavailable")}
+        descriptionDetail={configPath ?? undefined}
         onClose={onClose}
         size="xwide"
         mobileMode="fullscreen"

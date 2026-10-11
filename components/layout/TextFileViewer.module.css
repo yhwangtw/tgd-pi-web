@@ -511,3 +511,6 @@
   .sourceTools::-webkit-scrollbar { display: none; }
   .selectionBar { min-height: var(--control-touch); }
 }
+
+/* Keep the file readable when Inspector is open in a narrow preview panel. */
+@container (max-width: 680px) { .workspaceBody > :global([data-testid="file-inspector"]) { position: absolute; inset-block: 0; right: 0; width: min(340px, 100%); min-width: min(250px, 100%); } }

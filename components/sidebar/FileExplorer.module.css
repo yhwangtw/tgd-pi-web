@@ -154,6 +154,9 @@
   position: fixed;
   z-index: 1300;
   min-width: 168px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
   padding: var(--space-1);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-menu);
@@ -183,6 +186,12 @@
 
 .treeNodeActive {
   background: var(--bg-selected);
+}
+/* Give both selected-file controls their own slot so hover cannot cover More. */
+.treeNodeActive .mentionButton {
+  position: static;
+  transform: none;
+  flex: 0 0 auto;
 }
 .menuItemDanger { color: var(--color-error); }
 .menuSep {
@@ -230,3 +239,8 @@
   :global(html[data-ui-style="trae"]) .treeNode { height: 46px; padding-right: var(--space-2); }
   :global(html[data-ui-style="trae"]) .mentionButton { display: none; }
 }
+
+.fileActions { flex: 0 0 auto; min-width: 28px; min-height: 28px; display: inline-grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer; }
+.fileActions:hover { background: var(--bg-selected); color: var(--text); }
+.fileActions:focus-visible { outline: 2px solid var(--color-accent-border-focus); }
+@media (max-width: 700px), (pointer: coarse) { .fileActions { min-width: 44px; min-height: 44px; } .menuItem { min-height: 44px; } }

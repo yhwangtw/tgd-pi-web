@@ -1,6 +1,9 @@
 "use client";
 
 import type { SemanticHit } from "@/lib/semantic-search";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { getSessionListSnapshot, getServerSessionListSnapshot, subscribeSessionList } from "@/lib/session-list-store";
+import { getRequestSnapshot } from "@/lib/request-state";
 import type { SessionSearchStatus } from "@/lib/session-search";
 import { fetchJson, useRequestResource } from "./useRequestResource";
 import { DEFAULT_FILE_SEARCH_OPTIONS, fileSearchOptionsQuery, type FileSearchOptions } from "@/lib/file-search-options";
@@ -56,6 +59,7 @@ interface UnifiedSearchPayload {
 
 interface UnifiedSearchResults extends UnifiedSearchPayload {
   loading: boolean;
+  refresh: () => Promise<UnifiedSearchPayload | undefined>;
 }
 
 const EMPTY_RESULTS: Omit<UnifiedSearchPayload, "error"> = {
@@ -76,6 +80,12 @@ export function useUnifiedSearchResults(
   fileOptions: FileSearchOptions = DEFAULT_FILE_SEARCH_OPTIONS,
 ): UnifiedSearchResults {
   const normalizedQuery = query.trim();
+  const searchesSessions = scope === "all" || scope === "sessions";
+  const subscribeSessions = useCallback((listener: () => void) => (
+    searchesSessions ? subscribeSessionList(listener) : () => undefined
+  ), [searchesSessions]);
+  const { allSessions } = useSyncExternalStore(subscribeSessions, getSessionListSnapshot, getServerSessionListSnapshot);
+  const previousSessions = useRef(allSessions);
   const key = normalizedQuery.length >= 2
     ? `unified-search:${JSON.stringify([cwd, normalizedQuery, scope, caseSensitive, fileOptions])}`
     : null;
@@ -122,10 +132,33 @@ export function useUnifiedSearchResults(
     },
     { debounceMs: 250, staleTimeMs: 30_000, retries: 1 },
   );
+  const refreshResults = resource.refresh;
+  const currentKey = useRef(key);
+  useEffect(() => {
+    currentKey.current = key;
+    return () => { currentKey.current = null; };
+  }, [key]);
+  const refreshSearch = useCallback(async () => {
+    if (!key) return undefined;
+    const status = getRequestSnapshot<UnifiedSearchPayload>(key).status;
+    const pending = status === "loading" || status === "refreshing";
+    const result = await refreshResults();
+    // A shared in-flight request may predate this creation/rename. Recheck
+    // after it settles instead of accepting its obsolete result as refreshed.
+    return pending && currentKey.current === key ? refreshResults() : result;
+  }, [key, refreshResults]);
+  useEffect(() => {
+    if (previousSessions.current === allSessions) return;
+    previousSessions.current = allSessions;
+    // List creation, rename and polling must refresh the existing query too.
+    // Keep query changes debounced; only actual list changes force a request.
+    if (searchesSessions && key) void refreshSearch();
+  }, [allSessions, key, searchesSessions, refreshSearch]);
   const results = resource.data ?? { ...EMPTY_RESULTS, error: false };
   return {
     ...results,
-    loading: resource.loading || resource.refreshing,
+    loading: resource.loading || resource.refreshing || Boolean(key && resource.status === "idle"),
     error: results.error || Boolean(resource.error),
+    refresh: refreshSearch,
   };
 }

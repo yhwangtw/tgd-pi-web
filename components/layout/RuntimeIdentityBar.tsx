@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { RuntimeIdentity } from '@/lib/runtime-identity';
 import s from './RuntimeIdentityBar.module.css';
@@ -41,13 +42,14 @@ export function RuntimeIdentityBar() {
     <summary>
       <strong>{t(`runtime.environment.${identity.environment}`)}</strong>
       <span>{identity.build.version}</span>
-      {identity.build.sourceSha && <span className={s.revision}>{identity.build.sourceSha.slice(0, 7)}{identity.build.dirty ? ' *' : ''}</span>}
-      <span className={s.hint}>{t('runtime.identityDetails')}</span>
+      {identity.build.dirty && <span title={t('runtime.dirtyHint')}>*</span>}
+      <span className={s.hint}>{t('runtime.identityDetails')}<ChevronDown size={12} aria-hidden /></span>
     </summary>
     <div className={s.details}>
       {identity.environment === 'fixture' && <p>{t('runtime.fixtureHint')}</p>}
       {identity.environment === 'preview' && <p>{t('runtime.previewHint')}</p>}
       <dl>
+        {identity.build.sourceSha && <><dt>{t('runtime.sourceRevision')}</dt><dd>{identity.build.sourceSha}</dd></>}
         <dt>{t('runtime.modelsPath')}</dt><dd>{identity.modelsPath}</dd>
         <dt>{t('runtime.agentPath')}</dt><dd>{identity.agentDir}</dd>
         <dt>{t('runtime.sourcePath')}</dt><dd>{identity.cwd}</dd>

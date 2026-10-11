@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { AtSign, ChevronRight, LoaderCircle, Upload } from "lucide-react";
+import { MoreHorizontal, AtSign, ChevronRight, LoaderCircle, Upload } from "lucide-react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
 import { encodeFilePathForApi, getRelativeFilePath, joinFilePath } from "@/lib/file-paths";
 import styles from "./FileExplorer.module.css";
@@ -10,6 +10,7 @@ import { saveTreeExpansion, loadTreeExpansion } from "@/lib/tree-expansion-memor
 import { showToast } from "@/hooks/useToast";
 import { createFile, createDir, renameEntry, deleteEntry, uploadFiles } from "@/lib/file-ops-client";
 import { FileOpsDialog, type FileOpRequest } from "./FileOpsDialog";
+import { usePopupMenuKeyboard } from "@/hooks/usePopupMenuKeyboard";
 
 const JUNK_DIRS = new Set([
   ".git", ".next", ".nuxt", "node_modules", "__pycache__", ".venv", "venv",
@@ -205,6 +206,11 @@ function TreeNode({
             <LoaderCircle className={styles.loadingIcon} size={12} strokeWidth={1.8} aria-hidden="true" />
           )}
         </button>
+        {activePath === node.fullPath && <button type="button" className={styles.fileActions}
+          aria-label={`${t("files.moreActions")}: ${node.name}`} title={t("files.moreActions")}
+          onClick={event => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); onContextMenu({ x: rect.right, y: rect.bottom, fullPath: node.fullPath, relative, isDir: node.isDir }); }}>
+          <MoreHorizontal size={16} aria-hidden />
+        </button>}
         {onAtMention && !node.isDir && (
           <button
             type="button"
@@ -293,12 +299,14 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
       expansionCwdRef.current = cwd;
     }
 
-    setLoading(cwdChanged);
+    let current = true;
+    setLoading(true);
     setError(null);
     fetchEntries(cwd)
-      .then((entries) => setRoots(entries))
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+      .then(entries => { if (current) setRoots(entries); })
+      .catch(error => { if (current) setError(String(error)); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
   }, [cwd, treeRefresh]);
 
   // ── Git working-tree status (badges) ────────────────────────────────────
@@ -385,17 +393,26 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
 
   // ── Context menu ─────────────────────────────────────────────────────────
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuAnchorRef = useRef<HTMLElement>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  usePopupMenuKeyboard(menu !== null, menuRef, menuAnchorRef, closeMenu);
   useEffect(() => {
     if (!menu) return;
-    const close = () => setMenu(null);
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
-    window.addEventListener("mousedown", close);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", close);
-      window.removeEventListener("keydown", onKey);
+    const position = () => {
+      const node = menuRef.current;
+      if (!node) return;
+      node.style.left = `${Math.max(8, Math.min(menu.x, innerWidth - node.offsetWidth - 8))}px`;
+      node.style.top = `${Math.max(8, Math.min(menu.y, innerHeight - node.offsetHeight - 8))}px`;
     };
-  }, [menu]);
+    position();
+    window.addEventListener("resize", position);
+    window.addEventListener("mousedown", closeMenu);
+    return () => {
+      window.removeEventListener("resize", position);
+      window.removeEventListener("mousedown", closeMenu);
+    };
+  }, [menu, closeMenu]);
 
   const copyText = useCallback((text: string) => {
     navigator.clipboard?.writeText(text).catch(() => {});
@@ -503,6 +520,7 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
         const parentDir = menu.isDir ? menu.fullPath : menu.fullPath.slice(0, menu.fullPath.lastIndexOf("/")) || cwd;
         return (
         <div
+          ref={menuRef}
           className={`glass ${styles.contextMenu}`}
           style={{ left: menu.x, top: menu.y }}
           onMouseDown={(e) => e.stopPropagation()}
