@@ -142,8 +142,6 @@ async function auditControls(page: Page, root: Locator, context: string, mobile:
         hittable,
         hitDescription,
         minimapPointerTarget,
-        centerX,
-        centerY,
         tooSmall: buttonLike && (rect.width < (isMobile ? 43.5 : 23.5) || rect.height < (isMobile ? 43.5 : 23.5)),
       }];
     }), mobile);
@@ -177,16 +175,19 @@ async function auditControls(page: Page, root: Locator, context: string, mobile:
   // scrolls to this message, even if a later button receives the DOM event.
   for (const target of results.filter(result => result.minimapPointerTarget !== null)) {
     const article = page.locator("[data-transcript-scroll] [data-message-role]").nth(target.minimapPointerTarget!);
-    const expectedScroll = await article.evaluate(element => {
+    // Latest appears/disappears while navigating; use current geometry for
+    // each click and validate alignment after the resulting layout settles.
+    const node = page.locator(`[data-minimap-message-index="${target.minimapPointerTarget}"]`);
+    const bounds = (await node.boundingBox())!;
+    await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await expect.poll(() => article.evaluate(element => {
       const scroll = element.closest("[data-transcript-scroll]")!;
       const margin = parseFloat(getComputedStyle(element).scrollMarginTop) || 0;
       const padding = parseFloat(getComputedStyle(scroll).scrollPaddingTop) || 0;
-      return Math.max(0, Math.min(scroll.scrollHeight - scroll.clientHeight,
+      const expected = Math.max(0, Math.min(scroll.scrollHeight - scroll.clientHeight,
         scroll.scrollTop + element.getBoundingClientRect().top - scroll.getBoundingClientRect().top - margin - padding));
-    });
-    await page.mouse.click(target.centerX, target.centerY);
-    await expect.poll(async () => Math.abs(await page.locator("[data-transcript-scroll]").evaluate(element => element.scrollTop) - expectedScroll),
-      { message: `${context}: minimap pointer must reach message ${target.minimapPointerTarget}` }).toBeLessThanOrEqual(1);
+      return Math.abs(scroll.scrollTop - expected);
+    }), { message: `${context}: minimap pointer must reach message ${target.minimapPointerTarget}` }).toBeLessThanOrEqual(1);
   }
   await auditTypography(root, context);
   await expectNoPageOverflow(page, context);

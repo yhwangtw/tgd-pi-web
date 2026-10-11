@@ -303,6 +303,14 @@
 
 .transcriptWide { max-width: 1040px; }
 
+/* Keep Latest outside the transcript so it never covers message actions. */
+.jumpControlRow {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  padding: var(--space-1) var(--component-chat-minimap-gutter) var(--space-1) var(--space-4);
+}
+
 .srOnly {
   position: absolute;
   width: 1px;
@@ -486,11 +494,9 @@
     padding-right: var(--component-chat-minimap-gutter);
   }
 
+  .jumpControlRow { padding-inline: var(--space-2); justify-content: flex-end; }
+
   .jumpButton {
-    right: 14px;
-    left: auto !important;
-    bottom: 8px !important;
-    transform: none !important;
     min-width: var(--control-touch);
     min-height: var(--control-touch);
   }

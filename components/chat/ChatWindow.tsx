@@ -1228,18 +1228,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             </button>
           </div>
         )}
-        {showJumpToBottom && (
-          <button
-            onClick={jumpToBottom}
-            aria-label={t("chat.jumpBottom")}
-            className={`${styles.jumpButton} glass absolute bottom-4 left-1/2 z-10 flex h-8 -translate-x-1/2 items-center justify-center gap-1.5 rounded-full border px-3 text-[var(--text-muted)] shadow-[var(--color-shadow-dropdown)] transition hover:text-[var(--text)] ${agentRunning ? "!border-[var(--color-accent-border)] text-[var(--accent)]" : ""}`}
-          >
-            <ArrowDown size={14} strokeWidth={2.2} aria-hidden="true" />
-            <span className="text-[11.5px] font-medium whitespace-nowrap">
-              {agentRunning && newLines > 0 ? `+${newLines} ${t("chat.lines")}` : t("chat.latest")}
-            </span>
-          </button>
-        )}
         <div ref={scrollContainerRef} data-transcript-scroll className={`${styles.transcriptScroll} flex-1 overflow-y-auto pt-4 [scrollbar-width:none]`}>
           <div
             className={`${styles.transcript} ${wideChat ? styles.transcriptWide : ""} mx-auto px-4`}
@@ -1502,6 +1490,24 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       </div>
 
       <div className={`${styles.composerDock} relative`}>
+        {showJumpToBottom && (
+          <div className={styles.jumpControlRow}>
+          <button
+            onPointerDown={event => {
+              // Keep the mobile dock still until pointerup while typing.
+              if (event.isPrimary && event.button === 0) event.preventDefault();
+            }}
+            onClick={jumpToBottom}
+            aria-label={t("chat.jumpBottom")}
+            className={`${styles.jumpButton} glass flex h-8 items-center justify-center gap-1.5 rounded-full border px-3 text-[var(--text-muted)] shadow-[var(--color-shadow-dropdown)] transition hover:text-[var(--text)] ${agentRunning ? "!border-[var(--color-accent-border)] text-[var(--accent)]" : ""}`}
+          >
+            <ArrowDown size={14} strokeWidth={2.2} aria-hidden="true" />
+            <span className="text-[11.5px] font-medium whitespace-nowrap">
+              {agentRunning && newLines > 0 ? `+${newLines} ${t("chat.lines")}` : t("chat.latest")}
+            </span>
+          </button>
+          </div>
+        )}
         {/* Context-pressure nudge: suggest compaction before it's too late */}
         {contextUsage?.percent != null && contextUsage.percent >= 80 && !isCompacting && (
           /* pl-4 pr-[52px]: mirror ChatInput's container padding (right side
