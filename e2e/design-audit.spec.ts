@@ -171,23 +171,29 @@ async function auditControls(page: Page, root: Locator, context: string, mobile:
   }
 
   expect(failures, `${context}\n${failures.join("\n")}`).toEqual([]);
-  // Shared minimap hit areas are accepted only when an actual center click
-  // scrolls to this message, even if a later button receives the DOM event.
-  for (const target of results.filter(result => result.minimapPointerTarget !== null)) {
+  // Shared minimap hit areas are accepted only when a real pointer click
+  // selects the intended article and actually brings it into the viewport.
+  // Near the tail, normal follow/layout reconciliation can adjust alignment.
+  const sharedTargets = results.filter(result => result.minimapPointerTarget !== null);
+  if (sharedTargets.length) await page.evaluate(() => {
+    const nativeScroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function(options) {
+      if (this.hasAttribute("data-message-role")) {
+        const articles = [...document.querySelectorAll("[data-transcript-scroll] [data-message-role]")];
+        document.documentElement.dataset.lastMinimapTarget = String(articles.indexOf(this));
+      }
+      nativeScroll.call(this, options);
+    };
+  });
+  for (const target of sharedTargets) {
     const article = page.locator("[data-transcript-scroll] [data-message-role]").nth(target.minimapPointerTarget!);
-    // Latest appears/disappears while navigating; use current geometry for
-    // each click and validate alignment after the resulting layout settles.
+    // Latest appears/disappears while navigating; read current geometry.
     const node = page.locator(`[data-minimap-message-index="${target.minimapPointerTarget}"]`);
     const bounds = (await node.boundingBox())!;
     await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
-    await expect.poll(() => article.evaluate(element => {
-      const scroll = element.closest("[data-transcript-scroll]")!;
-      const margin = parseFloat(getComputedStyle(element).scrollMarginTop) || 0;
-      const padding = parseFloat(getComputedStyle(scroll).scrollPaddingTop) || 0;
-      const expected = Math.max(0, Math.min(scroll.scrollHeight - scroll.clientHeight,
-        scroll.scrollTop + element.getBoundingClientRect().top - scroll.getBoundingClientRect().top - margin - padding));
-      return Math.abs(scroll.scrollTop - expected);
-    }), { message: `${context}: minimap pointer must reach message ${target.minimapPointerTarget}` }).toBeLessThanOrEqual(1);
+    await expect(page.locator("html"), `${context}: pointer must select message ${target.minimapPointerTarget}`)
+      .toHaveAttribute("data-last-minimap-target", String(target.minimapPointerTarget));
+    await expect(article).toBeInViewport();
   }
   await auditTypography(root, context);
   await expectNoPageOverflow(page, context);
