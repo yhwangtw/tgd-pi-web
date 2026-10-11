@@ -53,6 +53,11 @@ describe("ExtensionUIPanel", () => {
     expect(container!.textContent).toContain("OV ✗");
   });
 
+  it.each(["aboveEditor", "belowEditor"] as const)("retains a generic extension status alongside its %s widget", async (placement) => {
+    await render({ dialogs: [], statuses: { e2e: "Complete" }, widgets: { e2e: { placement, lines: ["Production · QA Owner"] } } });
+    expect(container!.querySelector('[data-testid="extension-status"]')?.textContent).toContain("Complete");
+  });
+
   it("keeps the question shortcut stable until pointer activation and supports keyboard clicks", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);

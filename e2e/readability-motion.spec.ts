@@ -12,6 +12,7 @@ async function openSessions(page: Page, width: number, style: string) {
   await page.goto(MAIN);
   await expect(page.getByRole("textbox", { name: "Message…" })).toBeVisible();
   if (width <= 700) await page.getByRole("button", { name: "Sessions", exact: true }).click();
+  await page.getByRole("textbox", { name: "Search conversations", exact: true }).fill("專案");
   await expect(page.locator('[data-session-row][aria-selected="true"] time')).toBeVisible();
 }
 

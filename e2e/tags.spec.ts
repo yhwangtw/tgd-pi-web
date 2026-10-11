@@ -4,11 +4,13 @@ const MAIN = "/?session=aaaa1111-2222-3333-4444-555566667777";
 
 async function openMain(page: Page) {
   await page.goto(MAIN);
-  await expect(page.getByText("專案架構分析").first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("composer-shell").locator("textarea")).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("textbox", { name: "Search conversations", exact: true }).fill("專案架構分析");
+  await expect(page.locator('[data-session-row="aaaa1111-2222-3333-4444-555566667777"]')).toBeVisible();
 }
 
 async function addTag(page: Page, tag: string) {
-  await page.getByText("專案架構分析").first().click({ button: "right" });
+  await page.locator('[data-session-row="aaaa1111-2222-3333-4444-555566667777"]').click({ button: "right" });
   // Menu entries are role=menuitem, not button
   await page.getByRole("menuitem", { name: "Add tag" }).click();
   const input = page.locator("input[placeholder*='tag']");
@@ -38,7 +40,7 @@ test.describe("session tags", () => {
     await addTag(page, "menutest");
     await expect(page.locator("[class*=tagChip]", { hasText: "#menutest" }).first()).toBeVisible();
 
-    await page.getByText("專案架構分析").first().click({ button: "right" });
+    await page.locator('[data-session-row="aaaa1111-2222-3333-4444-555566667777"]').click({ button: "right" });
     const menu = page.getByRole("menu");
     const menuRemove = menu.getByRole("button", { name: "Remove #menutest" });
     await expect(menuRemove).toBeVisible();

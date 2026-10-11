@@ -50,7 +50,9 @@ export function ExtensionUIPanel({ state, onRespond, onWorkflowCommand, wide = f
   const first = state.dialogs[0];
   const dialog = questionInTranscript ? undefined : first;
   const hasAboveWidgets = Object.values(state.widgets).some((widget) => widget.placement === "aboveEditor");
-  const statuses = visibleStatuses(state.statuses).filter(([key]) => !state.widgets[key])
+  const statuses = visibleStatuses(state.statuses).filter(([key]) => !(
+    onWorkflowCommand && (key === "Goal" || key === "Plan") && state.widgets[key]?.placement === "aboveEditor"
+  ))
     .sort((a, b) => Number(/error|fail|blocked|✗|waiting/i.test(b[1])) - Number(/error|fail|blocked|✗|waiting/i.test(a[1])));
   const hasStatuses = statuses.length > 0;
   if (!dialog && !hasAboveWidgets && !hasStatuses) return null;

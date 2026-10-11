@@ -46,7 +46,11 @@ for (const width of [1440, 390]) {
     await openSidebar();
     await expect(row).not.toHaveAttribute("data-unread", "true");
     // Move away before another writer adds a reply.
+    const search = page.getByRole("textbox", { name: "Search conversations", exact: true });
+    await search.fill("專案架構分析");
     await page.locator(`[data-session-row="${existing}"]`).click();
+    await openSidebar();
+    await search.fill("");
     appendFileSync(path, JSON.stringify(message("later", "answer", timestamp + 10_000, "Later unseen reply")) + "\n");
     await openSidebar();
     await expect(row).toHaveAttribute("data-unread", "true", { timeout: 12_000 });

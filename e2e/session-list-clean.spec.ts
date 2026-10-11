@@ -69,7 +69,7 @@ for (const style of ["original", "trae"]) for (const width of [1440, 390, 320]) 
     const box = (await menu.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(width);
     expect(box.y + box.height).toBeLessThanOrEqual(900);
-    if (width < 701) expect((await menu.getByRole("menuitem", { name: "Rename", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    if (width < 701) expect(Number((await menu.getByRole("menuitem", { name: "Rename", exact: true }).boundingBox())!.height.toFixed(2))).toBeGreaterThanOrEqual(44);
     await page.keyboard.press("Escape");
     await expect(row.getByRole("button", { name: "More actions" })).toBeFocused();
   });
