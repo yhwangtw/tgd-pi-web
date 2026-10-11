@@ -69,9 +69,15 @@ for (const style of ["original", "trae"] as const) {
     await expect(notes).toHaveValue("Browser verified.");
     await page.getByRole("button", { name: "Continue", exact: true }).click();
 
-    await expect(page.getByText("Complete", { exact: true })).toBeVisible();
-    await expect(page.getByText("Production · QA Owner", { exact: true })).toBeVisible();
+    // Verify the transient acknowledgment when it arrives, before testing
+    // the persistent widget's disclosure and editor state.
     await expect(page.getByText("Saved 1 line(s) for QA Owner", { exact: true })).toBeVisible();
+    await expect(page.getByText("Complete", { exact: true })).toBeVisible();
+    const widget = page.locator('details[aria-label="e2e"]');
+    await expect(widget).not.toHaveAttribute("open");
+    await widget.locator("summary").click();
+    await expect(widget).toHaveAttribute("open");
+    await expect(page.getByText("Production · QA Owner", { exact: true })).toBeVisible();
     await expect(composer).toHaveValue("Release production when ready.");
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(responses).toHaveLength(4);

@@ -291,6 +291,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
             key={node.index}
             type="button"
             className={styles.node}
+            data-minimap-message-index={node.visIdx}
             style={{ top: `${dotTop}%` }}
             aria-label={`${t(isUser ? "minimap.jumpUser" : "minimap.jumpAssistant").replace("{index}", String(node.visIdx + 1))}${getMessagePreview(node.msg) ? `: ${getMessagePreview(node.msg).replace(/\s+/g, " ").slice(0, 64)}` : ""}`}
             onFocus={() => setFocusedIndex(node.index)}

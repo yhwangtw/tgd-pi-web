@@ -149,7 +149,11 @@ export function ExtensionWidgets({ state, placement, wide = false, bare = false,
         </section>
       ) : (
         <details key={key} className={styles.widget} aria-label={key}>
-          <summary className={styles.widgetKey}>{key}</summary>
+          <summary className={styles.widgetKey} onPointerDown={event => {
+            // Keep mobile composer focus until the disclosure activates; a
+            // returning navigation bar must not move it before pointerup.
+            if (event.isPrimary && event.button === 0) event.preventDefault();
+          }}>{key}</summary>
           <span className={styles.widgetText}>{stripTerminalFormatting(widget.lines.join("\n"))}</span>
         </details>
       ))}
