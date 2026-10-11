@@ -40,7 +40,7 @@ for (const style of ["original", "trae"] as const) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     }
     await reveal("Choose a release target");
-    await expect(page.getByText("Waiting for decisions")).toBeVisible();
+    await expect(page.getByText("Waiting for your answer")).toBeVisible();
     await page.getByRole("radio", { name: "Production", exact: true }).click();
     await page.getByRole("button", { name: "Continue", exact: true }).click();
 

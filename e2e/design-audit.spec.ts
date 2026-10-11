@@ -436,7 +436,7 @@ test("Original and TRAE share one semantic radius contract with distinct geometr
       expect(measured.composerSurface).toBe(expected[style].composer);
 
       await page.getByRole("button", { name: "Token usage and cost report" }).last().click();
-      const analytics = page.getByRole("dialog", { name: "Session Analytics" });
+      const analytics = page.getByRole("dialog", { name: "Usage analytics" });
       await expect(analytics).toBeVisible();
       expect(Number.parseFloat(await analytics.evaluate((element) => getComputedStyle(element).borderTopLeftRadius)))
         .toBe(expected[style].dialog);
