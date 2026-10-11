@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
-import { forgetSession, rememberNewSession } from "@/lib/session-list-store";
+import { forgetSession, rememberNewSession, getSessionListSnapshot, getServerSessionListSnapshot, subscribeSessionList } from "@/lib/session-list-store";
 
 export interface SessionStats {
   tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -121,6 +121,20 @@ export function useAppShellState(): {
   // session in the multi-pane view.
   const [parallelSessions, setParallelSessions] = useState<SessionInfo[]>([]);
   const [parallelActiveId, setParallelActiveId] = useState<string | null>(null);
+  const { allSessions } = useSyncExternalStore(subscribeSessionList, getSessionListSnapshot, getServerSessionListSnapshot);
+
+  useEffect(() => {
+    const updateName = (session: SessionInfo) => {
+      const latest = allSessions.find(item => item.id === session.id);
+      return latest && latest.name !== session.name ? { ...session, name: latest.name } : session;
+    };
+    // Metadata changes must not bump sessionKey or reconnect the active run.
+    setSelectedSession(previous => previous ? updateName(previous) : previous);
+    setParallelSessions(previous => {
+      const next = previous.map(updateName);
+      return next.some((session, index) => session !== previous[index]) ? next : previous;
+    });
+  }, [allSessions]);
 
   // Top panel position tracking
   useEffect(() => {

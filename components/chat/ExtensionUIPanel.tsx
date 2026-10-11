@@ -46,10 +46,14 @@ function visibleStatuses(statuses: ExtensionUIState["statuses"]) {
 }
 
 export function ExtensionUIPanel({ state, onRespond, onWorkflowCommand, wide = false, questionInTranscript = false }: Props) {
+  const { t } = useI18n();
   const first = state.dialogs[0];
   const dialog = questionInTranscript ? undefined : first;
   const hasAboveWidgets = Object.values(state.widgets).some((widget) => widget.placement === "aboveEditor");
-  const statuses = visibleStatuses(state.statuses);
+  const statuses = visibleStatuses(state.statuses).filter(([key]) => !(
+    onWorkflowCommand && (key === "Goal" || key === "Plan") && state.widgets[key]?.placement === "aboveEditor"
+  ))
+    .sort((a, b) => Number(/error|fail|blocked|✗|waiting/i.test(b[1])) - Number(/error|fail|blocked|✗|waiting/i.test(a[1])));
   const hasStatuses = statuses.length > 0;
   if (!dialog && !hasAboveWidgets && !hasStatuses) return null;
 
@@ -61,13 +65,13 @@ export function ExtensionUIPanel({ state, onRespond, onWorkflowCommand, wide = f
             <ExtensionWidgets state={state} placement="aboveEditor" bare onWorkflowCommand={onWorkflowCommand} />
             {hasStatuses && (
               <div className={styles.statusRow} role="status">
-                {statuses.map(([key, text]) => (
-                  <span key={key} className={styles.statusChip}>
-                    <span className={styles.statusDot} aria-hidden />
-                    <span className={styles.statusKey}>{key}</span>
-                    <span>{text}</span>
-                  </span>
-                ))}
+                <span className={styles.statusChip}>
+                  <span className={styles.statusKey}>{statuses[0][0]}</span><span>{statuses[0][1]}</span>
+                </span>
+                {statuses.length > 1 && <details className={styles.extraStatuses}>
+                  <summary>{t("extensionUI.moreStatuses")} · {statuses.length - 1}</summary>
+                  {statuses.slice(1).map(([key, text]) => <div key={key}><strong>{key}</strong> {text}</div>)}
+                </details>}
               </div>
             )}
           </div>
@@ -120,17 +124,17 @@ export function ExtensionWidgets({ state, placement, wide = false, bare = false,
       {widgets.map(([key, widget]) => (key === "Goal" || key === "Plan") && onWorkflowCommand ? (
         <section key={key} className={`${styles.widget} ${styles.workflow}`} aria-label={key} data-testid={`workflow-${key.toLowerCase()}`}>
           <details>
-            <summary onPointerDown={event => { if (event.isPrimary && event.button === 0) event.preventDefault(); }}><span className={styles.widgetKey}>{key}</span> {stripTerminalFormatting(widget.lines[0] ?? "").slice(0, 160)}{(widget.lines[0]?.length ?? 0) > 160 ? "…" : ""}</summary>
+            <summary onPointerDown={event => { if (event.isPrimary && event.button === 0) event.preventDefault(); }}><span className={styles.widgetKey}>{key}</span><span className={styles.workflowState}>{stripTerminalFormatting(state.statuses[key] ?? "")}</span> {stripTerminalFormatting(widget.lines[0] ?? "").slice(0, 160)}{(widget.lines[0]?.length ?? 0) > 160 ? "…" : ""}</summary>
             <div className={styles.workflowSteps}>{stripTerminalFormatting(widget.lines.slice((widget.lines[0]?.length ?? 0) > 160 ? 0 : 1).join("\n"))}</div>
           </details>
           <div className={styles.workflowActions}>
             {(key === "Goal" ? [
-              { command: "/goal pause", label: t("workflow.pause") },
-              { command: "/goal resume", label: t("workflow.resume") },
+              ...(state.statuses.Goal?.startsWith("active") ? [{ command: "/goal pause", label: t("workflow.pause") }] : []),
+              ...(state.statuses.Goal?.startsWith("paused") ? [{ command: "/goal resume", label: t("workflow.resume") }] : []),
               { command: "/goal", label: t("workflow.manage") },
             ] : [
-              { command: "/plan", label: t("workflow.review") },
-              { command: "/plan execute", label: t("workflow.execute") },
+              { command: state.statuses.Plan?.startsWith("complete") ? "/plan new" : "/plan", label: t(state.statuses.Plan?.startsWith("complete") ? "workflow.newPlan" : "workflow.review") },
+              ...(state.statuses.Plan?.startsWith("ready") ? [{ command: "/plan execute", label: t("workflow.execute") }] : []),
             ]).map(action => <button key={action.command} type="button" disabled={pendingAction !== null}
               onPointerDown={event => {
                 // Preserve composer focus: mobile navigation returning on blur
@@ -144,10 +148,14 @@ export function ExtensionWidgets({ state, placement, wide = false, bare = false,
           </div>
         </section>
       ) : (
-        <section key={key} className={styles.widget} aria-label={key}>
-          <span className={styles.widgetKey}>{key}</span>
+        <details key={key} className={styles.widget} aria-label={key}>
+          <summary className={styles.widgetKey} onPointerDown={event => {
+            // Keep mobile composer focus until the disclosure activates; a
+            // returning navigation bar must not move it before pointerup.
+            if (event.isPrimary && event.button === 0) event.preventDefault();
+          }}>{key}</summary>
           <span className={styles.widgetText}>{stripTerminalFormatting(widget.lines.join("\n"))}</span>
-        </section>
+        </details>
       ))}
     </div>
   );

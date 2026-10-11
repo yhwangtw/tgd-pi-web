@@ -19,6 +19,12 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 describe('runtime environment presentation', () => {
+  it('keeps the compact summary readable and exposes the complete revision in details', async () => {
+    await act(async () => root.render(<RuntimeIdentityBar />));
+    expect(container.querySelector('summary')?.textContent).toContain(version);
+    expect(container.querySelector('summary')?.textContent).not.toContain('abcdef1');
+    expect(container.querySelector('dl')?.textContent).toContain('abcdef12345');
+  });
   it('identifies demonstration data and its actual config path without claiming a release', async () => {
     await act(async () => root.render(<RuntimeIdentityBar />));
     expect(container.querySelector('[data-environment="fixture"]')).toBeTruthy();

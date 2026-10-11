@@ -11,6 +11,8 @@ let timer: ReturnType<typeof setInterval> | undefined;
 const listeners = new Set<() => void>();
 // Pi may not persist a new conversation until its first assistant message.
 const optimistic = new Map<string, SessionInfo>();
+const pendingNames = new Map<string, { name: string; revision: number }>();
+let nameRevision = 0;
 
 function publish(next: typeof snapshot) {
   if (JSON.stringify(next) === JSON.stringify(snapshot)) return;
@@ -30,7 +32,18 @@ export function rememberNewSession(session: SessionInfo) {
 
 export function forgetSession(id: string) {
   optimistic.delete(id);
+  pendingNames.delete(id);
   publish({ ...snapshot, allSessions: snapshot.allSessions.filter(session => session.id !== id) });
+}
+
+/** Publish successful renames to every visible conversation without reopening it. */
+export function updateSessionName(id: string, name: string) {
+  pendingNames.set(id, { name, revision: ++nameRevision });
+  const pendingSession = optimistic.get(id);
+  if (pendingSession) optimistic.set(id, { ...pendingSession, name });
+  publish({ ...snapshot, allSessions: snapshot.allSessions.map(session => (
+    session.id === id ? { ...session, name } : session
+  )) });
 }
 
 /** One request/poller shared by the sidebar and command palette. */
@@ -39,6 +52,7 @@ export function refreshSessionList(invalidate = false): Promise<boolean> {
     refreshAgain ||= invalidate;
     return pending;
   }
+  const startedNameRevision = nameRevision;
   pending = (async () => {
     try {
       const response = await fetch("/api/sessions", { cache: "no-store", signal: AbortSignal.timeout(15_000) });
@@ -49,6 +63,13 @@ export function refreshSessionList(invalidate = false): Promise<boolean> {
       for (const [id, session] of optimistic) {
         if (sessions.some(item => item.id === id)) optimistic.delete(id);
         else sessions.push(session);
+      }
+      for (const [id, { name, revision }] of pendingNames) {
+        const session = sessions.find(item => item.id === id);
+        // Protect only requests that began before the successful rename.
+        // Later external names remain authoritative, including another writer.
+        if (!session || revision <= startedNameRevision) pendingNames.delete(id);
+        else session.name = name;
       }
       sessions.sort((a, b) => b.modified.localeCompare(a.modified));
       publish({ allSessions: sessions, loading: false, error: null });

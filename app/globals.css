@@ -187,6 +187,7 @@
   --text-md: calc(14px * var(--font-scale));
   --text-base: calc(15px * var(--font-scale));
   --text-lg: calc(16px * var(--font-scale));
+  --text-input-mobile: max(16px, var(--text-lg));
   --text-xl: calc(18px * var(--font-scale));
   --text-title: calc(20px * var(--font-scale));
   --text-2xl: calc(22px * var(--font-scale));

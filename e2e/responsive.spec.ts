@@ -403,7 +403,7 @@ test.describe("responsive shell", () => {
     expect(await branch.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 
     await usage.click();
-    await expect(page.getByRole("heading", { name: "Session Analytics" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Usage analytics" })).toBeVisible();
     await expectNoPageOverflow(page);
   });
 
@@ -417,7 +417,7 @@ test.describe("responsive shell", () => {
 
     await page.getByRole("button", { name: "More", exact: true }).click();
     await page.getByRole("button", { name: "Analytics", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Session Analytics" });
+    const dialog = page.getByRole("dialog", { name: "Usage analytics" });
     await expect(dialog).toBeVisible();
 
     const table = dialog.locator("[class*='table']").first();
@@ -457,7 +457,7 @@ test.describe("responsive shell", () => {
     await expect(identity.getByTestId("workspace-branch")).not.toHaveText("");
     await expect(identity.getByTestId("workspace-repository")).toBeVisible();
     await expect(identity.getByTestId("workspace-branch")).toBeVisible();
-    await expect(identity.locator("[class*='chatTitle']")).toBeHidden();
+    await expect(identity.locator("[class*='chatTitle']")).toBeVisible();
 
     const [topBarBox, workspaceBox] = await Promise.all([
       page.getByTestId("top-bar").boundingBox(),

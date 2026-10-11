@@ -94,6 +94,7 @@ export function IconRail({
       >
         <CalendarClock size={17} strokeWidth={1.8} aria-hidden="true" />
       </button>
+      <div className={s.railDivider} role="separator" />
       <button
         onClick={() => onSelectView("files")}
         title={t("sidebar.explorer")}
@@ -134,6 +135,7 @@ export function IconRail({
         <BarChart3 size={17} strokeWidth={1.8} aria-hidden="true" />
       </button>
       <div className={s.railSpacer} />
+      <div className={s.railDivider} role="separator" />
       <button onClick={onOpenModels} title={`${t("sidebar.models")} (⇧⌘M)`} aria-label={t("sidebar.models")} className={s.railButton}>
         <Cpu size={17} strokeWidth={1.8} aria-hidden="true" />
       </button>

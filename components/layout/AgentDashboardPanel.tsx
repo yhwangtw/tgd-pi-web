@@ -59,6 +59,8 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
   const maxConcurrency = agentRuns.data?.maxConcurrency ?? 3;
   const refreshRuns = agentRuns.refresh;
   const error = agentRuns.error;
+  const hasFilters = Boolean(query.trim()) || filter !== "all";
+  const clearFilters = () => { setQuery(""); setFilter("all"); };
 
   useEffect(() => {
     const timer = window.setInterval(() => void refreshRuns(), 2_000);
@@ -249,7 +251,7 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
       <div className={s.filterBar}>
         <Search size={13} strokeWidth={2} aria-hidden="true" />
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("agents.search")} aria-label={t("agents.search")} />
-        {(query || filter !== "all") && <button type="button" onClick={() => { setQuery(""); setFilter("all"); }} aria-label={t("agents.clearFilters")}><X size={13} strokeWidth={2} aria-hidden="true" /></button>}
+        {(query || filter !== "all") && <button type="button" onClick={clearFilters} aria-label={t("agents.clearFilters")}><X size={13} strokeWidth={2} aria-hidden="true" /></button>}
       </div>
       <div className={s.body}>
         {error && <div className={s.listError} role="alert"><span>{error}</span><button type="button" onClick={() => void refreshRuns()}>{t("common.retry")}</button></div>}
@@ -258,9 +260,11 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
         ) : groups.length === 0 ? (
           <div className={s.empty}>
             <Bot size={30} strokeWidth={1.5} aria-hidden />
-            <strong>{t("agents.empty")}</strong>
-            <span>{t("agents.emptyHint")}</span>
-            {defaultCwd && <button className={s.primaryButton} type="button" onClick={() => setEditorOpen(true)}>{t("agents.new")}</button>}
+            <strong>{t(hasFilters ? "agents.noMatches" : "agents.empty")}</strong>
+            <span>{t(hasFilters ? "agents.noMatchesHint" : "agents.emptyHint")}</span>
+            {hasFilters ? (
+              <button className={s.primaryButton} type="button" onClick={clearFilters}>{t("agents.clearFilters")}</button>
+            ) : defaultCwd && <button className={s.primaryButton} type="button" onClick={() => setEditorOpen(true)}>{t("agents.new")}</button>}
           </div>
         ) : (
           <div className={s.groups}>

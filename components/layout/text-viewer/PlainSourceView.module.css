@@ -38,3 +38,9 @@
 :global(html[data-ui-style="trae"]) .plainPre { padding: var(--space-4) 0; background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .line { padding-right: var(--space-4); }
 :global(html[data-ui-style="trae"]) .lineNo { border-right: 1px solid var(--trae-hairline); margin-right: 12px; }
+
+.pagination { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; padding: var(--space-2); background: var(--bg-panel); color: var(--text-muted); font-size: var(--text-xs); border-bottom: 1px solid var(--border); }
+.pagination span { font-variant-numeric: tabular-nums; }
+.pagination button { min-height: 32px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg); color: var(--text); cursor: pointer; }
+.pagination button:disabled { color: var(--text-dim); cursor: default; }
+@media (max-width: 700px), (pointer: coarse) { .pagination button { min-height: 44px; } }

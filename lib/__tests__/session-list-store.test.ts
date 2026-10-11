@@ -17,6 +17,31 @@ afterEach(() => { unsubscribe.forEach(stop => stop()); vi.useRealTimers(); vi.re
 const subscribe = () => unsubscribe.push(store.subscribeSessionList(vi.fn()));
 
 describe("live session list", () => {
+  it("does not overwrite a committed rename with an older list response", async () => {
+    subscribe(); fetchMock.mockResolvedValue(response([session("existing")]));
+    await store.refreshSessionList();
+    let resolve!: (value: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>(done => { resolve = done; }));
+    const pending = store.refreshSessionList();
+    store.updateSessionName("existing", "Committed name");
+    resolve(response([session("existing")])); await pending;
+    expect(store.getSessionListSnapshot().allSessions[0].name).toBe("Committed name");
+    fetchMock.mockResolvedValue(response([{ ...session("existing"), name: "Later external rename" }]));
+    await store.refreshSessionList();
+    expect(store.getSessionListSnapshot().allSessions[0].name).toBe("Later external rename");
+  });
+  it("publishes successful names immediately for persisted and optimistic sessions", async () => {
+    subscribe(); fetchMock.mockImplementation(async () => response([session("persisted")]));
+    await store.refreshSessionList();
+    const changed = vi.fn(); unsubscribe.push(store.subscribeSessionList(changed));
+    store.updateSessionName("persisted", "Renamed");
+    expect(store.getSessionListSnapshot().allSessions[0].name).toBe("Renamed");
+    expect(changed).toHaveBeenCalledOnce();
+    store.rememberNewSession(session("new"));
+    store.updateSessionName("new", "Named before save");
+    await store.refreshSessionList();
+    expect(store.getSessionListSnapshot().allSessions.find(item => item.id === "new")?.name).toBe("Named before save");
+  });
   it("shares requests and polling, discovers external sessions, and stops when unmounted", async () => {
     subscribe(); subscribe();
     const first = store.refreshSessionList();

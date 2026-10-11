@@ -63,10 +63,10 @@
 .sessionTitleSelected {
   font-weight: var(--weight-medium);
 }
-.sessionTitleUnread { font-weight: var(--weight-semibold); }
+.sessionTitleUnread { font-weight: var(--weight-bold, 700); }
 .unreadDot {
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   border-radius: var(--radius-pill);
   flex-shrink: 0;
   background: var(--color-accent);
@@ -192,6 +192,20 @@
   gap: var(--space-optical);
   color: var(--text-dim);
 }
+
+.attentionStatus {
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 60%;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-warning-text);
+}
+.attentionStatus svg { flex-shrink: 0; }
+.attentionStatus span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attentionStatus[data-status="failed"] { color: var(--color-error-text); }
+.attentionStatus + .workspaceMeta { max-width: 24%; }
 
 .metaTime { color: var(--text-dim); font-family: var(--font-ui); font-size: var(--text-2xs); }
 

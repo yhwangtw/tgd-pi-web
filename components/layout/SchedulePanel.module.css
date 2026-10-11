@@ -387,3 +387,6 @@
     min-height: var(--control-touch);
   }
 }
+
+.deletePrompt { width: 100%; color: var(--color-error-text); font-size: var(--text-xs); overflow-wrap: anywhere; }
+@media (max-width: 700px), (pointer: coarse) { .cardActions button { min-height: 44px; } }

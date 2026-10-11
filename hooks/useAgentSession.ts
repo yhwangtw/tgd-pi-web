@@ -32,6 +32,7 @@ import {
 } from "@/lib/web-extension-ui-types";
 import {
   moveQueuedFollowUp,
+  normalizeQueuedFollowUps,
   updateQueuedFollowUp,
   type QueuedFollowUp,
 } from "@/lib/queued-follow-ups";
@@ -119,12 +120,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
   const pendingPromptMessageRef = useRef<AgentMessage | null>(null);
+  const pendingSendRef = useRef<AbortController | null>(null);
+  const abortInFlightRef = useRef(false);
   const agentRunningRef = useRef(false);
   const agentPhaseRef = useRef<AgentPhase>(null);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
   // Already-named sessions never need auto-naming — skip the summarize call
   const hasSummarizedRef = useRef(Boolean(session?.name));
   const sessionNameRef = useRef<string | undefined>(session?.name);
+  useEffect(() => {
+    sessionNameRef.current = session?.name;
+    if (session?.name) hasSummarizedRef.current = true;
+    if (agentRunningRef.current) setRunningTitle(session?.name);
+    else setIdleTitle(session?.name);
+  }, [session?.name]);
   const sessionLoadRequestRef = useRef(0);
   const replacementChannelRef = useRef<SessionReplacementChannel | null>(null);
   const autoProviderFallbackRef = useRef(autoProviderFallback);
@@ -273,7 +282,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       generationMetrics.record(sessionIdRef.current, event, performance.now());
     }
     if (handleCompactionEvent(event)) return;
-    if (event.type === "queue_update") { setQueuedFollowUps(event.items as QueuedFollowUp[]); return; }
+    if (event.type === "queue_update") { setQueuedFollowUps(previous => normalizeQueuedFollowUps(event, previous)); return; }
     if (event.type === "connected") {
       // The server immediately follows this with a complete Web UI snapshot.
       // Reset first so status/widgets removed while this tab was offline do
@@ -312,7 +321,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage);
       if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt);
       if (state?.thinkingLevel !== undefined) setThinkingLevel(state.thinkingLevel as ThinkingLevelOption);
-      if (state?.queuedFollowUps) setQueuedFollowUps(state.queuedFollowUps);
+      if (state?.queuedFollowUps) setQueuedFollowUps(previous => normalizeQueuedFollowUps({ items: state.queuedFollowUps }, previous));
       const model = (event.state as { model?: { provider: string; id: string } } | undefined)?.model;
       if (model) setCurrentModelOverride({ provider: model.provider, modelId: model.id });
       setBashRun((event.bashRun as { command: string; output: string; running: boolean } | null) ?? null);
@@ -690,6 +699,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const createNewSession = useCallback(async (
     message: string,
     piImages?: Array<{ type: "image"; data: string; mimeType: string }>,
+    signal?: AbortSignal,
   ): Promise<string> => {
     if (!newSessionCwd) throw new Error("No cwd for new session");
     const selectedModel = newSessionModel;
@@ -697,6 +707,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (selectedModel) setPendingModel(selectedModel);
     const toolNames = namesForToolSelection(toolPreset, customToolNames);
     const res = await fetch("/api/agent/new", {
+      signal,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -715,10 +726,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const result = await res.json() as { sessionId: string };
+    signal?.throwIfAborted();
     sessionIdRef.current = result.sessionId;
-    if (!(await connectEvents(result.sessionId))) throw new Error(translate("connection.streamNotReady"));
+    if (!(await connectEvents(result.sessionId, false, signal))) throw new Error(translate("connection.streamNotReady"));
+    signal?.throwIfAborted();
     pendingPromptMessageRef.current = null;
     await sendAgentCommand(result.sessionId, { type: "prompt", message, ...(piImages?.length ? { images: piImages } : {}) });
+    if (signal?.aborted) { await sendAgentCommand(result.sessionId, { type: "abort" }); signal.throwIfAborted(); }
     onSessionCreated?.({
       id: result.sessionId,
       path: "",
@@ -758,7 +772,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return true;
     }
     if (isCompacting) return enqueueCompaction(message, images);
-    if (agentRunning) return false;
+    if (agentRunning || pendingSendRef.current) return false;
     if (isNew && (catalogStatus !== "ready" || !newSessionModel)) {
       showToast(translate("model.catalogRequired"), { type: "warning" });
       return false;
@@ -821,7 +835,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // or a slow connection can inherit the previous run's stale idle time.
     lastEventAtRef.current = Date.now();
     resetRunProgress();
+    const start = new AbortController();
+    pendingSendRef.current = start;
     pendingPromptMessageRef.current = userMsg;
+    agentRunningRef.current = true;
     setMessages((prev) => [...prev, userMsg]);
     setAgentRunning(true);
     setAgentPhase({ kind: "waiting_model" });
@@ -833,46 +850,59 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     try {
       if (isNew && newSessionCwd) {
-        await createNewSession(message, piImages);
+        await createNewSession(message, piImages, start.signal);
       } else if (session) {
         // Wait for the SSE stream to be open before prompting, so the run's
         // first events aren't emitted before we're subscribed.
-        if (!(await connectEvents(session.id))) {
+        if (!(await connectEvents(session.id, false, start.signal))) {
+          start.signal.throwIfAborted();
           throw new Error(translate("connection.streamNotReady"));
         }
+        start.signal.throwIfAborted();
         pendingPromptMessageRef.current = null;
         await sendAgentCommand(session.id, {
           type: "prompt",
           message,
           ...(piImages?.length ? { images: piImages } : {}),
         });
+        if (start.signal.aborted) { await sendAgentCommand(session.id, { type: "abort" }); start.signal.throwIfAborted(); }
       } else {
         throw new Error("No active session");
       }
       return true;
     } catch (e) {
       pendingPromptMessageRef.current = null;
-      console.error("Failed to send message:", e);
-      showToast(`${translate("toast.messageNotSent")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
+      if (!start.signal.aborted) console.error("Failed to send message:", e);
+      if (!start.signal.aborted) showToast(`${translate("toast.messageNotSent")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
       setMessages((prev) => {
         const index = prev.lastIndexOf(userMsg);
         return index < 0 ? prev : [...prev.slice(0, index), ...prev.slice(index + 1)];
       });
+      agentRunningRef.current = false;
       setAgentRunning(false);
+      setAgentStartedAt(null);
       setAgentPhase(null);
       dispatch({ type: "end" });
       return false;
+    } finally {
+      if (pendingSendRef.current === start) pendingSendRef.current = null;
     }
   }, [isNew, newSessionCwd, newSessionModel, catalogStatus, session, agentRunning, connectEvents, createNewSession, loadSession, lastEventAtRef, pendingScrollToUserRef, resetRunProgress, isCompacting, enqueueCompaction, handleCompact, handleWorkflowCommand]);
 
   const handleAbort = useCallback(async () => {
+    if (abortInFlightRef.current) return;
+    abortInFlightRef.current = true;
+    setAgentPhase({ kind: "stopping" });
+    pendingSendRef.current?.abort();
     const sid = sessionIdRef.current;
-    if (!sid) return;
+    if (!sid) { abortInFlightRef.current = false; return; }
     try {
       await sendAgentCommand(sid, { type: "abort" });
     } catch (e) {
       console.error("Failed to abort:", e);
-    }
+      showToast(translate("toast.stopFailed"), { type: "error" });
+      setAgentPhase({ kind: "waiting_model" });
+    } finally { abortInFlightRef.current = false; }
   }, []);
 
   const handleRuntimeReconnect = useCallback(async () => {
@@ -1029,6 +1059,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     try {
       await sendAgentCommand(sid, {
         type: "follow_up",
+        queueId: item.id,
         message,
         ...(piImages?.length ? { images: piImages } : {}),
       });
@@ -1063,19 +1094,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!sid || queueUpdating) return false;
     setQueueUpdating(true);
     try {
-      if (sid.startsWith("dw_")) {
-        const saved = await sendAgentCommand<QueuedFollowUp[]>(sid, { type: "replace_queue", items: next });
-        setQueuedFollowUps(saved); return true;
-      }
-      await sendAgentCommand(sid, { type: "clear_queue" });
-      for (const item of next) {
-        await sendAgentCommand(sid, {
-          type: "follow_up",
-          message: item.message,
-          ...(item.images?.length ? { images: item.images.map((image) => ({ type: "image" as const, ...image })) } : {}),
-        });
-      }
-      setQueuedFollowUps(next);
+      const saved = await sendAgentCommand<QueuedFollowUp[]>(sid, { type: "replace_queue", items: next });
+      setQueuedFollowUps(previous => normalizeQueuedFollowUps({ items: saved }, previous));
       return true;
     } catch (e) {
       showToast(`${translate("toast.followUpFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });

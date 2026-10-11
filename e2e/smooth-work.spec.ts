@@ -22,7 +22,7 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
     await expect(composer).toBeFocused();
     const box = (await panel.boundingBox())!;
     expect(box.height).toBeLessThan(900 * (width < 700 ? 0.56 : 0.81));
-    expect(await panel.locator("header p").evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    expect(await panel.locator("header p").first().evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     const nav = page.getByTestId("skills-config-nav");
     await nav.getByRole("button", { name: /e2e-reading/ }).click();
     const detail = page.getByTestId("skills-config-detail");

@@ -1,4 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
 
 const MAIN = "/?session=aaaa1111-2222-3333-4444-555566667777";
 
@@ -109,7 +111,14 @@ async function auditControls(page: Page, root: Locator, context: string, mobile:
         if (ancestorStyle.position === "fixed") break;
       }
       const hit = fullyOnscreen ? document.elementFromPoint(centerX, centerY) : null;
-      const hittable = !fullyOnscreen || disabled || hit === node || node.contains(hit) || Boolean(hit?.contains(node));
+      // Dense minimap buttons route pointer activation by position, not DOM
+      // stacking. Verify those shared targets with a real click below.
+      const sharedMinimapTarget = node.hasAttribute("data-minimap-message-index")
+        && hit?.closest("[data-minimap-message-index]")?.parentElement === node.parentElement
+        && hit !== node && !node.contains(hit);
+      const minimapPointerTarget = sharedMinimapTarget ? Number(node.dataset.minimapMessageIndex) : null;
+      const hittable = !fullyOnscreen || disabled || hit === node || node.contains(hit)
+        || Boolean(hit?.contains(node)) || sharedMinimapTarget;
       const hitDescription = hit instanceof HTMLElement
         ? `${hit.tagName.toLowerCase()}${typeof hit.className === "string" && hit.className ? `.${hit.className.split(/\s+/).filter(Boolean).slice(0, 2).join(".")}` : ""}`
         : "none";
@@ -132,6 +141,7 @@ async function auditControls(page: Page, root: Locator, context: string, mobile:
         transitionMs,
         hittable,
         hitDescription,
+        minimapPointerTarget,
         tooSmall: buttonLike && (rect.width < (isMobile ? 43.5 : 23.5) || rect.height < (isMobile ? 43.5 : 23.5)),
       }];
     }), mobile);
@@ -161,6 +171,30 @@ async function auditControls(page: Page, root: Locator, context: string, mobile:
   }
 
   expect(failures, `${context}\n${failures.join("\n")}`).toEqual([]);
+  // Shared minimap hit areas are accepted only when a real pointer click
+  // selects the intended article and actually brings it into the viewport.
+  // Near the tail, normal follow/layout reconciliation can adjust alignment.
+  const sharedTargets = results.filter(result => result.minimapPointerTarget !== null);
+  if (sharedTargets.length) await page.evaluate(() => {
+    const nativeScroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function(options) {
+      if (this.hasAttribute("data-message-role")) {
+        const articles = [...document.querySelectorAll("[data-transcript-scroll] [data-message-role]")];
+        document.documentElement.dataset.lastMinimapTarget = String(articles.indexOf(this));
+      }
+      nativeScroll.call(this, options);
+    };
+  });
+  for (const target of sharedTargets) {
+    const article = page.locator("[data-transcript-scroll] [data-message-role]").nth(target.minimapPointerTarget!);
+    // Latest appears/disappears while navigating; read current geometry.
+    const node = page.locator(`[data-minimap-message-index="${target.minimapPointerTarget}"]`);
+    const bounds = (await node.boundingBox())!;
+    await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await expect(page.locator("html"), `${context}: pointer must select message ${target.minimapPointerTarget}`)
+      .toHaveAttribute("data-last-minimap-target", String(target.minimapPointerTarget));
+    await expect(article).toBeInViewport();
+  }
   await auditTypography(root, context);
   await expectNoPageOverflow(page, context);
 }
@@ -355,6 +389,33 @@ test("XL mono Traditional Chinese reflows at phone, tablet, and desktop widths",
   }
 });
 
+test("dense minimap center clicks reach the intended messages through overlapping hit areas", async ({ page }) => {
+  const root = process.env.E2E_ROOT;
+  if (!root || process.env.PI_E2E_FIXTURES_READY !== root) throw new Error("Requires generated, isolated fixtures");
+  const session = "bbbb8400-1111-2222-3333-444455556666";
+  const entries: unknown[] = [{ type: "session", version: 3, id: session, timestamp: "2026-10-11T00:00:00.000Z", cwd: process.env.E2E_PROJECT_CWD }];
+  for (let i = 0; i < 80; i++) entries.push({
+    type: "message", id: `dense${i}`, parentId: i ? `dense${i - 1}` : null,
+    timestamp: new Date(Date.UTC(2026, 9, 11) + i * 1000).toISOString(),
+    message: i % 2 === 0
+      ? { role: "user", content: `Synthetic minimap turn ${i / 2}.` }
+      : { role: "assistant", content: [{ type: "text", text: `Synthetic reply ${i}.` }], stopReason: "stop", provider: "fixture", model: "fixture" },
+  });
+  writeFileSync(path.join(root, "agent", "sessions", "-demo", `2026-10-11T00-00-00_${session}.jsonl`), entries.map(entry => JSON.stringify(entry)).join("\n") + "\n");
+  await page.setViewportSize({ width: 840, height: 889 });
+  await page.goto(`/?session=${session}`);
+  const map = page.locator('[class*="ChatMinimap_container"]');
+  await expect(map.locator("[data-minimap-message-index]")).toHaveCount(80);
+  // Require this fixture to exercise the shared hit-area path, rather than
+  // relying on whichever conversations earlier specs happened to create.
+  expect(await map.locator("button").evaluateAll(nodes => nodes.some(node => {
+    const rect = node.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    return hit !== node && !node.contains(hit) && hit?.closest("[data-minimap-message-index]")?.parentElement === node.parentElement;
+  }))).toBe(true);
+  await auditControls(page, map, "dense-minimap/840", false);
+});
+
 test("Original and TRAE share one semantic radius contract with distinct geometry", async ({ browser }) => {
   const expected = {
     original: {
@@ -436,7 +497,7 @@ test("Original and TRAE share one semantic radius contract with distinct geometr
       expect(measured.composerSurface).toBe(expected[style].composer);
 
       await page.getByRole("button", { name: "Token usage and cost report" }).last().click();
-      const analytics = page.getByRole("dialog", { name: "Session Analytics" });
+      const analytics = page.getByRole("dialog", { name: "Usage analytics" });
       await expect(analytics).toBeVisible();
       expect(Number.parseFloat(await analytics.evaluate((element) => getComputedStyle(element).borderTopLeftRadius)))
         .toBe(expected[style].dialog);
@@ -508,7 +569,7 @@ async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: bool
   // Settings and analysis are modeless panels; explicit close keeps background
   // keyboard work intact instead of intercepting Escape from the composer.
   const modals = [
-    { label: "Analytics", desktopTrigger: "Token usage and cost report", dialog: "Session Analytics" },
+    { label: "Analytics", desktopTrigger: "Token usage and cost report", dialog: "Usage analytics" },
     { label: "Models", desktopTrigger: /^Models/, dialog: "Models" },
     { label: "Skills", desktopTrigger: /^Skills/, dialog: "Skills" },
     { label: "Extensions", desktopTrigger: "Extensions", dialog: "Extensions" },

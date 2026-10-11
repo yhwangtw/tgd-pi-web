@@ -256,3 +256,5 @@
 :global(html[data-ui-style="trae"]) .position,
 :global(html[data-ui-style="trae"]) .message small { border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .editor textarea { border-radius: var(--radius-control); }
+
+@media (max-width: 700px), (pointer: coarse) { .actions button { min-width: 44px; min-height: 44px; } .actions { flex-wrap: wrap; } .editor button, .clearButton { min-height: 44px; } }

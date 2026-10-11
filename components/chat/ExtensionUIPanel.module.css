@@ -545,3 +545,11 @@
     min-height: var(--control-touch);
   }
 }
+
+.extraStatuses { min-width: 0; color: var(--text-muted); font-size: var(--text-xs); }
+.extraStatuses summary { cursor: pointer; }
+.extraStatuses div { padding-block: var(--space-1); overflow-wrap: anywhere; }
+.workflowState { color: var(--text-muted); font-size: var(--text-xs); margin-inline: var(--space-2); }
+.widgets > details { display: block; }
+.widget > summary { cursor: pointer; }
+@media (max-width: 700px), (pointer: coarse) { .workflowActions button, .questionNotice button { min-height: 44px; } .widget > summary, .extraStatuses summary { min-height: 44px; display: flex; align-items: center; } }

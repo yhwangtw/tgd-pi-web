@@ -103,7 +103,10 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
   return (
     <div>
       {/* This node row */}
-      <div
+      <button
+        type="button"
+        aria-pressed={isActive}
+        aria-label={`${role ?? rep.entry.type}: ${label}`}
         className={styles.nodeRow}
         onClick={() => onSelect(rep.entry.id)}
       >
@@ -147,7 +150,7 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
         <span className={isActive ? styles.nodeLabelActive : isOnPath ? styles.nodeLabelOnPath : styles.nodeLabelInactive}>
           {label}
         </span>
-      </div>
+      </button>
 
       {/* Children */}
       {rep.children.map((child, idx) => (
@@ -206,7 +209,9 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
 
   const handleSelect = useCallback((id: string) => {
     onLeafChange(id);
-  }, [onLeafChange]);
+    if (onToggle) onToggle(); else setOpenInternal(false);
+    btnRef.current?.focus();
+  }, [onLeafChange, onToggle]);
 
   const noBranchReason = !hasSession
     ? t("session.branch.noneActive")
@@ -251,7 +256,15 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
           // the chat content (the tGD pipeline bar covered this dropdown).
           <div className={styles.inlineDropdown} style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}>
             {hasContent && firstNode ? (
-              <div className={styles.dropdownContent}>
+              <div className={styles.dropdownContent} onKeyDown={event => {
+                const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
+                const at = items.indexOf(document.activeElement as HTMLButtonElement);
+                if (event.key === "Escape") { event.preventDefault(); if (onToggle) onToggle(); else setOpenInternal(false); btnRef.current?.focus(); }
+                else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                  event.preventDefault();
+                  items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+                }
+              }}>
                 {firstNode.children.map((child, idx) => (
                   <TreeNodeView
                     key={child.entry.id}
@@ -292,7 +305,15 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
       {open && (
         <div className={styles.standaloneOverlay}>
           {hasContent && firstNode ? (
-            <div className={styles.dropdownContent}>
+            <div className={styles.dropdownContent} onKeyDown={event => {
+                const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
+                const at = items.indexOf(document.activeElement as HTMLButtonElement);
+                if (event.key === "Escape") { event.preventDefault(); if (onToggle) onToggle(); else setOpenInternal(false); btnRef.current?.focus(); }
+                else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                  event.preventDefault();
+                  items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+                }
+              }}>
               {firstNode.children.map((child, idx) => (
                 <TreeNodeView
                   key={child.entry.id}

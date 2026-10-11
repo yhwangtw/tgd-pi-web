@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function openEditor(page: Page, id: string, width: number, origin = "") {
   await page.goto(`${origin}/?session=aaaa1111-2222-3333-4444-555566667777`);
-  await expect(page.getByText("專案架構分析").first()).toBeVisible();
+  await expect(page.getByTestId("composer-shell").locator("textarea")).toBeVisible();
   if (width === 320) await page.getByRole("button", { name: "More", exact: true }).click();
   await page.getByRole("button", { name: "Extensions", exact: true }).click();
   const center = page.getByTestId("extensions-config");

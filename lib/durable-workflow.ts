@@ -1,3 +1,4 @@
+import { goalActions, planActions } from "./workflow-actions";
 import { createHash, randomUUID } from "node:crypto";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Context } from "@earendil-works/chord";
@@ -281,11 +282,12 @@ async function executeWorkflowCommand(
   if (!args) {
     if (!ui) return true;
     args = command.command === "goal"
-      ? initial.goal ? await ui.select(`${initial.goal.status}: ${initial.goal.objective}`, ["status", "pause", "resume", "clear"]) ?? "" : await ui.input("Goal", "What should Pi complete?") ?? ""
-      : initial.plan ? await ui.select(initial.plan.title, ["status", "execute", "refine", "cancel"]) ?? "" : await ui.input("Plan", "What should Pi plan?") ?? "";
+      ? initial.goal ? await ui.select(`${initial.goal.status}: ${initial.goal.objective}`, goalActions(initial.goal.status)) ?? "" : await ui.input("Goal", "What should Pi complete?") ?? ""
+      : initial.plan ? await ui.select(initial.plan.title, planActions(initial.plan.status)) ?? "" : await ui.input("Plan", "What should Pi plan?") ?? "";
     args = args.trim();
     if (!args) return true;
   }
+  if (command.command === "plan" && args === "new") { args = (await ui?.input("Plan", "What should Pi plan?"))?.trim() ?? ""; if (!args) return true; }
   if (args === "status") { if (command.command === "goal") ui?.notify?.(initial.goal ? `${initial.goal.status}: ${initial.goal.objective}` : "No goal. Use /goal <objective>.", "info"); return true; }
   if (command.command === "goal" && args === "pause") { await pauseDurableWorkflow(conversation, undefined, context); return true; }
   const live = await harness.snapshot(LiveDoc, conversation.id, context);

@@ -70,6 +70,7 @@ export function getRunError(event: AgentEvent): string | null {
 }
 
 export type AgentPhase =
+  | { kind: "stopping"; tools?: undefined }
   | { kind: "waiting_model"; tools?: undefined }
   | { kind: "running_tools"; tools: { id: string; name: string; label?: string }[] }
   | null;
@@ -77,7 +78,7 @@ export type AgentPhase =
 export interface RunProgressState {
   idleSeconds: number;
   attention: "normal" | "delayed" | "stalled";
-  connection: "connected" | "reconnecting";
+  connection: "connected" | "connecting" | "reconnecting";
 }
 
 export interface SessionStats {

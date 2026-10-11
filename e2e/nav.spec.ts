@@ -26,11 +26,9 @@ test.describe("left rail", () => {
     const search = page.getByRole("textbox", { name: "Search conversations" });
 
     await expect(scope.getByRole("button", { name: "All", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await expect(sessionList.getByText("跨專案歷史對話", { exact: true })).toBeVisible();
-    await expect(sessionList.getByText("archive-project", { exact: true })).toBeVisible();
-
     await search.fill("billing migration");
     await expect(sessionList.getByText("跨專案歷史對話", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(sessionList.getByText("archive-project", { exact: true })).toBeVisible();
 
     await scope.getByRole("button", { name: "This project", exact: true }).click();
     await expect(scope.getByRole("button", { name: "This project", exact: true })).toHaveAttribute("aria-pressed", "true");

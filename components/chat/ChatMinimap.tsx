@@ -72,12 +72,12 @@ interface NodeInfo {
 
 export function ChatMinimap({ messages, streamingMessage, scrollContainer, messageRefs, bookmarkedIndices }: Props) {
   const { t } = useI18n();
-  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [scrollRatio, setScrollRatio] = useState(0);
   const [viewportRatio, setViewportRatio] = useState(1);
   const [visible, setVisible] = useState(false);
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [mouseYRatio, setMouseYRatio] = useState<number | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const draggingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -233,35 +233,6 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
 
 
 
-  // Compute collision-free tooltip positions for all nodes
-  const TOOLTIP_HEIGHT = 22;
-  const TOOLTIP_GAP = 2;
-  const minimapHeightPx = containerRef.current?.clientHeight ?? 600;
-
-  const tooltipPositions = useMemo(() => {
-    if (nodes.length === 0) return [];
-    // Initial positions: centered on the dot
-    const positions = nodes.map((node) =>
-      Math.round(node.topRatio * minimapHeightPx - TOOLTIP_HEIGHT / 2)
-    );
-    // Iterative push-apart to resolve overlaps (top-to-bottom pass, then bottom-to-top)
-    for (let pass = 0; pass < 10; pass++) {
-      for (let i = 1; i < positions.length; i++) {
-        const minTop = positions[i - 1] + TOOLTIP_HEIGHT + TOOLTIP_GAP;
-        if (positions[i] < minTop) positions[i] = minTop;
-      }
-      for (let i = positions.length - 2; i >= 0; i--) {
-        const maxTop = positions[i + 1] - TOOLTIP_HEIGHT - TOOLTIP_GAP;
-        if (positions[i] > maxTop) positions[i] = maxTop;
-      }
-    }
-    // Clamp all to minimap bounds
-    for (let i = 0; i < positions.length; i++) {
-      positions[i] = Math.max(0, Math.min(minimapHeightPx - TOOLTIP_HEIGHT, positions[i]));
-    }
-    return positions;
-  }, [nodes, minimapHeightPx]);
-
   if (!visible) return null;
 
   const viewportBoxTop = scrollRatio * (1 - viewportRatio) * 100;
@@ -273,11 +244,19 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
         return Math.abs(node.topRatio - mouseYRatio) < Math.abs(nodes[best].topRatio - mouseYRatio) ? node.index : best;
       }, 0)
     : null;
+  // One preview follows the pointer or keyboard focus. Rendering a preview for
+  // every historical message obscures the transcript and grows the DOM needlessly.
+  const previewNode = nodes[focusedIndex ?? nearestIndex ?? -1];
+  const preview = previewNode ? getMessagePreview(previewNode.msg) : "";
+  const minimapHeight = containerRef.current?.clientHeight ?? 600;
+  const previewTop = previewNode ? Math.max(0, Math.min(minimapHeight - 36, previewNode.topRatio * minimapHeight - 18)) : 0;
 
   return (
     <div
       ref={containerRef}
-      className={styles.container}
+      className={`hover-group ${styles.container}`}
+      role="navigation"
+      aria-label={t("chat.messageMap")}
       onMouseDown={handleMouseDown}
       onMouseLeave={() => { setMouseYRatio(null); }}
       onMouseMove={(e) => {
@@ -303,6 +282,8 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
           : getNodeColor(node.msg);
         const isNearest = nearestIndex === node.index;
         const isUser = node.msg.role === "user";
+        const inViewport = node.topRatio + node.heightRatio >= scrollRatio * (1 - viewportRatio)
+          && node.topRatio <= scrollRatio * (1 - viewportRatio) + viewportRatio;
         const dotTop = node.topRatio * 100;
 
         return (
@@ -310,13 +291,22 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
             key={node.index}
             type="button"
             className={styles.node}
+            data-minimap-message-index={node.visIdx}
             style={{ top: `${dotTop}%` }}
             aria-label={`${t(isUser ? "minimap.jumpUser" : "minimap.jumpAssistant").replace("{index}", String(node.visIdx + 1))}${getMessagePreview(node.msg) ? `: ${getMessagePreview(node.msg).replace(/\s+/g, " ").slice(0, 64)}` : ""}`}
             onFocus={() => setFocusedIndex(node.index)}
             onBlur={() => setFocusedIndex(null)}
             onClick={(event) => {
               event.stopPropagation();
-              messageRefs.current?.[node.visIdx]?.scrollIntoView({ block: "start", behavior: "auto" });
+              // Dense histories have overlapping hit areas. Pointer clicks
+              // follow the preview nearest that point; keyboard clicks keep
+              // the explicitly focused message as their target.
+              const rect = containerRef.current?.getBoundingClientRect();
+              const ratio = rect && rect.height > 0 ? (event.clientY - rect.top) / rect.height : null;
+              const target = event.detail > 0 && ratio !== null
+                ? nodes.reduce((best, candidate) => Math.abs(candidate.topRatio - ratio) < Math.abs(best.topRatio - ratio) ? candidate : best, node)
+                : node;
+              messageRefs.current?.[target.visIdx]?.scrollIntoView({ block: "start", behavior: "auto" });
             }}
           >
             {/* Dot */}
@@ -324,7 +314,8 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
               className={[
                 styles.dot,
                 isUser ? styles.dotUser : styles.dotAssistant,
-                isNearest ? styles.dotNearest : styles.dotNormal,
+                isNearest || focusedIndex === node.index ? styles.dotNearest : styles.dotNormal,
+                inViewport || bookmarked ? styles.dotHighlighted : "",
               ].join(" ")}
               style={{
                 background: color.bg,
@@ -340,34 +331,11 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
       {/* Center line */}
       <div className={styles.centerLine} />
 
-      {/* Tooltips for all nodes, collision-free positions — shown on hover via CSS */}
-      <div className={styles.tooltipLayer} aria-hidden="true">
-        {nodes.map((node, i) => {
-          const preview = getMessagePreview(node.msg);
-          const color = getNodeColor(node.msg);
-          const isNearest = nearestIndex === node.index;
-          if (!preview || tooltipPositions.length === 0) return null;
-          return (
-            <div
-              key={node.index}
-              className={`${styles.tooltip} ${isNearest ? styles.tooltipNearest : styles.tooltipFar} ${focusedIndex === node.index ? styles.tooltipFocused : ""}`}
-              style={{
-                top: tooltipPositions[i],
-                borderTop: `1px solid ${isNearest ? color.border : "var(--border)"}`,
-                borderRight: `1px solid ${isNearest ? color.border : "var(--border)"}`,
-                borderBottom: `1px solid ${isNearest ? color.border : "var(--border)"}`,
-                borderLeft: `2px solid ${color.border}`,
-              }}
-            >
-              <div
-                className={`${styles.tooltipText} ${isNearest ? styles.tooltipTextNearest : styles.tooltipTextFar}`}
-              >
-                {preview}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {preview && <div className={styles.tooltipLayer} aria-hidden="true">
+        <div className={`${styles.tooltip} ${styles.tooltipNearest} ${focusedIndex !== null ? styles.tooltipFocused : ""}`} style={{ top: previewTop, border: "1px solid var(--border)" }}>
+          <div className={`${styles.tooltipText} ${styles.tooltipTextNearest}`}>{preview}</div>
+        </div>
+      </div>}
     </div>
   );
 }

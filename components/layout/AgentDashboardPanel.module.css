@@ -525,3 +525,5 @@
   border-radius: var(--radius-control-prominent);
   background: var(--trae-control);
 }
+
+@media (max-width: 700px), (pointer: coarse) { .container button, .container select { min-height: 44px; } .container select { font-size: var(--text-input-mobile); } }

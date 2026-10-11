@@ -84,3 +84,5 @@
 @media (prefers-reduced-motion: reduce) {
   .root:active:not(:disabled) { transform: none; }
 }
+
+@media (max-width: 700px), (pointer: coarse) { .root, .root[data-size="compact"] { --icon-button-size: 44px; } }

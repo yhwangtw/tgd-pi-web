@@ -34,6 +34,7 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
       { type: "session_snapshot", sessionId: SESSION, state },
       { type: "extension_ui_request", id: "goal-widget", method: "setWidget", widgetKey: "Goal", widgetPlacement: "aboveEditor", widgetLines: ["Fix the message experience", "Continue until verified"] },
       { type: "extension_ui_request", id: "plan-widget", method: "setWidget", widgetKey: "Plan", widgetPlacement: "aboveEditor", widgetLines: ["Message experience plan", "✓ 1. Inspect output", "→ 2. Verify the fix"] },
+      { type: "extension_ui_request", id: "plan-status", method: "setStatus", statusKey: "Plan", statusText: "ready · 0/2" },
       { type: "extension_ui_request", id: "goal-status", method: "setStatus", statusKey: "Goal", statusText: "active · 100 tokens" },
     ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(""),
   }));

@@ -15,7 +15,7 @@ for (const style of ["original", "trae"]) {
       }, { style, size: width === 320 ? "xlarge" : "default" });
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/?session=aaaa1111-2222-3333-4444-555566667777");
-      await expect(page.getByText("專案架構分析").first()).toBeVisible();
+      await expect(page.getByTestId("composer-shell").locator("textarea")).toBeVisible();
       // Original geometry / Default size intentionally remove their attributes.
       await expect.poll(() => page.locator("html").getAttribute("data-ui-style").then((value) => value ?? "original")).toBe(style);
       await expect.poll(() => page.locator("html").getAttribute("data-font-size").then((value) => value ?? "default")).toBe(width === 320 ? "xlarge" : "default");

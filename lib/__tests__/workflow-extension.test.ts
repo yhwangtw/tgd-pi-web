@@ -207,4 +207,21 @@ describe("persistent Web goals and plans", () => {
     expect(parseWorkflowCommand("/goal pause")).toEqual({ command: "goal", args: "pause" });
     expect(parseWorkflowCommand("/goals pause")).toBeNull();
   });
+
+  it("offers valid actions for a completed plan and preserves it when New is cancelled", async () => {
+    const h = await harness();
+    await h.tool("update_plan", { title: "Finished", steps: [{ text: "Verified", status: "completed" }] });
+    const before = structuredClone(h.state().plan);
+    h.ctx.ui.select.mockResolvedValueOnce("new" as never);
+    h.ctx.ui.input.mockResolvedValueOnce(undefined);
+    await h.command("plan", "");
+    expect(h.ctx.ui.select).toHaveBeenCalledWith("Finished", expect.arrayContaining(["new"]));
+    expect(h.ctx.ui.select.mock.calls.at(-1)?.[1]).not.toContain("execute");
+    expect(h.state().plan).toEqual(before);
+    expect(h.api.sendUserMessage).not.toHaveBeenCalled();
+    h.ctx.ui.input.mockResolvedValueOnce("Next feature" as never);
+    await h.command("plan", "new");
+    expect(h.state().plan).toMatchObject({ title: "Next feature", status: "planning", steps: [] });
+    expect(h.api.sendUserMessage).toHaveBeenCalledTimes(1);
+  });
 });

@@ -104,6 +104,14 @@
 .railSpacer {
   flex: 1;
 }
+.railDivider { width: 20px; min-height: 1px; margin: var(--space-1) 0; background: var(--border); flex-shrink: 0; }
+.railButton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rightPanelContainer :global(.right-panel-resizer:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--bg-selected); }
+
+@media (min-width: 701px) {
+  .chatTitle { order: -1; flex: 1 1 auto; }
+  .workspaceIdentity { flex: 0 1 auto; max-width: 44%; }
+}
 
 @media (min-width: 701px) {
   :global(html[data-density="compact"]) .topBar { height: 40px; }
@@ -940,7 +948,7 @@
 }
 
 .mobileFilePanelClose {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 36px;
@@ -1597,7 +1605,8 @@
   }
 
   :global(html[data-ui-style="trae"]) .topBar {
-    height: 58px;
+    height: auto;
+    min-height: 58px;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
     background: var(--bg);
@@ -1615,7 +1624,9 @@
   }
 
   :global(html[data-ui-style="trae"]) .sessionIdentity {
+    flex-direction: column;
     align-items: center;
+    gap: var(--space-optical);
     padding: 0;
   }
 
@@ -1631,11 +1642,12 @@
     color: var(--text);
     font-family: var(--font-ui);
     font-size: var(--text-xs);
+    min-height: var(--control-touch);
   }
 
   :global(html[data-ui-style="trae"]) .workspaceRepository,
   :global(html[data-ui-style="trae"]) .workspaceBranch {
-    padding: var(--space-2) var(--space-2);
+    padding: var(--space-optical) var(--space-2);
     border-radius: var(--radius-pill);
     text-align: center;
   }
@@ -1661,7 +1673,11 @@
   }
 
   :global(html[data-ui-style="trae"]) .chatTitle {
-    display: none;
+    display: block;
+    order: -1;
+    width: 100%;
+    flex: 0 0 auto;
+    text-align: center;
   }
 
   :global(html[data-ui-style="trae"]) .sidebarContainer {
@@ -1719,3 +1735,4 @@
   .workspaceIdentity { max-width: 60%; }
   .workspaceBranch { max-width: 100px; }
 }
+@media (min-width: 701px) { .rightPanelContainer { max-width: max(320px, calc(100vw - 500px)); } .container:has(> :global(.sidebar-open)) .rightPanelContainer { max-width: max(320px, calc(100vw - 880px)); } }

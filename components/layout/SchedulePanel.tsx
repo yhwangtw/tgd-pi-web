@@ -188,6 +188,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
   const refreshSchedules = schedules.refresh;
 
   const openEditor = useCallback((nextDraft: Draft) => {
+    setDeleteId(null);
     setDraft(nextDraft);
     setError(null);
     setValidationAttempted(false);
@@ -559,7 +560,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
                     <IconButton
                       label={t("schedule.edit")}
                       icon={<Pencil strokeWidth={1.8} />}
-                      onClick={() => openEditor(scheduleDraft(schedule))}
+                      onClick={() => { setDeleteId(null); openEditor(scheduleDraft(schedule)); }}
                     />
                   </div>
                   <div className={`${s.scheduleLine} chrome-mono`}>{scheduleSummary(schedule, (day) => t(WEEKDAY_KEYS[day]), t("schedule.daily"))}</div>
@@ -576,10 +577,10 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
                     </div>
                   )}
                   <div className={s.cardActions}>
-                    <button type="button" onClick={() => void runNow(schedule.id)} disabled={busyId === schedule.id || latest?.status === "running" || waiting}>{t("schedule.runNow")}</button>
-                    <button type="button" onClick={() => void patchSchedule(schedule, { enabled: !schedule.enabled })} disabled={busyId === schedule.id}>{schedule.enabled ? t("schedule.pause") : t("schedule.resume")}</button>
+                    <button type="button" onClick={() => { setDeleteId(null); void runNow(schedule.id); }} disabled={busyId === schedule.id || latest?.status === "running" || waiting}>{t("schedule.runNow")}</button>
+                    <button type="button" onClick={() => { setDeleteId(null); void patchSchedule(schedule, { enabled: !schedule.enabled }); }} disabled={busyId === schedule.id}>{schedule.enabled ? t("schedule.pause") : t("schedule.resume")}</button>
                     {deleteId === schedule.id ? (
-                      <button type="button" className={s.dangerButton} onClick={() => void remove(schedule.id)} disabled={busyId === schedule.id}>{t("schedule.confirmDelete")}</button>
+                      <><span className={s.deletePrompt}>{t("schedule.confirmDelete")} · {schedule.name}</span><button type="button" className={s.dangerButton} onClick={() => void remove(schedule.id)} disabled={busyId === schedule.id}>{t("schedule.delete")}</button><button type="button" onClick={() => setDeleteId(null)} disabled={busyId === schedule.id}>{t("common.cancel")}</button></>
                     ) : (
                       <button type="button" className={s.dangerTextButton} onClick={() => setDeleteId(schedule.id)}>{t("schedule.delete")}</button>
                     )}

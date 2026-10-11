@@ -42,7 +42,7 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
       await expect.poll(() => content.evaluate(element => element.scrollTop)).toBe(640);
     }
 
-    await page.getByRole("button", { name: "Hide file panel", exact: true }).click();
+    await page.getByTestId(width < 700 ? "right-panel-tab-bar" : "top-bar").getByRole("button", { name: "Hide file panel", exact: true }).click();
     await expect(panel).toHaveClass(/right-panel-closed/);
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("pi-file-workspace-v1")!).open)).toBe(false);
     await page.reload();

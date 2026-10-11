@@ -11,6 +11,7 @@ vi.mock("@/hooks/useToast", () => ({ showToast: harness.toast }));
 vi.mock("@/lib/attention", () => ({ setIdleTitle: vi.fn(), setRunningTitle: vi.fn(), setDoneTitle: vi.fn(), setErrorTitle: vi.fn(), setExtensionTitle: vi.fn(), notifyDone: vi.fn(), requestNotifyPermission: vi.fn() }));
 vi.mock("../use-model-catalog", () => ({ useModelCatalog: () => ({ modelNames: {}, modelList: [], modelThinkingLevels: {}, modelThinkingLevelMaps: {}, newSessionModel: { provider: "fixture", modelId: "instant" }, setNewSessionModel: vi.fn(), catalogStatus: "ready", catalogDiagnostics: [], retryModelCatalog: vi.fn(), reportModelUnavailable: harness.rejectModel }) }));
 import { useAgentSession } from "../useAgentSession";
+import { setIdleTitle, setRunningTitle } from "@/lib/attention";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 class FakeEventSource {
@@ -59,6 +60,20 @@ describe("session reconciliation and first-prompt ordering", () => {
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it("renames the current tab without reconnecting, preserves running state and clears the title for New", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    const calls = harness.fetch.mock.calls.length;
+    await act(async () => root.render(<Harness selected={{ ...session, name: "Renamed" }} />));
+    expect(setIdleTitle).toHaveBeenLastCalledWith("Renamed");
+    expect(harness.fetch).toHaveBeenCalledTimes(calls);
+    expect(FakeEventSource.instances).toHaveLength(1);
+    await act(async () => current.handleAgentEventRef.current?.({ type: "agent_start" }));
+    await act(async () => root.render(<Harness selected={{ ...session, name: "Running renamed" }} />));
+    expect(setRunningTitle).toHaveBeenLastCalledWith("Running renamed");
+    await act(async () => root.render(<Harness key="new" selected={null} />));
+    expect(setIdleTitle).toHaveBeenLastCalledWith(undefined);
+  });
 
   it("retains live generation metrics after authoritative transcript replacement", async () => {
     await act(async () => root.render(<Harness selected={session} />));
@@ -124,12 +139,58 @@ describe("session reconciliation and first-prompt ordering", () => {
     expect(harness.created).toHaveBeenCalledOnce();
   });
 
+  it("waits through slow bootstrap and sends only once", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    let sending!: Promise<boolean>;
+    await act(async () => { sending = current.handleSend("slow start"); });
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(harness.send.mock.calls.some(([, command]) => command.type === "prompt")).toBe(false);
+    await act(async () => { const source = FakeEventSource.instances[0]; source.open(); source.message(snapshot([]), "epoch:0"); await sending; });
+    await expect(sending).resolves.toBe(true);
+    expect(harness.send.mock.calls.filter(([, command]) => command.type === "prompt")).toHaveLength(1);
+  });
+
+  it("cancels a pending start before snapshot and keeps later readiness from posting it", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    let sending!: Promise<boolean>;
+    await act(async () => { sending = current.handleSend("cancel this draft"); });
+    await act(async () => { await current.handleAbort(); await sending; });
+    await expect(sending).resolves.toBe(false);
+    await act(async () => FakeEventSource.instances[0].message(snapshot([]), "epoch:0"));
+    expect(harness.send.mock.calls.some(([, command]) => command.type === "prompt")).toBe(false);
+    expect(harness.toast).not.toHaveBeenCalled();
+    expect(current.agentRunning).toBe(false);
+  });
+
+  it("waits for a dispatched prompt receipt before confirming cancellation", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    await act(async () => FakeEventSource.instances[0].message(snapshot([]), "epoch:0"));
+    let acknowledge!: () => void;
+    harness.send.mockImplementation((_sid, command) => command.type === "prompt" ? new Promise(resolve => { acknowledge = () => resolve(null); }) : Promise.resolve(null));
+    let sending!: Promise<boolean>;
+    await act(async () => { sending = current.handleSend("receipt race"); });
+    await act(async () => current.handleAbort());
+    await act(async () => { acknowledge(); await sending; });
+    expect(harness.send.mock.calls.map(([, command]) => command.type).filter(type => type !== "get_tools")).toEqual(["prompt", "abort", "abort"]);
+    await expect(sending).resolves.toBe(false);
+  });
+
+  it("reconciles official SDK queues with stable IDs and image metadata", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    await act(async () => current.handleFollowUp("next", [{ data: "image", mimeType: "image/png", previewUrl: "blob:fixture" }]));
+    const id = current.queuedFollowUps[0].id;
+    await act(async () => current.handleAgentEventRef.current?.({ type: "queue_update", steering: ["urgent"], followUp: ["next"] }));
+    expect(current.queuedFollowUps).toMatchObject([{ message: "urgent", deliveryMode: "steer" }, { id, message: "next", images: [{ data: "image" }] }]);
+    await act(async () => current.handleAgentEventRef.current?.({ type: "queue_update", steering: [], followUp: [] }));
+    expect(current.queuedFollowUps).toEqual([]);
+  });
+
   it("does not post the prompt if the initial snapshot handshake times out", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     await act(async () => root.render(<Harness selected={null} />));
     let sending!: Promise<boolean>;
     await act(async () => { sending = current.handleSend("hello"); });
-    await act(async () => { FakeEventSource.instances[0].open(); await vi.advanceTimersByTimeAsync(1500); });
+    await act(async () => { FakeEventSource.instances[0].open(); await vi.advanceTimersByTimeAsync(30_000); });
     await expect(sending).resolves.toBe(false);
     expect(harness.send).not.toHaveBeenCalled(); expect(harness.created).not.toHaveBeenCalled();
     expect(current.messages).toEqual([]); expect(current.agentRunning).toBe(false);

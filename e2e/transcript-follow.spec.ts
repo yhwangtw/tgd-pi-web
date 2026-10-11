@@ -109,6 +109,11 @@ test("smart preserves an upward reader at completion and Latest returns to the t
   await page.locator("[data-transcript-scroll]").hover();
   await page.mouse.wheel(0, -500);
   await expect(page.getByRole("button", { name: "Jump to bottom" })).toBeVisible();
+  const [latest, transcript] = await Promise.all([
+    page.getByRole("button", { name: "Jump to bottom" }).boundingBox(),
+    page.locator("[data-transcript-scroll]").boundingBox(),
+  ]);
+  expect(latest!.y, "Latest must not cover transcript actions").toBeGreaterThanOrEqual(transcript!.y + transcript!.height - 1);
   const before = await page.locator("[data-transcript-scroll]").evaluate(node => node.scrollTop);
   output.finish(longText("Initial stream tail") + "\n\n" + longText("Paused final tail"));
   await expect(page.getByText("Paused final tail", { exact: true })).toBeAttached();
@@ -165,3 +170,26 @@ test("preserve mode also applies to layout changes after a reply completes", asy
   await expect(page.getByText("Completed before preserving", { exact: true })).not.toBeInViewport();
   await expect.poll(() => page.locator("[data-transcript-scroll]").evaluate(node => node.scrollTop)).toBeLessThanOrEqual(before + 2);
 });
+
+for (const style of ["original", "trae"] as const) {
+  test(`${style}: mobile Latest responds to the first tap while typing without covering messages`, async ({ page, output }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.addInitScript(style => {
+      localStorage.setItem("pi-ui-style", style);
+      localStorage.setItem("pi-locale", "en");
+    }, style);
+    await output.open();
+    const composer = page.getByTestId("composer-shell").locator("textarea");
+    await composer.focus();
+    await page.locator("[data-transcript-scroll]").hover();
+    await page.mouse.wheel(0, -500);
+    const latest = page.getByRole("button", { name: "Jump to bottom" });
+    await expect(latest).toBeVisible();
+    const [buttonBox, transcriptBox] = await Promise.all([latest.boundingBox(), page.locator("[data-transcript-scroll]").boundingBox()]);
+    expect(buttonBox!.y).toBeGreaterThanOrEqual(transcriptBox!.y + transcriptBox!.height - 1);
+    expect(buttonBox!.height).toBeGreaterThanOrEqual(44);
+    await latest.click();
+    await expectTailVisible(page, "Initial stream tail");
+    await expect(composer).toBeFocused();
+  });
+}

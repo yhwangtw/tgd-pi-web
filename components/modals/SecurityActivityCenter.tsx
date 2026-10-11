@@ -104,7 +104,7 @@ export function SecurityActivityCenter() {
       <div className={styles.toolbar}>
         <label className={styles.search}>
           <Search size={15} strokeWidth={1.8} aria-hidden />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("securityActivity.search")} />
+          <input aria-label={t("securityActivity.search")} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("securityActivity.search")} />
         </label>
         <select aria-label={t("securityActivity.category")} value={category} onChange={(event) => setCategory(event.target.value as SecurityActivityCategory | "all")}>
           <option value="all">{t("securityActivity.allCategories")}</option>

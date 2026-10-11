@@ -324,6 +324,13 @@ export function createSubagentExtension(options: {
   return {
     name: "pi-web-subagent",
     factory: (pi) => {
+      // Pi's tool.execute return flag is ignored by agent-core. Use its supported
+      // tool_result hook so the error reaches events AND persisted tool results.
+      pi.on("tool_result", event => {
+        if (event.toolName !== "subagent") return;
+        const details = event.details as { failed?: boolean; runs?: Array<{ status: string }> } | undefined;
+        if (details?.failed || details?.runs?.some(run => run.status !== "completed")) return { isError: true };
+      });
       pi.registerTool(defineTool({
         name: "subagent",
         label: "Subagent",
@@ -352,7 +359,7 @@ export function createSubagentExtension(options: {
           if (Number(hasSingle) + Number(hasParallel) + Number(hasChain) !== 1) {
             return {
               content: [{ type: "text", text: `Provide exactly one subagent mode. Available agents: ${agents.map((agent) => agent.name).join(", ")}.` }],
-              details: outcomeDetails("single", []),
+              details: { ...outcomeDetails("single", []), failed: true },
               isError: true,
             };
           }
@@ -366,7 +373,7 @@ export function createSubagentExtension(options: {
           if (unknown.length) {
             return {
               content: [{ type: "text", text: `Unknown subagent: ${unknown.join(", ")}. Available agents: ${agents.map((agent) => agent.name).join(", ")}.` }],
-              details: outcomeDetails(hasParallel ? "parallel" : hasChain ? "chain" : "single", []),
+              details: { ...outcomeDetails(hasParallel ? "parallel" : hasChain ? "chain" : "single", []), failed: true },
               isError: true,
             };
           }
@@ -378,7 +385,7 @@ export function createSubagentExtension(options: {
             if (!ctx.hasUI) {
               return {
                 content: [{ type: "text", text: "Project-local subagents require an interactive trust confirmation." }],
-                details: outcomeDetails(hasParallel ? "parallel" : hasChain ? "chain" : "single", []),
+                details: { ...outcomeDetails(hasParallel ? "parallel" : hasChain ? "chain" : "single", []), failed: true },
                 isError: true,
               };
             }
@@ -389,7 +396,7 @@ export function createSubagentExtension(options: {
             if (!approved) {
               return {
                 content: [{ type: "text", text: "Project-local subagents were cancelled." }],
-                details: outcomeDetails(hasParallel ? "parallel" : hasChain ? "chain" : "single", []),
+                details: { ...outcomeDetails(hasParallel ? "parallel" : hasChain ? "chain" : "single", []), failed: true },
               };
             }
           }
@@ -460,7 +467,7 @@ export function createSubagentExtension(options: {
             const text = results.map((result) => `### ${result.agent} · ${result.run.status}\n\n${result.output}`).join("\n\n---\n\n");
             return {
               content: [{ type: "text", text: `${results.length - failed.length}/${tasks.length} subagents completed${results.length < tasks.length ? " (remaining tasks cancelled)" : ""}\n\n${text}` }],
-              details: outcomeDetails("parallel", results),
+              details: { ...outcomeDetails("parallel", results), failed: failed.length > 0 || results.length < tasks.length },
               ...(failed.length || results.length < tasks.length ? { isError: true } : {}),
             };
           }

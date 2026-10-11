@@ -824,21 +824,21 @@ function UsageDetails({ usage }: { usage: NonNullable<AssistantMessage["usage"]>
 }
 
 
-function getToolPreview(block: ToolCallContent): string {
+export function getToolPreview(block: ToolCallContent): string {
   const input = block.input;
   if (!input || typeof input !== "object") return "";
+  const tasks = Array.isArray(input.tasks) ? input.tasks : Array.isArray(input.chain) ? input.chain : null;
+  if (tasks) {
+    const agents = [...new Set(tasks.flatMap(item => item && typeof item === "object" && "agent" in item ? [String(item.agent)] : []))];
+    return `${tasks.length} ${Array.isArray(input.chain) ? "steps" : "tasks"}${agents.length ? ` · ${agents.join(", ")}` : ""}`.slice(0, 120);
+  }
   const keys = Object.keys(input);
-  if (keys.length === 0) return "";
-
-  // Common tool input patterns
-  if ("command" in input) return String(input.command).slice(0, 120);
-  if ("path" in input) return String(input.path).slice(0, 120);
-  if ("file_path" in input) return String(input.file_path).slice(0, 120);
-  if ("pattern" in input) return String(input.pattern).slice(0, 120);
-  if ("query" in input) return String(input.query).slice(0, 120);
-
-  const first = input[keys[0]];
-  return String(first).slice(0, 120);
+  if (!keys.length) return "";
+  const key = ["command", "path", "file_path", "pattern", "query", "objective", "title", "task"].find(key => key in input) ?? keys[0];
+  const value = input[key];
+  if (value == null) return key;
+  const text = typeof value === "object" ? `${key}: ${JSON.stringify(value)}` : String(value);
+  return text.length > 120 ? text.slice(0, 119) + "…" : text;
 }
 
 function formatUsage(usage: {

@@ -1,7 +1,7 @@
 .bar {
   flex: 0 0 auto;
   min-width: 0;
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-1) var(--space-4);
   border-bottom: 1px solid var(--border);
   color: var(--text-muted);
   background: var(--bg-panel);
@@ -12,7 +12,11 @@
 .bar summary:focus-visible, .bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .bar strong { color: var(--text); font-weight: var(--weight-medium); }
 .bar button { font: inherit; background: none; color: inherit; border: none; padding: 0; cursor: pointer; text-decoration: underline; }
-.hint { margin-left: auto; }
+.hint { display: inline-flex; align-items: center; gap: var(--space-1); margin-left: auto; }
+.hint svg { transition: transform var(--motion-fast) var(--ease-standard); }
+.bar[open] .hint svg { transform: rotate(180deg); }
+.bar summary::-webkit-details-marker { display: none; }
+.bar[open] { padding-bottom: var(--space-2); }
 .revision { font-family: var(--font-mono); }
 .details { max-height: min(35dvh, 240px); overflow-y: auto; overscroll-behavior: contain; padding-top: var(--space-3); }
 .details p { margin: 0 0 var(--space-2); }

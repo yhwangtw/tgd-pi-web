@@ -50,6 +50,7 @@ import { useAttentionCenter } from "@/hooks/useAttentionCenter";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { onOpenFileRequest } from "@/lib/file-links";
 import type { FileOpenMode, FileOpenOrigin } from "@/lib/file-open";
+import { usePopupMenuKeyboard } from "@/hooks/usePopupMenuKeyboard";
 import { useI18n, translate } from "@/lib/i18n";
 import { setScrollFollowMode } from "@/lib/prefs";
 import { useTabTitle } from "@/lib/attention";
@@ -167,7 +168,7 @@ export function AppShell() {
     return () => controller.abort();
   }, [workspaceCwd]);
 
-  const { rightWidth, draggingRight, startRightResize, resetRightWidth } = useRightPanelWidth();
+  const { rightWidth, draggingRight, startRightResize, resetRightWidth, resizeRightByKeyboard } = useRightPanelWidth();
   const chatInputRef = useRef<ChatInputHandle | null>(null);
 
   useEffect(() => {
@@ -207,7 +208,7 @@ export function AppShell() {
     // On phones the file viewer covers the contextual panel. Selecting a
     // section must bring that section back into view, including when it was
     // already selected behind the viewer.
-    const coveredByFileViewer = window.innerWidth <= 700 && rightPanelOpen;
+    const coveredByFileViewer = window.innerWidth <= 1100 && rightPanelOpen;
     if (coveredByFileViewer) setRightPanelOpen(false);
     if (view === "search") setSearchFocusSignal((signal) => signal + 1);
     if (view === panelView && !coveredByFileViewer) {
@@ -500,9 +501,15 @@ export function AppShell() {
       showToast(t("extensionUI.noSession"), { type: "warning" });
       return;
     }
+    if (window.matchMedia("(max-width: 1024px)").matches) {
+      autoCollapsedSidebarRef.current = false;
+      setRightPanelOpen(false);
+      setSidebarOpen(false);
+      setMobileActionsOpen(false);
+    }
     chatInputRef.current?.insertText(prompt);
     showToast(t("files.contextAdded"), { type: "success" });
-  }, [state.selectedSession, t]);
+  }, [state.selectedSession, setRightPanelOpen, t]);
 
   const refreshAfterAgentEnd = actions.handleAgentEnd;
   const handleAgentEndWithReview = useCallback(() => {
@@ -543,6 +550,11 @@ export function AppShell() {
   const sessionMenuRef = useRef<HTMLDivElement>(null);
   const sessionMenuPanelRef = useRef<HTMLDivElement>(null);
   const [sessionMenuPos, setSessionMenuPos] = useState<{ top: number; right: number } | null>(null);
+
+  const closeSessionMenu = useCallback(() => setSessionMenuOpen(false), []);
+  const closeExportMenu = useCallback(() => setExportMenuOpen(false), []);
+  usePopupMenuKeyboard(sessionMenuOpen && sessionMenuPos !== null, sessionMenuPanelRef, sessionMenuRef, closeSessionMenu);
+  usePopupMenuKeyboard(exportMenuOpen && exportMenuPos !== null, exportMenuPanelRef, exportMenuRef, closeExportMenu);
 
   useEffect(() => {
     if (!sessionMenuOpen) { setSessionMenuPos(null); return; }
@@ -685,6 +697,7 @@ export function AppShell() {
           activeTagFilter={activeTagFilter}
           onSelectTagFilter={setActiveTagFilter}
           showExplorer={false}
+          attentionItems={attention.items}
         />
       ) : panelView === "attention" ? (
         <AttentionPanel
@@ -1300,7 +1313,7 @@ export function AppShell() {
 
       {/* Right panel: file viewer — always mounted, width animated via CSS.
           The splitter on its left edge drags the width (persisted);
-          double-click resets to the 42% default. */}
+          double-click resets to the 38% default. */}
       <div
         className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${draggingRight ? " right-panel-dragging" : ""} ${s.rightPanelContainer}`}
         style={rightWidth ? ({ "--right-panel-w": `${rightWidth}px` } as React.CSSProperties) : undefined}
@@ -1310,10 +1323,15 @@ export function AppShell() {
             className={`right-panel-resizer${draggingRight ? " right-panel-resizer-active" : ""}`}
             onMouseDown={startRightResize}
             onDoubleClick={resetRightWidth}
+            onKeyDown={resizeRightByKeyboard}
+            tabIndex={0}
             title={t("topbar.resizeFilePanelHint")}
             aria-label={t("topbar.resizeFilePanel")}
             role="separator"
             aria-orientation="vertical"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={rightWidth && typeof window !== "undefined" ? Math.round(rightWidth / window.innerWidth * 100) : 38}
           />
         )}
         {/* Right panel tab bar */}
