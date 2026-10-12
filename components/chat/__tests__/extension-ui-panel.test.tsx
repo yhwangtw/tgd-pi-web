@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ExtensionUIPanel, PendingQuestionNotice, ExtensionWidgets } from "../ExtensionUIPanel";
 import type { ExtensionUIState } from "@/hooks/use-extension-ui";
 
@@ -11,6 +11,7 @@ import type { ExtensionUIState } from "@/hooks/use-extension-ui";
 describe("ExtensionUIPanel", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
+  beforeEach(() => localStorage.clear());
 
   afterEach(async () => {
     if (root) await act(async () => root?.unmount());
@@ -85,13 +86,44 @@ describe("ExtensionUIPanel", () => {
     expect(container!.textContent).toContain("Resume");
     expect(container!.textContent).not.toContain("Pause");
     expect(container!.textContent).not.toContain("Execute plan");
-    expect(container!.textContent).toContain("New plan");
+    expect(container!.querySelector('[data-testid="workflow-plan"]')).toBeNull();
     await act(async () => root?.render(<ExtensionWidgets state={{ ...state, statuses: { Goal: "active · 1 tokens", Plan: "ready · 0/2" } }} placement="aboveEditor" bare onWorkflowCommand={run} />));
     expect(container!.textContent).toContain("Pause");
     expect(container!.textContent).not.toContain("Resume");
     const execute = Array.from(container!.querySelectorAll("button")).find(button => button.textContent?.includes("Execute"))!;
     await act(async () => execute.click());
     expect(run).toHaveBeenCalledWith("/plan execute");
+  });
+
+  it("hides and reopens cards without commands, survives remount, and scopes hiding to session and title", async () => {
+    await render({ dialogs: [], statuses: {}, widgets: {} });
+    const run = vi.fn().mockResolvedValue(true);
+    const state: ExtensionUIState = { dialogs: [], statuses: { Goal: "active · 1 tokens" }, widgets: { Goal: { placement: "aboveEditor", lines: ["Ship goal"] } } };
+    const view = (sessionId: string, next = state) => <ExtensionUIPanel state={next} sessionId={sessionId} onRespond={vi.fn()} onWorkflowCommand={run} />;
+    await act(async () => root?.render(view("a")));
+    await act(async () => container!.querySelector<HTMLButtonElement>('[aria-label="Hide Goal"]')!.click());
+    expect(container!.querySelector('[data-testid="workflow-goal"]')).toBeNull();
+    expect(container!.textContent).toContain("Show Goal");
+    expect(run).not.toHaveBeenCalled();
+    expect(state.statuses.Goal).toBe("active · 1 tokens");
+    expect(localStorage.getItem("pi-workflow-hidden:a")).not.toContain("Ship goal");
+    await act(async () => { root!.unmount(); root = createRoot(container!); root.render(view("a")); });
+    expect(container!.textContent).toContain("Show Goal");
+    await act(async () => root?.render(view("b")));
+    expect(container!.querySelector('[data-testid="workflow-goal"]')).not.toBeNull();
+    await act(async () => root?.render(view("a", { ...state, widgets: { Goal: { placement: "aboveEditor", lines: ["Another goal"] } } })));
+    expect(container!.textContent).toContain("Another goal");
+    await act(async () => root?.render(view("a")));
+    await act(async () => container!.querySelector<HTMLButtonElement>("button")!.click());
+    expect(container!.querySelector('[data-testid="workflow-goal"]')).not.toBeNull();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("clears terminal workflow cards and statuses even from an old replay", async () => {
+    const state: ExtensionUIState = { dialogs: [], statuses: { Goal: "blocked · 0 tokens", Plan: "complete · 1/1" }, widgets: { Goal: { placement: "aboveEditor", lines: ["Old goal"] }, Plan: { placement: "aboveEditor", lines: ["Old plan"] } } };
+    await render(state);
+    expect(container!.querySelector('[data-testid="extension-status"]')).toBeNull();
+    expect(state.widgets.Plan.lines).toEqual(["Old plan"]);
   });
 
   it("submits a selected extension option", async () => {

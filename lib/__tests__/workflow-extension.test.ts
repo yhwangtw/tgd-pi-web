@@ -212,6 +212,8 @@ describe("persistent Web goals and plans", () => {
     const h = await harness();
     await h.tool("update_plan", { title: "Finished", steps: [{ text: "Verified", status: "completed" }] });
     const before = structuredClone(h.state().plan);
+    expect(h.ctx.ui.setWidget).toHaveBeenLastCalledWith("Plan", undefined);
+    expect(h.ctx.ui.setStatus).toHaveBeenLastCalledWith("Plan", undefined);
     h.ctx.ui.select.mockResolvedValueOnce("new" as never);
     h.ctx.ui.input.mockResolvedValueOnce(undefined);
     await h.command("plan", "");

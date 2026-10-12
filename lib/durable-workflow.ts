@@ -58,7 +58,7 @@ export async function readDurableWorkflow(harness: Harness, conversationId: Conv
 /** Existing Web extension UI protocol; callers publish this after committed doc changes. */
 export function durableWorkflowUIEvents(state: WorkflowState): WebExtensionUIEvent[] {
   const goal = state.goal && !["complete", "blocked"].includes(state.goal.status) ? state.goal : null;
-  const plan = state.plan;
+  const plan = state.plan?.status === "complete" ? null : state.plan;
   return [
     { type: "extension_ui_request", id: randomUUID(), method: "setStatus", statusKey: "Goal", statusText: goal ? `${goal.status} · ${goal.tokens.toLocaleString()}${goal.tokenBudget ? ` / ${goal.tokenBudget.toLocaleString()}` : ""} tokens` : undefined },
     { type: "extension_ui_request", id: randomUUID(), method: "setWidget", widgetKey: "Goal", widgetLines: goal ? [goal.objective, ...(goal.reason ? [goal.reason] : []), "/goal · /goal pause · /goal resume · /goal runs <count>"] : undefined },

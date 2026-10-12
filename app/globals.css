@@ -1213,7 +1213,7 @@ span.linenumber {
 
 /* Right panel: animate width; --right-panel-w is set inline when the user
    has dragged the splitter (persisted), otherwise the 42% default applies. */
-@media (min-width: 1025px) {
+@media (min-width: 701px) {
   .right-panel-container {
     position: relative;
     overflow: hidden;
@@ -1221,8 +1221,8 @@ span.linenumber {
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
-    width: var(--right-panel-w, 38%);
-    min-width: 300px;
+    width: clamp(var(--right-panel-min-w, 320px), var(--right-panel-w, 38vw), var(--right-panel-max-w, 60vw));
+    min-width: 0;
   }
   .right-panel-container.right-panel-closed {
     width: 0;
@@ -1232,10 +1232,10 @@ span.linenumber {
   .right-panel-container.right-panel-dragging {
     transition: none;
   }
-  /* keep inner content at fixed width so it doesn't reflow during animation */
+  /* Content follows the actual pane, including after a viewport/sidebar resize. */
   .right-panel-container > * {
-    width: var(--right-panel-w, 38vw);
-    min-width: 300px;
+    width: 100%;
+    min-width: 0;
   }
   /* The handle occupies a reserved gutter on the panel's left edge (the panel
      content is inset by the same width — see .rightPanelTabBar/.rightPanelContent),
@@ -1245,7 +1245,7 @@ span.linenumber {
     left: 0;
     top: 0;
     bottom: 0;
-    width: 9px;
+    width: 12px;
     /* Override the min-width: 300px inherited from `.right-panel-container > *`
        — without this the handle is 300px wide and its resize hit area covers
        the left third of the file content. */
@@ -1275,7 +1275,7 @@ span.linenumber {
   }
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 700px) {
   .right-panel-resizer {
     display: none;
   }
@@ -1287,6 +1287,9 @@ span.linenumber {
   .chat-stats-center {
     display: none !important;
   }
+}
+
+@media (max-width: 700px) {
   .right-panel-container {
     overflow: hidden;
     transition: width var(--motion-spatial-duration, 0.2s) ease, min-width var(--motion-spatial-duration, 0.2s) ease;

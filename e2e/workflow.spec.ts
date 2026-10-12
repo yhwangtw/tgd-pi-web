@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const SESSION = "aaaa1111-2222-3333-4444-555566667777";
+test.use({ hasTouch: true });
 
 for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft and remain usable at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 1000 });
@@ -46,6 +47,23 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
   await goal.getByRole("button", { name: "Pause", exact: true }).click();
   await expect.poll(() => commands.filter(c => c.type === "workflow_command")).toEqual([{ type: "workflow_command", command: "goal", args: "pause" }]);
   await expect(input).toHaveValue("Keep this draft");
+  await goal.getByRole("button", { name: "Hide Goal", exact: true }).tap();
+  await plan.getByRole("button", { name: "Hide Plan", exact: true }).tap();
+  await expect(goal).toBeHidden(); await expect(plan).toBeHidden();
+  await expect(input).toHaveValue("Keep this draft");
+  expect(await input.evaluate(element => element === document.activeElement)).toBe(true);
+  await page.reload();
+  await expect(goal).toBeHidden(); await expect(plan).toBeHidden();
+  await page.getByRole("button", { name: "Show Goal", exact: true }).tap();
+  await page.getByRole("button", { name: "Show Plan", exact: true }).tap();
+  await expect(goal).toBeVisible(); await expect(plan).toBeVisible();
+  await expect(input).toHaveValue("Keep this draft");
+  const hideGoal = goal.getByRole("button", { name: "Hide Goal", exact: true });
+  await hideGoal.focus(); await hideGoal.press("Enter");
+  const reopenGoal = page.getByRole("button", { name: "Show Goal", exact: true });
+  await expect(reopenGoal).toBeFocused();
+  await reopenGoal.press("Enter");
+  await expect(hideGoal).toBeFocused();
   await plan.locator("summary").click();
   await expect(plan).toContainText("Verify the fix");
   await expect(plan.getByRole("button", { name: "Execute plan" })).toBeInViewport();

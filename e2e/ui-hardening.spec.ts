@@ -49,6 +49,10 @@ for (const style of ["original", "trae"]) {
     await menu.getByRole("menuitem", { name: "Focus mode", exact: true }).click();
     const viewer = page.locator('[class*="TextFileViewer_fullscreen"]');
     await expect(viewer).toBeVisible();
+    const fullscreenBox = (await viewer.boundingBox())!;
+    expect(fullscreenBox.x).toBe(0);
+    expect(fullscreenBox.width).toBe(1280);
+    expect(fullscreenBox.height).toBe(800);
     await trigger.click();
     await page.keyboard.press("Escape");
     await expect(menu).toBeHidden();

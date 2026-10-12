@@ -570,7 +570,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
   const hasComparedDiff = diffBase !== null && diffBase !== data.content;
 
   return (
-    <div className={`${styles.root} ${fullscreen ? styles.fullscreen : ""}`}>
+    <div className={`${styles.root} ${fullscreen ? styles.fullscreen : ""}`} data-file-focus-mode={fullscreen}>
       <div className={styles.statusBar} data-testid="file-viewer-toolbar">
         <div className={styles.fileSummary}>
           <span className={styles.filePath} title={filePath} aria-label={relativePath}>
