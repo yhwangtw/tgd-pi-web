@@ -1563,6 +1563,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           <>
             <ExtensionUIPanel
               state={extensionUIState}
+              sessionId={session?.id}
               onRespond={handleExtensionUIResponse}
               onWorkflowCommand={handleSend}
               wide={wideChat}

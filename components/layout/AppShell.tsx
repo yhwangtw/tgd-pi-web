@@ -11,10 +11,13 @@ import {
   FileText,
   Gauge,
   Menu,
+  Maximize2,
+  Minimize2,
   MessageSquare,
   PanelRightClose,
   PanelRightOpen,
   Plus,
+  RotateCcw,
   X,
 } from "lucide-react";
 import { SessionSidebar } from "../sidebar/SessionSidebar";
@@ -168,7 +171,20 @@ export function AppShell() {
     return () => controller.abort();
   }, [workspaceCwd]);
 
-  const { rightWidth, draggingRight, startRightResize, resetRightWidth, resizeRightByKeyboard } = useRightPanelWidth();
+  const { panelRef: rightPanelRef, rightWidth, rightMinWidth, rightMaxWidth, draggingRight, startRightResize, resetRightWidth, resizeRightByKeyboard } = useRightPanelWidth();
+  const [filePanelExpanded, setFilePanelExpanded] = useState(false);
+  useEffect(() => {
+    if (!rightPanelOpen) setFilePanelExpanded(false);
+    if (!filePanelExpanded) return;
+    const onEscape = (event: KeyboardEvent) => {
+      // Menus and dialogs own their first Escape; restore the panel afterward.
+      if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector('[role="menu"], [role="dialog"], [data-file-focus-mode="true"]')) {
+        setFilePanelExpanded(false);
+      }
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [filePanelExpanded, rightPanelOpen]);
   const chatInputRef = useRef<ChatInputHandle | null>(null);
 
   useEffect(() => {
@@ -1315,13 +1331,14 @@ export function AppShell() {
           The splitter on its left edge drags the width (persisted);
           double-click resets to the 38% default. */}
       <div
-        className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${draggingRight ? " right-panel-dragging" : ""} ${s.rightPanelContainer}`}
-        style={rightWidth ? ({ "--right-panel-w": `${rightWidth}px` } as React.CSSProperties) : undefined}
+        ref={rightPanelRef}
+        className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${draggingRight ? " right-panel-dragging" : ""} ${s.rightPanelContainer} ${filePanelExpanded ? s.rightPanelExpanded : ""}`}
+        style={{ "--right-panel-w": rightWidth ? `${rightWidth}px` : undefined, "--right-panel-min-w": `${rightMinWidth}px`, "--right-panel-max-w": `${rightMaxWidth}px` } as React.CSSProperties}
       >
-        {rightPanelOpen && (
+        {rightPanelOpen && !filePanelExpanded && (
           <div
             className={`right-panel-resizer${draggingRight ? " right-panel-resizer-active" : ""}`}
-            onMouseDown={startRightResize}
+            onPointerDown={startRightResize}
             onDoubleClick={resetRightWidth}
             onKeyDown={resizeRightByKeyboard}
             tabIndex={0}
@@ -1329,14 +1346,14 @@ export function AppShell() {
             aria-label={t("topbar.resizeFilePanel")}
             role="separator"
             aria-orientation="vertical"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={rightWidth && typeof window !== "undefined" ? Math.round(rightWidth / window.innerWidth * 100) : 38}
+            aria-valuemin={rightMinWidth}
+            aria-valuemax={rightMaxWidth}
+            aria-valuenow={rightWidth ?? Math.min(rightMaxWidth, Math.max(rightMinWidth, typeof window !== "undefined" ? Math.round(window.innerWidth * 0.38) : rightMinWidth))}
           />
         )}
         {/* Right panel tab bar */}
-        {!(diffFile && panelCwd) && <div className={s.rightPanelTabBar} data-testid="right-panel-tab-bar">
-          <div className={s.rightPanelTabBarInner}>
+        <div className={s.rightPanelTabBar} data-testid="right-panel-tab-bar">
+          {!(diffFile && panelCwd) && <div className={s.rightPanelTabBarInner}>
             <TabBar
               tabs={fileTabs}
               activeTabId={activeFileTabId ?? ""}
@@ -1350,7 +1367,7 @@ export function AppShell() {
               onOpenSplit={handleOpenSplit}
               splitTabId={splitFileTabId}
             />
-          </div>
+          </div>}
           {(activeFileOrigin?.kind === "message" || activeFileOrigin?.kind === "search") && (
             <button
               type="button"
@@ -1367,6 +1384,16 @@ export function AppShell() {
               {t("files.reviewCount").replace("{count}", pendingReviewFiles.length.toLocaleString())}
             </button>
           )}
+          <button type="button" className={`${s.filePanelControl} ${s.filePanelResizeControl}`}
+            onClick={resetRightWidth} title={t("topbar.resetFilePanel")} aria-label={t("topbar.resetFilePanel")}>
+            <RotateCcw size={15} aria-hidden />
+          </button>
+          <button type="button" className={`${s.filePanelControl} ${s.filePanelResizeControl}`}
+            aria-pressed={filePanelExpanded} onClick={() => setFilePanelExpanded(value => !value)}
+            title={t(filePanelExpanded ? "topbar.restoreFilePanel" : "topbar.expandFilePanel")}
+            aria-label={t(filePanelExpanded ? "topbar.restoreFilePanel" : "topbar.expandFilePanel")}>
+            {filePanelExpanded ? <Minimize2 size={15} aria-hidden /> : <Maximize2 size={15} aria-hidden />}
+          </button>
           <button
             type="button"
             onClick={() => setRightPanelOpen(false)}
@@ -1378,7 +1405,6 @@ export function AppShell() {
           </button>
         </div>
 
-        }
         {/* File content */}
         <div className={s.rightPanelContent}>
           {fileTabs.filter((tab) => tab.id !== activeFileTabId).map((tab) => (

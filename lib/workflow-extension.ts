@@ -23,7 +23,8 @@ export function createWorkflowExtension(): InlineExtension {
     let runSettled = false;
 
     const render = (ctx: ExtensionContext) => {
-      const { goal, plan } = state;
+      const { goal } = state;
+      const plan = state.plan?.status === "complete" ? null : state.plan;
       // Terminal goal states clear the composer card: a completed or blocked
       // goal must not keep occupying space above the editor.
       const visibleGoal = goal && goal.status !== "complete" && goal.status !== "blocked" ? goal : null;

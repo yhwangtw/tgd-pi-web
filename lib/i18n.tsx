@@ -27,6 +27,11 @@ const MESSAGES = {
   "workflow.manage": { en: "Manage goal", zh: "管理目標" },
   "workflow.review": { en: "Review plan", zh: "檢視計畫" },
   "workflow.execute": { en: "Execute plan", zh: "執行計畫" },
+  "workflow.hideGoal": { en: "Hide Goal", zh: "隱藏目標" },
+  "workflow.hidePlan": { en: "Hide Plan", zh: "隱藏計畫" },
+  "workflow.showGoal": { en: "Show Goal", zh: "顯示目標" },
+  "workflow.showPlan": { en: "Show Plan", zh: "顯示計畫" },
+  "workflow.hideHint": { en: "Hide this card; the task keeps its current state", zh: "只隱藏卡片，任務維持目前狀態" },
   "interaction.minimize": { en: "Minimize panel", zh: "收合面板" },
   "interaction.expand": { en: "Expand panel", zh: "展開面板" },
   "agents.limits": { en: "Subagent budgets", zh: "子代理執行上限" },
@@ -115,6 +120,9 @@ const MESSAGES = {
   "topbar.hideFilePanel": { en: "Hide file panel", zh: "隱藏檔案面板" },
   "topbar.showFilePanel": { en: "Show file panel", zh: "顯示檔案面板" },
   "topbar.resizeFilePanel": { en: "Resize file panel", zh: "調整檔案面板寬度" },
+  "topbar.resetFilePanel": { en: "Reset file panel width", zh: "重設檔案面板寬度" },
+  "topbar.expandFilePanel": { en: "Expand file panel", zh: "放大檔案面板" },
+  "topbar.restoreFilePanel": { en: "Restore file panel", zh: "還原檔案面板" },
   "topbar.resizeFilePanelHint": { en: "Drag or use ← / → to resize · double-click or Home to reset", zh: "拖曳或按 ← / → 調整寬度 · 點兩下或按 Home 重設" },
 
   // ── Design inspector ──

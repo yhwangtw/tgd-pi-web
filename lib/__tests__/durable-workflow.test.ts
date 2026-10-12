@@ -15,6 +15,13 @@ import {
 } from "../durable-workflow";
 
 const context = BACKGROUND_CONTEXT;
+it("clears completed Durable plan chrome without deleting the saved plan", () => {
+  const state = { version: 1 as const, goal: null, plan: { title: "Verified plan", status: "complete" as const, steps: [{ text: "Verify", status: "completed" as const }], previousTools: [] } };
+  const events = durableWorkflowUIEvents(state);
+  expect(events).toContainEqual(expect.objectContaining({ method: "setWidget", widgetKey: "Plan", widgetLines: undefined }));
+  expect(events).toContainEqual(expect.objectContaining({ method: "setStatus", statusKey: "Plan", statusText: undefined }));
+  expect(state.plan.title).toBe("Verified plan");
+});
 const directories: string[] = [];
 const live = new Set<Harness>();
 afterEach(async () => {
