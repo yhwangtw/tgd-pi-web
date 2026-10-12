@@ -33,11 +33,13 @@ for (const style of ["original", "trae"]) {
     await input.fill("Preserve the preview draft");
     await page.getByRole("link", { name: "查看成果", exact: true }).click();
     const panel = page.locator(".right-panel-open");
+    await fits(page); // Opening animates the pane and its drag handle.
     const separator = panel.getByRole("separator", { name: "Resize file panel" });
     const edge = (await separator.boundingBox())!;
     const before = (await panel.boundingBox())!.width;
     await page.mouse.move(edge.x + edge.width / 2, edge.y + 150);
     await page.mouse.down();
+    await expect(panel).toHaveClass(/right-panel-dragging/);
     await page.mouse.move(edge.x - 140, edge.y + 150, { steps: 8 });
     await page.mouse.up();
     await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(before + 100);

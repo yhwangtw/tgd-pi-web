@@ -17,7 +17,9 @@ for (const style of ["original", "trae"]) {
     await page.getByText("diff-navigation.txt", { exact: true }).click();
     const panel = page.locator('.right-panel-container.right-panel-open');
     await expect(panel.getByRole("button", { name: "Next hunk" })).toBeVisible();
-    await expect(page.getByTestId("right-panel-tab-bar")).toHaveCount(0);
+    const toolbar = page.getByTestId("right-panel-tab-bar");
+    await expect(toolbar.getByRole("tab")).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Hide file panel", exact: true })).toBeVisible();
     await expect(panel.locator('[data-diff-new-line="501"]')).toContainText("review change 501");
 
     // A same-numbered diff elsewhere must never capture right-panel navigation.
