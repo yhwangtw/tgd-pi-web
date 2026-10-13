@@ -1758,3 +1758,16 @@
   .fileOriginButton span { display: none; }
   .fileOriginButton { flex-shrink: 0; min-width: 36px; padding-inline: var(--space-1); }
 }
+
+/* Split previews follow the pane's measured width, not the entire browser. */
+.fileWorkspaceStacked {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(280px, 1fr));
+  overflow: auto;
+  scroll-snap-type: none;
+}
+.fileWorkspaceStacked .fileWorkspacePane + .fileWorkspacePane {
+  border-left: 0;
+  border-top: 1px solid var(--border);
+}

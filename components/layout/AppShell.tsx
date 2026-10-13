@@ -171,7 +171,17 @@ export function AppShell() {
     return () => controller.abort();
   }, [workspaceCwd]);
 
-  const { panelRef: rightPanelRef, rightWidth, rightMinWidth, rightMaxWidth, draggingRight, startRightResize, resetRightWidth, resizeRightByKeyboard } = useRightPanelWidth();
+  const { panelRef: rightPanelRef, rightWidth, rightMeasuredWidth, rightMinWidth, rightMaxWidth, draggingRight, startRightResize, resetRightWidth, resizeRightByKeyboard } = useRightPanelWidth();
+  const filePanelToggleRef = useRef<HTMLButtonElement>(null);
+  const wasRightPanelOpen = useRef(rightPanelOpen);
+  useLayoutEffect(() => {
+    if (!rightPanelOpen && wasRightPanelOpen.current
+      && (rightPanelRef.current?.contains(document.activeElement) || document.activeElement === document.body)) {
+      filePanelToggleRef.current?.focus({ preventScroll: true });
+    }
+    wasRightPanelOpen.current = rightPanelOpen;
+  }, [rightPanelOpen, rightPanelRef]);
+
   const [filePanelExpanded, setFilePanelExpanded] = useState(false);
   useEffect(() => {
     if (!rightPanelOpen) setFilePanelExpanded(false);
@@ -206,15 +216,20 @@ export function AppShell() {
      laptops. Opening a file therefore borrows the contextual panel's width
      below 1600px, and restores it when the file viewer closes. */
   useEffect(() => {
-    if (rightPanelOpen && window.innerWidth < 1600 && sidebarOpenRef.current) {
-      autoCollapsedSidebarRef.current = true;
-      setSidebarOpen(false);
-      return;
-    }
+    const compact = window.matchMedia("(max-width: 1599px)");
+    const fitPanels = () => {
+      if (rightPanelOpen && compact.matches && sidebarOpenRef.current) {
+        autoCollapsedSidebarRef.current = true;
+        setSidebarOpen(false);
+      }
+    };
+    fitPanels();
     if (!rightPanelOpen && autoCollapsedSidebarRef.current) {
       autoCollapsedSidebarRef.current = false;
       setSidebarOpen(true);
     }
+    compact.addEventListener("change", fitPanels);
+    return () => compact.removeEventListener("change", fitPanels);
   }, [rightPanelOpen]);
 
   // Rail behavior: clicking the active view collapses the panel; clicking the
@@ -1158,6 +1173,7 @@ export function AppShell() {
             );
           })()}
           <button
+            ref={filePanelToggleRef}
             type="button"
             onClick={() => setRightPanelOpen((open) => !open)}
             title={rightPanelOpen ? t("topbar.hideFilePanel") : t("topbar.showFilePanel")}
@@ -1332,6 +1348,8 @@ export function AppShell() {
           double-click resets to the 38% default. */}
       <div
         ref={rightPanelRef}
+        inert={!rightPanelOpen}
+        aria-hidden={!rightPanelOpen || undefined}
         className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${draggingRight ? " right-panel-dragging" : ""} ${s.rightPanelContainer} ${filePanelExpanded ? s.rightPanelExpanded : ""}`}
         style={{ "--right-panel-w": rightWidth ? `${rightWidth}px` : undefined, "--right-panel-min-w": `${rightMinWidth}px`, "--right-panel-max-w": `${rightMaxWidth}px` } as React.CSSProperties}
       >
@@ -1353,7 +1371,7 @@ export function AppShell() {
         )}
         {/* Right panel tab bar */}
         <div className={s.rightPanelTabBar} data-testid="right-panel-tab-bar">
-          {!(diffFile && panelCwd) && <div className={s.rightPanelTabBarInner}>
+          {rightPanelOpen && !(diffFile && panelCwd) && <div className={s.rightPanelTabBarInner}>
             <TabBar
               tabs={fileTabs}
               activeTabId={activeFileTabId ?? ""}
@@ -1413,7 +1431,7 @@ export function AppShell() {
           {diffFile && panelCwd ? (
             <DiffPanel key={`${panelCwd}:${diffFile}`} cwd={panelCwd} path={diffFile} onClose={() => setDiffFile(null)} onAnnotate={handleDiffAnnotation} />
           ) : activeFileTab?.filePath ? (
-            <div className={`${s.fileWorkspace} ${splitFileTab ? s.fileWorkspaceSplit : ""}`}>
+            <div className={`${s.fileWorkspace} ${splitFileTab ? `${s.fileWorkspaceSplit} ${rightMeasuredWidth < 720 ? s.fileWorkspaceStacked : ""}` : ""}`}>
               <div className={s.fileWorkspacePane} role="tabpanel" id={filePanelId(activeFileTab.id)} aria-labelledby={fileTabId(activeFileTab.id)} tabIndex={0}>
                 <FileViewer
                   filePath={activeFileTab.filePath}

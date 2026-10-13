@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useLayoutEffect, useEffect } from "react";
 
-type Limits = { min: number; max: number; right: number };
+type Limits = { min: number; max: number; right: number; width: number };
 const clamp = (width: number, limits: Limits) => Math.round(Math.min(limits.max, Math.max(limits.min, width)));
 
 /** Keep the preferred width, but fit the actual space left beside the chat. */
@@ -15,7 +15,7 @@ export function useRightPanelWidth() {
       return Number.isFinite(value) && value >= 160 ? value : null;
     } catch { return null; }
   });
-  const [limits, setLimits] = useState<Limits>({ min: 320, max: 100000, right: 0 });
+  const [limits, setLimits] = useState<Limits>({ min: 320, max: 100000, right: 0, width: 0 });
   const [draggingRight, setDraggingRight] = useState(false);
 
   const measure = useCallback((): Limits => {
@@ -30,13 +30,13 @@ export function useRightPanelWidth() {
     const available = Math.max(0, right - (centerBox?.left ?? 0));
     const min = Math.min(320, Math.max(160, available * 0.6));
     const max = Math.max(min, available - (window.innerWidth <= 1024 ? 280 : 360));
-    return { min: Math.round(min), max: Math.round(max), right };
+    return { min: Math.round(min), max: Math.round(max), right, width: Math.round(panel?.getBoundingClientRect().width ?? 0) };
   }, []);
 
   useLayoutEffect(() => {
     const update = () => {
       const next = measure();
-      setLimits(previous => previous.min === next.min && previous.max === next.max && previous.right === next.right ? previous : next);
+      setLimits(previous => previous.min === next.min && previous.max === next.max && previous.right === next.right && previous.width === next.width ? previous : next);
     };
     update();
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
@@ -117,5 +117,5 @@ export function useRightPanelWidth() {
   }, [measure, resetRightWidth]);
 
   const rightWidth = preferredWidth === null ? null : clamp(preferredWidth, limits);
-  return { panelRef, rightWidth, rightMinWidth: limits.min, rightMaxWidth: limits.max, draggingRight, startRightResize, resetRightWidth, resizeRightByKeyboard };
+  return { panelRef, rightWidth, rightMeasuredWidth: limits.width, rightMinWidth: limits.min, rightMaxWidth: limits.max, draggingRight, startRightResize, resetRightWidth, resizeRightByKeyboard };
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useId, useMemo, useCallback } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useId, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { BadgeCheck, Check, ChevronDown, Cpu, Pin, Search, RefreshCw, Settings2, TriangleAlert } from "lucide-react";
 import { DialogShell } from "@/components/ui/DialogShell";
 import { useI18n } from "@/lib/i18n";
@@ -40,6 +41,7 @@ interface ModelSelectorProps {
   catalogDiagnostics?: ModelCatalogDiagnostic[];
   onRetry?: () => void;
   onOpenModels?: () => void;
+  onOpen?: () => void;
   className?: string;
 }
 
@@ -55,6 +57,7 @@ export function ModelSelector({
   catalogDiagnostics = [],
   onRetry,
   onOpenModels,
+  onOpen,
   className,
 }: ModelSelectorProps) {
   const { t } = useI18n();
@@ -63,7 +66,6 @@ export function ModelSelector({
   const [query, setQuery] = useState("");
   const [recentRefs, setRecentRefs] = useState<ModelPreferenceRef[]>([]);
   const [pinnedRefs, setPinnedRefs] = useState<ModelPreferenceRef[]>([]);
-  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -104,13 +106,11 @@ export function ModelSelector({
   };
 
   const openMenu = (button: HTMLButtonElement, preferredIndex = selectedIndex, moveFocus = false) => {
+    onOpen?.();
     if (useDialog) {
       // Keep an explicit launcher focus target so DialogShell can always return
       // focus after pointer, keyboard, or programmatic opens.
       button.focus();
-    } else {
-      const nextRect = button.getBoundingClientRect();
-      setRect({ top: nextRect.top, left: nextRect.left, width: nextRect.width });
     }
     setQuery("");
     setOpen(true);
@@ -122,6 +122,55 @@ export function ModelSelector({
     setQuery("");
     if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
+
+  useLayoutEffect(() => {
+    if (!open || useDialog) return;
+    const anchor = triggerRef.current;
+    const panel = panelRef.current;
+    if (!anchor || !panel) return;
+    const viewport = window.visualViewport;
+    let frame = 0;
+    const place = () => {
+      const edge = 8;
+      const gap = 6;
+      const x = viewport?.offsetLeft ?? 0;
+      const y = viewport?.offsetTop ?? 0;
+      const width = viewport?.width ?? window.innerWidth;
+      const height = viewport?.height ?? window.innerHeight;
+      const rect = anchor.getBoundingClientRect();
+      panel.style.maxWidth = `${Math.max(0, width - edge * 2)}px`;
+      const above = Math.max(0, rect.top - y - edge - gap);
+      const below = Math.max(0, y + height - rect.bottom - edge - gap);
+      const preferredHeight = Math.min(panel.scrollHeight, height * 0.6);
+      const upwards = above >= preferredHeight || above >= below;
+      panel.style.maxHeight = `${Math.min(height * 0.6, upwards ? above : below)}px`;
+      const bounds = panel.getBoundingClientRect();
+      panel.style.left = `${Math.max(x + edge, Math.min(rect.left, x + width - edge - bounds.width))}px`;
+      panel.style.top = `${Math.max(y + edge, Math.min(upwards ? rect.top - gap - bounds.height : rect.bottom + gap, y + height - edge - bounds.height))}px`;
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(place);
+    };
+    place();
+    // The composer moves when controls, drafts or either sidebar change size.
+    // Observe its ancestors as well as viewport changes, without a polling loop.
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(schedule) : null;
+    for (let element: HTMLElement | null = anchor; element; element = element.parentElement) observer?.observe(element);
+    observer?.observe(panel);
+    window.addEventListener("resize", schedule);
+    window.addEventListener("scroll", schedule, true);
+    viewport?.addEventListener("resize", schedule);
+    viewport?.addEventListener("scroll", schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("scroll", schedule, true);
+      viewport?.removeEventListener("resize", schedule);
+      viewport?.removeEventListener("scroll", schedule);
+    };
+  }, [open, useDialog]);
 
   useEffect(() => {
     // A recovered catalog changes dialog into a listbox. Close the old surface
@@ -309,6 +358,7 @@ export function ModelSelector({
           description={status === "loading" ? undefined : t(status === "error" ? "model.catalogErrorHint" : "model.catalogEmptyHint")}
           onClose={() => closeMenu(false)}
           mobileMode="sheet"
+          placement="center"
         >
           <div id={panelId} className={styles.catalogRecovery}>
             <p role="status" aria-live="polite" className={styles.catalogStatus}>{statusLabel}</p>
@@ -334,6 +384,7 @@ export function ModelSelector({
           initialFocusRef={searchRef}
           bodyClassName={styles.modelSheetBody}
           mobileMode="sheet"
+          placement="center"
         >
           <div className={styles.modelSheetSearch}>
             <Search size={17} strokeWidth={1.8} aria-hidden />
@@ -369,16 +420,12 @@ export function ModelSelector({
           {refreshRejected}
         </DialogShell>
       )}
-      {open && !needsRecovery && !isMobile && rect && (() => {
-        const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-        const bottom = viewportHeight - rect.top + 6;
-        const maxH = Math.max(120, Math.min(rect.top - 8, viewportHeight * 0.6));
-        const left = Math.max(8, Math.min(rect.left, window.innerWidth - 208));
-        return (
+      {open && !needsRecovery && !isMobile && createPortal(
           <div
             ref={panelRef}
             className={`${styles.panel} ${styles.panelFixed} ${styles.modelPanel}`}
-            style={{ bottom, left, width: "max-content", maxHeight: maxH }}
+            data-testid="model-selector-popover"
+            style={{ width: "max-content" }}
             onKeyDown={(event) => {
               if (!(event.target as HTMLElement).closest('[role="option"]')) return;
               if (event.key === "ArrowDown") {
@@ -444,9 +491,9 @@ export function ModelSelector({
             ))}
             </div>
             {refreshRejected}
-          </div>
-        );
-      })()}
+          </div>,
+          document.body,
+      )}
     </div>
   );
 }

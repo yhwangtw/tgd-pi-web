@@ -165,6 +165,7 @@ function ResponsiveComposerControls({
         initialFocusRef={initialFocusRef}
         bodyClassName={styles.composerSettingsSheetBody}
         mobileMode="sheet"
+        placement="center"
         footer={(
           <button type="button" className={styles.composerSettingsDone} onClick={() => onClose(false)}>
             {doneLabel}
@@ -1124,6 +1125,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             )}
             {/* Model selector — visible always, disabled during streaming */}
             <ModelSelector
+              onOpen={() => closeMobileTools()}
               modelOptions={modelOptions}
               modelsByProvider={modelsByProvider}
               currentName={currentName}
