@@ -1,6 +1,7 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Info, MoreHorizontal } from "lucide-react";
 import { encodeFilePathForApi, getRelativeFilePath } from "@/lib/file-paths";
 import { useI18n } from "@/lib/i18n";
@@ -58,7 +59,12 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
   const [selection, setSelection] = useState<TextSelectionRange | null>(null);
   const [version, setVersion] = useState<{ ref: string; label: string; content: string } | null>(null);
   const [diagnostics, setDiagnostics] = useState<Array<{ line: number; severity: "error" | "warning" }>>([]);
+  const viewerRef = useRef<HTMLDivElement>(null);
+  const inspectorButtonRef = useRef<HTMLButtonElement>(null);
   const fileInfoRef = useRef<HTMLDetailsElement>(null);
+  const fileInfoPanelRef = useRef<HTMLDivElement>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [infoPosition, setInfoPosition] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null);
   const previewStartedAtRef = useRef<number | null>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const loadedFilePathRef = useRef<string | null>(null);
@@ -214,6 +220,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
     setStructuredMode(false);
     setChangeCount(0);
     setInspectorTab(null);
+    setInfoOpen(false);
     setSelection(null);
     setVersion(null);
     setDiagnostics([]);
@@ -521,32 +528,100 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
     } catch (reason) { showToast(`${t("files.snapshotLoadFailed")}: ${reason instanceof Error ? reason.message : String(reason)}`, { type: "error" }); }
   }, [cwd, relativePath, sessionId, t]);
 
-  useEffect(() => {
-    if (!fullscreen || moreOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setFullscreen(false); };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [fullscreen, moreOpen]);
+  const closeInspector = useCallback(() => {
+    setInspectorTab(null);
+    inspectorButtonRef.current?.focus({ preventScroll: true });
+  }, []);
 
-  // Native <details> does not dismiss itself when another toolbar control is
-  // used. Close the metadata popover on outside interaction so it never sits
-  // over the second toolbar row and makes those controls feel unresponsive.
+  const closeOverlayInspector = useCallback(() => {
+    const drawer = viewerRef.current?.querySelector<HTMLElement>('[data-testid="file-inspector"]');
+    if (drawer && getComputedStyle(drawer).position === "absolute") closeInspector();
+  }, [closeInspector]);
+
+  // Dismiss the innermost surface before the outer file panel sees Escape.
+  useEffect(() => {
+    if (!visible || moreOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      // Split panes keep their own keyboard ownership. A key pressed in the
+      // other viewer (or the composer) must not dismiss this pane's surfaces.
+      if (event.target instanceof Node && event.target !== document.body && event.target !== document.documentElement
+        && !viewerRef.current?.contains(event.target) && !fileInfoPanelRef.current?.contains(event.target)) return;
+      if (event.target instanceof Element && event.target.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+      if (fileInfoRef.current?.open) {
+        fileInfoRef.current.open = false;
+        setInfoOpen(false);
+        fileInfoRef.current.querySelector("summary")?.focus();
+      } else if (inspectorTab) closeInspector();
+      else if (fullscreen) setFullscreen(false);
+      else return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [closeInspector, fullscreen, inspectorTab, moreOpen, visible]);
+
+  useEffect(() => {
+    if (visible) return;
+    if (fileInfoRef.current) fileInfoRef.current.open = false;
+    setInfoOpen(false);
+  }, [visible]);
+
+  // Metadata lives outside the clipped viewer, while staying anchored to Info
+  // as its toolbar wraps, the file pane resizes or the software keyboard opens.
+  useLayoutEffect(() => {
+    if (!infoOpen || !visible) return;
+    const position = () => {
+      const anchor = fileInfoRef.current?.querySelector("summary");
+      const panel = fileInfoPanelRef.current;
+      if (!anchor || !panel) return;
+      const bounds = anchor.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const leftEdge = viewport?.offsetLeft ?? 0;
+      const topEdge = viewport?.offsetTop ?? 0;
+      const width = Math.min(240, (viewport?.width ?? window.innerWidth) - 24);
+      const bottomEdge = topEdge + (viewport?.height ?? window.innerHeight);
+      const availableBelow = Math.max(0, bottomEdge - bounds.bottom - 18);
+      const availableAbove = Math.max(0, bounds.top - topEdge - 18);
+      const opensBelow = availableBelow >= Math.min(panel.scrollHeight, 140) || availableBelow >= availableAbove;
+      const maxHeight = Math.max(0, opensBelow ? availableBelow : availableAbove);
+      const height = Math.min(panel.scrollHeight, maxHeight);
+      const next = {
+        left: Math.max(leftEdge + 12, Math.min(bounds.right - width, leftEdge + (viewport?.width ?? window.innerWidth) - width - 12)),
+        top: opensBelow ? bounds.bottom + 6 : bounds.top - 6 - height,
+        width,
+        maxHeight,
+      };
+      setInfoPosition(current => current && Object.keys(next).every(key => current[key as keyof typeof next] === next[key as keyof typeof next]) ? current : next);
+    };
+    position();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(position);
+    if (viewerRef.current) observer?.observe(viewerRef.current);
+    if (fileInfoPanelRef.current) observer?.observe(fileInfoPanelRef.current);
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    window.visualViewport?.addEventListener("resize", position);
+    window.visualViewport?.addEventListener("scroll", position);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+      window.visualViewport?.removeEventListener("resize", position);
+      window.visualViewport?.removeEventListener("scroll", position);
+    };
+  }, [fullscreen, infoOpen, visible]);
+
   useEffect(() => {
     const closeInfo = (event: PointerEvent) => {
       const details = fileInfoRef.current;
-      if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
-        details.removeAttribute("open");
+      if (details?.open && event.target instanceof Node && !details.contains(event.target) && !fileInfoPanelRef.current?.contains(event.target)) {
+        details.open = false;
+        setInfoOpen(false);
       }
     };
-    const closeInfoWithKeyboard = (event: KeyboardEvent) => {
-      if (event.key === "Escape") fileInfoRef.current?.removeAttribute("open");
-    };
     document.addEventListener("pointerdown", closeInfo, true);
-    window.addEventListener("keydown", closeInfoWithKeyboard);
-    return () => {
-      document.removeEventListener("pointerdown", closeInfo, true);
-      window.removeEventListener("keydown", closeInfoWithKeyboard);
-    };
+    return () => document.removeEventListener("pointerdown", closeInfo, true);
   }, []);
 
   if (loading) {
@@ -570,7 +645,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
   const hasComparedDiff = diffBase !== null && diffBase !== data.content;
 
   return (
-    <div className={`${styles.root} ${fullscreen ? styles.fullscreen : ""}`} data-file-focus-mode={fullscreen}>
+    <div ref={viewerRef} className={`${styles.root} ${fullscreen ? styles.fullscreen : ""}`} data-file-focus-mode={fullscreen}>
       <div className={styles.statusBar} data-testid="file-viewer-toolbar">
         <div className={styles.fileSummary}>
           <span className={styles.filePath} title={filePath} aria-label={relativePath}>
@@ -586,6 +661,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
             ref={fileInfoRef}
             className={styles.fileInfo}
             onToggle={(event) => {
+              setInfoOpen(event.currentTarget.open);
               if (event.currentTarget.open) setMoreOpen(false);
             }}
           >
@@ -593,7 +669,13 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
               <Info size={14} strokeWidth={1.8} aria-hidden />
               <span>{t("files.info")}</span>
             </summary>
-            <div className={styles.fileInfoPopover}>
+            {infoOpen && visible && createPortal(<div
+              ref={fileInfoPanelRef}
+              className={styles.fileInfoPopover}
+              role="region"
+              aria-label={t("files.info")}
+              style={infoPosition ?? { visibility: "hidden" }}
+            >
               <span>{t("files.type")}</span><strong>{data.language}</strong>
               <span>{t("files.lines")}</span><strong>{lines.length}</strong>
               <span>{t("files.size")}</span><strong>{formatSize(data.size)}</strong>
@@ -605,7 +687,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
               {previewMode && previewRenderMs !== null && <>
                 <span>{t("files.render")}</span><strong>{previewRenderMs} {t("files.millisecondsShort")}</strong>
               </>}
-            </div>
+            </div>, document.body)}
           </details>
         </div>
 
@@ -656,7 +738,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
           </div>
         )}
 
-        {!editing && <button className={`${styles.toggleStandalone} ${inspectorTab ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setInspectorTab((current) => current ? null : "outline")} aria-expanded={Boolean(inspectorTab)}>{t("files.inspector")}</button>}
+        {!editing && <button ref={inspectorButtonRef} className={`${styles.toggleStandalone} ${inspectorTab ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setInspectorTab((current) => current ? null : "outline")} aria-expanded={Boolean(inspectorTab)}>{t("files.inspector")}</button>}
         <div className={styles.moreWrap}>
           <ActionMenu open={moreOpen} onOpenChange={setMoreOpen} label={t("files.moreActions")} trigger={
             <button type="button" className={`${styles.moreButton} ${moreOpen ? styles.toggleActive : styles.toggleInactive}`} aria-label={t("files.moreActions")}><MoreHorizontal size={17} strokeWidth={1.8} aria-hidden /></button>
@@ -690,6 +772,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
                 else if (e.key === "Escape") setFindQuery("");
               }}
               placeholder={t("files.findLine")}
+              aria-label={t("files.findLine")}
               className={styles.findInput}
               spellCheck={false}
             />
@@ -794,10 +877,10 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
         sessionId={sessionId}
         outline={outline}
         initialTab={inspectorTab}
-        onClose={() => setInspectorTab(null)}
-        onGotoLine={(line) => { setViewMode("source"); setPreviewMode(false); setStructuredMode(false); setFindQuery(`:${line}`); }}
-        onCompareVersion={(commit) => void compareVersion(commit)}
-        onCompareSnapshot={(snapshot) => void compareSnapshot(snapshot)}
+        onClose={closeInspector}
+        onGotoLine={(line) => { setViewMode("source"); setPreviewMode(false); setStructuredMode(false); setFindQuery(`:${line}`); closeOverlayInspector(); }}
+        onCompareVersion={(commit) => { void compareVersion(commit); closeOverlayInspector(); }}
+        onCompareSnapshot={(snapshot) => { void compareSnapshot(snapshot); closeOverlayInspector(); }}
         onDiagnosticsLoaded={(items) => setDiagnostics(items)}
         onSendDiagnostic={onSendToAgent ? (diagnostic) => onSendToAgent(buildFileAgentPrompt("diagnostic", relativePath, { startLine: diagnostic.line, endLine: diagnostic.line, text: data.content.split("\n")[diagnostic.line - 1] ?? "" }, `${diagnostic.code ?? diagnostic.source}: ${diagnostic.message}`)) : undefined}
       />}

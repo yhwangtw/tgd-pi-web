@@ -185,7 +185,7 @@ describe("composer controls", () => {
     await act(async () => trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
     await nextFrame();
 
-    const listbox = container!.querySelector<HTMLElement>('[role="listbox"]')!;
+    const listbox = document.querySelector<HTMLElement>('[role="listbox"]')!;
     const optionsEls = [...listbox.querySelectorAll<HTMLButtonElement>('[role="option"]')];
     expect(trigger.getAttribute("aria-controls")).toBe(listbox.id);
     expect(optionsEls[1].getAttribute("aria-selected")).toBe("true");
@@ -201,7 +201,7 @@ describe("composer controls", () => {
 
     await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
     await nextFrame();
-    expect(container!.querySelector('[role="listbox"]')).toBeNull();
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 
@@ -225,7 +225,7 @@ describe("composer controls", () => {
     expect(trigger.getAttribute("aria-label")).toBe(accessibleName);
     expect(trigger.title).toBe(label);
     await act(async () => trigger.click());
-    expect(container!.querySelectorAll('[role="option"]')).toHaveLength(2);
+    expect(document.querySelectorAll('[role="option"]')).toHaveLength(2);
     expect(onModelChange).not.toHaveBeenCalled();
   });
 
@@ -299,13 +299,13 @@ describe("composer controls", () => {
     const trigger = container!.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
     await act(async () => trigger.click());
     await nextFrame();
-    const nextModel = [...container!.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+    const nextModel = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')]
       .find((option) => option.textContent?.includes("GPT-5.6"))!;
     await act(async () => nextModel.click());
     await nextFrame();
 
     expect(onModelChange).toHaveBeenCalledWith("openai", "gpt-5.6");
-    expect(container!.querySelector('[role="listbox"]')).toBeNull();
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 
@@ -334,9 +334,9 @@ describe("composer controls", () => {
     const trigger = container!.querySelector<HTMLButtonElement>('[data-testid="model-selector-trigger"]')!;
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     await act(async () => trigger.click());
-    expect(container!.querySelector('[role="listbox"]')).not.toBeNull();
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull();
     await act(async () => root?.render(selector("ready", true)));
-    expect(container!.querySelector('[role="listbox"]')).toBeNull();
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
     expect(trigger.disabled).toBe(true);
   });
 
@@ -431,12 +431,12 @@ describe("composer controls", () => {
     )!;
     await act(async () => trigger.click());
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    expect(container!.querySelector('[role="listbox"]')).not.toBeNull();
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull();
     expect(container!.querySelectorAll('[role="option"]').length).toBeGreaterThan(1);
 
     await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    expect(container!.querySelector('[role="listbox"]')).toBeNull();
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
   });
 
   it("keeps the textarea full-width and the primary send action inside the composer card", async () => {

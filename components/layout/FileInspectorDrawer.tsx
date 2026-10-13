@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { FileOutlineItem } from "@/lib/file-workbench";
 import { useI18n, type MsgKey } from "@/lib/i18n";
 import styles from "./FileInspectorDrawer.module.css";
@@ -43,6 +43,7 @@ function readNotes(filePath: string): FileNote[] {
 
 export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, outline, initialTab = "outline", onClose, onGotoLine, onCompareVersion, onCompareSnapshot, onSendDiagnostic, onDiagnosticsLoaded }: Props) {
   const { t } = useI18n();
+  const tabId = useId();
   const [tab, setTab] = useState<InspectorTab>(initialTab);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[] | null>(null);
   const [history, setHistory] = useState<Commit[] | null>(null);
@@ -135,10 +136,18 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
   return (
     <div className={styles.drawer} role="complementary" aria-label={t("files.inspector.title")} data-testid="file-inspector">
       <div className={styles.header}><strong>{t("files.inspector.title")}</strong><button onClick={onClose} aria-label={t("files.inspector.close")}>×</button></div>
-      <div className={styles.tabs} role="tablist">
-        {(["outline", "problems", "history", "blame", "notes"] as InspectorTab[]).map((item) => <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? styles.tabActive : styles.tab} onClick={() => setTab(item)}>{t(tabKeys[item])}{item === "problems" && diagnostics?.length ? ` ${diagnostics.length}` : ""}</button>)}
+      <div className={styles.tabs} role="tablist" aria-label={t("files.inspector.title")} onKeyDown={(event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+        const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+        event.preventDefault();
+        tabs[next]?.focus();
+        tabs[next]?.click();
+      }}>
+        {(["outline", "problems", "history", "blame", "notes"] as InspectorTab[]).map((item) => <button key={item} id={`${tabId}-${item}`} role="tab" aria-controls={`${tabId}-panel`} tabIndex={tab === item ? 0 : -1} aria-selected={tab === item} className={tab === item ? styles.tabActive : styles.tab} onClick={() => setTab(item)}>{t(tabKeys[item])}{item === "problems" && diagnostics?.length ? ` ${diagnostics.length}` : ""}</button>)}
       </div>
-      <div className={styles.body}>
+      <div className={styles.body} id={`${tabId}-panel`} role="tabpanel" aria-labelledby={`${tabId}-${tab}`}>
         {loading && <div className={styles.empty}>{t("common.loading")}</div>}
         {error && <div className={styles.error} role="alert">{error}</div>}
         {tab === "outline" && <>

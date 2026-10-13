@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useLayoutEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Columns2, Pin, X } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 import { getFileIcon } from "../sidebar/FileIcons";
@@ -46,14 +47,66 @@ export const filePanelId = (id: string) => `file-panel-${encodeURIComponent(id)}
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthers, onCloseAll, onReorder, onReveal, onTogglePin, onOpenSplit, splitTabId }: Props) {
   const { t } = useI18n();
-  const [menu, setMenu] = useState<{ x: number; y: number; tab: Tab } | null>(null);
+  const [menu, setMenu] = useState<{ offsetX: number; offsetY: number; tab: Tab } | null>(null);
+  const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 });
+  const menuRef = useRef<HTMLDivElement>(null);
   const dragId = useRef<string | null>(null);
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
 
-  const closeTab = (id: string) => {
+  const dismissMenu = useCallback((restoreFocus = true) => {
+    if (restoreFocus && menu) tabRefs.current.get(menu.tab.id)?.focus({ preventScroll: true });
+    setMenu(null);
+  }, [menu]);
+
+  const openMenu = (tab: Tab, point?: { x: number; y: number }) => {
+    const anchor = tabRefs.current.get(tab.id)?.getBoundingClientRect();
+    if (!anchor) return;
+    setMenu({ tab, offsetX: point ? point.x - anchor.left : 0, offsetY: point ? point.y - anchor.top : anchor.height });
+  };
+
+  useLayoutEffect(() => {
+    if (!menu) return;
+    const update = () => {
+      const anchor = tabRefs.current.get(menu.tab.id);
+      const content = menuRef.current;
+      if (!anchor || !content || anchor.closest('[inert], [aria-hidden="true"]')) {
+        setMenu(null);
+        return;
+      }
+      const rect = anchor.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const left = (viewport?.offsetLeft ?? 0) + 8;
+      const top = (viewport?.offsetTop ?? 0) + 8;
+      const right = left + (viewport?.width ?? window.innerWidth) - 16;
+      const bottom = top + (viewport?.height ?? window.innerHeight) - 16;
+      const size = content.getBoundingClientRect();
+      const next = {
+        left: Math.max(left, Math.min(rect.left + menu.offsetX, right - size.width)),
+        top: Math.max(top, Math.min(rect.top + menu.offsetY, bottom - size.height)),
+      };
+      setMenuPosition(previous => previous.left === next.left && previous.top === next.top ? previous : next);
+    };
+    update();
+    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true });
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    if (menuRef.current) observer?.observe(menuRef.current);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+    };
+  }, [menu]);
+
+  const closeTab = (id: string, fromMenu = false) => {
     const index = tabs.findIndex((tab) => tab.id === id);
     const next = tabs[index + 1] ?? tabs[index - 1];
-    const restoreFocus = document.activeElement === tabRefs.current.get(id)
+    const restoreFocus = fromMenu || document.activeElement === tabRefs.current.get(id)
       || (document.activeElement instanceof HTMLElement && document.activeElement.dataset.closeFileTab === id);
     onCloseTab(id);
     if (restoreFocus && next) {
@@ -83,7 +136,10 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
             }}
             // Middle-click closes, like a browser tab.
             onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(tab.id); } }}
-            onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, tab }); }}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              openMenu(tab, event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : undefined);
+            }}
             className={`${styles.tab} ${isActive ? styles.tabActive : styles.tabInactive}`}
             style={{ gridColumn: index + 1, gridRow: 1 }}
           >
@@ -95,9 +151,17 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
               role="tab"
               aria-selected={isActive}
               aria-controls={filePanelId(tab.id)}
+              aria-haspopup="menu"
+              aria-expanded={menu?.tab.id === tab.id}
+              aria-keyshortcuts="Shift+F10"
               tabIndex={isActive ? 0 : -1}
               onClick={() => onSelectTab(tab.id)}
               onKeyDown={(event) => {
+                if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+                  event.preventDefault();
+                  openMenu(tab);
+                  return;
+                }
                 const nextIndex = event.key === "ArrowRight" ? (index + 1) % tabs.length
                   : event.key === "ArrowLeft" ? (index - 1 + tabs.length) % tabs.length
                   : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
@@ -139,40 +203,65 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
         />
       ))}
 
-      {menu && (
+      {menu && createPortal(
         <>
-          <div className={styles.menuBackdrop} onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
-          <div className={`glass ${styles.tabMenu}`} style={{ left: menu.x, top: menu.y }} role="menu">
+          <div className={styles.menuBackdrop} onPointerDown={(event) => { event.preventDefault(); dismissMenu(); }} onContextMenu={(event) => { event.preventDefault(); dismissMenu(); }} />
+          <div ref={menuRef} className={`glass ${styles.tabMenu}`} style={menuPosition} role="menu" aria-label={menu.tab.label}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault(); event.stopPropagation(); dismissMenu(); return;
+              }
+              if (event.key === "Tab") {
+                event.preventDefault(); event.stopPropagation();
+                const anchor = tabRefs.current.get(menu.tab.id);
+                const focusable = Array.from(document.querySelectorAll<HTMLElement>(
+                  'button:not([disabled]),a[href],input:not([disabled]),textarea:not([disabled]),select:not([disabled]),[tabindex]',
+                )).filter(node => node.tabIndex >= 0 && !event.currentTarget.contains(node)
+                  && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== "hidden"
+                  && !node.closest('[inert],[aria-hidden="true"]'));
+                const index = anchor ? focusable.indexOf(anchor) : -1;
+                const target = index >= 0 ? focusable[index + (event.shiftKey ? -1 : 1)] : anchor;
+                dismissMenu(false);
+                (target ?? anchor)?.focus({ preventScroll: true });
+                return;
+              }
+              const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+              const current = items.indexOf(document.activeElement as HTMLButtonElement);
+              const index = event.key === "ArrowDown" ? (current + 1) % items.length
+                : event.key === "ArrowUp" ? (current - 1 + items.length) % items.length
+                : event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : null;
+              if (index !== null) { event.preventDefault(); event.stopPropagation(); items[index]?.focus(); }
+            }}>
             {onReveal && (
-              <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onReveal(menu.tab.filePath); setMenu(null); }}>
+              <button type="button" role="menuitem" tabIndex={-1} className={styles.tabMenuItem} onClick={() => { dismissMenu(); onReveal(menu.tab.filePath); }}>
                 {t("explorer.revealInTree")}
               </button>
             )}
             {onTogglePin && (
-              <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onTogglePin(menu.tab.id); setMenu(null); }}>
+              <button type="button" role="menuitem" tabIndex={-1} className={styles.tabMenuItem} onClick={() => { dismissMenu(); onTogglePin(menu.tab.id); }}>
                 {menu.tab.pinned ? t("tabs.unpin") : t("tabs.pin")}
               </button>
             )}
             {onOpenSplit && tabs.length > 1 && (
-              <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onOpenSplit(menu.tab.id); setMenu(null); }}>
+              <button type="button" role="menuitem" tabIndex={-1} className={styles.tabMenuItem} onClick={() => { dismissMenu(); onOpenSplit(menu.tab.id); }}>
                 {splitTabId === menu.tab.id ? t("tabs.closeSplit") : t("tabs.openSplit")}
               </button>
             )}
-            <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onCloseTab(menu.tab.id); setMenu(null); }}>
+            <button type="button" role="menuitem" tabIndex={-1} className={styles.tabMenuItem} onClick={() => { closeTab(menu.tab.id, true); dismissMenu(false); }}>
               {t("tabs.close")}
             </button>
             {onCloseOthers && tabs.length > 1 && (
-              <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onCloseOthers(menu.tab.id); setMenu(null); }}>
+              <button type="button" role="menuitem" tabIndex={-1} className={styles.tabMenuItem} onClick={() => { dismissMenu(); onCloseOthers(menu.tab.id); }}>
                 {t("tabs.closeOthers")}
               </button>
             )}
             {onCloseAll && (
-              <button type="button" role="menuitem" className={styles.tabMenuItem} onClick={() => { onCloseAll(); setMenu(null); }}>
+              <button type="button" role="menuitem" tabIndex={-1} className={styles.tabMenuItem} onClick={() => { dismissMenu(false); onCloseAll(); }}>
                 {t("tabs.closeAll")}
               </button>
             )}
           </div>
-        </>
+        </>, document.body
       )}
     </div>
   );

@@ -30,8 +30,11 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
   container-type: inline-size;
+  container-name: file-viewer;
 }
 
 /* Status bar */
@@ -83,6 +86,9 @@
 
 .sourceTools {
   min-height: 38px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -92,11 +98,13 @@
   color: var(--text-dim);
   font-size: var(--text-xs);
 }
+.sourceTools > * { flex-shrink: 0; white-space: nowrap; }
 .sourceTools button { min-height: 28px; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-control-compact); background: transparent; color: var(--color-accent); cursor: pointer; }
 .sourceTools button:hover { background: var(--bg-hover); }
 
 .selectionBar {
   min-height: 42px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -177,7 +185,11 @@
 }
 
 .filePathEnd {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-muted);
 }
 
@@ -205,10 +217,11 @@
 .fileInfo[open] > summary { background: var(--bg-hover); color: var(--text); }
 
 .fileInfoPopover {
-  position: absolute;
-  top: calc(100% + var(--space-1));
-  right: var(--space-2);
-  z-index: 52;
+  position: fixed;
+  z-index: 1600;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
   display: grid;
   width: 220px;
   grid-template-columns: auto minmax(0, 1fr);
@@ -488,6 +501,8 @@
   .fileSummary { gap: var(--space-2); }
   .fileMeta { gap: var(--space-2); }
   .findInput { width: 92px; }
+  .markdownPreview,
+  :global(html[data-ui-style="trae"]) .markdownPreview { padding: var(--space-4); }
 }
 
 @media (max-width: 700px) {
@@ -506,11 +521,7 @@
   .fileActions { order: 2; }
   .askPi { min-height: var(--control-touch); padding-inline: 14px; }
   .moreButton { min-width: var(--control-touch); min-height: var(--control-touch); }
-  .fileInfoPopover { width: min(240px, calc(100vw - 32px)); }
   .sourceTools { min-height: var(--control-touch); overflow-x: auto; scrollbar-width: none; }
   .sourceTools::-webkit-scrollbar { display: none; }
   .selectionBar { min-height: var(--control-touch); }
 }
-
-/* Keep the file readable when Inspector is open in a narrow preview panel. */
-@container (max-width: 680px) { .workspaceBody > :global([data-testid="file-inspector"]) { position: absolute; inset-block: 0; right: 0; width: min(340px, 100%); min-width: min(250px, 100%); } }

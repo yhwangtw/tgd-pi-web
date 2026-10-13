@@ -18,6 +18,7 @@ export function DialogShell({
   size = "default",
   mobileMode = "sheet",
   modal = false,
+  placement = "corner",
   initialFocusRef,
   headerActions,
   footer,
@@ -35,6 +36,8 @@ export function DialogShell({
   mobileMode?: "sheet" | "fullscreen";
   /** Opt in only for a genuinely blocking flow; normal panels stay modeless. */
   modal?: boolean;
+  /** Center a picker on desktop and honor its sheet/fullscreen mode on phones. */
+  placement?: "corner" | "center";
   initialFocusRef?: RefObject<HTMLElement | null>;
   headerActions?: ReactNode;
   footer?: ReactNode;
@@ -76,6 +79,7 @@ export function DialogShell({
       className={styles.overlay}
       data-dialog-root
       data-modeless={!modal || undefined}
+      data-placement={placement}
       onMouseDown={(event) => {
         if (modal && canClose && event.target === event.currentTarget) onClose();
       }}
