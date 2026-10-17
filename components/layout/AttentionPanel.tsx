@@ -112,6 +112,7 @@ export function AttentionPanel({
 
   const renderItem = (item: AttentionItem) => {
     const read = readIds.has(item.id);
+    const failed = item.status === "failed" || item.status === "interrupted";
     const sourceLabel = item.source === "agent"
       ? t("agents.title")
       : item.source === "schedule"
@@ -128,8 +129,12 @@ export function AttentionPanel({
           {!read && <i className={s.unreadDot} aria-label={t("attention.unreadItem")} />}
         </div>
         <strong className={s.title}>{item.title}</strong>
-        <p className={s.summary}>{item.summary}</p>
-        {item.cwd && <div className={`${s.path} chrome-mono`} title={item.cwd}>{item.cwd}</div>}
+        <p className={s.summary}>{failed ? t(item.status === "failed" ? "agents.status.failed" : "agents.status.interrupted") : item.summary}</p>
+        {(failed || item.cwd) && <details className={s.technicalDetails}>
+          <summary>{t("ui.technicalDetails")}</summary>
+          {failed && <p>{item.summary}</p>}
+          {item.cwd && <div className="chrome-mono">{item.cwd}</div>}
+        </details>}
         <div className={s.actions}>
           <button type="button" className={s.primaryAction} onClick={() => void open(item)}>
             <ArrowUpRight size={15} aria-hidden />

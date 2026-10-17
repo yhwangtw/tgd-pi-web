@@ -235,7 +235,7 @@ async function begin(page: Page, relay: Relay, mode: "complete" | "delayed" | "e
   await page.getByRole("button", { name: "New", exact: true }).click();
   await expect(page.getByTestId("model-selector-trigger")).toHaveAttribute("data-catalog-status", "ready");
   await page.getByTestId("model-selector-trigger").click();
-  await page.getByRole("option", { name: /E2E deterministic offline model/ }).click();
+  await page.getByRole("dialog", { name: "Choose a model", exact: true }).getByRole("button", { name: /E2E deterministic offline model/ }).click();
   const composer = page.locator("textarea").last();
   await composer.fill(`/e2e-reconnect-${mode} ${token}`);
   await page.getByRole("button", { name: "Send", exact: true }).click();

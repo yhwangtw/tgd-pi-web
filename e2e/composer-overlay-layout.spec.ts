@@ -67,8 +67,8 @@ async function expectContained(page: Page, target: Locator) {
 }
 
 async function expectModelAnchored(page: Page) {
-  const listbox = page.getByRole("listbox", { name: "Model", exact: true });
-  const panel = listbox.locator("..");
+  const listbox = page.getByTestId("model-selector-popover");
+  const panel = listbox;
   await expectContained(page, panel);
   await expect.poll(async () => {
     const trigger = await page.getByTestId("model-selector-trigger").boundingBox();
@@ -110,10 +110,10 @@ for (const style of ["original", "trae"] as const) {
     await expect(page.getByRole("region", { name: "Composer controls", exact: true })).toBeHidden();
     await expect(controls).toHaveAttribute("aria-expanded", "false");
     await expectModelAnchored(page);
-    const selected = page.getByRole("option", { name: new RegExp(LONG_MODEL) });
+    const selected = page.getByRole("button", { name: new RegExp(LONG_MODEL) });
     await selected.click();
     expect(selections).toEqual([{ type: "set_model", provider: "anthropic", modelId: "claude-sonnet-5" }]);
-    await expect(page.getByRole("listbox", { name: "Model", exact: true })).toBeHidden();
+    await expect(page.getByTestId("model-selector-popover")).toBeHidden();
     await expect(trigger).toBeFocused();
     await trigger.click();
     await expectModelAnchored(page);
@@ -127,7 +127,7 @@ for (const style of ["original", "trae"] as const) {
     await page.keyboard.press("ControlOrMeta+b");
     await expectModelAnchored(page);
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("listbox", { name: "Model", exact: true })).toBeHidden();
+    await expect(page.getByTestId("model-selector-popover")).toBeHidden();
     await expect(trigger).toBeFocused();
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
   });
@@ -161,7 +161,7 @@ for (const style of ["original", "trae"] as const) {
       await expect(controls).toBeFocused();
       await controls.click();
       await expectBottomSheet(page, controlsDialog);
-      await controlsDialog.getByRole("button", { name: "Done", exact: true }).click();
+      await controlsDialog.getByRole("button", { name: "Close", exact: true }).click();
       await expect(controlsDialog).toBeHidden();
       await expect(composer).toHaveValue("Keep this draft while using controls");
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);

@@ -160,3 +160,7 @@
   .filters button { min-width: var(--control-touch); }
 }
 @keyframes attention-spin { to { transform: rotate(360deg); } }
+
+.technicalDetails { color: var(--text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.technicalDetails summary { cursor: pointer; padding-block: var(--space-1); }
+.technicalDetails p { margin-block: var(--space-2); white-space: pre-wrap; }

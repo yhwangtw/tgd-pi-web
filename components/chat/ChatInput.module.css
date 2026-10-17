@@ -498,7 +498,7 @@
 }
 
 .bottomBarLeft {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -592,20 +592,6 @@
 
 .composerSettingsSheetBody { padding: 0; }
 
-.composerSettingsDone {
-  min-width: 96px;
-  min-height: var(--control-default);
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-accent-border);
-  border-radius: var(--radius-control);
-  background: var(--accent);
-  color: var(--accent-fg);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-}
-
-.composerSettingsDone:hover { background: var(--accent-hover); }
 
 .bottomBarRightMobileOpen {
   position: static;
@@ -1024,7 +1010,7 @@
   }
 
   .bottomBarLeft {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
   }
@@ -1261,11 +1247,6 @@
 
   .composerSettingsSheetContent .mobileToolsHeader { display: none; }
 
-  .composerSettingsDone {
-    width: 100%;
-    min-height: var(--control-touch);
-    border-radius: var(--radius-pill);
-  }
 
   .bottomBarRightStreaming {
     display: flex;
@@ -1352,9 +1333,9 @@
 }
 
 :global(html[data-ui-style="trae"]) .textarea {
-  min-height: 44px;
-  padding: var(--space-2) 0;
-  font-size: var(--text-lg);
+  min-height: 40px;
+  padding: var(--space-1) 0;
+  font-size: var(--text-base);
   line-height: var(--leading-relaxed);
 }
 

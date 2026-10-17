@@ -41,7 +41,6 @@ export function RuntimeIdentityBar() {
   return <details className={s.bar} data-testid="runtime-identity" data-environment={identity.environment}>
     <summary>
       <strong>{t(`runtime.environment.${identity.environment}`)}</strong>
-      <span>{identity.build.version}</span>
       {identity.build.dirty && <span title={t('runtime.dirtyHint')}>*</span>}
       <span className={s.hint}>{t('runtime.identityDetails')}<ChevronDown size={12} aria-hidden /></span>
     </summary>
@@ -49,6 +48,7 @@ export function RuntimeIdentityBar() {
       {identity.environment === 'fixture' && <p>{t('runtime.fixtureHint')}</p>}
       {identity.environment === 'preview' && <p>{t('runtime.previewHint')}</p>}
       <dl>
+        <dt>{t("runtime.version")}</dt><dd>{identity.build.version}</dd>
         {identity.build.sourceSha && <><dt>{t('runtime.sourceRevision')}</dt><dd>{identity.build.sourceSha}</dd></>}
         <dt>{t('runtime.modelsPath')}</dt><dd>{identity.modelsPath}</dd>
         <dt>{t('runtime.agentPath')}</dt><dd>{identity.agentDir}</dd>

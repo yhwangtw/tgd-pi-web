@@ -72,10 +72,10 @@
 .askPi {
   min-height: 28px;
   padding: 0 var(--space-3);
-  border: 1px solid var(--color-accent-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--color-accent-bg);
-  color: var(--color-accent);
+  background: transparent;
+  color: var(--text-muted);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   cursor: pointer;
@@ -472,7 +472,7 @@
   padding: clamp(var(--space-6), 4vw, var(--component-reading-padding));
 }
 :global(html[data-ui-style="trae"]) .editor { padding: var(--space-4); background: var(--trae-canvas); }
-:global(html[data-ui-style="trae"]) .askPi { border-color: transparent; border-radius: var(--radius-pill); background: var(--color-accent); color: var(--color-accent-fg); }
+:global(html[data-ui-style="trae"]) .askPi { border-color: var(--trae-hairline); border-radius: var(--radius-control); background: transparent; color: var(--text-muted); }
 :global(html[data-ui-style="trae"]) .fileInfo > summary { border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .fileInfoPopover { border-color: var(--trae-hairline); background: var(--trae-surface-solid); }
 :global(html[data-ui-style="trae"]) .sourceTools { border-color: var(--trae-hairline); background: var(--trae-canvas); }

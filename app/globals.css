@@ -96,6 +96,7 @@
 
 :root {
   --accent-text: var(--accent-hover);
+  --link-text: var(--accent-text);
   --font-scale: 1;
   --bg: #f8faf9;
   --bg-panel: #f0f3f1;
@@ -946,7 +947,7 @@ pre, code {
   margin-right: 7px;
   vertical-align: -1.5px;
 }
-.markdown-body a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.markdown-body a { color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
 .markdown-body a[target="_blank"]::after {
   content: "↗";
   font-size: 0.72em;

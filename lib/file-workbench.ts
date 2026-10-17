@@ -25,11 +25,20 @@ export function extractFileOutline(content: string, language: string): FileOutli
     out.push({ id: `${line}-${slug(clean) || kind}`, label: clean, kind, line, level });
   };
 
+  let fence: { char: string; length: number } | null = null;
   lines.forEach((line, index) => {
     const n = index + 1;
     if (language === "markdown") {
-      const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*$/);
+      const delimiter = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      if (delimiter) {
+        if (!fence) fence = { char: delimiter[1][0], length: delimiter[1].length };
+        else if (delimiter[1][0] === fence.char && delimiter[1].length >= fence.length && !delimiter[2].trim()) fence = null;
+        return;
+      }
+      if (fence) return;
+      const heading = line.match(/^ {0,3}(#{1,6})\s+(.+?)\s*#*$/);
       if (heading) push(heading[2], "heading", n, heading[1].length);
+      else if (line.trim() && /^ {0,3}(=+|-+)\s*$/.test(lines[index + 1] ?? "")) push(line, "heading", n, lines[index + 1].trim()[0] === "=" ? 1 : 2);
       return;
     }
 

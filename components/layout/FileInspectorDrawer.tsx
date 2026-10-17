@@ -29,6 +29,7 @@ interface Props {
   initialTab?: InspectorTab;
   onClose: () => void;
   onGotoLine: (line: number) => void;
+  onGotoOutline?: (line: number) => void;
   onCompareVersion: (commit: Commit) => void;
   onCompareSnapshot?: (snapshot: Snapshot) => void;
   onSendDiagnostic?: (diagnostic: Diagnostic) => void;
@@ -41,7 +42,7 @@ function readNotes(filePath: string): FileNote[] {
   catch { return []; }
 }
 
-export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, outline, initialTab = "outline", onClose, onGotoLine, onCompareVersion, onCompareSnapshot, onSendDiagnostic, onDiagnosticsLoaded }: Props) {
+export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, outline, initialTab = "outline", onClose, onGotoLine, onGotoOutline, onCompareVersion, onCompareSnapshot, onSendDiagnostic, onDiagnosticsLoaded }: Props) {
   const { t } = useI18n();
   const tabId = useId();
   const [tab, setTab] = useState<InspectorTab>(initialTab);
@@ -159,7 +160,7 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
           {symbolMatches && <div className={styles.list} aria-label={t(symbolMode === "definition" ? "files.inspector.definitionResults" : "files.inspector.referenceResults")}>
             {symbolMatches.length === 0 ? <div className={styles.empty}>{t(symbolMode === "definition" ? "files.inspector.noDefinition" : "files.inspector.noReferences")}</div> : symbolMatches.map((match, index) => <button key={`${match.path}:${match.line}:${index}`} className={styles.symbolResult} onClick={() => match.path === relativePath ? onGotoLine(match.line) : requestOpenFile({ path: match.path, line: match.line })}><span className="chrome-mono">{match.path}:{match.line}</span><span>{match.preview}</span></button>)}
           </div>}
-          {outline.length ? <div className={styles.list}>{outline.map((item) => <button key={item.id} className={styles.row} style={{ paddingLeft: 10 + (item.level - 1) * 14 }} onClick={() => onGotoLine(item.line)}><span className={styles.kind}>{item.kind.slice(0, 2)}</span><span className={styles.label}>{item.label}</span><span className={styles.line}>L{item.line}</span></button>)}</div> : !symbolMatches && <div className={styles.empty}>{t("files.inspector.noSymbols")}</div>}
+          {outline.length ? <div className={styles.list}>{outline.map((item) => <button key={item.id} className={styles.row} style={{ paddingLeft: 10 + (item.level - 1) * 14 }} onClick={() => (onGotoOutline ?? onGotoLine)(item.line)}><span className={styles.kind}>{item.kind.slice(0, 2)}</span><span className={styles.label}>{item.label}</span><span className={styles.line}>L{item.line}</span></button>)}</div> : !symbolMatches && <div className={styles.empty}>{t("files.inspector.noSymbols")}</div>}
         </>}
         {!loading && !error && tab === "problems" && <div className={styles.problemsPane}>
           <div className={styles.problemActions}><span>{t("files.inspector.problemSources")}</span><button disabled={runningTests} onClick={() => void runRelatedTests()}>{t(runningTests ? "files.inspector.runningTests" : "files.inspector.runTests")}</button></div>

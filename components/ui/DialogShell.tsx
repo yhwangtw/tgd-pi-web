@@ -109,6 +109,7 @@ export function DialogShell({
             {headerActions}
             {!modal && <button className={styles.collapse} type="button" aria-expanded={!collapsed} aria-label={t(collapsed ? "interaction.expand" : "interaction.minimize")} onClick={() => setCollapsed(!collapsed)}>{collapsed ? "+" : "−"}</button>}
             <IconButton
+              className={styles.close}
               label={t("common.close")}
               icon={<X strokeWidth={1.8} />}
               onClick={onClose}

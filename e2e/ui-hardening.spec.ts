@@ -104,7 +104,7 @@ for (const style of ["original", "trae"]) {
         await page.keyboard.press("End");
         await expect.poll(() => page.evaluate(() => localStorage.getItem("pi-scroll-follow-mode"))).toBe("preserve");
         if (width === 390 && size === "xlarge") await page.screenshot({ path: test.info().outputPath(`mobile-xl-${style}.png`) });
-        await dialog.getByRole("button", { name: "Done", exact: true }).click();
+        await dialog.getByRole("button", { name: "Close", exact: true }).click();
         await page.locator('input[type="file"]').first().setInputFiles({ name: "fixture.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jS1sAAAAASUVORK5CYII=", "base64") });
         const remove = page.getByRole("button", { name: "Remove image", exact: true });
         await expect(remove).toBeVisible();

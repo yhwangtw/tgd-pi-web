@@ -26,6 +26,7 @@ import { useWorkspaceIdentities } from "@/hooks/useWorkspaceIdentities";
 import { onOpenProjectSwitcher } from "@/lib/project-switcher-events";
 import { computeVirtualWindow } from "@/lib/virtual-list";
 import { ArrowDownAZ, BarChart3, Check, ChevronRight, Clock3, FolderGit2, Plus, RefreshCw, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { ActionMenu, ActionMenuRadioGroup, ActionMenuRadioItem } from "@/components/ui/ActionMenu";
 import styles from "./SessionSidebar.module.css";
 
 const SORT_MODE_KEY = "pi-session-sort";
@@ -217,13 +218,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       if (v === "name" || v === "messages" || v === "recent") setSortMode(v);
     } catch { /* private mode */ }
   }, []);
-  const cycleSortMode = useCallback(() => {
-    setSortMode((m) => {
-      const next: SessionSortMode = m === "recent" ? "name" : m === "name" ? "messages" : "recent";
-      try { localStorage.setItem(SORT_MODE_KEY, next); } catch { /* private mode */ }
-      return next;
-    });
-  }, []);
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortModes = ["recent", "name", "messages"] as const;
+  const sortLabel = (mode: SessionSortMode) => t(mode === "recent" ? "sidebar.sortRecent" : mode === "name" ? "sidebar.sortName" : "sidebar.sortMessages");
+  const selectSortMode = (value: string) => {
+    if (!sortModes.includes(value as SessionSortMode)) return;
+    setSortMode(value as SessionSortMode);
+    try { localStorage.setItem(SORT_MODE_KEY, value); } catch { /* private mode */ }
+  };
 
   const [showArchived, setShowArchived] = useState(false);
   const archivedSet = useMemo(() => new Set(archivedIds), [archivedIds]);
@@ -581,9 +583,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               {t("sidebar.thisProject")}
             </button>
           </div>
+          <ActionMenu open={sortOpen} onOpenChange={setSortOpen} label={t("sidebar.sortBy")} trigger={
           <button
             type="button"
-            onClick={cycleSortMode}
             className={`${styles.sortButton} ${sortMode !== "recent" ? styles.sortButtonActive : ""} hover-bg-selected-accent`}
             title={`${t("sidebar.sortBy")}: ${t(sortMode === "recent" ? "sidebar.sortRecent" : sortMode === "name" ? "sidebar.sortName" : "sidebar.sortMessages")}`}
             aria-label={`${t("sidebar.sortBy")}: ${t(sortMode === "recent" ? "sidebar.sortRecent" : sortMode === "name" ? "sidebar.sortName" : "sidebar.sortMessages")}`}
@@ -595,7 +597,15 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             ) : (
               <BarChart3 size={12} strokeWidth={2} aria-hidden="true" />
             )}
+            <span className={styles.sortLabel}>{t(sortMode === "recent" ? "sidebar.sortRecentShort" : sortMode === "messages" ? "sidebar.sortMessagesShort" : "sidebar.sortName")}</span>
           </button>
+          }>
+            <ActionMenuRadioGroup value={sortMode} onValueChange={selectSortMode}>
+              {sortModes.map((mode) => <ActionMenuRadioItem key={mode} value={mode}>
+                <span aria-hidden>{sortMode === mode ? <Check size={14} /> : null}</span>{sortLabel(mode)}
+              </ActionMenuRadioItem>)}
+            </ActionMenuRadioGroup>
+          </ActionMenu>
           <button
             type="button"
             onClick={() => setFiltersOpen(true)}

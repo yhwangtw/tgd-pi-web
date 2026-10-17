@@ -87,11 +87,11 @@ export function SkillsConfig({
     }
   }, []);
 
-  const selectedSkill = skills.find((s) => s.filePath === selected) ?? null;
   const normalizedQuery = query.trim().toLowerCase();
   const visibleSkills = normalizedQuery
     ? skills.filter((skill) => `${skill.name} ${skill.description ?? ""} ${skill.filePath}`.toLowerCase().includes(normalizedQuery))
     : skills;
+  const selectedSkill = visibleSkills.find((s) => s.filePath === selected) ?? null;
   const groupLabels: Record<string, string> = {
     project: t("skills.source.project"),
     global: t("skills.source.global"),
@@ -236,7 +236,7 @@ export function SkillsConfig({
               />
             ) : (
               <div className={styles.emptyState}>
-                {t("skills.select")}
+                {t(visibleSkills.length === 0 && normalizedQuery ? "skills.noMatches" : "skills.select")}
               </div>
             )}
           </div>

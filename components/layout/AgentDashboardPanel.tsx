@@ -34,7 +34,7 @@ function projectName(path: string): string {
 }
 
 export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessions }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [editorOpen, setEditorOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -211,6 +211,7 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
           <div className={s.compareGrid}>
             {comparedRuns.map((run) => <article key={run.id}>
               <strong>{run.name}</strong>
+              <time dateTime={run.startedAt ?? run.createdAt}>{new Date(run.startedAt ?? run.createdAt).toLocaleString(locale === "zh" ? "zh-TW" : "en")}</time>
               <span>{run.report?.summary ?? run.error ?? t("agents.noReport")}</span>
               <dl>
                 <div><dt>{t("agents.files")}</dt><dd>{run.report?.changedFiles.length ?? 0}</dd></div>

@@ -194,7 +194,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
         <IconButton
           key={`close:${tab.id}`}
           data-close-file-tab={tab.id}
-          label={t("tabs.close")}
+          label={`${t("tabs.close")}: ${tab.label}`}
           icon={<X strokeWidth={1.8} />}
           size="compact"
           onClick={() => closeTab(tab.id)}

@@ -878,6 +878,14 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
         outline={outline}
         initialTab={inspectorTab}
         onClose={closeInspector}
+        onGotoOutline={(line) => {
+          if (isMarkdown && previewMode && viewMode === "source") {
+            stopRestoringView();
+            contentAreaRef.current?.querySelector<HTMLElement>(`[data-source-line="${line}"]`)?.scrollIntoView({ block: "start", behavior: "instant" });
+            return;
+          }
+          setViewMode("source"); setPreviewMode(false); setStructuredMode(false); setFindQuery(`:${line}`); closeOverlayInspector();
+        }}
         onGotoLine={(line) => { setViewMode("source"); setPreviewMode(false); setStructuredMode(false); setFindQuery(`:${line}`); closeOverlayInspector(); }}
         onCompareVersion={(commit) => { void compareVersion(commit); closeOverlayInspector(); }}
         onCompareSnapshot={(snapshot) => { void compareSnapshot(snapshot); closeOverlayInspector(); }}

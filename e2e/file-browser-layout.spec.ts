@@ -183,7 +183,7 @@ for (const style of ["original", "trae"] as const) {
   test(`${style}: closing the file panel removes its controls from keyboard focus`, async ({ page }) => {
     await openFixture(page, style, 1440);
     const panel = await openSource(page);
-    await panel.getByRole("button", { name: "Hide file panel", exact: true }).click();
+    await panel.getByRole("button", { name: /^(Hide file panel|Back to chat)$/ }).click();
     await expect(page.locator(".right-panel-open")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Show file panel", exact: true })).toBeFocused();
     const hiddenPanel = page.locator(".right-panel-container");

@@ -41,6 +41,7 @@
 .header > div { min-width: 0; }
 .headerActions { display: flex; flex: 0 0 auto; align-items: center; gap: var(--space-2); }
 .headerActions:empty { display: none; }
+.headerActions .close { color: var(--text); }
 .header h2 { margin: 0; color: var(--text); font-size: var(--type-title-size); font-weight: var(--weight-semibold); line-height: var(--type-title-leading); }
 .header p { max-width: 68ch; margin: var(--space-1) 0 0; overflow-wrap: anywhere; color: var(--text-muted); font-size: var(--type-label-size); line-height: var(--leading-copy); }
 

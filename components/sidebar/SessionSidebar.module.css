@@ -647,3 +647,6 @@
 .unreadFilter strong { font-variant-numeric: tabular-nums; }
 .unreadFilter:focus-visible { outline: 2px solid var(--color-accent-border-focus); outline-offset: 2px; }
 @media (max-width: 700px), (pointer: coarse) { .unreadFilter { min-height: 44px; } }
+
+.sortButton { width: auto; max-width: 112px; flex-shrink: 1; gap: var(--space-1); padding-inline: var(--space-2); }
+.sortLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-2xs); }

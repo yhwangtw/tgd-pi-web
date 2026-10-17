@@ -142,7 +142,6 @@ function ResponsiveComposerControls({
   open,
   isStreaming,
   title,
-  doneLabel,
   initialFocusRef,
   onClose,
   children,
@@ -151,26 +150,22 @@ function ResponsiveComposerControls({
   open: boolean;
   isStreaming: boolean;
   title: string;
-  doneLabel: string;
   initialFocusRef: RefObject<HTMLElement | null>;
   onClose: (restoreFocus?: boolean) => void;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   if (isMobile && !isStreaming) {
     return (
       <DialogShell
         open={open}
         title={title}
+        description={t("input.settingsImmediate")}
         onClose={() => onClose(false)}
         initialFocusRef={initialFocusRef}
         bodyClassName={styles.composerSettingsSheetBody}
         mobileMode="sheet"
         placement="center"
-        footer={(
-          <button type="button" className={styles.composerSettingsDone} onClick={() => onClose(false)}>
-            {doneLabel}
-          </button>
-        )}
       >
         <div
           id="composer-secondary-tools"
@@ -252,6 +247,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const isComposingRef = useRef(false);
   const lastCompositionEndAtRef = useRef(0);
   const lastEscAtRef = useRef(0);
+  const controlsBeforeExpandRef = useRef(false);
   const expandedRef = useRef(expanded);
   expandedRef.current = expanded;
 
@@ -501,6 +497,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         if (showSlashMenu || mention) return;
         event.preventDefault();
         setExpanded(false);
+        setMobileToolsOpen(controlsBeforeExpandRef.current);
         requestAnimationFrame(() => textareaRef.current?.focus());
         return;
       }
@@ -595,6 +592,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (!isComposing && e.key === "Escape" && expanded && !mention && !showSlashMenu) {
         e.preventDefault();
         setExpanded(false);
+        setMobileToolsOpen(controlsBeforeExpandRef.current);
         return;
       }
 
@@ -805,10 +803,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [setValue]);
 
   const toggleExpanded = useCallback(() => {
-    setExpanded((current) => !current);
-    setMobileToolsOpen(false);
+    if (!expanded) {
+      controlsBeforeExpandRef.current = mobileToolsOpen;
+      if (isMobileViewport) setMobileToolsOpen(false);
+    } else {
+      setMobileToolsOpen(controlsBeforeExpandRef.current);
+    }
+    setExpanded(!expanded);
     requestAnimationFrame(() => textareaRef.current?.focus());
-  }, []);
+  }, [expanded, isMobileViewport, mobileToolsOpen]);
 
 
 
@@ -1168,7 +1171,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             open={mobileToolsOpen}
             isStreaming={isStreaming}
             title={t("input.controlsTitle")}
-            doneLabel={t("input.controlsDone")}
             initialFocusRef={mobileControlsInitialRef}
             onClose={closeMobileTools}
           >

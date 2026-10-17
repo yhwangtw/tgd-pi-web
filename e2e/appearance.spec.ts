@@ -14,16 +14,16 @@ test.describe("appearance", () => {
     const dialog = page.getByRole("dialog", { name: "Appearance" });
     await expect(dialog).toBeVisible();
 
-    const colors = dialog.getByRole("group", { name: "Color palette" });
-    const rows = colors.getByRole("button");
+    const colors = dialog.getByRole("radiogroup", { name: "Color palette" });
+    const rows = colors.getByRole("radio");
     await expect(rows).toHaveCount(6);
 
-    await dialog.getByRole("button", { name: "Original", exact: true }).click();
+    await dialog.getByRole("radio", { name: "Original", exact: true }).click();
     await expect
       .poll(() => page.evaluate(() => document.documentElement.hasAttribute("data-ui-style")))
       .toBe(false);
 
-    await dialog.getByRole("button", { name: /Glass/ }).click();
+    await dialog.getByRole("radio", { name: /Glass/ }).click();
     await expect
       .poll(() => page.evaluate(() => document.documentElement.getAttribute("data-skin")))
       .toBe("glass");
@@ -31,7 +31,7 @@ test.describe("appearance", () => {
       .poll(() => page.evaluate(() => document.documentElement.hasAttribute("data-ui-style")))
       .toBe(false);
 
-    await dialog.getByRole("button", { name: "TRAE", exact: true }).click();
+    await dialog.getByRole("radio", { name: "TRAE", exact: true }).click();
     const combined = await page.evaluate(() => ({
       style: document.documentElement.getAttribute("data-ui-style"),
       skin: document.documentElement.getAttribute("data-skin"),
@@ -39,7 +39,7 @@ test.describe("appearance", () => {
     expect(combined).toEqual({ style: "trae", skin: "glass" });
     await expect(dialog).toBeVisible(); // stays open for live preview
 
-    await dialog.getByRole("button", { name: "Dark" }).click();
+    await dialog.getByRole("radio", { name: "Dark" }).click();
     await expect
       .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
       .toBe(true);
@@ -73,7 +73,7 @@ test.describe("appearance", () => {
 
     await page.getByRole("button", { name: "Appearance" }).click();
     const dialog = page.getByRole("dialog", { name: "Appearance" });
-    await dialog.getByRole("button", { name: "All left" }).click();
+    await dialog.getByRole("radio", { name: "All left" }).click();
 
     await expect
       .poll(() => page.evaluate(() => document.documentElement.getAttribute("data-message-layout")))
@@ -89,7 +89,7 @@ test.describe("appearance", () => {
       .toBe("left");
 
     await page.getByRole("button", { name: "Appearance" }).click();
-    await page.getByRole("dialog", { name: "Appearance" }).getByRole("button", { name: "Left & right" }).click();
+    await page.getByRole("dialog", { name: "Appearance" }).getByRole("radio", { name: "Left & right" }).click();
     await expect
       .poll(() => page.evaluate(() => document.documentElement.hasAttribute("data-message-layout")))
       .toBe(false);
@@ -99,7 +99,7 @@ test.describe("appearance", () => {
     await openMain(page);
     await page.getByRole("button", { name: "Appearance" }).click();
     const dialog = page.getByRole("dialog", { name: "Appearance" });
-    await dialog.getByRole("button", { name: "Compact", exact: true }).click();
+    await dialog.getByRole("radio", { name: "Compact", exact: true }).click();
 
     await expect
       .poll(() => page.evaluate(() => document.documentElement.getAttribute("data-density")))
@@ -112,7 +112,7 @@ test.describe("appearance", () => {
       .toBe("compact");
 
     await page.getByRole("button", { name: "Appearance" }).click();
-    await page.getByRole("dialog", { name: "Appearance" }).getByRole("button", { name: "Comfortable", exact: true }).click();
+    await page.getByRole("dialog", { name: "Appearance" }).getByRole("radio", { name: "Comfortable", exact: true }).click();
     await expect
       .poll(() => page.evaluate(() => document.documentElement.hasAttribute("data-density")))
       .toBe(false);
@@ -129,7 +129,7 @@ test.describe("appearance", () => {
     await page.getByRole("button", { name: "More", exact: true }).click();
     await page.getByRole("button", { name: "Appearance", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Appearance" });
-    const leftButton = dialog.getByRole("button", { name: "All left" });
+    const leftButton = dialog.getByRole("radio", { name: "All left" });
     await expect(leftButton).toBeVisible();
     expect((await leftButton.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await leftButton.click();

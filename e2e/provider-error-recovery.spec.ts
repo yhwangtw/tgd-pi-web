@@ -128,11 +128,11 @@ for (const width of [390, 1440]) {
     await page.goto(`/?session=${SESSION}`);
     await expect(page.getByRole("alert").filter({ hasText: "This model was rejected for the current connection." })).toHaveCount(1);
     await page.getByTestId("model-selector-trigger").click();
-    const model = width < 700 ? page.getByRole("button", { name: /Fixture Spark.*Unavailable/ }) : page.getByRole("option", { name: /Fixture Spark.*Unavailable/ });
+    const model = page.getByRole("dialog", { name: "Choose a model", exact: true }).getByRole("button", { name: /Fixture Spark.*Unavailable/ });
     await expect(model).toHaveAttribute("aria-disabled", "true");
     await page.getByRole("button", { name: "Refresh model availability" }).click();
     await page.getByTestId("model-selector-trigger").click();
-    const refreshed = width < 700 ? page.getByRole("button", { name: /Fixture Spark.*Available/ }) : page.getByRole("option", { name: /Fixture Spark/ });
+    const refreshed = page.getByRole("dialog", { name: "Choose a model", exact: true }).getByRole("button", { name: /Fixture Spark/ });
     await expect(refreshed).not.toHaveAttribute("aria-disabled", "true");
     expect(forbidden).toEqual([]);
   });

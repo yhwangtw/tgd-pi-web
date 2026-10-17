@@ -55,3 +55,10 @@ export function ActionMenu({ open, onOpenChange, label, trigger, children }: {
 export function ActionMenuItem({ children }: { children: ReactElement }) {
   return <Menu.Item className={styles.item} asChild>{children}</Menu.Item>;
 }
+
+export function ActionMenuRadioGroup({ value, onValueChange, children }: { value: string; onValueChange: (value: string) => void; children: ReactNode }) {
+  return <Menu.RadioGroup value={value} onValueChange={onValueChange}>{children}</Menu.RadioGroup>;
+}
+export function ActionMenuRadioItem({ value, children }: { value: string; children: ReactNode }) {
+  return <Menu.RadioItem className={styles.item} value={value}>{children}</Menu.RadioItem>;
+}

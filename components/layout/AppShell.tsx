@@ -892,14 +892,14 @@ export function AppShell() {
                 className={s.workspaceIdentity}
                 data-testid="project-switcher-trigger"
                 aria-label={`${t("cwd.select")} · ${t("topbar.repository")}: ${visibleWorkspaceIdentity.repository}${visibleWorkspaceIdentity.branch ? `, ${t("topbar.branch")}: ${visibleWorkspaceIdentity.branch}` : ""}`}
-                title={visibleWorkspaceIdentity.root}
+                title={`${visibleWorkspaceIdentity.root}${visibleWorkspaceIdentity.branch ? ` · ${visibleWorkspaceIdentity.branch}` : ""}`}
                 onClick={handleOpenProjectSwitcher}
               >
                 <span className={s.workspaceRepository} data-testid="workspace-repository">
                   {visibleWorkspaceIdentity.repository}
                 </span>
                 <span
-                  className={`${s.workspaceBranch} ${visibleWorkspaceIdentity.isGit ? "" : s.workspaceBranchNeutral}`}
+                  className={`${s.workspaceBranch} ${visibleWorkspaceIdentity.detached ? s.detachedBranch : ""} ${visibleWorkspaceIdentity.isGit ? "" : s.workspaceBranchNeutral}`}
                   data-testid="workspace-branch"
                   title={visibleWorkspaceIdentity.detached && visibleWorkspaceIdentity.branch
                     ? `${t("topbar.detached")} · ${visibleWorkspaceIdentity.branch}`
@@ -1416,10 +1416,11 @@ export function AppShell() {
             type="button"
             onClick={() => setRightPanelOpen(false)}
             title={t("topbar.hideFilePanel")}
-            aria-label={t("topbar.hideFilePanel")}
             className={`${s.mobileFilePanelClose} hover-text`}
           >
             <PanelRightClose size={16} strokeWidth={1.9} aria-hidden />
+            <span className={s.fileBackLabel}>{t("files.backToChat")}</span>
+            <span className={`${s.fileHideLabel} sr-only`}>{t("topbar.hideFilePanel")}</span>
           </button>
         </div>
 

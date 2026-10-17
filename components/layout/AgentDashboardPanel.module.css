@@ -1,5 +1,6 @@
 .container {
   container-type: inline-size;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -11,6 +12,7 @@
   flex: 0 0 auto;
   min-height: 42px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
@@ -80,13 +82,13 @@
 .compareTray { margin: 8px 8px 0; padding: var(--space-2); border: 1px solid var(--color-accent-border-subtle); border-radius: var(--radius-card); background: var(--bg-elev-1); }
 .compareTrayHeader { display: flex; align-items: center; justify-content: space-between; font-size: var(--text-xs); }
 .compareTrayHeader button { border: 0; background: transparent; color: var(--text-dim); cursor: pointer; font-size: var(--text-lg); }
-.compareGrid { margin-top: 7px; display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: var(--space-2); }
+.compareGrid { margin-top: 7px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--space-2); }
 .compareGrid article { min-width: 0; padding: var(--space-2); border-radius: var(--radius-control); background: var(--bg-hover); display: grid; gap: var(--space-1); }
-.compareGrid article > strong, .compareGrid article > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-2xs); }
+.compareGrid article > strong, .compareGrid article > span { overflow-wrap: anywhere; font-size: var(--text-xs); }
 .compareGrid article > span { color: var(--text-dim); }
-.compareGrid dl { margin: 0; display: flex; gap: var(--space-2); }
+.compareGrid dl { margin: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .compareGrid dl div { display: flex; gap: var(--space-1); color: var(--text-dim); font-size: var(--text-2xs); }
-.compareGrid dd { margin: 0; color: var(--text); }
+.compareGrid dd { margin: 0; overflow-wrap: anywhere; color: var(--text); }
 .compareOpenSessions { margin-top: 7px; min-height: var(--control-sm); padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--text-2xs); cursor: pointer; }
 
 .summary {
@@ -299,7 +301,7 @@
 }
 .runReport { margin-top: 7px; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
 .reportToggle { width: 100%; min-height: 32px; padding: var(--space-1) var(--space-2); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); border: 0; background: var(--bg-hover); color: var(--text-muted); font: inherit; font-size: var(--text-2xs); cursor: pointer; }
-.reportToggle span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.reportToggle span:last-child { min-width: 0; overflow-wrap: anywhere; white-space: normal; color: var(--text-dim); }
 .reportBody { padding: var(--space-2); display: grid; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-2xs); line-height: var(--leading-snug); }
 .reportBody p { margin: 0; white-space: pre-wrap; }
 .reportBody strong { color: var(--text); }
@@ -527,3 +529,9 @@
 }
 
 @media (max-width: 700px), (pointer: coarse) { .container button, .container select { min-height: 44px; } .container select { font-size: var(--text-input-mobile); } }
+
+.runDetails { margin-top: var(--space-2); color: var(--text-muted); font-size: var(--text-xs); }
+.runDetails summary { cursor: pointer; }
+.runDetails .path, .runDetails .runError { overflow-wrap: anywhere; white-space: normal; }
+.reportToggle { flex-wrap: wrap; gap: var(--space-1); }
+.compareGrid time { color: var(--text-muted); font-size: var(--text-2xs); }

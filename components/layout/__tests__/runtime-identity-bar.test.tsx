@@ -21,7 +21,8 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 describe('runtime environment presentation', () => {
   it('keeps the compact summary readable and exposes the complete revision in details', async () => {
     await act(async () => root.render(<RuntimeIdentityBar />));
-    expect(container.querySelector('summary')?.textContent).toContain(version);
+    expect(container.querySelector('summary')?.textContent).not.toContain(version);
+    expect(container.querySelector('dl')?.textContent).toContain(version);
     expect(container.querySelector('summary')?.textContent).not.toContain('abcdef1');
     expect(container.querySelector('dl')?.textContent).toContain('abcdef12345');
   });
