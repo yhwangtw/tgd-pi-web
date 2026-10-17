@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Context } from "@earendil-works/chord";
-import { Type } from "@earendil-works/pi-ai-durable";
+import { Type } from "@earendil-works/pi-ai";
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import {
   configure, defineDoc, defineExtension, defineTool, GenerationTask, hook, ToolTask, UsageDoc,
@@ -508,7 +508,7 @@ export function createDurableSubagentExtension(options: DurableSubagentOptions):
         const output = resolved.mode === "parallel"
           ? `${outcomes.filter(outcome => outcome.child.status === "completed").length}/${resolved.items.length} subagents completed\n\n${outcomes.map(outcome => `### ${outcome.child.agent} · ${outcome.child.status}\n\n${outcome.output}`).join("\n\n---\n\n")}`
           : failed ? `Chain stopped at ${outcomes.at(-1)!.child.agent}: ${outcomes.at(-1)!.child.error || outcomes.at(-1)!.output}` : outcomes.at(-1)?.output ?? "No output.";
-        return { content: [{ type: "text", text: clipped(output) }],
+        return { output: [{ type: "text", text: clipped(output) }],
           details: JSON.parse(JSON.stringify(details(resolved.mode, outcomes, resolved.limits))), ...(failed ? { isError: true } : {}) };
       },
     })],

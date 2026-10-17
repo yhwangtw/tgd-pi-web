@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type } from "@earendil-works/pi-ai-durable";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type } from "@earendil-works/pi-ai";
 import { createRegistry, defineExtension, defineTool, Harness, type HarnessOptions } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { cancelDurableQuestions, createDurableQuestionsExtension, DurableQuestions, durableQuestionSnapshot, respondDurableQuestion, waitForDurableHostQuestion, waitForDurableQuestion, type DurableQuestionDraft } from "../durable-questions";
@@ -28,7 +28,7 @@ function fixture(draft?: DurableQuestionDraft, timeoutMs?: number) {
     name: "dialog", description: "Ask through an extension", parameters: Type.Object({}), replay: "safe",
     async execute(_args, api, ctx) {
       const result = await waitForDurableQuestion(api, draft, ctx, { ...options, timeoutMs });
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      return { output: [{ type: "text", text: JSON.stringify(result) }] };
     },
   })] }));
   const faux = fauxProvider({ provider: "questions-test", models: [{ id: "model" }], tokensPerSecond: 0 });

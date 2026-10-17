@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createAgentSessionServices, ModelRuntime, SettingsManager, type ExtensionUIContext, type InlineExtension } from "@earendil-works/pi-coding-agent";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type } from "@earendil-works/pi-ai-durable";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type } from "@earendil-works/pi-ai";
 import { createRegistry, Harness, type Conversation, type HarnessOptions } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { createDurableExtensionHost } from "../durable-extension-host";
@@ -41,7 +41,7 @@ function fixture(resources = false) {
     pi.on("session_start", (_event, ctx) => { calls.sessions.push(ctx.sessionManager.getSessionId()); });
     pi.on("before_agent_start", async (event, ctx) => {
       calls.before.push(ctx.sessionManager.getSessionId());
-      if (event.prompt === "Question prompt") {
+      if (event.messageType === "user" && event.prompt === "Question prompt") {
         await ctx.ui.input("First");
         await ctx.ui.input("Second");
       }
@@ -51,7 +51,7 @@ function fixture(resources = false) {
           return { content: [{ type: "text", text: args.value }], details: { session: ctx.sessionManager.getSessionId() } };
         },
       });
-      return { systemPrompt: `${event.systemPrompt}\nMEMORY_PROFILE_FIXTURE`, ...(event.prompt === "Attach note" ? { message: { customType: "fixture-note", content: "MODEL_VISIBLE_NOTE", display: false } } : {}) };
+      return { systemPrompt: `${event.systemPrompt}\nMEMORY_PROFILE_FIXTURE`, ...(event.messageType === "user" && event.prompt === "Attach note" ? { message: { customType: "fixture-note", content: "MODEL_VISIBLE_NOTE", display: false } } : {}) };
     });
     pi.on("context", (event, ctx) => {
       calls.contexts++;

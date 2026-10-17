@@ -21,7 +21,7 @@ export async function createDurableMcpExtension(cwd: string): Promise<Extension>
         // Built-in MCP tools consume only arguments and the cancellation signal.
         const result = await tool.execute(api.callId, args, context.abortSignal, undefined, {} as never);
         return {
-          content: result.content,
+          output: result.content,
           // The legacy MCP adapter can include an undefined structuredContent;
           // Durable documents/results accept JSON values only.
           ...(result.details === undefined ? {} : { details: JSON.parse(JSON.stringify(result.details)) }),

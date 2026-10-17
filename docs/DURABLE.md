@@ -1,7 +1,7 @@
 # Durable conversations: usage and limits
 
 Pi Web offers an explicit **Durable (preview)** mode for new conversations. It
-uses the official `@earendil-works/pi-durable` package, pinned to **1.0.0**. Upstream
+uses the official `@earendil-works/pi-durable` package, pinned to **1.3.0**. Upstream
 describes this runtime as experimental. The Web integration is implemented in
 this source tree; this document does not claim a release or production deployment.
 
@@ -69,9 +69,8 @@ edits are not merged into SQLite.
 | Schedules | Saves the admitted run's prompt/model/tools and request ID; a restart reconnects unfinished work, including pending questions, with the original deadline |
 
 Goal, Plan and subagent integration remain Pi Web-maintained code using official
-Pi APIs. They are not unmodified official extension packages. The legacy Pi
-runtime stays pinned separately; the `pi-ai-durable` npm alias supplies the
-Durable 1.0 model contract while `lib/durable-models.ts` uses the existing model
+Pi APIs. They are not unmodified official extension packages. Standard and
+Durable share Pi AI 1.3.0; `lib/durable-models.ts` uses the existing model
 configuration and authentication runtime.
 
 ## Storage and recovery

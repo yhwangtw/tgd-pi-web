@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
-import { Type } from "@earendil-works/pi-ai-durable";
+import { Type } from "@earendil-works/pi-ai";
 import { defineDoc, defineExtension, defineTool, type Conversation, type ConversationId, type Harness, type ToolExecutionApi } from "@earendil-works/pi-durable";
 import type { AskUserQuestion, WebExtensionUIClosedEvent, WebExtensionUIDialogRequest, WebExtensionUIEvent, WebExtensionUIResponse, WebExtensionUIResponseResult } from "./web-extension-ui-types";
 
@@ -256,8 +256,8 @@ export function createDurableQuestionsExtension(options: DurableQuestionOptions 
       });
       const result = await waitForDurableQuestion(api, { method: "ask_user", questions }, context, options);
       const answers = result.response && "answers" in result.response ? result.response.answers : undefined;
-      return answers ? { content: [{ type: "text", text: `User answers: ${JSON.stringify(answers)}` }], details: { cancelled: false, answers, outcome: result.outcome } }
-        : { content: [{ type: "text", text: result.outcome === "timeout" ? "The question timed out." : "The user cancelled the question." }], details: { cancelled: true, answers: {}, outcome: result.outcome } };
+      return answers ? { output: [{ type: "text", text: `User answers: ${JSON.stringify(answers)}` }], details: { cancelled: false, answers, outcome: result.outcome } }
+        : { output: [{ type: "text", text: result.outcome === "timeout" ? "The question timed out." : "The user cancelled the question." }], details: { cancelled: true, answers: {}, outcome: result.outcome } };
     },
   })] });
 }

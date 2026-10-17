@@ -12,7 +12,7 @@ import {
 } from "@earendil-works/pi-durable";
 import { createReadTool, createBashTool, createEditTool, createWriteTool, createGrepTool, createFindTool, createLsTool,
   createAgentSessionServices, type AgentSessionServices, type ExtensionUIContext } from "@earendil-works/pi-coding-agent";
-import type { ModelThinkingLevel } from "@earendil-works/pi-ai-durable";
+import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { AgentEventLog, type AgentStreamRecord } from "./agent-event-log";
 import { createPiModelRuntime } from "./pi-model-runtime";
 import { durableModels } from "./durable-models";
@@ -113,7 +113,7 @@ function nativeCodingTools(cwd: string): ToolRegistration[] {
           else api.output(text);
           prior = text;
         });
-        return { content: result.content, ...(result.details !== undefined ? { details: JSON.parse(JSON.stringify(result.details)) } : {}) };
+        return { output: result.content, ...(result.details !== undefined ? { details: JSON.parse(JSON.stringify(result.details)) } : {}) };
       },
     }));
 }

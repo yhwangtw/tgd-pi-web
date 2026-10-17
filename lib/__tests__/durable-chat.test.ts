@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createModels, fauxProvider, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai-durable";
+import { createModels, fauxProvider, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import type { HarnessOptions } from "@earendil-works/pi-durable";
 import { createDurableChat, openDurableChat, type DurableChat, type DurableChatOptions } from "../durable-chat";
 import { durableContext } from "../durable-session-store";

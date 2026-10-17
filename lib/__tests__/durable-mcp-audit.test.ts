@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type } from "@earendil-works/pi-ai-durable";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type } from "@earendil-works/pi-ai";
 import { createRegistry, defineExtension, defineTool, Harness, type HarnessOptions } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { McpConnectionManager } from "../mcp-client";
@@ -44,7 +44,7 @@ async function fixture(mode = "normal") {
     // No replay annotation: unknown remote tools must retain Durable's unsafe default.
     execute: async (args, _api, callContext) => {
       const result = await manager.callTool(server, remoteTool, args, callContext.abortSignal);
-      return { content: result.content.flatMap(block => block.type === "text" ? [{ type: "text" as const, text: block.text }] : []),
+      return { output: result.content.flatMap(block => block.type === "text" ? [{ type: "text" as const, text: block.text }] : []),
         ...(result.isError ? { isError: true } : {}) };
     },
   })] }));

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels, fauxProvider, fauxAssistantMessage, fauxToolCall, Type } from "@earendil-works/pi-ai-durable";
+import { createModels, fauxProvider, fauxAssistantMessage, fauxToolCall, Type } from "@earendil-works/pi-ai";
 import { createRegistry, defineDoc, defineExtension, defineTool, GenerationTask, Harness, hook, type HarnessOptions } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 
@@ -55,7 +55,7 @@ describe("Durable persistent state feasibility (not product integration)", () =>
           if (doc.status === "empty") { doc.id = api.callId; doc.status = "pending"; deliveries++; }
         }, ctx);
         const saved = await api.snapshot(Question, api.conversationId, ctx);
-        if (saved?.status === "answered") return { content: [{ type: "text", text: saved.answer }] };
+        if (saved?.status === "answered") return { output: [{ type: "text", text: saved.answer }] };
         const watch = await api.watchDoc(Question, api.conversationId, ctx);
         if (!watch) throw new Error("Question document missing");
         try {
@@ -72,7 +72,7 @@ describe("Durable persistent state feasibility (not product integration)", () =>
             watch.start(async value => accept(value ?? undefined));
             accept(watch.value ?? undefined);
           });
-          return { content: [{ type: "text", text: answer }] };
+          return { output: [{ type: "text", text: answer }] };
         } finally { await watch.stop(); }
       },
     })] }));
@@ -129,7 +129,7 @@ describe("Durable persistent state feasibility (not product integration)", () =>
           doc.steps = [args.evidence];
           doc.goal = "complete";
         }, ctx);
-        return { content: [{ type: "text", text: "Plan complete" }], details: { evidence: args.evidence } };
+        return { output: [{ type: "text", text: "Plan complete" }], details: { evidence: args.evidence } };
       },
     })], hooks: [hook(GenerationTask, { onYield: async (_answer, api, ctx) => {
       const state = await api.snapshot(Workflow, api.conversationId, ctx);

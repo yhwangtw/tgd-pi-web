@@ -63,7 +63,9 @@ export function normalizePiBraceExpansionLock(projectRoot = PROJECT_ROOT) {
   if (!rootEntry || !isPatchedBraceExpansion(rootEntry.version)) {
     throw new Error(`package-lock.json does not contain a patched direct brace-expansion dependency`);
   }
-  if (JSON.stringify(lock.packages[nestedKey]) !== JSON.stringify(rootEntry)) {
+  // Pi 1.3 already resolves the patched root package and has no nested copy.
+  // Never synthesize an unnecessary nested lock entry for a clean install.
+  if (lock.packages[nestedKey] && JSON.stringify(lock.packages[nestedKey]) !== JSON.stringify(rootEntry)) {
     lock.packages[nestedKey] = { ...rootEntry };
     writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
     console.log(`Normalized Pi's shrinkwrap lock entry to brace-expansion@${rootEntry.version}.`);
