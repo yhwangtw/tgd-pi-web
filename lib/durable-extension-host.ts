@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import {
-  ExtensionRunner, ModelRegistry, SessionManager, stripFrontmatter, getPackageDir,
+  ExtensionRunner, ModelRegistry, SessionManager, convertToLlm, stripFrontmatter, getPackageDir,
   type AgentSessionServices, type ExtensionActions, type ExtensionCommandContextActions,
   type ExtensionError, type ExtensionUIContext, type FileEntry, type SessionEntry, type SessionBeforeCompactEvent, type ToolCallEvent, type ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
@@ -30,7 +30,7 @@ const ExtensionDoc = defineDoc({
 });
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const LEGACY_BUILTINS = new Set(["<inline:Plan Mode>", "<inline:pi-web-workflow>", "<inline:Structured Output>", "<inline:pi-web-mcp>", "<inline:pi-web-subagent>"]);
-const READ_METHODS = new Set(["getCwd", "getSessionDir", "getSessionId", "getSessionFile", "getLeafId", "getLeafEntry", "getEntry", "getLabel", "getBranch", "buildContextEntries", "getHeader", "getEntries", "getTree", "getSessionName"]);
+const READ_METHODS = new Set(["getCwd", "getSessionDir", "getSessionId", "getSessionFile", "getLeafId", "getLeafEntry", "getEntry", "getLabel", "getBranch", "buildContextEntries", "buildSessionProjection", "getHeader", "getEntries", "getTree", "getSessionName"]);
 
 export interface DurableExtensionHostOptions {
   /** Must be freshly created for this conversation: extension factories share their runtime bindings. */
@@ -180,9 +180,9 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
     sendUserMessage: (content, delivery) => { const requestId = effectId(); enqueue(() => options.conversation().submit({ type: "input", content: content as never, whenBusy: delivery?.deliverAs === "steer" ? "steer" : undefined, requestId }, context)); },
     appendEntry: append,
     setSessionName: unsupported("setSessionName"), getSessionName: () => projection.getSessionName(), setLabel: unsupported("setLabel"),
-    getActiveTools: () => [...activeTools], getAllTools: () => runner.getAllRegisteredTools().map(tool => ({ ...tool.definition, sourceInfo: tool.sourceInfo })),
+    getActiveTools: () => [...activeTools], getAllTools: () => runner.getAllRegisteredTools().map(tool => ({ ...tool.definition, exposure: tool.definition.exposure ?? "direct", sourceInfo: tool.sourceInfo })),
     setActiveTools: names => { activeTools = [...names]; enqueue(() => options.conversation().commit(async tx => { (await tx.doc(AgentDoc, conversationId)).tools = [...names]; }, context)); },
-    refreshTools, getCommands: () => runner.getRegisteredCommands().map(command => ({ name: command.name, description: command.description, source: "extension" as const, sourceInfo: command.sourceInfo })),
+    refreshTools, getSettings: () => options.services.settingsManager.getSettings(), getCommands: () => runner.getRegisteredCommands().map(command => ({ name: command.name, description: command.description, source: "extension" as const, sourceInfo: command.sourceInfo })),
     setModel: async model => { await options.conversation().configure({ model: { provider: model.provider, modelId: model.id } }, context); currentModel = model; return true; },
     getThinkingLevel: () => thinking as ReturnType<ExtensionActions["getThinkingLevel"]>,
     setThinkingLevel: level => { thinking = level; enqueue(() => options.conversation().configure({ thinkingLevel: level }, context)); },
@@ -217,9 +217,10 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
             const text = update.content.filter(block => block.type === "text").map(block => block.text).join("\n");
             api.output(text.startsWith(previous) ? text.slice(previous.length) : text); previous = text;
             if (update.details !== undefined) void api.details(plain(update.details) as JsonValue, callContext);
-          }, runner.createContext());
+          }, runner.createToolContext(api.callId, callContext.abortSignal));
           await flush();
-          return { ...plain(result), ...(result.terminate ? { control: { terminate: true as const } } : {}) } as never;
+          return { output: plain(result.content), details: result.details === undefined ? undefined : plain(result.details) as JsonValue, isError: result.isError,
+            usage: result.usage, ...(result.terminate ? { control: { terminate: true as const } } : {}) };
         });
       },
     }));
@@ -253,9 +254,14 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
         },
         afterTool: async (call, result, api, callContext) => {
           if (api.conversationId !== conversationId) return undefined;
-          const patched = await invoke("tool_result", api, callContext, () => runner.emitToolResult({ type: "tool_result", toolCallId: call.id, toolName: call.name, input: plain(call.arguments), content: plain(result.content ?? []), details: result.details, isError: result.isError ?? false, usage: result.usage } as ToolResultEvent));
+          const patched = await invoke("tool_result", api, callContext, () => runner.emitToolResult({ type: "tool_result", toolCallId: call.id, toolName: call.name, input: plain(call.arguments), content: plain(result.output ?? []), details: result.details, isError: result.isError ?? false, usage: result.usage } as ToolResultEvent));
           await flush();
-          return patched ? { ...result, ...plain(patched) } as typeof result : undefined;
+          if (!patched) return undefined;
+          return { ...result, ...(patched.content !== undefined ? { output: plain(patched.content) } : {}),
+            ...(patched.details !== undefined ? { details: plain(patched.details) as JsonValue } : {}),
+            ...(patched.structuredContent !== undefined ? { structuredOutput: plain(patched.structuredContent) as JsonValue } : {}),
+            ...(patched.isError !== undefined ? { isError: patched.isError } : {}),
+            ...(patched.usage !== undefined ? { usage: patched.usage } : {}) };
         },
       }), hook(CompactionTask, {
         beforeCompact: async (compaction, api, callContext) => {
@@ -299,7 +305,7 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
       return input;
     }
     input = { ...input, text: await expandInput(input.text) };
-    const result = await invoke("before_agent_start", undefined, context, () => runner.emitBeforeAgentStart(input.text, input.images, { cwd, forceSystemPrompt: options.systemPrompt }), requestId);
+    const result = await invoke("before_agent_start", undefined, context, () => runner.emitBeforeAgentStart({ messageType: "user", prompt: input.text, images: input.images }, { cwd, forceSystemPrompt: options.systemPrompt }), requestId);
     await flush();
     systemPrompt = result.systemPromptOptions.forceSystemPrompt ?? options.systemPrompt;
     // Receipt and returned messages are atomic. External effects performed inside the
@@ -335,7 +341,7 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
     }
     const templates = options.services.resourceLoader.getPrompts().prompts;
     if (templates.length) {
-      // Pi 0.86 does not export this helper publicly; resolve its pinned official
+      // Pi does not export this helper publicly; resolve its pinned official
       // implementation relative to the installed SDK rather than cloning parsing.
       const source = pathToFileURL(join(getPackageDir(), "dist/core/prompt-templates.js"));
       const official = await import(/* webpackIgnore: true */ source.href) as { expandPromptTemplate(text: string, values: typeof templates): string };
@@ -362,7 +368,11 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
       const toolResults = tail.flatMap(item => item.type === "message" && item.message.role === "toolResult" ? [item.message] : []);
       const calls = entry.message.role === "assistant" ? entry.message.content.filter(block => block.type === "toolCall") : [];
       if (calls.some(call => !toolResults.some(result => result.toolCallId === call.id))) continue;
-      await invoke(`turn_end:${entry.id}`, undefined, context, () => runner.emit({ type: "turn_end", turnIndex: index, message: entry.message, toolResults }), entry.id);
+      await invoke(`turn_end:${entry.id}`, undefined, context, () => runner.emitBoundary({ type: "turn_end", turnIndex: index, message: entry.message, toolResults,
+        messageEntryId: entry.id, toolResultEntryIds: tail.flatMap(item => item.type === "message" && item.message.role === "toolResult" ? [item.id] : []), outcome: "completed" }, () => {
+        const current = projection.buildSessionProjection();
+        return { contextEntries: current.entries, contextMessages: current.messages, llmMessages: convertToLlm(current.messages), pendingMessages: [], canContinue: false };
+      }), entry.id);
       await flush();
       await options.conversation().commit(async tx => { (await tx.doc(ExtensionDoc, conversationId)).deliveredTurns[entry.id] = true; }, context);
     }

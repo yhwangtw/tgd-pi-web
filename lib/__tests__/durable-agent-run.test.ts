@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   fauxProvider, fauxAssistantMessage, fauxToolCall, createModels, Type,
-} from "@earendil-works/pi-ai-durable";
+} from "@earendil-works/pi-ai";
 import { createRegistry, defineExtension, defineTool, type HarnessOptions } from "@earendil-works/pi-durable";
 import { openDurableAgentRun, type DurableRunHandle } from "../durable-agent-run";
 import type { AgentRun } from "../agent-run-types";
@@ -84,7 +84,7 @@ describe("official Pi Durable background runs", () => {
   it("enforces a turn budget before another model request, including after reopening", async () => {
     const input = fixture();
     input.run.limits = { maxTurns: 1, timeoutMs: 0 };
-    const execute = vi.fn(async () => ({ content: [{ type: "text" as const, text: "Inspected" }] }));
+    const execute = vi.fn(async () => ({ output: [{ type: "text" as const, text: "Inspected" }] }));
     input.registry.install(defineExtension({ name: "test-tools", tools: [defineTool({ name: "inspect", description: "Inspect", parameters: Type.Object({}), replay: "safe", execute })] }));
     input.faux.setResponses([fauxAssistantMessage(fauxToolCall("inspect", {}), { stopReason: "toolUse" }), fauxAssistantMessage("Must not happen")]);
     const first = await open(input);
@@ -143,7 +143,7 @@ describe("official Pi Durable background runs", () => {
     const signal = await new Promise<NodeJS.Signals | null>(resolveExit => { child.once("exit", (_code, signal) => resolveExit(signal)); child.kill("SIGKILL"); });
     expect(signal).toBe("SIGKILL");
     expect(readFileSync(join(input.directory, "effect.txt"), "utf8")).toBe("once");
-    const execute = vi.fn(async () => ({ content: [{ type: "text" as const, text: "Duplicated" }] }));
+    const execute = vi.fn(async () => ({ output: [{ type: "text" as const, text: "Duplicated" }] }));
     input.registry.install(defineExtension({ name: "test-tools", tools: [defineTool({ name: "side_effect", description: "Side effect", parameters: Type.Object({}), execute })] }));
     input.faux.setResponses([(transcript) => {
       expect(transcript.messages.some(message => message.role === "toolResult" && message.isError)).toBe(true);

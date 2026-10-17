@@ -11,10 +11,10 @@ import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite
 import {
   createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type,
   type FauxResponseFactory,
-} from "@earendil-works/pi-ai-durable";
+} from "@earendil-works/pi-ai";
 
 // Capability experiment only: no product adapter, real credentials or services.
-// The owned-child pattern is the official Durable 1.0 README's subagent example.
+// The owned-child pattern follows the official Durable subagent example.
 const context = BACKGROUND_CONTEXT;
 const directories: string[] = [];
 const opened = new Set<Harness>();
@@ -93,7 +93,7 @@ function fixture(labels: string[]) {
       const submission = await child.submit({ type: "input", content: args.label, requestId: `delegate:${api.taskId}` }, callContext);
       const settled = await submission.wait(callContext);
       if (settled.status !== "done") throw new Error(`Child ${args.label} did not complete`);
-      return { content: [{ type: "text", text: `Child ${args.label} completed` }], details: { conversationId: childId } };
+      return { output: [{ type: "text", text: `Child ${args.label} completed` }], details: { conversationId: childId } };
     },
   })] }));
 

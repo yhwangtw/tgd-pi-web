@@ -14,7 +14,7 @@ import {
   createGrepTool, createFindTool, createLsTool, getAgentDir,
   createAgentSessionServices,
 } from "@earendil-works/pi-coding-agent";
-import type { ModelThinkingLevel } from "@earendil-works/pi-ai-durable";
+import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { AgentRun, AgentRunReport, DurableRunTranscript } from "./agent-run-types";
 import type { AgentMessage } from "./types";
 import { DURABLE_AGENT_TOOLS } from "./agent-run-types";
@@ -92,7 +92,7 @@ function makeTools(cwd: string, names: string[]): ToolRegistration[] {
         if (text) api.output(text.startsWith(previousOutput) ? text.slice(previousOutput.length) : text);
         previousOutput = text;
       });
-      return { content: result.content };
+      return { output: result.content };
     },
   }));
 }

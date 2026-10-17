@@ -77,7 +77,7 @@ They do not flatten the imported history into Durable or replace its source stor
 This is the separate Agents-dashboard runner. Its smaller tool surface is
 distinct from the Durable conversation/schedule path above.
 
-`AgentRunInput.engine: "durable"` selects official Pi Durable 1.0.0 for a new
+`AgentRunInput.engine: "durable"` selects official Pi Durable 1.3.0 for a new
 background run. Missing `engine` preserves the normal coding-agent path.
 `lib/durable-agent-run.ts` owns one Harness/SQLite database per run under
 `<agent-dir>/durable-runs/<uuid>/`. A process lease prevents concurrent owners;
@@ -93,10 +93,10 @@ marked safe to replay. Writes, edits and shell commands are never automatically
 replayed after interruption. The model sees the interruption and can issue new
 calls, so exactly-once admission does not imply exactly-once external effects.
 
-`pi-ai-durable` is an npm alias of official `@earendil-works/pi-ai` 1.0.0.
+Standard and Durable use the same official `@earendil-works/pi-ai` 1.3.0.
 `lib/durable-models.ts` bridges its chat contract to the existing Pi ModelRuntime
-so credentials, custom endpoints and OAuth locking remain canonical. This
-version boundary needs its regression test when either Pi version changes.
+so credentials, custom endpoints and OAuth locking remain canonical. Exercise
+this bridge whenever the Pi package group changes.
 Core file/shell tools and project instructions are supported. Conversation extensions,
 MCP, ask_user, subagents and Goal/Plan are not installed in this harness.
 

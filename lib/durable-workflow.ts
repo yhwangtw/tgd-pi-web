@@ -6,7 +6,7 @@ import {
   AgentDoc, defineDoc, defineExtension, defineTool, GenerationTask, hook, InboxDoc, LiveDoc, section, ToolTask,
   type Conversation, type ConversationId, type Harness, type HookApi, type TaskId,
 } from "@earendil-works/pi-durable";
-import { Type } from "@earendil-works/pi-ai-durable";
+import { Type } from "@earendil-works/pi-ai";
 import { isPlanReadOnlyCommand, isPlanToolSelection, PLAN_MODE_PROMPT } from "./plan-mode";
 import { TOOL_PRESET_DEFAULT, TOOL_PRESET_PLAN } from "./tool-selection";
 import { emptyWorkflow, parseTokenBudget, parseWorkflowCommand, type WorkflowState } from "./workflow-state";
@@ -146,7 +146,7 @@ export function createDurableWorkflowExtension(options: DurableWorkflowOptions) 
             state.planResults[String(api.taskId)] = detached(state.plan);
             return detached(state.plan);
           }, context);
-          return { content: [{ type: "text", text: `Plan saved: ${result.status}.` }], details: result };
+          return { output: [{ type: "text", text: `Plan saved: ${result.status}.` }], details: result };
         },
       }),
       defineTool({
@@ -167,7 +167,7 @@ export function createDurableWorkflowExtension(options: DurableWorkflowOptions) 
             state.goalResults[String(api.taskId)] = detached(goal);
             return detached(goal);
           }, context);
-          return { content: [{ type: "text", text: `Goal ${args.status}: ${args.evidence}` }], details: result };
+          return { output: [{ type: "text", text: `Goal ${args.status}: ${args.evidence}` }], details: result };
         },
       }),
       defineTool({
@@ -176,7 +176,7 @@ export function createDurableWorkflowExtension(options: DurableWorkflowOptions) 
         async execute(args, api, context) {
           const details = { headline: args.headline.trim(), summary: args.summary.trim(), actionItems: args.actionItems.map(item => item.trim()).filter(Boolean), kind: args.kind ?? "result", ...(args.details?.trim() ? { details: args.details.trim() } : {}) };
           const workflow = await api.snapshot(DurableWorkflowDoc, api.conversationId, context);
-          return { content: [{ type: "text", text: `Structured result: ${details.headline}` }], details, ...(workflow?.goal?.status === "active" ? {} : { control: { terminate: true as const } }) };
+          return { output: [{ type: "text", text: `Structured result: ${details.headline}` }], details, ...(workflow?.goal?.status === "active" ? {} : { control: { terminate: true as const } }) };
         },
       }),
     ],

@@ -6,8 +6,8 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   createModels, fauxProvider, fauxAssistantMessage, fauxToolCall, Type,
   type FauxResponseFactory, type TranscriptContext,
-} from "@earendil-works/pi-ai-durable";
-import { getCurrentTools } from "@earendil-works/pi-ai-durable/utils/transcript";
+} from "@earendil-works/pi-ai";
+import { getCurrentTools } from "@earendil-works/pi-ai/utils/transcript";
 import {
   createRegistry, defineExtension, defineTool, Harness, UsageDoc,
   type Conversation, type ConversationId, type HarnessOptions, type ToolRegistration,
@@ -28,7 +28,7 @@ async function fixture(options: Partial<Omit<DurableSubagentOptions, "getHarness
   models.setProvider(faux.provider);
   const registry = createRegistry();
   const tools = ["read", "write", "mcp_custom"].map(name => defineTool({ name, description: name, parameters: Type.Object({}),
-    execute: async () => ({ content: [{ type: "text", text: `${name} worked` }] }),
+    execute: async () => ({ output: [{ type: "text", text: `${name} worked` }] }),
   }));
   registry.install(defineExtension({ name: "fixture-tools", tools: [...tools, ...extraTools] }));
   let active: Harness;
@@ -89,7 +89,7 @@ describe("native Durable subagents", () => {
         await check(api, callContext);
         executions++;
         if (executions === 1) await new Promise<void>((resolve) => callContext.abortSignal?.addEventListener("abort", () => resolve(), { once: true }));
-        return { content: [{ type: "text", text: "Probe complete" }] };
+        return { output: [{ type: "text", text: "Probe complete" }] };
       },
     });
     const f = await fixture({ isProjectTrusted: () => trusted }, [probe]);

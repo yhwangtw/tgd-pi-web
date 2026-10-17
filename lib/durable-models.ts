@@ -1,4 +1,4 @@
-import { createModels } from "@earendil-works/pi-ai-durable/models";
+import { createModels } from "@earendil-works/pi-ai/models";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { HarnessOptions } from "@earendil-works/pi-durable";
 

@@ -6,7 +6,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type,
   type TranscriptContext,
-} from "@earendil-works/pi-ai-durable";
+} from "@earendil-works/pi-ai";
 import {
   createRegistry, defineExtension, defineTool, Harness, watchEvents,
   type AgentEvent, type AgentEventStream, type Conversation, type HarnessOptions,
@@ -114,7 +114,7 @@ describe("Pi Durable native chat capability audit", () => {
         toolStarted = true;
         callContext.abortSignal?.addEventListener("abort", releaseTool, { once: true });
         await gate;
-        return { content: [{ type: "text", text: "Gate opened" }] };
+        return { output: [{ type: "text", text: "Gate opened" }] };
       },
     })] }));
     const requests: string[][] = [];

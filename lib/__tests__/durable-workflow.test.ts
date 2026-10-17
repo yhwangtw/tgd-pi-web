@@ -8,7 +8,7 @@ import {
   type GenerationHooks, type HarnessOptions,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type, type FauxContentBlock } from "@earendil-works/pi-ai-durable";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type, type FauxContentBlock } from "@earendil-works/pi-ai";
 import {
   createDurableWorkflowExtension, DurableWorkflowDoc, durableWorkflowUIEvents,
   handleDurableWorkflowCommand, pauseDurableWorkflow, readDurableWorkflow,
@@ -55,8 +55,8 @@ async function fixture(options: { holdFirstYield?: boolean } = {}) {
       return result;
     }) satisfies GenerationHooks["onYield"] } };
   }) });
-  const writes = vi.fn(async () => ({ content: [{ type: "text" as const, text: "Written" }] }));
-  const shells = vi.fn(async () => ({ content: [{ type: "text" as const, text: "Inspected" }] }));
+  const writes = vi.fn(async () => ({ output: [{ type: "text" as const, text: "Written" }] }));
+  const shells = vi.fn(async () => ({ output: [{ type: "text" as const, text: "Inspected" }] }));
   registry.install(defineExtension({ name: "fixture-files", tools: [
     defineTool({ name: "write", description: "Fixture write", parameters: Type.Object({}), execute: writes }),
     defineTool({ name: "bash", description: "Fixture shell", parameters: Type.Object({ command: Type.String() }), execute: shells }),
