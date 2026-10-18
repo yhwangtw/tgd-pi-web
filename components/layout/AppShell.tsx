@@ -35,7 +35,6 @@ import { AttentionPanel } from "./AttentionPanel";
 import { DiffPanel } from "./DiffPanel";
 import type { DiffAnnotation } from "./DiffView";
 import { DesignInspector } from "./DesignInspector";
-import { AppearancePanel } from "./AppearancePanel";
 import { IconRail, type PanelView } from "./IconRail";
 import { MobileNavigation } from "./MobileNavigation";
 import { ShortcutsDialog } from "./ShortcutsDialog";
@@ -72,6 +71,7 @@ import { getSessionDisplayTitle } from "../sidebar/session-utils";
 import s from "./AppShell.module.css";
 
 // Lazy-load heavy modals — they're ~1000 lines each and rarely opened
+const AppearancePanel = lazy(() => import("./AppearancePanel").then((m) => ({ default: m.AppearancePanel })));
 const ModelsConfig = lazy(() => import("../modals/ModelsConfig").then((m) => ({ default: m.ModelsConfig })));
 const SkillsConfig = lazy(() => import("../modals/SkillsConfig").then((m) => ({ default: m.SkillsConfig })));
 const ExtensionsConfig = lazy(() => import("../modals/ExtensionsConfig").then((m) => ({ default: m.ExtensionsConfig })));
@@ -1507,7 +1507,7 @@ export function AppShell() {
         }}
       /></Suspense>
     )}
-    {appearanceOpen && <AppearancePanel returnFocus={appearanceReturnFocus.current} onClose={closeAppearance} />}
+    {appearanceOpen && <Suspense fallback={null}><AppearancePanel returnFocus={appearanceReturnFocus.current} onClose={closeAppearance} /></Suspense>}
     {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
     <DesignInspector active={designModeOpen && showChat} onClose={() => setDesignModeOpen(false)} onCapture={handleDesignCapture} />
     {/* Toast notifications — mount once at app root */}
