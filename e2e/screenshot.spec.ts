@@ -69,7 +69,7 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
     await dialog.getByRole("button", { name: "Attach selection", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Remove image", exact: true })).toBeVisible();
-    const attachment = composer.locator("img").first();
+    const attachment = page.getByRole("button", { name: "Remove image", exact: true }).locator("..").locator("img");
     await expect(attachment).toBeVisible();
     expect(await attachment.evaluate(async (image: HTMLImageElement) => {
       await image.decode();
