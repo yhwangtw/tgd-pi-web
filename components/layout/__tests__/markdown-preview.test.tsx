@@ -56,6 +56,13 @@ describe("Markdown file preview", () => {
       .toBe("/api/files/workspace/project/screenshots/mobile%20view.png?type=raw");
   });
 
+  it("maps repeated and formatted headings to their exact source lines", async () => {
+    container = document.createElement("div"); document.body.append(container); root = createRoot(container);
+    await act(async () => root?.render(<PreviewView language="markdown" filePath="/project/README.md" content={"# **Same**\n\nText\n\n## Same\n\nSetext\n------\n\n```md\n# Example\n```"} />));
+    expect([...container.querySelectorAll("[data-source-line]")].map((node) => [node.textContent, node.getAttribute("data-source-line")]))
+      .toEqual([["Same", "1"], ["Same", "5"], ["Setext", "7"]]);
+  });
+
   it("keeps inline HTML network-isolated as well as sandboxed", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);

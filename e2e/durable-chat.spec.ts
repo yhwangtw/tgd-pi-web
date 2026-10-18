@@ -152,7 +152,7 @@ test("the new-session Durable control creates a Durable conversation with the se
   await page.getByRole("button", { name: "More composer controls", exact: true }).click();
   await expect(page.getByTestId("model-selector-trigger")).toHaveAttribute("data-catalog-status", "ready");
   await page.getByTestId("model-selector-trigger").click();
-  await page.getByRole("option", { name: /E2E deterministic offline model/ }).click();
+  await page.getByRole("dialog", { name: "Choose a model", exact: true }).getByRole("button", { name: /E2E deterministic offline model/ }).click();
   const created = page.waitForResponse(response => new URL(response.url()).pathname === "/api/agent/new" && response.request().method() === "POST");
   await page.locator("textarea").last().fill("E2E_RECONNECT:complete:durable-ui-create");
   await page.getByRole("button", { name: "Send", exact: true }).click();

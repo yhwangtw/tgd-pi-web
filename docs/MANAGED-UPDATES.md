@@ -125,6 +125,11 @@ Adapter responsibilities:
    still recorded as failed, with `rollbackVerified: true` when recovery passes.
    A rollback verification failure requires operator recovery.
 
+The release pipeline can retain only the current build plus one recoverable previous
+build **after public verification**. It preserves failed/unverified attempts and
+manual/source backups; see [release retention](./RELEASE-PIPELINE.md#release-retention).
+Managed adapters must not prune while switching or before verification completes.
+
 This first adapter contract is **fixed-canonical-cwd**, matching the current
 fixed-working-directory launchd/systemd setup. A release-symlink swap that
 changes the service's canonical cwd is deliberately rejected. Supporting that

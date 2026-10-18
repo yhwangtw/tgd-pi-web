@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
@@ -34,7 +35,6 @@ import { AttentionPanel } from "./AttentionPanel";
 import { DiffPanel } from "./DiffPanel";
 import type { DiffAnnotation } from "./DiffView";
 import { DesignInspector } from "./DesignInspector";
-import { AppearancePanel } from "./AppearancePanel";
 import { IconRail, type PanelView } from "./IconRail";
 import { MobileNavigation } from "./MobileNavigation";
 import { ShortcutsDialog } from "./ShortcutsDialog";
@@ -71,6 +71,7 @@ import { getSessionDisplayTitle } from "../sidebar/session-utils";
 import s from "./AppShell.module.css";
 
 // Lazy-load heavy modals — they're ~1000 lines each and rarely opened
+const AppearancePanel = lazy(() => import("./AppearancePanel").then((m) => ({ default: m.AppearancePanel })));
 const ModelsConfig = lazy(() => import("../modals/ModelsConfig").then((m) => ({ default: m.ModelsConfig })));
 const SkillsConfig = lazy(() => import("../modals/SkillsConfig").then((m) => ({ default: m.SkillsConfig })));
 const ExtensionsConfig = lazy(() => import("../modals/ExtensionsConfig").then((m) => ({ default: m.ExtensionsConfig })));
@@ -883,7 +884,7 @@ export function AppShell() {
             onClick={() => handleRailView("sessions")}
             aria-label={t("mobile.openSessions")}
           >
-            <ArrowLeft size={21} strokeWidth={2} aria-hidden="true" />
+            <ArrowLeft size={UI_ICON_SIZE.navigation} aria-hidden="true" />
           </button>
           <div className={s.sessionIdentity} data-testid="session-identity">
             {visibleWorkspaceIdentity && (
@@ -892,14 +893,14 @@ export function AppShell() {
                 className={s.workspaceIdentity}
                 data-testid="project-switcher-trigger"
                 aria-label={`${t("cwd.select")} · ${t("topbar.repository")}: ${visibleWorkspaceIdentity.repository}${visibleWorkspaceIdentity.branch ? `, ${t("topbar.branch")}: ${visibleWorkspaceIdentity.branch}` : ""}`}
-                title={visibleWorkspaceIdentity.root}
+                title={`${visibleWorkspaceIdentity.root}${visibleWorkspaceIdentity.branch ? ` · ${visibleWorkspaceIdentity.branch}` : ""}`}
                 onClick={handleOpenProjectSwitcher}
               >
                 <span className={s.workspaceRepository} data-testid="workspace-repository">
                   {visibleWorkspaceIdentity.repository}
                 </span>
                 <span
-                  className={`${s.workspaceBranch} ${visibleWorkspaceIdentity.isGit ? "" : s.workspaceBranchNeutral}`}
+                  className={`${s.workspaceBranch} ${visibleWorkspaceIdentity.detached ? s.detachedBranch : ""} ${visibleWorkspaceIdentity.isGit ? "" : s.workspaceBranchNeutral}`}
                   data-testid="workspace-branch"
                   title={visibleWorkspaceIdentity.detached && visibleWorkspaceIdentity.branch
                     ? `${t("topbar.detached")} · ${visibleWorkspaceIdentity.branch}`
@@ -933,7 +934,7 @@ export function AppShell() {
               aria-label={t("mobile.sessionActions")}
               aria-expanded={mobileActionsOpen}
             >
-              <Ellipsis size={19} strokeWidth={2} aria-hidden="true" />
+              <Ellipsis size={UI_ICON_SIZE.navigation} aria-hidden="true" />
             </button>
           )}
           {mobileActionsOpen && <button type="button" className={s.mobileActionsBackdrop} onClick={() => setMobileActionsOpen(false)} aria-label={t("mobile.closeActions")} />}
@@ -947,9 +948,9 @@ export function AppShell() {
                 aria-haspopup="menu"
                 aria-expanded={sessionMenuOpen}
               >
-                <Menu size={13} strokeWidth={1.9} aria-hidden="true" />
+                <Menu size={UI_ICON_SIZE.compact} aria-hidden="true" />
                 <span>{t("topbar.sessionMenu")}</span>
-                <ChevronDown size={9} strokeWidth={1.8} aria-hidden="true" />
+                <ChevronDown size={UI_ICON_SIZE.inline} aria-hidden="true" />
               </button>
               {sessionMenuOpen && sessionMenuPos && typeof document !== "undefined" && createPortal(
                 <div ref={sessionMenuPanelRef} className={s.sessionMenu} style={{ top: sessionMenuPos.top, right: sessionMenuPos.right }} role="menu">
@@ -1025,10 +1026,10 @@ export function AppShell() {
                     className={s.exportIcon}
                     style={{ color: state.selectedSession ? "var(--text-muted)" : "var(--text-dim)" }}
                   >
-                    <Download size={12} strokeWidth={2.2} aria-hidden="true" />
+                    <Download size={UI_ICON_SIZE.inline} aria-hidden="true" />
                   </span>
                   <span>{t("topbar.export")}</span>
-                  <ChevronDown size={9} strokeWidth={1.8} aria-hidden="true" />
+                  <ChevronDown size={UI_ICON_SIZE.inline} aria-hidden="true" />
                 </button>
                 {exportMenuOpen && state.selectedSession && exportMenuPos && typeof document !== "undefined" && createPortal(
                   <div
@@ -1067,7 +1068,7 @@ export function AppShell() {
                 title={t("topbar.analyticsTitle")}
                 aria-label={t("topbar.analyticsTitle")}
               >
-                <BarChart3 size={12} strokeWidth={2} style={{ color: "var(--text-dim)", flexShrink: 0 }} aria-hidden="true" />
+                <BarChart3 size={UI_ICON_SIZE.inline} style={{ color: "var(--text-dim)", flexShrink: 0 }} aria-hidden="true" />
                 <span>{t("topbar.analytics")}</span>
               </button>
               <BranchNavigator
@@ -1092,8 +1093,8 @@ export function AppShell() {
                 aria-label={rightPanelOpen ? t("topbar.hideFilePanel") : t("topbar.showFilePanel")}
               >
                 {rightPanelOpen
-                  ? <PanelRightClose size={16} strokeWidth={1.9} aria-hidden />
-                  : <PanelRightOpen size={16} strokeWidth={1.9} aria-hidden />}
+                  ? <PanelRightClose size={UI_ICON_SIZE.compact} aria-hidden />
+                  : <PanelRightOpen size={UI_ICON_SIZE.compact} aria-hidden />}
                 <span>{t("mobile.files")}</span>
                 {pendingReviewFiles.length > 0 && <span className={s.mobileReviewCount}>
                   {t("files.reviewCount").replace("{count}", pendingReviewFiles.length.toLocaleString())}
@@ -1106,7 +1107,7 @@ export function AppShell() {
                 disabled={systemPromptUnavailable}
                 title={systemPromptUnavailable ? t("topbar.sessionMenuSystemUnavailable") : t("topbar.system")}
               >
-                <FileText size={14} strokeWidth={1.8} aria-hidden style={{ color: state.systemPrompt ? "var(--accent)" : "var(--text-dim)", flexShrink: 0 }} />
+                <FileText size={UI_ICON_SIZE.compact} aria-hidden style={{ color: state.systemPrompt ? "var(--accent)" : "var(--text-dim)", flexShrink: 0 }} />
                 <span>{t("topbar.system")}</span>
               </button>
             </div>
@@ -1160,7 +1161,7 @@ export function AppShell() {
               >
                 {ctxPercentStr && (
                   <span className={s.contextStat} style={{ color: ctxColor }}>
-                    <Gauge size={13} strokeWidth={1.7} aria-hidden />
+                    <Gauge size={UI_ICON_SIZE.compact} aria-hidden />
                     <span>{ctxPercentStr}</span>
                     <span className={s.contextWindow}>{ctxWindowStr}</span>
                   </span>
@@ -1183,8 +1184,8 @@ export function AppShell() {
             style={{ color: rightPanelOpen ? "var(--text)" : "var(--text-muted)" }}
           >
             {rightPanelOpen
-              ? <PanelRightClose size={16} strokeWidth={1.9} aria-hidden />
-              : <PanelRightOpen size={16} strokeWidth={1.9} aria-hidden />}
+              ? <PanelRightClose size={UI_ICON_SIZE.compact} aria-hidden />
+              : <PanelRightOpen size={UI_ICON_SIZE.compact} aria-hidden />}
             {pendingReviewFiles.length > 0 && <span
               id="file-review-count"
               data-testid="file-review-count"
@@ -1216,7 +1217,7 @@ export function AppShell() {
                   aria-label={t("common.close")}
                   title={t("common.close")}
                 >
-                  <X size={16} strokeWidth={2} aria-hidden="true" />
+                  <X size={UI_ICON_SIZE.control} aria-hidden="true" />
                 </button>
               </header>
               <div className={s.systemPromptContent}>
@@ -1297,7 +1298,7 @@ export function AppShell() {
           ) : centerView === "project" ? (
               <div className={s.placeholderContainer}>
                 <div className={s.placeholderIconBg}>
-                  <MessageSquare size={28} color="var(--accent)" strokeWidth={1.5} className={s.placeholderIcon} aria-hidden="true" />
+                  <MessageSquare size={28} color="var(--accent)" className={s.placeholderIcon} aria-hidden="true" />
                 </div>
                 <div className={s.placeholderText}>
                   <div className={s.placeholderTitle}>{t("welcome.selectSession")}</div>
@@ -1309,7 +1310,7 @@ export function AppShell() {
           ) : centerView === "welcome" ? (
               <div className={s.welcomeContainer}>
                 <div className={s.welcomeIconBg}>
-                  <MessageSquare size={32} color="var(--accent)" strokeWidth={1.5} aria-hidden="true" />
+                  <MessageSquare size={32} color="var(--accent)" aria-hidden="true" />
                 </div>
                 <div className={s.placeholderText}>
                   <div className={s.welcomeTitle}>
@@ -1321,7 +1322,7 @@ export function AppShell() {
                   </div>
                 </div>
                 <button type="button" className={s.welcomeStartButton} onClick={handleStartNewSession}>
-                  <Plus size={18} aria-hidden="true" />
+                  <Plus size={UI_ICON_SIZE.control} aria-hidden="true" />
                   {t("welcome.startConversation")}
                 </button>
                 <div className={s.welcomeSteps}>
@@ -1393,7 +1394,7 @@ export function AppShell() {
               onClick={() => void handleReturnToFileOrigin()}
               title={t(activeFileOrigin.kind === "message" ? "files.backToMessage" : "files.backToSearch")}
             >
-              <ArrowLeft size={14} strokeWidth={1.8} aria-hidden />
+              <ArrowLeft size={UI_ICON_SIZE.compact} aria-hidden />
               <span>{t(activeFileOrigin.kind === "message" ? "files.message" : "files.search")}</span>
             </button>
           )}
@@ -1404,22 +1405,23 @@ export function AppShell() {
           )}
           <button type="button" className={`${s.filePanelControl} ${s.filePanelResizeControl}`}
             onClick={resetRightWidth} title={t("topbar.resetFilePanel")} aria-label={t("topbar.resetFilePanel")}>
-            <RotateCcw size={15} aria-hidden />
+            <RotateCcw size={UI_ICON_SIZE.compact} aria-hidden />
           </button>
           <button type="button" className={`${s.filePanelControl} ${s.filePanelResizeControl}`}
             aria-pressed={filePanelExpanded} onClick={() => setFilePanelExpanded(value => !value)}
             title={t(filePanelExpanded ? "topbar.restoreFilePanel" : "topbar.expandFilePanel")}
             aria-label={t(filePanelExpanded ? "topbar.restoreFilePanel" : "topbar.expandFilePanel")}>
-            {filePanelExpanded ? <Minimize2 size={15} aria-hidden /> : <Maximize2 size={15} aria-hidden />}
+            {filePanelExpanded ? <Minimize2 size={UI_ICON_SIZE.compact} aria-hidden /> : <Maximize2 size={UI_ICON_SIZE.compact} aria-hidden />}
           </button>
           <button
             type="button"
             onClick={() => setRightPanelOpen(false)}
             title={t("topbar.hideFilePanel")}
-            aria-label={t("topbar.hideFilePanel")}
             className={`${s.mobileFilePanelClose} hover-text`}
           >
-            <PanelRightClose size={16} strokeWidth={1.9} aria-hidden />
+            <PanelRightClose size={UI_ICON_SIZE.compact} aria-hidden />
+            <span className={s.fileBackLabel}>{t("files.backToChat")}</span>
+            <span className={`${s.fileHideLabel} sr-only`}>{t("topbar.hideFilePanel")}</span>
           </button>
         </div>
 
@@ -1467,7 +1469,7 @@ export function AppShell() {
             </div>
           ) : (
             <div className={s.rightPanelEmpty}>
-              <FileText size={28} strokeWidth={1.5} aria-hidden="true" />
+              <FileText size={28} aria-hidden="true" />
               <div className={s.rightPanelEmptyTitle}>{t("rightPanel.noFile")}</div>
               <div className={s.rightPanelEmptyHint}>
                 {t("rightPanel.noFileHint")}
@@ -1505,7 +1507,7 @@ export function AppShell() {
         }}
       /></Suspense>
     )}
-    {appearanceOpen && <AppearancePanel returnFocus={appearanceReturnFocus.current} onClose={closeAppearance} />}
+    {appearanceOpen && <Suspense fallback={null}><AppearancePanel returnFocus={appearanceReturnFocus.current} onClose={closeAppearance} /></Suspense>}
     {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
     <DesignInspector active={designModeOpen && showChat} onClose={() => setDesignModeOpen(false)} onCapture={handleDesignCapture} />
     {/* Toast notifications — mount once at app root */}

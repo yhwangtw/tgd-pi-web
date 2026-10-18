@@ -18,7 +18,7 @@ describe("quiet unread navigation", () => {
       onSelectView={onSelectView} onOpenAnalytics={vi.fn()} onOpenModels={vi.fn()} onOpenSkills={vi.fn()}
       skillsDisabled={false} onOpenExtensions={vi.fn()} appearanceOpen={false} onToggleAppearance={vi.fn()} />));
     const button = container.querySelector<HTMLButtonElement>('button[aria-label^="Attention"]')!;
-    expect(button.title).toBe(count ? `Attention · ${count} unread` : "Attention");
+    expect(button.title).toBe(count ? `Attention · ${count} unread notifications` : "Attention");
     expect(button.getAttribute("aria-label")).toBe(button.title);
     expect(button.textContent).toBe("");
     const dot = button.querySelector('[data-testid="attention-unread-dot"]');

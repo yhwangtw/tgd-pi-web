@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useRef } from "react";
 import { Plus, Search, X } from "lucide-react";
@@ -47,7 +48,7 @@ export function AddProviderPicker({
     >
         {/* Search */}
         <div className={styles.searchBar}>
-          <Search size={16} strokeWidth={1.8} aria-hidden="true" className={styles.searchIcon} />
+          <Search size={UI_ICON_SIZE.compact} aria-hidden="true" className={styles.searchIcon} />
           <input
             ref={inputRef}
             value={search}
@@ -59,7 +60,7 @@ export function AddProviderPicker({
           {search && (
             <IconButton
               label={t("providers.clearSearch")}
-              icon={<X strokeWidth={1.8} />}
+              icon={<X />}
               size="compact"
               onClick={() => setSearch("")}
             />
@@ -86,7 +87,7 @@ export function AddProviderPicker({
                     <div className={styles.cardSubtitle}>{t("providers.customEndpoint")}</div>
                   </div>
                   <span className={styles.plusIconBox}>
-                    <Plus size={15} strokeWidth={1.8} aria-hidden="true" className={styles.plusIcon} />
+                    <Plus size={UI_ICON_SIZE.compact} aria-hidden="true" className={styles.plusIcon} />
                   </span>
                 </button>
               )}

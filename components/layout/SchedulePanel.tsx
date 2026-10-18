@@ -1,6 +1,7 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { Clock3, Pencil, Plus } from "lucide-react";
 import { fetchJson, useRequestResource } from "@/hooks/useRequestResource";
 import { showToast } from "@/hooks/useToast";
@@ -172,6 +173,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
   const { locale, t } = useI18n();
   const formId = useId();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const initialDraft = useRef("");
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -189,6 +191,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
 
   const openEditor = useCallback((nextDraft: Draft) => {
     setDeleteId(null);
+    initialDraft.current = JSON.stringify(nextDraft);
     setDraft(nextDraft);
     setError(null);
     setValidationAttempted(false);
@@ -382,6 +385,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
       description={t("schedule.editorDescription")}
       onClose={closeEditor}
       canClose={!saving}
+      hasUnsavedChanges={JSON.stringify(draft) !== initialDraft.current}
       mobileMode="fullscreen"
       bodyClassName={s.dialogBody}
       footer={(
@@ -522,7 +526,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
       <div className={`${s.header} chrome-mono`}>
         <strong>{t("schedule.title")}</strong>
         <button className={s.newButton} type="button" onClick={() => openEditor(emptyDraft(defaultCwd))}>
-          <Plus size={12} strokeWidth={2.2} aria-hidden />
+          <Plus size={UI_ICON_SIZE.inline} aria-hidden />
           {t("sidebar.new")}
         </button>
       </div>
@@ -539,7 +543,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
           <div className={s.empty}>{t("search.searching")}</div>
         ) : data.schedules.length === 0 ? (
           <div className={s.empty}>
-            <Clock3 size={28} strokeWidth={1.5} aria-hidden />
+            <Clock3 size={28} aria-hidden />
             <strong>{t("schedule.empty")}</strong>
             <span>{t("schedule.emptyHint")}</span>
             <button type="button" className={s.primaryButton} onClick={() => openEditor(emptyDraft(defaultCwd))}>{t("schedule.new")}</button>
@@ -559,7 +563,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
                     </div>
                     <IconButton
                       label={t("schedule.edit")}
-                      icon={<Pencil strokeWidth={1.8} />}
+                      icon={<Pencil />}
                       onClick={() => { setDeleteId(null); openEditor(scheduleDraft(schedule)); }}
                     />
                   </div>

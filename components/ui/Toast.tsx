@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { Check, CircleX, Info, TriangleAlert, X } from "lucide-react";
 import type { ToastItem } from "@/hooks/useToast";
@@ -12,10 +13,10 @@ interface Props {
 }
 
 const ICONS: Record<ToastItem["type"], React.ReactNode> = {
-  success: <Check size={14} strokeWidth={2.5} />,
-  error: <CircleX size={14} strokeWidth={2.5} />,
-  warning: <TriangleAlert size={14} strokeWidth={2.5} />,
-  info: <Info size={14} strokeWidth={2.5} />,
+  success: <Check size={UI_ICON_SIZE.compact} />,
+  error: <CircleX size={UI_ICON_SIZE.compact} />,
+  warning: <TriangleAlert size={UI_ICON_SIZE.compact} />,
+  info: <Info size={UI_ICON_SIZE.compact} />,
 };
 
 export function ToastContainer({ toasts, onDismiss }: Props) {
@@ -34,7 +35,7 @@ export function ToastContainer({ toasts, onDismiss }: Props) {
           <IconButton
             size="compact"
             label={t("common.dismiss")}
-            icon={<X strokeWidth={2.2} />}
+            icon={<X />}
             onClick={() => onDismiss(toast.id)}
           />
         </div>

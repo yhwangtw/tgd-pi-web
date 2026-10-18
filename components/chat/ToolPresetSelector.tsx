@@ -1,10 +1,12 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import React, { useState, useRef, useEffect, useId } from "react";
 import { Check, Wrench } from "lucide-react";
 import { TOOL_PRESETS, TOOL_PRESET_MAP } from "./chat-input-constants";
 import { useI18n, type MsgKey } from "@/lib/i18n";
 import type { ToolCatalogEntry, ToolSelectionMode } from "@/lib/tool-selection";
+import { useComposerPopupPosition } from "./useComposerPopupPosition";
 import styles from "./ComposerSelector.module.css";
 import { announceComposerSelectorOpen, onAnotherComposerSelectorOpen } from "./composer-selector-coordination";
 
@@ -34,6 +36,7 @@ interface ToolPresetSelectorProps {
   customToolNames?: string[];
   isStreaming: boolean;
   presentation?: "popover" | "inline";
+  iconOnly?: boolean;
   onToolPresetChange?: (preset: ToolSelectionMode, customNames?: string[]) => void;
 }
 
@@ -43,6 +46,7 @@ export function ToolPresetSelector({
   customToolNames = [],
   isStreaming,
   presentation = "popover",
+  iconOnly = false,
   onToolPresetChange,
 }: ToolPresetSelectorProps) {
   const { t } = useI18n();
@@ -50,6 +54,7 @@ export function ToolPresetSelector({
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listboxId = useId();
+  const panelRef = useComposerPopupPosition(open && presentation === "popover", triggerRef);
 
   useEffect(() => onAnotherComposerSelectorOpen(listboxId, () => setOpen(false)), [listboxId]);
   const selectedLabel = (
@@ -65,7 +70,10 @@ export function ToolPresetSelector({
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        requestAnimationFrame(() => triggerRef.current?.focus());
+      }
     };
     document.addEventListener("mousedown", handler);
     document.addEventListener("keydown", onKeyDown);
@@ -96,14 +104,17 @@ export function ToolPresetSelector({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-controls={open ? listboxId : undefined}
-        title={t("input.toolsTitle")}
-        className={`${styles.trigger} ${open ? styles.triggerOpen : ""}`}
+        title={`${t("input.tools")}: ${t(TOOL_LABEL_KEYS[selectedLabel])}`}
+        aria-describedby={`${listboxId}-value`}
+        className={`${styles.trigger} ${iconOnly ? styles.iconTrigger : ""} ${open ? styles.triggerOpen : ""}`}
       >
-        <Wrench size={11} aria-hidden />
-        <span>{t(TOOL_LABEL_KEYS[selectedLabel])}</span>
+        <Wrench size={UI_ICON_SIZE.control} aria-hidden />
+        {!iconOnly && <span>{t(TOOL_LABEL_KEYS[selectedLabel])}</span>}
       </button>
+      <span id={`${listboxId}-value`} hidden>{t(TOOL_LABEL_KEYS[selectedLabel])}</span>
       {open && (
         <div
+          ref={panelRef}
           id={listboxId}
           className={`${styles.panel} ${presentation === "inline" ? styles.panelInline : styles.panelAbsolute} ${styles.toolPanel}`}
           role="listbox"
@@ -131,7 +142,7 @@ export function ToolPresetSelector({
                 className={`${styles.option} ${isActive ? styles.optionActive : ""}`}
               >
                 {isActive
-                  ? <Check className={styles.check} size={10} strokeWidth={2} aria-hidden />
+                  ? <Check className={styles.check} size={UI_ICON_SIZE.inline} aria-hidden />
                   : <span className={styles.checkSpacer} />}
                 <span className={styles.optionLabel}>{t(TOOL_LABEL_KEYS[lvl])}</span>
                 <span className={styles.description}>{desc}</span>

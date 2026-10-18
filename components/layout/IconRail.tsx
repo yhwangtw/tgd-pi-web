@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import {
   BarChart3,
@@ -64,7 +65,7 @@ export function IconRail({
         aria-pressed={panelView === "sessions" && sidebarOpen}
         className={`${s.railButton} ${panelView === "sessions" && sidebarOpen ? s.railButtonActive : ""}`}
       >
-        <MessageSquare size={17} strokeWidth={1.8} aria-hidden="true" />
+        <MessageSquare size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
       <button
         onClick={() => onSelectView("attention")}
@@ -73,7 +74,7 @@ export function IconRail({
         aria-pressed={panelView === "attention" && sidebarOpen}
         className={`${s.railButton} ${panelView === "attention" && sidebarOpen ? s.railButtonActive : ""}`}
       >
-        <Bell size={17} strokeWidth={1.8} aria-hidden="true" />
+        <Bell size={UI_ICON_SIZE.navigation} aria-hidden="true" />
         {attentionUnreadCount > 0 && <span className={s.railUnreadDot} data-testid="attention-unread-dot" aria-hidden="true" />}
       </button>
       <button
@@ -83,7 +84,7 @@ export function IconRail({
         aria-pressed={panelView === "agents" && sidebarOpen}
         className={`${s.railButton} ${panelView === "agents" && sidebarOpen ? s.railButtonActive : ""}`}
       >
-        <Bot size={17} strokeWidth={1.8} aria-hidden="true" />
+        <Bot size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
       <button
         onClick={() => onSelectView("schedule")}
@@ -92,7 +93,7 @@ export function IconRail({
         aria-pressed={panelView === "schedule" && sidebarOpen}
         className={`${s.railButton} ${panelView === "schedule" && sidebarOpen ? s.railButtonActive : ""}`}
       >
-        <CalendarClock size={17} strokeWidth={1.8} aria-hidden="true" />
+        <CalendarClock size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
       <div className={s.railDivider} role="separator" />
       <button
@@ -102,7 +103,7 @@ export function IconRail({
         aria-pressed={panelView === "files" && sidebarOpen}
         className={`${s.railButton} ${panelView === "files" && sidebarOpen ? s.railButtonActive : ""}`}
       >
-        <Folder size={17} strokeWidth={1.8} aria-hidden="true" />
+        <Folder size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
       <button
         onClick={() => onSelectView("search")}
@@ -111,7 +112,7 @@ export function IconRail({
         aria-pressed={panelView === "search" && sidebarOpen}
         className={`${s.railButton} ${panelView === "search" && sidebarOpen ? s.railButtonActive : ""}`}
       >
-        <Search size={17} strokeWidth={1.8} aria-hidden="true" />
+        <Search size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
       <button
         onClick={() => onSelectView("changes")}
@@ -120,7 +121,7 @@ export function IconRail({
         aria-pressed={panelView === "changes" && sidebarOpen}
         className={`${s.railButton} ${panelView === "changes" && sidebarOpen ? s.railButtonActive : ""}`}
       >
-        <GitBranch size={17} strokeWidth={1.8} aria-hidden="true" />
+        <GitBranch size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
       <button
         onClick={() => onSelectView("tgd")}
@@ -129,15 +130,15 @@ export function IconRail({
         aria-pressed={panelView === "tgd" && sidebarOpen}
         className={`${s.railButton} ${panelView === "tgd" && sidebarOpen ? s.railButtonActive : ""}`}
       >
-        <FileText size={17} strokeWidth={1.8} aria-hidden="true" />
+        <FileText size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
       <button onClick={onOpenAnalytics} title={t("topbar.analyticsTitle")} aria-label={t("topbar.analyticsTitle")} className={s.railButton}>
-        <BarChart3 size={17} strokeWidth={1.8} aria-hidden="true" />
+        <BarChart3 size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
       <div className={s.railSpacer} />
       <div className={s.railDivider} role="separator" />
       <button onClick={onOpenModels} title={`${t("sidebar.models")} (⇧⌘M)`} aria-label={t("sidebar.models")} className={s.railButton}>
-        <Cpu size={17} strokeWidth={1.8} aria-hidden="true" />
+        <Cpu size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
       <button
         onClick={onOpenSkills}
@@ -146,7 +147,7 @@ export function IconRail({
         aria-label={t("sidebar.skills")}
         className={s.railButton}
       >
-        <Layers3 size={17} strokeWidth={1.8} aria-hidden="true" />
+        <Layers3 size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
       <button
         onClick={onOpenExtensions}
@@ -154,7 +155,7 @@ export function IconRail({
         aria-label={t("extensions.title")}
         className={s.railButton}
       >
-        <Puzzle size={17} strokeWidth={1.8} aria-hidden="true" />
+        <Puzzle size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
       <button
         onClick={onToggleAppearance}
@@ -163,7 +164,7 @@ export function IconRail({
         aria-pressed={appearanceOpen}
         className={`${s.railButton} ${appearanceOpen ? s.railButtonActive : ""}`}
       >
-        <Palette size={17} strokeWidth={1.8} aria-hidden="true" />
+        <Palette size={UI_ICON_SIZE.navigation} aria-hidden="true" />
       </button>
     </nav>
   );

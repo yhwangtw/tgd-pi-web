@@ -82,9 +82,9 @@ function recovery(page: Page) { return page.getByRole("dialog", { name: "Choose 
 async function expectDesktopModels(page: Page, name: string, absent?: string) {
   await expect(trigger(page)).toHaveAttribute("data-catalog-status", "ready");
   await trigger(page).click();
-  const options = page.getByRole("listbox", { name: "Model", exact: true });
-  await expect(options.getByRole("option", { name: new RegExp(name) })).toBeVisible();
-  if (absent) await expect(options.getByRole("option", { name: new RegExp(absent) })).toHaveCount(0);
+  const options = page.getByTestId("model-selector-popover");
+  await expect(options.getByRole("button", { name: new RegExp(name) })).toBeVisible();
+  if (absent) await expect(options.getByRole("button", { name: new RegExp(absent) })).toHaveCount(0);
   await page.keyboard.press("Escape");
 }
 
@@ -173,8 +173,8 @@ for (const closeAction of ["Close", "Cancel"]) {
     await page.getByRole("button", { name: "New", exact: true }).click();
     await expect(trigger(page)).toHaveAttribute("data-catalog-status", "ready");
     await trigger(page).click();
-    await page.getByRole("listbox", { name: "Model", exact: true })
-      .getByRole("option", { name: new RegExp(ALTERNATE) }).click();
+    await page.getByTestId("model-selector-popover")
+      .getByRole("button", { name: new RegExp(ALTERNATE) }).click();
     await expect(trigger(page)).toContainText(ALTERNATE);
     const draft = "Keep this draft; do not submit.";
     await page.getByRole("textbox", { name: "Message…", exact: true }).fill(draft);
@@ -209,7 +209,7 @@ test("changing sessions clears old options while the new source is loading", asy
     await trigger(page).click();
     await expect(recovery(page).getByRole("status")).toHaveText("Loading models…");
     await expect(recovery(page)).not.toContainText(ALPHA);
-    await expect(page.getByRole("listbox", { name: "Model", exact: true })).toHaveCount(0);
+    await expect(page.getByTestId("model-selector-popover")).toHaveCount(0);
     await recovery(page).getByRole("button", { name: "Close", exact: true }).click();
     betaReady.resolve();
     await expectDesktopModels(page, BETA, ALPHA);
@@ -264,7 +264,7 @@ test("new-project catalogs reset the previous draft model selection", async ({ p
     await page.getByRole("button", { name: "New", exact: true }).click();
     await expect(trigger(page)).toHaveAttribute("data-catalog-status", "ready");
     await trigger(page).click();
-    await page.getByRole("option", { name: new RegExp(ALTERNATE) }).click();
+    await page.getByRole("button", { name: new RegExp(ALTERNATE) }).click();
     await expect(trigger(page)).toContainText(ALTERNATE);
     await page.getByTestId("project-switcher-trigger").click();
     await page.getByTestId("worktree-row").filter({ hasText: "demo-project-wt" }).click();

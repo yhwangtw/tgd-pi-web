@@ -1,8 +1,11 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import React, { useRef, useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef, KeyboardEvent, type ReactNode, type RefObject } from "react";
 import {
   ArrowRight,
+  History,
+  Ghost,
   FileText,
   Paperclip,
   Maximize2,
@@ -142,7 +145,6 @@ function ResponsiveComposerControls({
   open,
   isStreaming,
   title,
-  doneLabel,
   initialFocusRef,
   onClose,
   children,
@@ -151,26 +153,22 @@ function ResponsiveComposerControls({
   open: boolean;
   isStreaming: boolean;
   title: string;
-  doneLabel: string;
   initialFocusRef: RefObject<HTMLElement | null>;
   onClose: (restoreFocus?: boolean) => void;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   if (isMobile && !isStreaming) {
     return (
       <DialogShell
         open={open}
         title={title}
+        description={t("input.settingsImmediate")}
         onClose={() => onClose(false)}
         initialFocusRef={initialFocusRef}
         bodyClassName={styles.composerSettingsSheetBody}
         mobileMode="sheet"
         placement="center"
-        footer={(
-          <button type="button" className={styles.composerSettingsDone} onClick={() => onClose(false)}>
-            {doneLabel}
-          </button>
-        )}
       >
         <div
           id="composer-secondary-tools"
@@ -252,6 +250,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const isComposingRef = useRef(false);
   const lastCompositionEndAtRef = useRef(0);
   const lastEscAtRef = useRef(0);
+  const controlsBeforeExpandRef = useRef(false);
   const expandedRef = useRef(expanded);
   expandedRef.current = expanded;
 
@@ -483,7 +482,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (!containerRef.current?.contains(event.target as Node)) setMobileToolsOpen(false);
     };
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") closeMobileTools(true);
+      if (event.key !== "Escape") return;
+      // Close the active selector first, keeping the icon toolbar available.
+      if (containerRef.current?.querySelector('[aria-haspopup="listbox"][aria-expanded="true"]')) return;
+      closeMobileTools(true);
     };
     document.addEventListener("pointerdown", closeOnPointer);
     document.addEventListener("keydown", closeOnEscape);
@@ -501,6 +503,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         if (showSlashMenu || mention) return;
         event.preventDefault();
         setExpanded(false);
+        setMobileToolsOpen(controlsBeforeExpandRef.current);
         requestAnimationFrame(() => textareaRef.current?.focus());
         return;
       }
@@ -595,6 +598,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (!isComposing && e.key === "Escape" && expanded && !mention && !showSlashMenu) {
         e.preventDefault();
         setExpanded(false);
+        setMobileToolsOpen(controlsBeforeExpandRef.current);
         return;
       }
 
@@ -805,10 +809,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [setValue]);
 
   const toggleExpanded = useCallback(() => {
-    setExpanded((current) => !current);
-    setMobileToolsOpen(false);
+    if (!expanded) {
+      controlsBeforeExpandRef.current = mobileToolsOpen;
+      if (isMobileViewport) setMobileToolsOpen(false);
+    } else {
+      setMobileToolsOpen(controlsBeforeExpandRef.current);
+    }
+    setExpanded(!expanded);
     requestAnimationFrame(() => textareaRef.current?.focus());
-  }, []);
+  }, [expanded, isMobileViewport, mobileToolsOpen]);
 
 
 
@@ -894,14 +903,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <span>{t("input.expandedHint")}</span>
             </div>
             <button type="button" onClick={toggleExpanded} aria-label={t("input.collapseComposer")} title={t("input.collapseComposer")}>
-              <Minimize2 size={16} strokeWidth={1.8} aria-hidden="true" />
+              <Minimize2 size={UI_ICON_SIZE.compact} aria-hidden="true" />
             </button>
           </div>
         )}
         {/* Retry banner */}
         {retryInfo && (
           <div className={styles.retryBanner}>
-            <RefreshCw size={11} strokeWidth={2} className={styles.retryIcon} aria-hidden="true" />
+            <RefreshCw size={UI_ICON_SIZE.inline} className={styles.retryIcon} aria-hidden="true" />
             {t("input.retrying")} ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span className={styles.retryErrorText}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
@@ -912,7 +921,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <span className={styles.quotePreview}>{quote.text}</span>
             </button>
             <button type="button" className={styles.quoteRemove} onClick={onClearQuote} aria-label={t("chat.clearQuote")} title={t("chat.clearQuote")}>
-              <X size={12} strokeWidth={2} aria-hidden="true" />
+              <X size={UI_ICON_SIZE.compact} aria-hidden="true" />
             </button>
           </div>
         )}
@@ -928,7 +937,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     onClick={() => requestOpenFile({ path: item.path })}
                     title={item.path}
                   >
-                    <FileText size={11} strokeWidth={1.7} aria-hidden="true" />
+                    <FileText size={UI_ICON_SIZE.inline} aria-hidden="true" />
                     <span>{item.path}</span>
                   </button>
                   <button
@@ -938,7 +947,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     disabled={isSubmitting}
                     aria-label={`${t("input.removeContext")} ${item.path}`}
                     title={t("input.removeContext")}
-                  >×</button>
+                  ><X size={UI_ICON_SIZE.compact} aria-hidden="true" /></button>
                 </span>
               ))}
             </div>
@@ -949,15 +958,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <span className={styles.uploadHint}>{t("input.uploadHint")}</span>
             {fileUploads.items.map(item => (
               <div key={item.id} className={styles.uploadItem}>
-                <FileText size={14} aria-hidden="true" />
+                <FileText size={UI_ICON_SIZE.compact} aria-hidden="true" />
                 <div className={styles.uploadInfo}>
                   <strong title={item.file.name}>{item.file.name}</strong>
                   <span role={item.error ? "alert" : "status"}>{item.error ?? t("input.uploading")}</span>
                 </div>
                 {item.error &&
-                  <button type="button" onClick={() => fileUploads.retry(item)} aria-label={`${t("input.retryUpload")} ${item.file.name}`}><RefreshCw size={14} aria-hidden="true" /></button>
+                  <button type="button" onClick={() => fileUploads.retry(item)} aria-label={`${t("input.retryUpload")} ${item.file.name}`}><RefreshCw size={UI_ICON_SIZE.compact} aria-hidden="true" /></button>
                 }
-                <button type="button" onClick={() => fileUploads.dismiss(item.id)} aria-label={`${t(item.error ? "input.dismissUpload" : "input.cancelUpload")} ${item.file.name}`}><X size={14} aria-hidden="true" /></button>
+                <button type="button" onClick={() => fileUploads.dismiss(item.id)} aria-label={`${t(item.error ? "input.dismissUpload" : "input.cancelUpload")} ${item.file.name}`}><X size={UI_ICON_SIZE.compact} aria-hidden="true" /></button>
               </div>
             ))}
           </div>
@@ -982,7 +991,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   title={t("input.removeImage")}
                   className={styles.imageRemoveButton}
                 >
-                  <X size={8} strokeWidth={1.8} aria-hidden="true" />
+                  <X size={UI_ICON_SIZE.compact} aria-hidden="true" />
                 </button>
               </div>
             ))}
@@ -1064,9 +1073,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 }
               >
                 {streamingSendMode === "steer" ? (
-                  <ArrowRight size={12} strokeWidth={1.8} aria-hidden="true" />
+                  <ArrowRight size={UI_ICON_SIZE.inline} aria-hidden="true" />
                 ) : (
-                  <Upload size={12} strokeWidth={1.8} aria-hidden="true" />
+                  <Upload size={UI_ICON_SIZE.inline} aria-hidden="true" />
                 )}
                 <span className={styles.actionLabel}>{t(streamingSendMode === "steer" ? "input.steer" : "input.followUp")}</span>
               </button>
@@ -1082,7 +1091,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
             >
-              <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
+              <ArrowRight size={UI_ICON_SIZE.compact} aria-hidden="true" />
               <span className={styles.actionLabel}>{t("input.send")}</span>
             </button>
           )}
@@ -1103,7 +1112,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               className={isSubmitting ? styles.attachButtonDisabled : styles.attachButtonEnabled}
               style={{ color: attachedImages.length ? "var(--accent)" : "var(--text-muted)" }}
             >
-              <Paperclip size={16} strokeWidth={1.8} aria-hidden="true" />
+              <Paperclip size={UI_ICON_SIZE.control} aria-hidden="true" />
             </button>
             {isStreaming && onSteer && onFollowUp && (
               <div className={styles.sendModeSwitch} aria-label={t("input.sendMode")} role="group">
@@ -1153,12 +1162,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 setMobileToolsOpen((open) => !open);
               }}
               aria-label={t("input.moreControls")}
+              title={t("input.controlsTitle")}
               aria-expanded={mobileToolsOpen}
               aria-haspopup={isMobileViewport ? "dialog" : undefined}
               aria-controls="composer-secondary-tools"
             >
-              <SlidersHorizontal size={18} strokeWidth={1.8} aria-hidden="true" />
-              <span className={styles.mobileToolsText}>{t("input.controls")}</span>
+              <SlidersHorizontal size={UI_ICON_SIZE.control} aria-hidden="true" />
             </button>
           )}
 
@@ -1168,7 +1177,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             open={mobileToolsOpen}
             isStreaming={isStreaming}
             title={t("input.controlsTitle")}
-            doneLabel={t("input.controlsDone")}
             initialFocusRef={mobileControlsInitialRef}
             onClose={closeMobileTools}
           >
@@ -1190,9 +1198,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 title={expanded ? t("input.collapseComposer") : t("input.expandComposer")}
               >
                 {expanded ? (
-                  <Minimize2 size={13} strokeWidth={1.8} aria-hidden="true" />
+                  <Minimize2 size={UI_ICON_SIZE.control} aria-hidden="true" />
                 ) : (
-                  <Maximize2 size={13} strokeWidth={1.8} aria-hidden="true" />
+                  <Maximize2 size={UI_ICON_SIZE.control} aria-hidden="true" />
                 )}
                 <span className={styles.mobileControlValue}>{t(expanded ? "input.collapseComposerShort" : "input.expandComposerShort")}</span>
               </button>
@@ -1205,6 +1213,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 availableThinkingLevels={availableThinkingLevels}
                 isStreaming={isStreaming || !!isCompacting}
                 presentation={isMobileViewport ? "inline" : "popover"}
+                iconOnly={!isMobileViewport}
                 onThinkingLevelChange={onThinkingLevelChange}
               />
             </div>
@@ -1216,20 +1225,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 customToolNames={customToolNames}
                 isStreaming={isStreaming}
                 presentation={isMobileViewport ? "inline" : "popover"}
+                iconOnly={!isMobileViewport}
                 onToolPresetChange={onToolPresetChange}
               />
             </div>
             <div className={`${styles.mobileLabeledControl} ${styles.scrollModeControl}`}>
               <span className={styles.mobileControlLabel}>{t("input.scrollMode")}</span>
-              <ScrollFollowSelector />
+              <ScrollFollowSelector iconOnly={!isMobileViewport} />
             </div>
 
             {!isStreaming && onDurableChange && (
               <div className={styles.mobileLabeledControl}>
                 <span className={styles.mobileControlLabel}>{t("input.sessionEngine")}</span>
-                <button type="button" onClick={() => onDurableChange(!durable)} aria-label={t(durable ? "input.durable" : "input.standard")} aria-pressed={durable} className={durable ? styles.autoCompactButtonOn : styles.autoCompactButtonOff} title={t("input.durableHint")}>
-                  <span className={styles.autoCompactDot} aria-hidden />
-                  <span>{t(durable ? "input.durable" : "input.standard")}</span>
+                <button type="button" onClick={() => onDurableChange(!durable)} aria-label={t(durable ? "input.durable" : "input.standard")} aria-pressed={durable} className={durable ? styles.autoCompactButtonOn : styles.autoCompactButtonOff} title={`${t(durable ? "input.durable" : "input.standard")} — ${t("input.durableHint")}`}>
+                  <History size={UI_ICON_SIZE.control} aria-hidden="true" />
+                  <span className={styles.mobileControlValue}>{t(durable ? "input.durable" : "input.standard")}</span>
                 </button>
               </div>
             )}
@@ -1237,8 +1247,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {!isStreaming && onEphemeralChange && (
               <div className={styles.mobileLabeledControl}>
                 <span className={styles.mobileControlLabel}>{t("input.sessionStorage")}</span>
-                <button type="button" onClick={() => onEphemeralChange(!ephemeral)} aria-pressed={ephemeral} className={ephemeral ? styles.autoCompactButtonOn : styles.autoCompactButtonOff} title={t("input.ephemeralHint")}>
-                  <span className={styles.autoCompactDot} aria-hidden />
+                <button type="button" onClick={() => onEphemeralChange(!ephemeral)} aria-label={t(ephemeral ? "input.ephemeral" : "input.persisted")} aria-pressed={ephemeral} className={ephemeral ? styles.autoCompactButtonOn : styles.autoCompactButtonOff} title={`${t(ephemeral ? "input.ephemeral" : "input.persisted")} — ${t("input.ephemeralHint")}`}>
+                  <Ghost size={UI_ICON_SIZE.control} aria-hidden="true" />
                   <span className={styles.mobileControlValue}>{t(ephemeral ? "input.ephemeral" : "input.persisted")}</span>
                 </button>
               </div>
@@ -1258,7 +1268,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       title={autoCompactionEnabled ? t("chat.autoCompactOnTitle") : t("chat.autoCompactOffTitle")}
                       className={autoCompactionEnabled ? styles.autoCompactButtonOn : styles.autoCompactButtonOff}
                     >
-                      <span className={styles.autoCompactDot} aria-hidden />
+                      <RefreshCw size={UI_ICON_SIZE.control} aria-hidden="true" />
                       <span className={styles.mobileControlValue}>{t(autoCompactionEnabled ? "chat.on" : "chat.off")}</span>
                     </button>
                   </div>
@@ -1267,14 +1277,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   <span className={styles.mobileControlLabel}>{t("input.contextControl")}</span>
                   <div className={styles.compactWrapper}>
                     <button
+                      type="button"
+                      aria-label={isCompacting ? t("chat.stopCompaction") : t("chat.compactNow")}
                       onClick={isCompacting ? onAbortCompaction : onCompact}
                       className={isCompacting ? styles.compactButtonCompacting : styles.compactButtonIdle}
                       title={isCompacting ? t("chat.stopCompaction") : t("chat.compactTitle")}
                     >
                       {isCompacting ? (
-                        <><Square size={10} fill="currentColor" strokeWidth={1.5} aria-hidden="true" />{t("chat.compacting")}</>
+                        <><Square size={UI_ICON_SIZE.control} aria-hidden="true" /><span className={styles.mobileControlValue}>{t("chat.compacting")}</span></>
                       ) : (
-                        <><Shrink size={11} strokeWidth={2} aria-hidden="true" />{t("chat.compactNow")}</>
+                        <><Shrink size={UI_ICON_SIZE.control} aria-hidden="true" /><span className={styles.mobileControlValue}>{t("chat.compactNow")}</span></>
                       )}
                     </button>
                   </div>
@@ -1289,7 +1301,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 title={t("input.stopTitle")}
                 className={styles.stopButton}
               >
-                <Square size={10} fill="currentColor" strokeWidth={1.5} aria-hidden="true" />
+                <Square size={UI_ICON_SIZE.inline} fill="currentColor" aria-hidden="true" />
                 {t("input.stop")}
               </button>
             )}
@@ -1300,24 +1312,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   type="button"
                   onClick={onSoundToggle}
+                  aria-pressed={soundEnabled}
                   aria-label={soundEnabled ? t("input.soundOnTitle") : t("input.soundOffTitle")}
                   title={soundEnabled ? t("input.soundOnTitle") : t("input.soundOffTitle")}
                   className={soundEnabled ? styles.soundButtonEnabled : styles.soundButtonDisabled}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.color = "var(--text)";
-                    e.currentTarget.style.opacity = "1";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "none";
-                    e.currentTarget.style.color = soundEnabled ? "var(--text-muted)" : "var(--text-dim)";
-                    e.currentTarget.style.opacity = soundEnabled ? "1" : "0.55";
-                  }}
+
                 >
                   {soundEnabled ? (
-                    <Volume2 size={12} strokeWidth={2} aria-hidden="true" />
+                    <Volume2 size={UI_ICON_SIZE.control} aria-hidden="true" />
                   ) : (
-                    <VolumeX size={12} strokeWidth={2} aria-hidden="true" />
+                    <VolumeX size={UI_ICON_SIZE.control} aria-hidden="true" />
                   )}
                   <span className={styles.mobileControlValue}>{t(soundEnabled ? "chat.on" : "chat.off")}</span>
                 </button>

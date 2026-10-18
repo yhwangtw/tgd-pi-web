@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useState } from "react";
 import { Clock3, ClockAlert, LoaderCircle, RefreshCw } from "lucide-react";
@@ -88,8 +89,8 @@ export function RunStatus({
       <span className={styles.srOnly}>{label}</span>
       <span className={styles.runStatusVisual} aria-hidden="true">
         <Icon
-          size={14}
-          strokeWidth={state === "normal" ? 2.4 : 2}
+          size={UI_ICON_SIZE.compact}
+
           className={`${styles.runStatusIcon} ${state === "normal" || state === "reconnecting" ? styles.runStatusSpin : ""}`}
         />
         <span className={styles.runStatusMessage}>{label}</span>

@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { MoreHorizontal, AtSign, ChevronRight, LoaderCircle, Upload } from "lucide-react";
@@ -186,8 +187,8 @@ function TreeNode({
         >
           {node.isDir && (
             <ChevronRight
-              size={12}
-              strokeWidth={1.8}
+              size={UI_ICON_SIZE.inline}
+
               aria-hidden="true"
               className={styles.treeChevron}
               style={{ transform: open ? "rotate(90deg)" : "none" }}
@@ -195,7 +196,7 @@ function TreeNode({
           )}
           {!node.isDir && <span className={styles.fileSpacer} />}
           <span className={styles.iconWrapper}>
-            {node.isDir ? <FolderIcon size={14} open={open} /> : getFileIcon(node.name, 14)}
+            {node.isDir ? <FolderIcon size={UI_ICON_SIZE.compact} open={open} /> : getFileIcon(node.name)}
           </span>
           <span className={styles.fileName} title={node.fullPath}>
             {node.name}
@@ -203,13 +204,13 @@ function TreeNode({
           {fileStatus && <GitBadge status={fileStatus} />}
           {dirDirty && <span className={styles.dirtyDot} aria-hidden />}
           {loading && (
-            <LoaderCircle className={styles.loadingIcon} size={12} strokeWidth={1.8} aria-hidden="true" />
+            <LoaderCircle className={styles.loadingIcon} size={UI_ICON_SIZE.inline} aria-hidden="true" />
           )}
         </button>
         {activePath === node.fullPath && <button type="button" className={styles.fileActions}
           aria-label={`${t("files.moreActions")}: ${node.name}`} title={t("files.moreActions")}
           onClick={event => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); onContextMenu({ x: rect.right, y: rect.bottom, fullPath: node.fullPath, relative, isDir: node.isDir }); }}>
-          <MoreHorizontal size={16} aria-hidden />
+          <MoreHorizontal size={UI_ICON_SIZE.compact} aria-hidden />
         </button>}
         {onAtMention && !node.isDir && (
           <button
@@ -222,7 +223,7 @@ function TreeNode({
             aria-label={`${t("explorer.mention")}: ${node.name}`}
             title={t("explorer.mention")}
           >
-            <AtSign size={13} strokeWidth={2} aria-hidden="true" />
+            <AtSign size={UI_ICON_SIZE.compact} aria-hidden="true" />
             {t("explorer.mentionShort")}
           </button>
         )}
@@ -476,7 +477,7 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
       <input ref={uploadInputRef} type="file" multiple hidden onChange={onFileInputChange} />
       <div className={styles.uploadToolbar}>
         <button type="button" onClick={() => openUpload(cwd)} disabled={uploadCount > 0} title={cwd}>
-          <Upload size={14} aria-hidden="true" />{t("explorer.uploadFiles")}
+          <Upload size={UI_ICON_SIZE.compact} aria-hidden="true" />{t("explorer.uploadFiles")}
         </button>
         {uploadCount > 0 && <span role="status">{t("input.uploading")}</span>}
       </div>

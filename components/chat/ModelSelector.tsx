@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import React, { useState, useRef, useEffect, useLayoutEffect, useId, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -66,24 +67,14 @@ export function ModelSelector({
   const [query, setQuery] = useState("");
   const [recentRefs, setRecentRefs] = useState<ModelPreferenceRef[]>([]);
   const [pinnedRefs, setPinnedRefs] = useState<ModelPreferenceRef[]>([]);
-  const [activeIndex, setActiveIndex] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const panelId = useId();
   const status = catalogStatus ?? (modelOptions.length ? "ready" : "empty");
   const needsRecovery = status !== "ready" || !modelOptions.length;
   const useDialog = isMobile || needsRecovery;
-  const flatOptions = useMemo(
-    () => modelsByProvider.flatMap((group) => group.options),
-    [modelsByProvider],
-  );
-
-  const selectedIndex = Math.max(0, flatOptions.findIndex(
-    (option) => option.modelId === model?.modelId && option.provider === model?.provider,
-  ));
 
   useEffect(() => {
     const media = window.matchMedia?.("(max-width: 700px)");
@@ -98,23 +89,11 @@ export function ModelSelector({
     setPinnedRefs(loadModelPreferenceRefs(window.localStorage, MODEL_PINNED_STORAGE_KEY));
   }, []);
 
-  const focusOption = (index: number, moveFocus = true) => {
-    if (!flatOptions.length) return;
-    const nextIndex = (index + flatOptions.length) % flatOptions.length;
-    setActiveIndex(nextIndex);
-    if (moveFocus) requestAnimationFrame(() => optionRefs.current[nextIndex]?.focus());
-  };
-
-  const openMenu = (button: HTMLButtonElement, preferredIndex = selectedIndex, moveFocus = false) => {
+  const openMenu = (button: HTMLButtonElement) => {
     onOpen?.();
-    if (useDialog) {
-      // Keep an explicit launcher focus target so DialogShell can always return
-      // focus after pointer, keyboard, or programmatic opens.
-      button.focus();
-    }
+    button.focus();
     setQuery("");
     setOpen(true);
-    if (!useDialog) focusOption(preferredIndex, moveFocus);
   };
 
   const closeMenu = useCallback((restoreFocus = false) => {
@@ -153,6 +132,7 @@ export function ModelSelector({
       frame = requestAnimationFrame(place);
     };
     place();
+    searchRef.current?.focus();
     // The composer moves when controls, drafts or either sidebar change size.
     // Observe its ancestors as well as viewport changes, without a polling loop.
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(schedule) : null;
@@ -173,7 +153,7 @@ export function ModelSelector({
   }, [open, useDialog]);
 
   useEffect(() => {
-    // A recovered catalog changes dialog into a listbox. Close the old surface
+    // A recovered catalog changes the recovery dialog into a picker. Close the old surface
     // first, and never leave live options clickable after a run starts.
     setOpen(false);
     setQuery("");
@@ -241,17 +221,20 @@ export function ModelSelector({
     if (!normalizedQuery) return true;
     return `${option.name} ${option.modelId} ${option.provider}`.toLocaleLowerCase().includes(normalizedQuery);
   }, [normalizedQuery]);
+  const currentOption = model ? optionByKey.get(modelPreferenceKey(model)) : undefined;
+  const currentOptions = currentOption && matchesQuery(currentOption) ? [currentOption] : [];
+  const isCurrent = (option: ModelOption) => option.provider === model?.provider && option.modelId === model?.modelId;
   const pinnedOptions = pinnedRefs
     .map((ref) => optionByKey.get(modelPreferenceKey(ref)))
     .filter((option): option is ModelOption => Boolean(option))
-    .filter(matchesQuery);
+    .filter((option) => matchesQuery(option) && !isCurrent(option));
   const recentOptions = recentRefs
     .filter((ref) => !pinnedKeys.has(modelPreferenceKey(ref)))
     .map((ref) => optionByKey.get(modelPreferenceKey(ref)))
     .filter((option): option is ModelOption => Boolean(option))
-    .filter(matchesQuery);
+    .filter((option) => matchesQuery(option) && !isCurrent(option));
   const quickOptionKeys = new Set(
-    [...pinnedOptions, ...recentOptions].map(modelPreferenceKey),
+    [...currentOptions, ...pinnedOptions, ...recentOptions].map(modelPreferenceKey),
   );
   const filteredGroups = modelsByProvider
     .map((group) => ({
@@ -259,9 +242,9 @@ export function ModelSelector({
       options: group.options.filter((option) => matchesQuery(option) && !quickOptionKeys.has(modelPreferenceKey(option))),
     }))
     .filter((group) => group.options.length > 0);
-  const hasMobileResults = pinnedOptions.length > 0 || recentOptions.length > 0 || filteredGroups.length > 0;
+  const hasResults = currentOptions.length > 0 || pinnedOptions.length > 0 || recentOptions.length > 0 || filteredGroups.length > 0;
 
-  const renderMobileModel = (option: ModelOption) => {
+  const renderModel = (option: ModelOption) => {
     const identity = modelPreferenceKey(option);
     const isPinned = pinnedKeys.has(identity);
     const isActive = option.modelId === model?.modelId && option.provider === model?.provider;
@@ -276,10 +259,11 @@ export function ModelSelector({
           aria-current={isActive ? "true" : undefined}
           aria-disabled={option.available === false || undefined}
           title={option.available === false ? t("model.rejected") : undefined}
-          onClick={() => selectModel(option, false)}
+          data-model-choice
+          onClick={() => selectModel(option)}
         >
           <span className={styles.mobileModelLeading} aria-hidden>
-            {isActive ? <Check size={16} strokeWidth={2.2} /> : <Cpu size={16} strokeWidth={1.8} />}
+            {isActive ? <Check size={UI_ICON_SIZE.compact} /> : <Cpu size={UI_ICON_SIZE.compact} />}
           </span>
           <span className={styles.mobileModelCopy}>
             <span className={styles.mobileModelName}>{option.name}</span>
@@ -287,7 +271,7 @@ export function ModelSelector({
               <span>{option.provider}</span>
               <span aria-hidden>·</span>
               <span className={option.available === false ? styles.modelUnavailable : styles.modelAvailable}>
-                <BadgeCheck size={12} aria-hidden />
+                <BadgeCheck size={UI_ICON_SIZE.inline} aria-hidden />
                 {t(option.available === false ? "model.unavailable" : "model.available")}
               </span>
               {option.contextWindow && <><span aria-hidden>·</span><span>{formatContextWindow(option.contextWindow)}</span></>}
@@ -303,7 +287,7 @@ export function ModelSelector({
           title={t(isPinned ? "model.unpin" : "model.pin")}
           onClick={() => togglePin(option)}
         >
-          <Pin size={16} strokeWidth={1.8} fill={isPinned ? "currentColor" : "none"} aria-hidden />
+          <Pin size={UI_ICON_SIZE.compact} fill={isPinned ? "currentColor" : "none"} aria-hidden />
         </button>
       </div>
     );
@@ -313,9 +297,65 @@ export function ModelSelector({
   const triggerLabel = currentName || model?.modelId || (needsRecovery ? statusLabel : t("model.choose"));
   const refreshRejected = modelOptions.some((option) => option.available === false) && onRetry ? (
     <button type="button" className={styles.catalogAction} onClick={() => { closeMenu(); onRetry(); }}>
-      <RefreshCw size={14} aria-hidden />{t("model.recheck")}
+      <RefreshCw size={UI_ICON_SIZE.compact} aria-hidden />{t("model.recheck")}
     </button>
   ) : null;
+
+  const pickerContent = (
+    <div onKeyDown={(event) => {
+      const target = event.target as HTMLElement;
+      const choices = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("[data-model-choice]")];
+      const index = choices.indexOf(target as HTMLButtonElement);
+      if (target !== searchRef.current && index < 0) return;
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      if (target === searchRef.current && (event.key === "Home" || event.key === "End")) return;
+      if (!choices.length) return;
+      event.preventDefault();
+      const next = event.key === "Home" ? 0 : event.key === "End" ? choices.length - 1
+        : event.key === "ArrowDown" ? (index + 1) % choices.length
+          : (index < 0 ? choices.length - 1 : (index - 1 + choices.length) % choices.length);
+      choices[next]?.focus();
+    }}>
+          <div className={styles.modelSheetSearch}>
+            <Search size={UI_ICON_SIZE.control} aria-hidden />
+            <input
+              ref={searchRef}
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label={t("model.searchLabel")}
+              placeholder={t("model.searchPlaceholder")}
+              autoComplete="off"
+            />
+          </div>
+          {currentOptions.length > 0 && (
+            <section className={styles.mobileModelSection} aria-labelledby={`${panelId}-current`}>
+              <h3 id={`${panelId}-current`}>{t("model.current")}</h3>
+              <div className={styles.mobileModelList}>{currentOptions.map(renderModel)}</div>
+            </section>
+          )}
+          {pinnedOptions.length > 0 && (
+            <section className={styles.mobileModelSection} aria-labelledby={`${panelId}-pinned`}>
+              <h3 id={`${panelId}-pinned`}>{t("model.pinned")}</h3>
+              <div className={styles.mobileModelList}>{pinnedOptions.map(renderModel)}</div>
+            </section>
+          )}
+          {recentOptions.length > 0 && (
+            <section className={styles.mobileModelSection} aria-labelledby={`${panelId}-recent`}>
+              <h3 id={`${panelId}-recent`}>{t("model.recent")}</h3>
+              <div className={styles.mobileModelList}>{recentOptions.map(renderModel)}</div>
+            </section>
+          )}
+          {filteredGroups.map((group) => (
+            <section className={styles.mobileModelSection} key={group.provider} aria-labelledby={`${panelId}-${group.provider}`}>
+              <h3 id={`${panelId}-${group.provider}`}>{group.provider}</h3>
+              <div className={styles.mobileModelList}>{group.options.map(renderModel)}</div>
+            </section>
+          ))}
+          {!hasResults && <p className={styles.modelNoResults}>{t("model.noResults")}</p>}
+          {refreshRejected}
+    </div>
+  );
 
   return (
     <div ref={dropdownRef} className={`${styles.root} ${className ?? ""}`}>
@@ -323,7 +363,7 @@ export function ModelSelector({
         ref={triggerRef}
         type="button"
         aria-expanded={open}
-        aria-haspopup={useDialog ? "dialog" : "listbox"}
+        aria-haspopup="dialog"
         aria-controls={open && !useDialog ? panelId : undefined}
         aria-label={`${t("model.selectorLabel")}: ${triggerLabel}${needsRecovery && triggerLabel !== statusLabel ? ` — ${statusLabel}` : ""}`}
         title={needsRecovery ? `${triggerLabel} — ${statusLabel}` : triggerLabel}
@@ -336,20 +376,16 @@ export function ModelSelector({
         onKeyDown={(event) => {
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
           event.preventDefault();
-          openMenu(
-            event.currentTarget,
-            event.key === "ArrowUp" ? flatOptions.length - 1 : selectedIndex,
-            true,
-          );
+          openMenu(event.currentTarget);
         }}
         disabled={isStreaming || (!needsRecovery && !onModelChange)}
         className={`${styles.trigger} ${open ? styles.triggerOpen : ""}`}
       >
         {status === "loading"
-          ? <RefreshCw size={13} strokeWidth={1.8} aria-hidden />
-          : needsRecovery ? <TriangleAlert size={13} strokeWidth={1.8} aria-hidden /> : <Cpu size={13} strokeWidth={1.8} aria-hidden />}
-        <span className={styles.triggerLabel}>{triggerLabel}</span>
-        <ChevronDown className={styles.chevron} size={13} strokeWidth={1.8} aria-hidden />
+          ? <RefreshCw size={UI_ICON_SIZE.compact} aria-hidden />
+          : needsRecovery ? <TriangleAlert size={UI_ICON_SIZE.compact} aria-hidden /> : <Cpu size={UI_ICON_SIZE.compact} aria-hidden />}
+        <span className={styles.triggerLabel}>{model?.provider ? triggerLabel.replace(` (${model.provider})`, "") : triggerLabel}</span>
+        <ChevronDown className={styles.chevron} size={UI_ICON_SIZE.compact} aria-hidden />
       </button>
       {open && needsRecovery && (
         <DialogShell
@@ -369,8 +405,8 @@ export function ModelSelector({
               </ul>
             )}
             <div className={styles.catalogActions}>
-              {onRetry && <button type="button" className={styles.catalogAction} disabled={status === "loading"} onClick={onRetry} data-testid="model-catalog-retry"><RefreshCw size={16} aria-hidden />{t("model.catalogRetry")}</button>}
-              {onOpenModels && <button type="button" className={styles.catalogAction} onClick={() => { closeMenu(); onOpenModels(); }} data-testid="model-catalog-configure"><Settings2 size={16} aria-hidden />{t("model.configure")}</button>}
+              {onRetry && <button type="button" className={styles.catalogAction} disabled={status === "loading"} onClick={onRetry} data-testid="model-catalog-retry"><RefreshCw size={UI_ICON_SIZE.compact} aria-hidden />{t("model.catalogRetry")}</button>}
+              {onOpenModels && <button type="button" className={styles.catalogAction} onClick={() => { closeMenu(); onOpenModels(); }} data-testid="model-catalog-configure"><Settings2 size={UI_ICON_SIZE.compact} aria-hidden />{t("model.configure")}</button>}
             </div>
           </div>
         </DialogShell>
@@ -386,38 +422,7 @@ export function ModelSelector({
           mobileMode="sheet"
           placement="center"
         >
-          <div className={styles.modelSheetSearch}>
-            <Search size={17} strokeWidth={1.8} aria-hidden />
-            <input
-              ref={searchRef}
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              aria-label={t("model.searchLabel")}
-              placeholder={t("model.searchPlaceholder")}
-              autoComplete="off"
-            />
-          </div>
-          {pinnedOptions.length > 0 && (
-            <section className={styles.mobileModelSection} aria-labelledby={`${panelId}-pinned`}>
-              <h3 id={`${panelId}-pinned`}>{t("model.pinned")}</h3>
-              <div className={styles.mobileModelList}>{pinnedOptions.map(renderMobileModel)}</div>
-            </section>
-          )}
-          {recentOptions.length > 0 && (
-            <section className={styles.mobileModelSection} aria-labelledby={`${panelId}-recent`}>
-              <h3 id={`${panelId}-recent`}>{t("model.recent")}</h3>
-              <div className={styles.mobileModelList}>{recentOptions.map(renderMobileModel)}</div>
-            </section>
-          )}
-          {filteredGroups.map((group) => (
-            <section className={styles.mobileModelSection} key={group.provider} aria-labelledby={`${panelId}-${group.provider}`}>
-              <h3 id={`${panelId}-${group.provider}`}>{group.provider}</h3>
-              <div className={styles.mobileModelList}>{group.options.map(renderMobileModel)}</div>
-            </section>
-          ))}
-          {!hasMobileResults && <p className={styles.modelNoResults}>{t("model.noResults")}</p>}
-          {refreshRejected}
+          {pickerContent}
         </DialogShell>
       )}
       {open && !needsRecovery && !isMobile && createPortal(
@@ -425,72 +430,15 @@ export function ModelSelector({
             ref={panelRef}
             className={`${styles.panel} ${styles.panelFixed} ${styles.modelPanel}`}
             data-testid="model-selector-popover"
-            style={{ width: "max-content" }}
-            onKeyDown={(event) => {
-              if (!(event.target as HTMLElement).closest('[role="option"]')) return;
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                focusOption(activeIndex + 1);
-              } else if (event.key === "ArrowUp") {
-                event.preventDefault();
-                focusOption(activeIndex - 1);
-              } else if (event.key === "Home") {
-                event.preventDefault();
-                focusOption(0);
-              } else if (event.key === "End") {
-                event.preventDefault();
-                focusOption(flatOptions.length - 1);
-              } else if (event.key === "Tab" && !refreshRejected) {
-                closeMenu();
-              }
+            id={panelId}
+            role="dialog"
+            aria-label={t("model.choose")}
+            onBlur={(event) => {
+              const next = event.relatedTarget as Node | null;
+              if (next && !event.currentTarget.contains(next) && !dropdownRef.current?.contains(next)) closeMenu();
             }}
           >
-            <div id={panelId} role="listbox" aria-label={t("model.selectorLabel")}>
-            {modelsByProvider.map((group, gi) => (
-              <div key={group.provider}>
-                {modelsByProvider.length > 1 && (
-                  <div className={`${styles.providerLabel} ${gi > 0 ? styles.providerLabelBordered : ""}`}>
-                    {group.provider}
-                  </div>
-                )}
-                {group.options.map((opt) => {
-                  const isActive = opt.modelId === model?.modelId && opt.provider === model?.provider;
-                  const optionIndex = flatOptions.findIndex(
-                    (candidate) => candidate.modelId === opt.modelId && candidate.provider === opt.provider,
-                  );
-                  return (
-                    <button
-                      ref={(node) => { optionRefs.current[optionIndex] = node; }}
-                      key={`${opt.provider}:${opt.modelId}`}
-                      type="button"
-                      role="option"
-                      aria-selected={isActive}
-                      aria-disabled={opt.available === false || undefined}
-                      title={opt.available === false ? t("model.rejected") : undefined}
-                      tabIndex={optionIndex === activeIndex ? 0 : -1}
-                      onFocus={() => setActiveIndex(optionIndex)}
-                      onClick={() => {
-                        selectModel(opt);
-                      }}
-                      className={`${styles.option} ${styles.modelOption} ${isActive ? styles.optionActive : ""}`}
-                    >
-                      {isActive
-                        ? <Check className={styles.check} size={12} strokeWidth={2.2} aria-hidden />
-                        : <span className={styles.checkSpacer} />}
-                      <span className={styles.desktopModelCopy}>
-                        <span className={styles.desktopModelName}>{opt.name}</span>
-                        <span className={styles.desktopModelMeta}>
-                          {opt.available === false ? t("model.unavailable") : opt.contextWindow ? formatContextWindow(opt.contextWindow) : opt.provider}
-                          {opt.available !== false && opt.cost ? ` · ${formatModelCost(opt.cost)}` : ""}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-            </div>
-            {refreshRejected}
+            {pickerContent}
           </div>,
           document.body,
       )}

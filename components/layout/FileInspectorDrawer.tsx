@@ -1,4 +1,7 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
+
+import { X } from "lucide-react";
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { FileOutlineItem } from "@/lib/file-workbench";
@@ -29,6 +32,7 @@ interface Props {
   initialTab?: InspectorTab;
   onClose: () => void;
   onGotoLine: (line: number) => void;
+  onGotoOutline?: (line: number) => void;
   onCompareVersion: (commit: Commit) => void;
   onCompareSnapshot?: (snapshot: Snapshot) => void;
   onSendDiagnostic?: (diagnostic: Diagnostic) => void;
@@ -41,7 +45,7 @@ function readNotes(filePath: string): FileNote[] {
   catch { return []; }
 }
 
-export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, outline, initialTab = "outline", onClose, onGotoLine, onCompareVersion, onCompareSnapshot, onSendDiagnostic, onDiagnosticsLoaded }: Props) {
+export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, outline, initialTab = "outline", onClose, onGotoLine, onGotoOutline, onCompareVersion, onCompareSnapshot, onSendDiagnostic, onDiagnosticsLoaded }: Props) {
   const { t } = useI18n();
   const tabId = useId();
   const [tab, setTab] = useState<InspectorTab>(initialTab);
@@ -135,7 +139,7 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
 
   return (
     <div className={styles.drawer} role="complementary" aria-label={t("files.inspector.title")} data-testid="file-inspector">
-      <div className={styles.header}><strong>{t("files.inspector.title")}</strong><button onClick={onClose} aria-label={t("files.inspector.close")}>×</button></div>
+      <div className={styles.header}><strong>{t("files.inspector.title")}</strong><button onClick={onClose} aria-label={t("files.inspector.close")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button></div>
       <div className={styles.tabs} role="tablist" aria-label={t("files.inspector.title")} onKeyDown={(event) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
         const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
@@ -159,7 +163,7 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
           {symbolMatches && <div className={styles.list} aria-label={t(symbolMode === "definition" ? "files.inspector.definitionResults" : "files.inspector.referenceResults")}>
             {symbolMatches.length === 0 ? <div className={styles.empty}>{t(symbolMode === "definition" ? "files.inspector.noDefinition" : "files.inspector.noReferences")}</div> : symbolMatches.map((match, index) => <button key={`${match.path}:${match.line}:${index}`} className={styles.symbolResult} onClick={() => match.path === relativePath ? onGotoLine(match.line) : requestOpenFile({ path: match.path, line: match.line })}><span className="chrome-mono">{match.path}:{match.line}</span><span>{match.preview}</span></button>)}
           </div>}
-          {outline.length ? <div className={styles.list}>{outline.map((item) => <button key={item.id} className={styles.row} style={{ paddingLeft: 10 + (item.level - 1) * 14 }} onClick={() => onGotoLine(item.line)}><span className={styles.kind}>{item.kind.slice(0, 2)}</span><span className={styles.label}>{item.label}</span><span className={styles.line}>L{item.line}</span></button>)}</div> : !symbolMatches && <div className={styles.empty}>{t("files.inspector.noSymbols")}</div>}
+          {outline.length ? <div className={styles.list}>{outline.map((item) => <button key={item.id} className={styles.row} style={{ paddingLeft: 10 + (item.level - 1) * 14 }} onClick={() => (onGotoOutline ?? onGotoLine)(item.line)}><span className={styles.kind}>{item.kind.slice(0, 2)}</span><span className={styles.label}>{item.label}</span><span className={styles.line}>L{item.line}</span></button>)}</div> : !symbolMatches && <div className={styles.empty}>{t("files.inspector.noSymbols")}</div>}
         </>}
         {!loading && !error && tab === "problems" && <div className={styles.problemsPane}>
           <div className={styles.problemActions}><span>{t("files.inspector.problemSources")}</span><button disabled={runningTests} onClick={() => void runRelatedTests()}>{t(runningTests ? "files.inspector.runningTests" : "files.inspector.runTests")}</button></div>
@@ -171,7 +175,7 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
           {history && history.length === 0 && snapshots.length === 0 && <div className={styles.empty}>{t("files.inspector.noHistory")}</div>}
         </div>}
         {!loading && !error && tab === "blame" && (groupedBlame.length ? <div className={styles.list}>{groupedBlame.map((item) => <button key={`${item.sha}-${item.line}`} className={styles.commit} onClick={() => onGotoLine(item.line)}><span className={styles.sha}>{item.sha.slice(0, 8)}</span><span className={styles.label}>{item.author}</span><span className={styles.meta}>L{item.line}–{item.line + item.count - 1} · {new Date(item.date).toLocaleDateString()}</span></button>)}</div> : blame && <div className={styles.empty}>{t("files.inspector.blameUnavailable")}</div>)}
-        {tab === "notes" && <div className={styles.notes}><form onSubmit={(event) => { event.preventDefault(); const text = noteText.trim(); const line = Number(noteLine); if (!text || !Number.isFinite(line) || line < 1) return; saveNotes([...notes, { id: crypto.randomUUID(), line, text, createdAt: Date.now() }]); setNoteText(""); }}><div className={styles.noteForm}><input aria-label={t("files.inspector.line")} value={noteLine} onChange={(event) => setNoteLine(event.target.value)} inputMode="numeric" /><textarea aria-label={t("files.inspector.note")} value={noteText} onChange={(event) => setNoteText(event.target.value)} placeholder={t("files.inspector.notePlaceholder")} rows={2} /><button disabled={!noteText.trim()}>{t("common.add")}</button></div></form>{notes.map((note) => <div className={styles.note} key={note.id}><button onClick={() => onGotoLine(note.line)}>L{note.line}</button><span>{note.text}</span><button aria-label={t("files.inspector.deleteNote")} onClick={() => saveNotes(notes.filter((item) => item.id !== note.id))}>×</button></div>)}</div>}
+        {tab === "notes" && <div className={styles.notes}><form onSubmit={(event) => { event.preventDefault(); const text = noteText.trim(); const line = Number(noteLine); if (!text || !Number.isFinite(line) || line < 1) return; saveNotes([...notes, { id: crypto.randomUUID(), line, text, createdAt: Date.now() }]); setNoteText(""); }}><div className={styles.noteForm}><input aria-label={t("files.inspector.line")} value={noteLine} onChange={(event) => setNoteLine(event.target.value)} inputMode="numeric" /><textarea aria-label={t("files.inspector.note")} value={noteText} onChange={(event) => setNoteText(event.target.value)} placeholder={t("files.inspector.notePlaceholder")} rows={2} /><button disabled={!noteText.trim()}>{t("common.add")}</button></div></form>{notes.map((note) => <div className={styles.note} key={note.id}><button onClick={() => onGotoLine(note.line)}>L{note.line}</button><span>{note.text}</span><button aria-label={t("files.inspector.deleteNote")} onClick={() => saveNotes(notes.filter((item) => item.id !== note.id))}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button></div>)}</div>}
       </div>
     </div>
   );

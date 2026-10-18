@@ -16,7 +16,7 @@ async function fits(page: Page) {
   expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
   const content = (await panel.locator('[class*="rightPanelContent"]').boundingBox())!;
   expect(content.x + content.width).toBeLessThanOrEqual(box.x + box.width + 1);
-  await expect(panel.getByRole("button", { name: "Hide file panel", exact: true })).toBeInViewport();
+  await expect(panel.getByRole("button", { name: /^(Hide file panel|Back to chat)$/ })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 }
 
@@ -60,7 +60,7 @@ for (const style of ["original", "trae"]) {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.getByRole("button", { name: /^(Explorer|Files)$/ }).first().click();
     await fits(page);
-    await panel.getByRole("button", { name: "Hide file panel", exact: true }).click();
+    await panel.getByRole("button", { name: /^(Hide file panel|Back to chat)$/ }).click();
     await expect(input).toHaveValue("Preserve the preview draft");
     await page.getByRole("button", { name: "Show file panel", exact: true }).click();
     await expect(panel.locator('iframe[title="HTML preview"]')).toBeVisible();
@@ -98,7 +98,7 @@ for (const style of ["original", "trae"]) {
       const controls = panel.locator('[class*="HtmlPreview_toolbar"] button');
       for (const control of await controls.all()) expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       if ([390, 768, 1440].includes(width)) await page.screenshot({ path: test.info().outputPath(`preview-${width}-${style}.png`) });
-      await panel.getByRole("button", { name: "Hide file panel", exact: true }).tap();
+      await panel.getByRole("button", { name: /^(Hide file panel|Back to chat)$/ }).tap();
       await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeVisible();
     }
     expect(errors).toEqual([]);

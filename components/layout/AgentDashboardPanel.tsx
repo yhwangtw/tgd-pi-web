@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useMemo, useState } from "react";
 import { Bot, Search, X } from "lucide-react";
@@ -34,7 +35,7 @@ function projectName(path: string): string {
 }
 
 export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessions }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [editorOpen, setEditorOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -206,11 +207,12 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
         <section className={s.compareTray} aria-label={t("agents.compareResults")}>
           <div className={s.compareTrayHeader}>
             <strong>{t("agents.compareResults")}</strong>
-            <button type="button" onClick={() => setCompareOpen(false)} aria-label={t("common.close")}>×</button>
+            <button type="button" onClick={() => setCompareOpen(false)} aria-label={t("common.close")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>
           </div>
           <div className={s.compareGrid}>
             {comparedRuns.map((run) => <article key={run.id}>
               <strong>{run.name}</strong>
+              <time dateTime={run.startedAt ?? run.createdAt}>{new Date(run.startedAt ?? run.createdAt).toLocaleString(locale === "zh" ? "zh-TW" : "en")}</time>
               <span>{run.report?.summary ?? run.error ?? t("agents.noReport")}</span>
               <dl>
                 <div><dt>{t("agents.files")}</dt><dd>{run.report?.changedFiles.length ?? 0}</dd></div>
@@ -249,9 +251,9 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
       </div>
       {agentRuns.data && <AgentBudgetSettings limits={agentRuns.data.subagentLimits} maxConcurrency={maxConcurrency} onSaved={() => void refreshRuns()} />}
       <div className={s.filterBar}>
-        <Search size={13} strokeWidth={2} aria-hidden="true" />
+        <Search size={UI_ICON_SIZE.compact} aria-hidden="true" />
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("agents.search")} aria-label={t("agents.search")} />
-        {(query || filter !== "all") && <button type="button" onClick={clearFilters} aria-label={t("agents.clearFilters")}><X size={13} strokeWidth={2} aria-hidden="true" /></button>}
+        {(query || filter !== "all") && <button type="button" onClick={clearFilters} aria-label={t("agents.clearFilters")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>}
       </div>
       <div className={s.body}>
         {error && <div className={s.listError} role="alert"><span>{error}</span><button type="button" onClick={() => void refreshRuns()}>{t("common.retry")}</button></div>}
@@ -259,7 +261,7 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
           <div className={s.skeleton} aria-busy="true"><span /><span /><span /></div>
         ) : groups.length === 0 ? (
           <div className={s.empty}>
-            <Bot size={30} strokeWidth={1.5} aria-hidden />
+            <Bot size={30} aria-hidden />
             <strong>{t(hasFilters ? "agents.noMatches" : "agents.empty")}</strong>
             <span>{t(hasFilters ? "agents.noMatchesHint" : "agents.emptyHint")}</span>
             {hasFilters ? (

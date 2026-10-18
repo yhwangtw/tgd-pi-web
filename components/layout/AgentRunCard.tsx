@@ -72,11 +72,14 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
       </div>
       <div className={s.cardDetails}>
         <p className={s.promptPreview}>{run.prompt}</p>
-        <div className={`${s.path} chrome-mono`} title={run.cwd}>{run.cwd}</div>
-        {run.error && <div className={s.runError} role="status">{run.error}</div>}
+        <details className={s.runDetails}>
+          <summary>{t("ui.technicalDetails")}</summary>
+          <div className={`${s.path} chrome-mono`}>{run.cwd}</div>
+          {run.error && <div className={s.runError}>{run.error}</div>}
+        </details>
         {!!run.recoveryCount && <p>{t("agents.recovered")}: {run.recoveryCount}</p>}
         {active && run.limitWarning && <p role="status">{t("agents.limitNear")}</p>}
-        {run.progress && <p>{t("agents.turns")}: {run.progress.turns} · {new Intl.NumberFormat(locale === "zh" ? "zh-TW" : "en", { style: "currency", currency: "USD" }).format(run.progress.costUsd)}</p>}
+        {run.progress && !run.report && <p>{t("agents.turns")}: {run.progress.turns} · {new Intl.NumberFormat(locale === "zh" ? "zh-TW" : "en", { style: "currency", currency: "USD" }).format(run.progress.costUsd)}</p>}
         {run.report && (
           <div className={s.runReport}>
             <button type="button" className={s.reportToggle} aria-expanded={reportOpen} onClick={() => setReportOpen((open) => !open)}>

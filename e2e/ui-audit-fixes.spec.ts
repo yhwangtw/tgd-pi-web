@@ -102,10 +102,12 @@ for (const width of [390, 921, 1440]) {
   });
 }
 
-test("mobile Done meets normal text contrast in every palette and light/dark mode", async ({ page }, info) => {
+test("mobile Controls close icon stays readable in every palette and light/dark mode", async ({ page }, info) => {
   await open(page, 390);
   await page.getByRole("button", { name: "More composer controls", exact: true }).click();
-  const done = page.getByRole("dialog", { name: "Composer controls", exact: true }).getByRole("button", { name: "Done", exact: true });
+  const done = page.getByRole("dialog", { name: "Composer controls", exact: true }).getByRole("button", { name: "Close", exact: true });
+  // Measure settled colors, including translucent control surfaces.
+  await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" });
   const contrast = [];
   for (const skin of ["terminal", "trae", "editorial", "glass", "aurora", "industrial"]) for (const dark of [false, true]) {
     await page.locator("html").evaluate((element, { skin, dark }) => {
@@ -113,22 +115,35 @@ test("mobile Done meets normal text contrast in every palette and light/dark mod
       element.classList.toggle("dark", dark);
     }, { skin, dark });
     const ratio = await done.evaluate(element => {
-      const style = getComputedStyle(element);
-      const luminance = (color: string) => {
-        const rgb = color.match(/[\d.]+/g)!.slice(0, 3).map(value => {
-          const v = Number(value) / 255;
-          return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-        });
-        return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+      // Browser-normalize CSS Color 4 color(srgb ...) as well as rgb/rgba.
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d", { willReadFrequently: true })!;
+      const parse = (value: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = value;
+        context.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
+        return [r, g, b, a / 255];
       };
-      const a = luminance(style.color), b = luminance(style.backgroundColor);
+      const blend = (front: number[], back: number[]) => front.slice(0, 3).map((channel, i) => channel * front[3] + back[i] * (1 - front[3]));
+      const ancestors: Element[] = [];
+      for (let node: Element | null = element; node; node = node.parentElement) ancestors.unshift(node);
+      let background = [255, 255, 255];
+      for (const node of ancestors) background = blend(parse(getComputedStyle(node).backgroundColor), background);
+      const foreground = blend(parse(getComputedStyle(element).color), background);
+      const luminance = (rgb: number[]) => rgb.map(value => {
+        const v = value / 255;
+        return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      }).reduce((total, value, i) => total + value * [0.2126, 0.7152, 0.0722][i], 0);
+      const a = luminance(foreground), b = luminance(background);
       return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
     });
     contrast.push({ skin, dark, ratio });
-    expect(ratio, `${skin} ${dark ? "dark" : "light"}`).toBeGreaterThanOrEqual(4.5);
+    expect(ratio, `${skin} ${dark ? "dark" : "light"}`).toBeGreaterThanOrEqual(3);
   }
   await page.locator("html").evaluate(element => { element.setAttribute("data-skin", "terminal"); element.classList.remove("dark"); });
-  await page.screenshot({ path: info.outputPath("mobile-done.png") });
+  await page.screenshot({ path: info.outputPath("mobile-close.png") });
   await info.attach("contrast.json", { body: JSON.stringify(contrast, null, 2), contentType: "application/json" });
   await done.click();
   await expect(page.getByRole("dialog", { name: "Composer controls", exact: true })).toBeHidden();

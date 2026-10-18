@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { SessionInfo } from "@/lib/types";
@@ -26,6 +27,7 @@ import { useWorkspaceIdentities } from "@/hooks/useWorkspaceIdentities";
 import { onOpenProjectSwitcher } from "@/lib/project-switcher-events";
 import { computeVirtualWindow } from "@/lib/virtual-list";
 import { ArrowDownAZ, BarChart3, Check, ChevronRight, Clock3, FolderGit2, Plus, RefreshCw, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { ActionMenu, ActionMenuRadioGroup, ActionMenuRadioItem } from "@/components/ui/ActionMenu";
 import styles from "./SessionSidebar.module.css";
 
 const SORT_MODE_KEY = "pi-session-sort";
@@ -217,13 +219,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       if (v === "name" || v === "messages" || v === "recent") setSortMode(v);
     } catch { /* private mode */ }
   }, []);
-  const cycleSortMode = useCallback(() => {
-    setSortMode((m) => {
-      const next: SessionSortMode = m === "recent" ? "name" : m === "name" ? "messages" : "recent";
-      try { localStorage.setItem(SORT_MODE_KEY, next); } catch { /* private mode */ }
-      return next;
-    });
-  }, []);
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortModes = ["recent", "name", "messages"] as const;
+  const sortLabel = (mode: SessionSortMode) => t(mode === "recent" ? "sidebar.sortRecent" : mode === "name" ? "sidebar.sortName" : "sidebar.sortMessages");
+  const selectSortMode = (value: string) => {
+    if (!sortModes.includes(value as SessionSortMode)) return;
+    setSortMode(value as SessionSortMode);
+    try { localStorage.setItem(SORT_MODE_KEY, value); } catch { /* private mode */ }
+  };
 
   const [showArchived, setShowArchived] = useState(false);
   const archivedSet = useMemo(() => new Set(archivedIds), [archivedIds]);
@@ -510,7 +513,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               className={`${styles.newSessionButton} ${styles.newSessionButtonEnabled} hover-bg-selected-accent`}
               title={selectedCwd ? `${t("sidebar.newIn")} ${selectedCwd}` : t("sidebar.newChooseProject")}
             >
-              <Plus size={12} strokeWidth={2.2} aria-hidden="true" />
+              <Plus size={UI_ICON_SIZE.inline} aria-hidden="true" />
               {t("sidebar.new")}
             </button>
             <button
@@ -519,9 +522,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               title={t("sidebar.refresh")}
             >
               {sessionRefreshDone ? (
-                <Check size={15} color="var(--color-success)" strokeWidth={2.5} aria-hidden="true" />
+                <Check size={UI_ICON_SIZE.compact} color="var(--color-success)" aria-hidden="true" />
               ) : (
-                <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
+                <RefreshCw size={UI_ICON_SIZE.compact} aria-hidden="true" />
               )}
             </button>
           </div>
@@ -534,7 +537,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       <div className={styles.sessionToolbar}>
         <div className={styles.sessionSearch}>
           <span className={styles.sessionSearchIcon} aria-hidden>
-            <Search size={14} strokeWidth={2} />
+            <Search size={UI_ICON_SIZE.compact} />
           </span>
           <input
             ref={searchInputRef}
@@ -558,7 +561,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               onClick={() => setSessionQuery("")}
               aria-label={t("search.clear")}
             >
-              <X size={14} strokeWidth={2} />
+              <X size={UI_ICON_SIZE.control} />
             </button>
           )}
         </div>
@@ -581,21 +584,29 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               {t("sidebar.thisProject")}
             </button>
           </div>
+          <ActionMenu open={sortOpen} onOpenChange={setSortOpen} label={t("sidebar.sortBy")} trigger={
           <button
             type="button"
-            onClick={cycleSortMode}
             className={`${styles.sortButton} ${sortMode !== "recent" ? styles.sortButtonActive : ""} hover-bg-selected-accent`}
             title={`${t("sidebar.sortBy")}: ${t(sortMode === "recent" ? "sidebar.sortRecent" : sortMode === "name" ? "sidebar.sortName" : "sidebar.sortMessages")}`}
             aria-label={`${t("sidebar.sortBy")}: ${t(sortMode === "recent" ? "sidebar.sortRecent" : sortMode === "name" ? "sidebar.sortName" : "sidebar.sortMessages")}`}
           >
             {sortMode === "recent" ? (
-              <Clock3 size={12} strokeWidth={2} aria-hidden="true" />
+              <Clock3 size={UI_ICON_SIZE.inline} aria-hidden="true" />
             ) : sortMode === "name" ? (
-              <ArrowDownAZ size={12} strokeWidth={2} aria-hidden="true" />
+              <ArrowDownAZ size={UI_ICON_SIZE.inline} aria-hidden="true" />
             ) : (
-              <BarChart3 size={12} strokeWidth={2} aria-hidden="true" />
+              <BarChart3 size={UI_ICON_SIZE.inline} aria-hidden="true" />
             )}
+            <span className={styles.sortLabel}>{t(sortMode === "recent" ? "sidebar.sortRecentShort" : sortMode === "messages" ? "sidebar.sortMessagesShort" : "sidebar.sortName")}</span>
           </button>
+          }>
+            <ActionMenuRadioGroup value={sortMode} onValueChange={selectSortMode}>
+              {sortModes.map((mode) => <ActionMenuRadioItem key={mode} value={mode}>
+                <span aria-hidden>{sortMode === mode ? <Check size={UI_ICON_SIZE.compact} /> : null}</span>{sortLabel(mode)}
+              </ActionMenuRadioItem>)}
+            </ActionMenuRadioGroup>
+          </ActionMenu>
           <button
             type="button"
             onClick={() => setFiltersOpen(true)}
@@ -605,7 +616,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             aria-haspopup="dialog"
             aria-expanded={filtersOpen}
           >
-            <SlidersHorizontal size={15} strokeWidth={1.8} aria-hidden />
+            <SlidersHorizontal size={UI_ICON_SIZE.compact} aria-hidden />
             {activeFilterCount > 0 && <span className={styles.filterCount}>{activeFilterCount}</span>}
           </button>
         </div>
@@ -615,7 +626,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         </button>
         {hasSearchFilters && <div className={styles.activeFilters} aria-label={t("sidebar.filters")}>
           {normalizedSessionQuery && <span className={styles.filterChip} title={normalizedSessionQuery}>
-            <Search size={12} aria-hidden /><span>{normalizedSessionQuery}</span>
+            <Search size={UI_ICON_SIZE.inline} aria-hidden /><span>{normalizedSessionQuery}</span>
           </span>}
           {activeTagFilter && <span className={styles.filterChip} title={activeTagFilter}><span>{activeTagFilter}</span></span>}
           {showArchived && <span className={styles.filterChip}><span>{t("sidebar.showArchived")}</span></span>}
@@ -676,7 +687,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <>
             <div className={`${styles.groupHeader} ${styles.groupHeaderDivider}`}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                <Star size={11} color="var(--text-dim)" fill="var(--text-dim)" strokeWidth={2} aria-hidden="true" />
+                <Star size={UI_ICON_SIZE.inline} color="var(--text-dim)" fill="var(--text-dim)" aria-hidden="true" />
                 {t("sidebar.pinned")}
               </span>
             </div>
@@ -726,8 +737,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               className={styles.explorerToggle}
             >
               <ChevronRight
-                size={9}
-                strokeWidth={1.8}
+                size={UI_ICON_SIZE.inline}
+
                 className={styles.explorerChevron}
                 style={{ transform: explorerOpen ? "rotate(90deg)" : "none" }}
                 aria-hidden="true"
@@ -740,9 +751,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               className={`${styles.explorerRefreshButton} ${explorerRefreshDone ? styles.explorerRefreshButtonDone : styles.explorerRefreshButtonDefault} ${explorerRefreshDone ? "" : "hover-bg-selected-accent"}`}
             >
               {explorerRefreshDone ? (
-                <Check size={13} color="var(--color-success)" strokeWidth={2.5} aria-hidden="true" />
+                <Check size={UI_ICON_SIZE.compact} color="var(--color-success)" aria-hidden="true" />
               ) : (
-                <RefreshCw size={13} strokeWidth={2} aria-hidden="true" />
+                <RefreshCw size={UI_ICON_SIZE.compact} aria-hidden="true" />
               )}
             </button>
           </div>
@@ -795,12 +806,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 requestAnimationFrame(() => openPicker());
               }}
             >
-              <FolderGit2 size={18} strokeWidth={1.8} aria-hidden />
+              <FolderGit2 size={UI_ICON_SIZE.control} aria-hidden />
               <span className={styles.projectFilterText}>
                 <strong>{selectedCwd ? getSessionProjectName(selectedCwd) : t("sidebar.noProject")}</strong>
                 <small>{selectedCwd ? shortenCwd(selectedCwd, cwdState.homeDir) : t("sidebar.selectProjectFirst")}</small>
               </span>
-              <ChevronRight size={17} strokeWidth={1.8} aria-hidden />
+              <ChevronRight size={UI_ICON_SIZE.control} aria-hidden />
             </button>
           </section>
 
@@ -819,7 +830,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               onClick={() => setShowArchived((value) => !value)}
               aria-pressed={showArchived}
             >
-              <span className={styles.archiveCheck}>{showArchived && <Check size={14} strokeWidth={2.2} aria-hidden />}</span>
+              <span className={styles.archiveCheck}>{showArchived && <Check size={UI_ICON_SIZE.compact} aria-hidden />}</span>
               <span>
                 <strong>{t("sidebar.includeArchived")}</strong>
                 <small>{archivedCount} {t("sidebar.archivedConversations")}</small>

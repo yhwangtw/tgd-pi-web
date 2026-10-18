@@ -9,6 +9,7 @@ import { executeDeploymentCommand, runStagedDeployment, validateStagedPlan } fro
 import { assertCheckoutStopped } from './runtime-guard.mjs';
 import { finishUpdateOperation, patchUpdateOperation, reserveUpdateOperation } from './update-operation-store.mjs';
 import { assertDeploymentSpace } from './deployment-space.mjs';
+import { retainPreviousRelease } from './release-retention.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const delay = milliseconds => new Promise(done => setTimeout(done, milliseconds));
@@ -35,6 +36,9 @@ export async function validatePipelinePlan(input, tag, sourceDir = root) {
   const paths = [plan.stateDir, plan.stageRoot, plan.liveDir, await realpath(sourceDir)];
   for (let i = 0; i < 2; i++) for (let j = i + 1; j < paths.length; j++) {
     if (inside(paths[i], paths[j]) || inside(paths[j], paths[i])) throw new Error('State and candidate roots must be separate from source, live and each other');
+  }
+  if (plan.retention && (plan.retention.keepPrevious !== 1 || !isAbsolute(plan.retention.backupRoot || ''))) {
+    throw new Error('Retention requires an absolute backupRoot and keepPrevious: 1');
   }
   const url = new URL(plan.publicOrigin);
   if (url.protocol !== 'https:' || url.origin !== plan.publicOrigin || url.username || url.password) throw new Error('publicOrigin must be an exact HTTPS origin without credentials or a path');
@@ -340,6 +344,21 @@ export async function runReleasePipeline(input, options = {}, dependencies = {})
     state.public = await (dependencies.verifyPublic || verifyPublicDeployment)(plan, identity, env);
     state.phase = 'complete';
     await save();
+    if (plan.retention) {
+      try {
+        const current = await readLive();
+        if (current.pid !== identity.pid || current.startedAt !== identity.startedAt
+          || current.agentDir !== identity.agentDir || current.environment !== identity.environment) {
+          throw new Error('Service changed after public verification; retained all recovery builds');
+        }
+        state.retention = await (dependencies.retain || retainPreviousRelease)(plan, current, state);
+      } catch (error) {
+        // Cleanup must never restart or roll back a healthy deployed release.
+        state.retention = { status: 'deferred', message: error.message };
+        log('Release verified; old-build cleanup deferred. See the saved receipt.');
+      }
+      await save();
+    }
     log(`Published and deployed ${tag}: ${state.release.url}\nVerified ${plan.publicOrigin}; state: ${statePath}`);
     return { status: 'succeeded', statePath, state };
   });

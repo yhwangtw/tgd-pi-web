@@ -181,27 +181,30 @@ describe("composer controls", () => {
       />,
     );
 
-    const trigger = container!.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
+    const trigger = container!.querySelector<HTMLButtonElement>('button[data-testid="model-selector-trigger"]')!;
     await act(async () => trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
     await nextFrame();
 
-    const listbox = document.querySelector<HTMLElement>('[role="listbox"]')!;
-    const optionsEls = [...listbox.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    const listbox = document.querySelector<HTMLElement>('[data-testid="model-selector-popover"]')!;
+    const optionsEls = [...listbox.querySelectorAll<HTMLButtonElement>('[data-model-choice]')];
     expect(trigger.getAttribute("aria-controls")).toBe(listbox.id);
-    expect(optionsEls[1].getAttribute("aria-selected")).toBe("true");
+    expect(optionsEls[0].getAttribute("aria-current")).toBe("true");
+    const search = listbox.querySelector<HTMLInputElement>('input[type="search"]')!;
+    expect(document.activeElement).toBe(search);
+    await act(async () => search.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    expect(document.activeElement).toBe(optionsEls[0]);
+
+    await act(async () => optionsEls[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    await nextFrame();
     expect(document.activeElement).toBe(optionsEls[1]);
 
-    await act(async () => optionsEls[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
-    await nextFrame();
-    expect(document.activeElement).toBe(optionsEls[2]);
-
-    await act(async () => optionsEls[2].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })));
+    await act(async () => optionsEls[1].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })));
     await nextFrame();
     expect(document.activeElement).toBe(optionsEls[0]);
 
     await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
     await nextFrame();
-    expect(document.querySelector('[role="listbox"]')).toBeNull();
+    expect(document.querySelector('[data-testid="model-selector-popover"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 
@@ -225,7 +228,7 @@ describe("composer controls", () => {
     expect(trigger.getAttribute("aria-label")).toBe(accessibleName);
     expect(trigger.title).toBe(label);
     await act(async () => trigger.click());
-    expect(document.querySelectorAll('[role="option"]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-model-choice]')).toHaveLength(2);
     expect(onModelChange).not.toHaveBeenCalled();
   });
 
@@ -296,16 +299,16 @@ describe("composer controls", () => {
       />,
     );
 
-    const trigger = container!.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
+    const trigger = container!.querySelector<HTMLButtonElement>('button[data-testid="model-selector-trigger"]')!;
     await act(async () => trigger.click());
     await nextFrame();
-    const nextModel = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+    const nextModel = [...document.querySelectorAll<HTMLButtonElement>('[data-model-choice]')]
       .find((option) => option.textContent?.includes("GPT-5.6"))!;
     await act(async () => nextModel.click());
     await nextFrame();
 
     expect(onModelChange).toHaveBeenCalledWith("openai", "gpt-5.6");
-    expect(document.querySelector('[role="listbox"]')).toBeNull();
+    expect(document.querySelector('[data-testid="model-selector-popover"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 
@@ -334,14 +337,14 @@ describe("composer controls", () => {
     const trigger = container!.querySelector<HTMLButtonElement>('[data-testid="model-selector-trigger"]')!;
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     await act(async () => trigger.click());
-    expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="model-selector-popover"]')).not.toBeNull();
     await act(async () => root?.render(selector("ready", true)));
-    expect(document.querySelector('[role="listbox"]')).toBeNull();
+    expect(document.querySelector('[data-testid="model-selector-popover"]')).toBeNull();
     expect(trigger.disabled).toBe(true);
   });
 
-  it("uses a searchable mobile sheet with model metadata, pinning, and recent history", async () => {
-    useMobileViewport();
+  it.each([false, true])("uses shared searchable model content with pinning and recents (mobile=%s)", async (mobile) => {
+    if (mobile) useMobileViewport();
     const onModelChange = vi.fn();
     const options = [
       {
@@ -382,7 +385,8 @@ describe("composer controls", () => {
 
     const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
     expect(dialog).not.toBeNull();
-    expect(dialog.textContent).toContain("Choose a model");
+    if (mobile) expect(dialog.textContent).toContain("Choose a model");
+    else expect(dialog.getAttribute("aria-label")).toBe("Choose a model");
     expect(dialog.textContent).toContain("Available");
     expect(dialog.textContent).toContain("272k ctx");
     expect(dialog.textContent).toContain("$0.25 / $2 · 1M");
@@ -462,6 +466,31 @@ describe("composer controls", () => {
     expect(toolbar?.textContent).toContain("Enter 傳送 · Shift+Enter 換行");
   });
 
+  it("keeps icon actions named and announces their current settings", async () => {
+    const compact = vi.fn();
+    await render(<ChatInput onSend={vi.fn()} onAbort={vi.fn()} isStreaming={false}
+      thinkingLevel="high" onThinkingLevelChange={vi.fn()} toolPreset="default" onToolPresetChange={vi.fn()}
+      onCompact={compact} onEphemeralChange={vi.fn()} onDurableChange={vi.fn()} />);
+    const controls = container!.querySelector<HTMLButtonElement>('[aria-label="More composer controls"]')!;
+    expect(controls.textContent).toBe("");
+    expect(controls.title).toBe("Composer controls");
+    await act(async () => controls.click());
+    const thinking = container!.querySelector<HTMLButtonElement>('[aria-label="Change reasoning level"]')!;
+    expect(thinking.textContent).toBe("");
+    expect(document.getElementById(thinking.getAttribute("aria-describedby")!)?.textContent).toBe("High");
+    expect(thinking.title).toContain("High");
+    await act(async () => thinking.click());
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    await nextFrame();
+    expect(controls.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(thinking);
+    const tools = container!.querySelector<HTMLButtonElement>('[aria-label="Change tool preset"]')!;
+    expect(tools.textContent).toBe("");
+    expect(document.getElementById(tools.getAttribute("aria-describedby")!)?.textContent).toBeTruthy();
+    await act(async () => container!.querySelector<HTMLButtonElement>('[aria-label="Compact"]')!.click());
+    expect(compact).toHaveBeenCalledOnce();
+  });
+
   it("keeps secondary controls behind one disclosure button", async () => {
     await render(
       <ChatInput
@@ -486,15 +515,27 @@ describe("composer controls", () => {
     expect(panel.textContent).toContain("Reasoning");
     expect(panel.textContent).toContain("Tools");
     expect(panel.textContent).toContain("Response scroll");
-    expect(panel.textContent).toContain("Smart follow");
+    expect(panel.querySelector('[role="radio"][aria-label="Smart follow"]')).not.toBeNull();
     expect(panel.querySelector('[role="radiogroup"][aria-label="Change response scroll mode"]')).not.toBeNull();
-    expect(panel.textContent).toContain("Done");
+    expect(panel.textContent).toContain("Close");
 
     const done = [...panel.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent === "Done")!;
+      .find((button) => button.textContent === "Close")!;
     await act(async () => done.click());
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(panel.className).not.toContain("bottomBarRightMobileOpen");
+  });
+
+  it.each([false, true])("preserves expanded controls after expanding and collapsing the editor (mobile=%s)", async (mobile) => {
+    if (mobile) useMobileViewport();
+    await render(<ChatInput onSend={vi.fn()} onAbort={vi.fn()} isStreaming={false} />);
+    const trigger = container!.querySelector<HTMLButtonElement>('[aria-label="More composer controls"]')!;
+    await act(async () => trigger.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Expand composer"]')!.click());
+    expect(container!.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => container!.querySelector<HTMLButtonElement>('[aria-label="Collapse composer"]')!.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector("#composer-secondary-tools")?.className).toContain("bottomBarRightMobileOpen");
   });
 
   it("opens mobile composer controls without trapping the rest of the app", async () => {
@@ -527,7 +568,7 @@ describe("composer controls", () => {
     expect(sheet.textContent).toContain("Composer");
     expect(sheet.textContent).toContain("Reasoning");
     expect(sheet.textContent).toContain("Tools");
-    expect(dialog.textContent).toContain("Done");
+    expect(dialog.textContent).toContain("Close");
     expect(Boolean(container!.inert)).toBe(false);
     expect(dialog.getAttribute("aria-modal")).toBeNull();
 

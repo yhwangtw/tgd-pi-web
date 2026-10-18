@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -224,10 +225,10 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
   const firstNode = compressed?.node ?? null;
   const hasContent = !noBranchReason && firstNode && firstNode.children.length > 1;
 
-  const branchIcon = <GitBranch size={12} className={hasContent ? styles.branchIconActive : styles.branchIconInactive} aria-hidden />;
+  const branchIcon = <GitBranch size={UI_ICON_SIZE.inline} className={hasContent ? styles.branchIconActive : styles.branchIconInactive} aria-hidden />;
 
   const chevron = (
-    <ChevronDown size={10} strokeWidth={1.6} className={styles.chevron} style={{ transform: open ? "rotate(180deg)" : "none" }} aria-hidden />
+    <ChevronDown size={UI_ICON_SIZE.inline} className={styles.chevron} style={{ transform: open ? "rotate(180deg)" : "none" }} aria-hidden />
   );
 
 

@@ -1,7 +1,8 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import type { Pluggable, PluggableList } from "unified";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createElement, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createContext, useContext } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeRaw from "rehype-raw";
@@ -250,6 +251,10 @@ function MarkdownRenderer({
   rehypePlugins: PluggableList;
 }) {
   const components = useMemo<Components>(() => ({
+          ...Object.fromEntries(["h1", "h2", "h3", "h4", "h5", "h6"].map((tag) => [tag,
+            ({ node, children, ...props }: React.ComponentProps<"h1"> & { node?: { position?: { start: { line: number } } } }) =>
+              createElement(tag, { ...props, "data-source-line": sourceFilePath ? node?.position?.start.line : undefined }, children),
+          ])),
           code: function MarkdownCode({ className, children, node: markdownNode, ...props }) {
             const { isStreaming } = useContext(MarkdownContext);
             void markdownNode;
@@ -344,7 +349,7 @@ function MarkdownRenderer({
             // eslint-disable-next-line @next/next/no-img-element
             return <img {...props} src={src} alt={alt ?? ""} loading="lazy" decoding="async" referrerPolicy="no-referrer" />;
           },
-  }), []);
+  }), [sourceFilePath]);
   return (
     <MarkdownContext.Provider value={{ isStreaming, sourceFilePath }}><div className={["markdown-body", className].filter(Boolean).join(" ")}>
       <ReactMarkdown
@@ -514,7 +519,7 @@ function CodeBlock({ code, lang, headerAction, plain }: { code: string; lang: st
             title={t("code.focus")}
             aria-label={t("code.focus")}
           >
-            <Maximize2 size={12} strokeWidth={1.8} aria-hidden />
+            <Maximize2 size={UI_ICON_SIZE.inline} aria-hidden />
           </button>
           <button
             onClick={copy}

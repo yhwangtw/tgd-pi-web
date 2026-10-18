@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useCallback, useEffect, type RefObject } from "react";
 import { ChevronDown, Folder } from "lucide-react";
@@ -101,7 +102,7 @@ export function CwdPicker({ state, actions, projects, initialSessionId, isRestor
         data-testid="project-switcher-trigger"
       >
         <span className={styles.triggerIcon} aria-hidden>
-          <Folder size={13} aria-hidden />
+          <Folder size={UI_ICON_SIZE.compact} aria-hidden />
         </span>
         {selectedCwd ? (
           <>
@@ -114,7 +115,7 @@ export function CwdPicker({ state, actions, projects, initialSessionId, isRestor
           </span>
         )}
         <span className={styles.triggerChevron} aria-hidden>
-          <ChevronDown size={10} strokeWidth={1.6} aria-hidden />
+          <ChevronDown size={UI_ICON_SIZE.inline} aria-hidden />
         </span>
       </button>
 

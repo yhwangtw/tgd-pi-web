@@ -273,7 +273,7 @@ test.describe("responsive shell", () => {
     const controls = controlsDialog.locator("#composer-secondary-tools");
     await expect(controlsDialog).toBeVisible();
     await expect(controls).toBeVisible();
-    await expect(controlsDialog.getByRole("button", { name: "Done", exact: true })).toBeVisible();
+    await expect(controlsDialog.getByRole("button", { name: "Close", exact: true })).toBeVisible();
     const controlsBox = await controlsDialog.boundingBox();
     expect(controlsBox).not.toBeNull();
     expect(controlsBox!.x).toBeGreaterThanOrEqual(0);
@@ -281,7 +281,7 @@ test.describe("responsive shell", () => {
     expect(controlsBox!.y + controlsBox!.height).toBeLessThanOrEqual(800);
     await expectNoPageOverflow(page);
 
-    await controlsDialog.getByRole("button", { name: "Done", exact: true }).click();
+    await controlsDialog.getByRole("button", { name: "Close", exact: true }).click();
     await expect(controlsDialog).toBeHidden();
   });
 
@@ -336,7 +336,7 @@ test.describe("responsive shell", () => {
     await showPanel.click();
     const viewer = page.locator(".right-panel-container.right-panel-open");
     const panelBar = page.getByTestId("right-panel-tab-bar");
-    const hidePanel = panelBar.getByRole("button", { name: "Hide file panel", exact: true });
+    const hidePanel = panelBar.getByRole("button", { name: /^(Hide file panel|Back to chat)$/ });
     await expect(viewer).toBeVisible();
     await expect(hidePanel).toBeVisible();
 

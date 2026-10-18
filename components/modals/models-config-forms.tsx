@@ -71,7 +71,7 @@ export function SecretTextInput({
       <IconButton
         onClick={() => setVisible((v) => !v)}
         label={visible ? t("apiKey.hide") : t("apiKey.show")}
-        icon={visible ? <EyeOff strokeWidth={1.8} /> : <Eye strokeWidth={1.8} />}
+        icon={visible ? <EyeOff /> : <Eye />}
         size="compact"
         className={styles.revealButton}
       />

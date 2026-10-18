@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { File, Folder } from "lucide-react";
 import styles from "./FileMentionMenu.module.css";
@@ -21,7 +22,7 @@ interface Props {
 
 function EntryIcon({ isDir }: { isDir: boolean }) {
   const Icon = isDir ? Folder : File;
-  return <Icon size={12} strokeWidth={1.7} aria-hidden />;
+  return <Icon size={UI_ICON_SIZE.inline} aria-hidden />;
 }
 
 /**

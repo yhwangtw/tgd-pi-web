@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft, Plus, Search, X } from "lucide-react";
@@ -87,11 +88,11 @@ export function SkillsConfig({
     }
   }, []);
 
-  const selectedSkill = skills.find((s) => s.filePath === selected) ?? null;
   const normalizedQuery = query.trim().toLowerCase();
   const visibleSkills = normalizedQuery
     ? skills.filter((skill) => `${skill.name} ${skill.description ?? ""} ${skill.filePath}`.toLowerCase().includes(normalizedQuery))
     : skills;
+  const selectedSkill = visibleSkills.find((s) => s.filePath === selected) ?? null;
   const groupLabels: Record<string, string> = {
     project: t("skills.source.project"),
     global: t("skills.source.global"),
@@ -114,7 +115,7 @@ export function SkillsConfig({
           {/* Left: skill list */}
           <div className={styles.sidebar} data-testid="skills-config-nav">
             <label className={styles.searchBox}>
-              <Search size={15} strokeWidth={1.8} aria-hidden="true" />
+              <Search size={UI_ICON_SIZE.compact} aria-hidden="true" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -124,7 +125,7 @@ export function SkillsConfig({
               {query && (
                 <IconButton
                   label={t("skills.clearFilter")}
-                  icon={<X strokeWidth={1.8} />}
+                  icon={<X />}
                   size="compact"
                   onClick={() => setQuery("")}
                   className={styles.clearSearch}
@@ -206,7 +207,7 @@ export function SkillsConfig({
                 className={`${styles.addSkillButton} ${addMode ? styles.addSkillButtonActive : ""} ${!addMode ? "hover-bg" : ""}`}
                 aria-pressed={addMode}
               >
-                <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
+                <Plus size={UI_ICON_SIZE.compact} aria-hidden="true" />
                 {t("skills.add")}
               </button>
             </div>
@@ -215,7 +216,7 @@ export function SkillsConfig({
           {/* Right: detail or add panel */}
           <div className={styles.rightPanel} data-testid="skills-config-detail">
             <button type="button" className={styles.mobileBack} onClick={() => setMobilePane("list")}>
-              <ArrowLeft size={16} strokeWidth={1.8} aria-hidden="true" />
+              <ArrowLeft size={UI_ICON_SIZE.compact} aria-hidden="true" />
               {t("skills.back")}
             </button>
             {addMode ? (
@@ -236,7 +237,7 @@ export function SkillsConfig({
               />
             ) : (
               <div className={styles.emptyState}>
-                {t("skills.select")}
+                {t(visibleSkills.length === 0 && normalizedQuery ? "skills.noMatches" : "skills.select")}
               </div>
             )}
           </div>

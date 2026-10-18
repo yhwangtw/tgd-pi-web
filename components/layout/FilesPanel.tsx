@@ -26,7 +26,7 @@ export function FilesPanel({ cwd, onOpenFile, onAtMention, refreshKey, onOpenDif
   if (!cwd) {
     return (
       <div className={s.empty}>
-        <Folder size={24} strokeWidth={1.5} aria-hidden />
+        <Folder size={24} aria-hidden />
         <span>{t("sidebar.selectProjectFirst")}</span>
       </div>
     );

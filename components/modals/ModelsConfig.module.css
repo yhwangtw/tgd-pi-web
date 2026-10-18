@@ -446,7 +446,7 @@
 
 .levelLabel {
   font-size: var(--text-xs);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
 }
 
 .levelLabelOmit {

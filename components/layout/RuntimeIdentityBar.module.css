@@ -24,7 +24,7 @@
 .details dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); }
 @media (max-width: 480px) {
   .bar { padding-inline: var(--space-3); }
-  .hint { margin-left: 0; }
+  .hint { margin-left: auto; }
   .details dl { grid-template-columns: minmax(0, 1fr); }
   .details dd { margin-bottom: var(--space-2); }
 }

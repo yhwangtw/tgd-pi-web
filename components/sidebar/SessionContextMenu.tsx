@@ -1,4 +1,7 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
+
+import { X } from "lucide-react";
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -181,7 +184,7 @@ export function SessionContextMenu({
       }}
     >
       <button role="menuitem" onClick={handlePin} className={styles.menuItem}>
-        <Star size={13} fill={isPinned ? "currentColor" : "none"} className={styles.menuIcon} aria-hidden />
+        <Star size={UI_ICON_SIZE.compact} fill={isPinned ? "currentColor" : "none"} className={styles.menuIcon} aria-hidden />
         <span>{isPinned ? t("session.unpin") : t("session.pin")}</span>
       </button>
       <button
@@ -191,17 +194,17 @@ export function SessionContextMenu({
         className={`${styles.menuItem} ${isParallelOpen ? styles.menuItemDisabled : ""}`}
         title={isParallelOpen ? t("session.alreadyParallel") : t("session.openParallel")}
       >
-        <Columns2 size={13} className={styles.menuIcon} aria-hidden />
+        <Columns2 size={UI_ICON_SIZE.compact} className={styles.menuIcon} aria-hidden />
         <span>{t("session.openParallel")}</span>
       </button>
       <div className={styles.separator} />
       <button role="menuitem" onClick={handleRename} className={styles.menuItem}>
-        <Pencil size={13} className={styles.menuIcon} aria-hidden />
+        <Pencil size={UI_ICON_SIZE.compact} className={styles.menuIcon} aria-hidden />
         <span>{t("session.rename")}</span>
       </button>
       {addingTag ? (
         <form onSubmit={handleSubmitTag} className={styles.tagForm} role="menuitem">
-          <Tag size={13} className={styles.menuIcon} aria-hidden />
+          <Tag size={UI_ICON_SIZE.compact} className={styles.menuIcon} aria-hidden />
           <input
             ref={tagInputRef}
             value={tagDraft}
@@ -224,7 +227,7 @@ export function SessionContextMenu({
           onClick={() => setAddingTag(true)}
           className={styles.menuItem}
         >
-          <Tag size={13} className={styles.menuIcon} aria-hidden />
+          <Tag size={UI_ICON_SIZE.compact} className={styles.menuIcon} aria-hidden />
           <span>{t("session.addTag")}</span>
         </button>
       )}
@@ -245,7 +248,7 @@ export function SessionContextMenu({
                   className={styles.tagListRemove}
                   title={`${t("session.removeTag")} #${tag}`}
                   aria-label={`${t("session.removeTag")} #${tag}`}
-                >×</button>
+                ><X size={UI_ICON_SIZE.compact} aria-hidden="true" /></button>
               </span>
             );
           })}
@@ -254,12 +257,12 @@ export function SessionContextMenu({
       <div className={styles.separator} />
       {onArchiveToggle && (
         <button role="menuitem" onClick={handleArchive} className={styles.menuItem}>
-          <Archive size={13} className={styles.menuIcon} aria-hidden />
+          <Archive size={UI_ICON_SIZE.compact} className={styles.menuIcon} aria-hidden />
           <span>{isArchived ? t("session.unarchive") : t("session.archive")}</span>
         </button>
       )}
       <button role="menuitem" onClick={handleDelete} className={`${styles.menuItem} ${styles.menuItemDanger}`}>
-        <Trash2 size={13} className={styles.menuIcon} aria-hidden />
+        <Trash2 size={UI_ICON_SIZE.compact} className={styles.menuIcon} aria-hidden />
         <span>{t("session.delete")}</span>
       </button>
     </div>, document.body,

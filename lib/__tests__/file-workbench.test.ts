@@ -7,6 +7,13 @@ describe("file workbench helpers", () => {
     expect(extractFileOutline("export class A {}\nexport function run() {}\nconst Card = () => null", "typescript").map((item) => item.kind)).toEqual(["class", "function", "component"]);
   });
 
+  it("keeps outline source lines for setext headings and ignores fenced examples", () => {
+    const markdown = ["# Title", "", "```md", "# Example only", "```", "", "Second section", "---", "", "## Last section"].join("\n");
+    expect(extractFileOutline(markdown, "markdown").map(({ label, line, level }) => ({ label, line, level }))).toEqual([
+      { label: "Title", line: 1, level: 1 }, { label: "Second section", line: 7, level: 2 }, { label: "Last section", line: 10, level: 2 },
+    ]);
+  });
+
   it("parses quoted CSV and TSV", () => {
     expect(parseDelimitedText('name,note\nA,"x,y"', ",")).toEqual([["name", "note"], ["A", "x,y"]]);
     expect(parseDelimitedText("a\tb\n1\t2", "\t")).toEqual([["a", "b"], ["1", "2"]]);

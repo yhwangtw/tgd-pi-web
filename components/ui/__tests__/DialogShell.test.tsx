@@ -2,7 +2,8 @@
 
 import { act, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { createPortal } from "react-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DialogShell } from "../DialogShell";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -20,16 +21,16 @@ function Harness() {
   );
 }
 
-function StackedHarness() {
+function StackedHarness({ modal = true }: { modal?: boolean }) {
   const [parentOpen, setParentOpen] = useState(true);
   const [childOpen, setChildOpen] = useState(false);
   return (
     <>
       <button type="button">Background action</button>
-      <DialogShell modal open={parentOpen} title="Parent" onClose={() => setParentOpen(false)}>
+      <DialogShell modal={modal} open={parentOpen} title="Parent" onClose={() => setParentOpen(false)}>
         <button type="button" onClick={() => setChildOpen(true)}>Open child</button>
       </DialogShell>
-      <DialogShell modal open={childOpen} title="Child" onClose={() => setChildOpen(false)}>
+      <DialogShell modal={modal} open={childOpen} title="Child" onClose={() => setChildOpen(false)}>
         <button type="button" onClick={() => setParentOpen(false)}>Close parent first</button>
         <button type="button" onClick={() => setChildOpen(false)}>Close child</button>
       </DialogShell>
@@ -43,6 +44,7 @@ describe("DialogShell", () => {
 
   afterEach(async () => {
     if (root) await act(async () => root?.unmount());
+    vi.restoreAllMocks();
     root = null;
     container?.remove();
     container = null;
@@ -61,6 +63,119 @@ describe("DialogShell", () => {
     expect(document.querySelector<HTMLInputElement>('[role="dialog"] input')?.value).toBe("unfinished");
     expect(document.querySelector('[role="dialog"] [hidden]')).not.toBeNull();
     expect(document.activeElement).toBe(outside);
+    expect(collapse.getAttribute("aria-expanded")).toBe("false");
+    const expand = document.querySelector<HTMLButtonElement>('[aria-label="Expand panel"]')!;
+    expect(expand.title).toBe("Expand panel");
+    await act(async () => expand.click());
+    expect(document.querySelector('[role="dialog"] [hidden]')).toBeNull();
+    expect(document.querySelector<HTMLInputElement>('[role="dialog"] input')?.value).toBe("unfinished");
+  });
+
+  async function gesture(target: Element, pointerType = "mouse", button = 0) {
+    await act(async () => {
+      target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType, button, isPrimary: true }));
+      target.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType, button, isPrimary: true }));
+      target.dispatchEvent(new MouseEvent("click", { bubbles: true, button, detail: 1 }));
+    });
+  }
+
+  async function mount(view: React.ReactNode) {
+    container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => root!.render(view));
+  }
+
+  it.each([false, true])("dismisses modal=%s on outside mouse clicks and touch taps, but not inside", async (modal) => {
+    const close = vi.fn();
+    await mount(<DialogShell open modal={modal} title="Settings" onClose={close}><input defaultValue="draft" /></DialogShell>);
+    await gesture(document.querySelector("input")!);
+    expect(close).not.toHaveBeenCalled();
+    const outside = modal ? document.querySelector("[data-dialog-root]")! : document.body;
+    await gesture(outside);
+    await gesture(outside, "touch");
+    expect(close).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores drags from inside, canceled touches and secondary buttons", async () => {
+    const close = vi.fn();
+    await mount(<DialogShell open title="Settings" onClose={close}><input defaultValue="draft" /></DialogShell>);
+    await act(async () => {
+      document.querySelector("input")!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+      document.body.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+      document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "touch", isPrimary: true }));
+      document.body.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true }));
+      document.body.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    });
+    await gesture(document.body, "mouse", 2);
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("keeps portaled child controls interactive even when they stop propagation", async () => {
+    const close = vi.fn();
+    const selected = vi.fn();
+    await mount(<DialogShell open title="Settings" onClose={close}>
+      {createPortal(<button id="portaled-option" onPointerDown={event => event.stopPropagation()} onClick={selected}>Choose</button>, document.body)}
+    </DialogShell>);
+    await gesture(document.querySelector("#portaled-option")!);
+    expect(selected).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    await gesture(document.body);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([false, true])("dismisses only the top dialog when modal=%s", async (modal) => {
+    await mount(<StackedHarness modal={modal} />);
+    const openChild = [...document.querySelectorAll("button")].find(button => button.textContent === "Open child")!;
+    await gesture(openChild);
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(2);
+    await gesture(document.querySelectorAll("[data-dialog-root]")[1]);
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Parent");
+    await gesture(document.querySelector("[data-dialog-root]")!);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it.each([false, true])("honors busy state and uses the latest close handler when modal=%s", async (modal) => {
+    const close = vi.fn(), updated = vi.fn();
+    await mount(<DialogShell open modal={modal} title="Saving" canClose={false} onClose={close}>Saving</DialogShell>);
+    const outside = document.querySelector("[data-dialog-root]")!;
+    await gesture(outside);
+    await act(async () => document.querySelector('[role="dialog"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(close).not.toHaveBeenCalled();
+    expect(document.querySelector<HTMLButtonElement>('[aria-label="Close"]')?.disabled).toBe(true);
+    await act(async () => root!.render(<DialogShell open modal={modal} title="Saved" onClose={updated}>Saved</DialogShell>));
+    await gesture(outside);
+    expect(updated).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("does not dismiss on the opening click or reopen when its trigger toggles closed", async () => {
+    function ToggleHarness() {
+      const [open, setOpen] = useState(false);
+      return <><button onClick={() => setOpen(value => !value)}>Toggle</button>
+        <DialogShell open={open} title="Settings" onClose={() => setOpen(false)}>Content</DialogShell></>;
+    }
+    await mount(<ToggleHarness />);
+    const trigger = container!.querySelector("button")!;
+    await gesture(trigger);
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await gesture(trigger);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("keeps the draft when discard is canceled and closes only when confirmed", async () => {
+    const close = vi.fn();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await mount(<DialogShell open title="Editor" hasUnsavedChanges onClose={close}><input defaultValue="unfinished" /></DialogShell>);
+    await gesture(document.body);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    expect(document.querySelector<HTMLInputElement>("input")?.value).toBe("unfinished");
+    await gesture(document.querySelector('[aria-label="Close"]')!);
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(close).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true);
+    await act(async () => document.querySelector("input")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it("isolates the background, closes with Escape, and restores focus", async () => {

@@ -38,8 +38,8 @@
   min-width: 0;
   overflow: hidden;
   color: var(--text);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-family: var(--font-ui);
+  font-size: var(--type-title-size);
   font-weight: var(--weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;

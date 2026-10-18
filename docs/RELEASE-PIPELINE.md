@@ -22,6 +22,33 @@ Resuming validates saved source/plan identities and reads current CI evidence;
 it does not require resetting the original checkout to the version commit or
 rerunning tests. These commands do not merge PRs or install service adapters.
 
+## Release retention
+
+After the running identity and authenticated public hostname pass verification,
+keep the current release and one recoverable previous release. Failed or incomplete
+verification never triggers cleanup. Cleanup failure is recorded as `retention.status:
+"deferred"`; the healthy deployment stays running and the same receipt can retry it.
+
+For the operator adapter that stores `deploy-<tag>-<sha8>/operator.json`,
+`previous-build`, and `previous-node_modules`, enable this in its plan:
+
+```json
+"retention": {
+  "backupRoot": "/absolute/private-build-backups",
+  "keepPrevious": 1
+}
+```
+
+The retained backup is identified by the verified deployment manifest, not directory
+age. Older builds/modules are removed only when their matching release receipts show
+successful public verification. Logs and manifests remain. Incomplete attempts,
+manual recovery directories, symlinks, source backups, sessions, credentials, and
+GitHub releases are not deleted. Other adapter layouts must implement their own
+retention rather than pointing this cleaner at unrelated data.
+
+Preserve the previous plan file when enabling this option: existing receipts must
+resume with their original plan hash. The new plan applies to new deployments.
+
 ## Operator plan
 
 Keep the plan and adapter outside application source, owned by the operator.

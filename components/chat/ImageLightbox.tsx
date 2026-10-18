@@ -1,4 +1,7 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
+
+import { X } from "lucide-react";
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -32,7 +35,7 @@ export function ImageLightbox({ src, onClose }: Props) {
   if (typeof document === "undefined") return null;
   return createPortal(
     <div className={styles.overlay} onClick={onClose} role="dialog" aria-label={t("image.preview")}>
-      <button className={styles.close} onClick={onClose} aria-label={t("common.close")}>×</button>
+      <button className={styles.close} onClick={onClose} aria-label={t("common.close")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt="" className={styles.image} onClick={(e) => e.stopPropagation()} />
     </div>,

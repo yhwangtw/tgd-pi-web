@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, TriangleAlert } from "lucide-react";
@@ -84,9 +85,9 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
       >
         <span className={styles.stateIcon} aria-hidden>
           {failed ? (
-            <TriangleAlert size={13} strokeWidth={2.2} />
+            <TriangleAlert size={UI_ICON_SIZE.compact} />
           ) : (
-            <Check size={13} strokeWidth={2.2} />
+            <Check size={UI_ICON_SIZE.compact} />
           )}
         </span>
         <span className={styles.title}>{t("chat.workLog")}</span>
@@ -100,7 +101,7 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
           {filesChanged > 0 && <span>{filesChanged} {fileLabel}</span>}
           {elapsed !== undefined && elapsed > 0 && <span>{elapsed}s</span>}
         </span>
-        <ChevronDown className={styles.chevron} size={11} strokeWidth={1.6} aria-hidden />
+        <ChevronDown className={styles.chevron} size={UI_ICON_SIZE.inline} aria-hidden />
       </button>
       {expanded && <div className={styles.body}>{children}</div>}
     </section>

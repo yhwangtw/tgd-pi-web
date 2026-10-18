@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
@@ -305,16 +306,16 @@ export function AssistantMessageView({
         authRecovered && isProviderAuthError(message.errorMessage) ? (
           <details className={styles.recoveredError}>
             <summary className={styles.recoveredErrorSummary}>
-              <Check className={styles.recoveredIcon} size={12} strokeWidth={2.2} aria-hidden="true" />
+              <Check className={styles.recoveredIcon} size={UI_ICON_SIZE.inline} aria-hidden="true" />
               <span>{t("chat.authRecovered")}</span>
               <span className={styles.recoveredContext}>{t("chat.earlierConnectionIssue")}</span>
-              <ChevronDown className={styles.recoveredChevron} size={11} strokeWidth={1.8} aria-hidden="true" />
+              <ChevronDown className={styles.recoveredChevron} size={UI_ICON_SIZE.inline} aria-hidden="true" />
             </summary>
             <div className={styles.recoveredErrorDetail}>{redactSensitiveText(message.errorMessage ?? "")}</div>
           </details>
         ) : (
         <div className={styles.errorCard} role="alert">
-          <TriangleAlert size={13} strokeWidth={2} aria-hidden="true" />
+          <TriangleAlert size={UI_ICON_SIZE.compact} aria-hidden="true" />
           <div className={styles.errorBody}>
             <div className={styles.errorContent}>
               <span className={styles.errorSummary}>{errorPresentation.summary}</span>
@@ -356,7 +357,7 @@ export function AssistantMessageView({
         {showActions && textContent && !isStreaming && <div data-testid="assistant-message-actions" className={styles.actionToolbar}>
         {textContent && !isStreaming && onQuote && (
           <button type="button" onClick={quoteContent} title={t("chat.quote")} className={`${styles.copyButton} text-dim hover-accent`}>
-            <Reply size={11} strokeWidth={1.8} aria-hidden="true" />
+            <Reply size={UI_ICON_SIZE.inline} aria-hidden="true" />
             <span className={styles.copyLabel}>{t("chat.quote")}</span>
           </button>
         )}
@@ -367,9 +368,9 @@ export function AssistantMessageView({
             className={`${styles.copyButton} ${copied ? "text-accent" : "text-dim hover-accent"}`}
           >
             {copied ? (
-              <Check size={11} strokeWidth={1.8} aria-hidden="true" />
+              <Check size={UI_ICON_SIZE.inline} aria-hidden="true" />
             ) : (
-              <Copy size={11} strokeWidth={1.8} aria-hidden="true" />
+              <Copy size={UI_ICON_SIZE.inline} aria-hidden="true" />
             )}
             <span className={styles.copyLabel}>{copied ? t("common.copied") : t("common.copy")}</span>
           </button>
@@ -385,7 +386,7 @@ export function AssistantMessageView({
         {textContent && !isStreaming && (
           <details ref={actionsRef} className={styles.mobileActionMenu}>
             <summary role="button" title={t("chat.moreActions")} aria-label={t("chat.moreActions")} onClick={() => setActionsOpen(!(actionsRef.current?.open ?? false))}>
-              <Ellipsis size={16} strokeWidth={2} aria-hidden="true" />
+              <Ellipsis size={UI_ICON_SIZE.compact} aria-hidden="true" />
             </summary>
             <div
               data-mobile-action-panel
@@ -393,15 +394,15 @@ export function AssistantMessageView({
             >
               <button type="button" onClick={() => { closeActions(); copyContent(); }} className={`${styles.copyButton} ${copied ? "text-accent" : "text-dim hover-accent"}`}>
                 {copied ? (
-                  <Check size={13} strokeWidth={1.8} aria-hidden="true" />
+                  <Check size={UI_ICON_SIZE.compact} aria-hidden="true" />
                 ) : (
-                  <Copy size={13} strokeWidth={1.8} aria-hidden="true" />
+                  <Copy size={UI_ICON_SIZE.compact} aria-hidden="true" />
                 )}
                 <span>{copied ? t("common.copied") : t("common.copy")}</span>
               </button>
               {onQuote && (
                 <button type="button" onClick={() => { closeActions(); quoteContent(); }} className={`${styles.copyButton} text-dim hover-accent`}>
-                  <Reply size={13} strokeWidth={1.8} aria-hidden="true" />
+                  <Reply size={UI_ICON_SIZE.compact} aria-hidden="true" />
                   <span>{t("chat.quote")}</span>
                 </button>
               )}
@@ -719,7 +720,7 @@ function ToolCallBlock({ block, result, duration, active = false }: { block: Too
         {duration !== undefined && (
           <span className={styles.toolDuration}>{duration}s</span>
         )}
-        <ChevronDown size={10} strokeWidth={1.8} className={styles.toolChevron} style={{ transform: expanded ? "rotate(180deg)" : "none" }} aria-hidden="true" />
+        <ChevronDown size={UI_ICON_SIZE.inline} className={styles.toolChevron} style={{ transform: expanded ? "rotate(180deg)" : "none" }} aria-hidden="true" />
       </button>
 
       {/* ── Expanded: structured view for file tools, JSON otherwise ── */}
@@ -780,7 +781,7 @@ function ToolDiffHeader({ path, onFocus }: { path: string; onFocus: () => void }
     <div className={`${styles.toolDiffPath} chrome-mono`}>
       <button type="button" className={styles.toolDiffOpen} onClick={(event) => requestOpenFile({ path }, event.currentTarget)} title={path}>{path}</button>
       <button type="button" onClick={onFocus} title={t("code.focus")} aria-label={t("code.focus")}>
-        <Maximize2 size={12} strokeWidth={1.8} aria-hidden="true" />
+        <Maximize2 size={UI_ICON_SIZE.inline} aria-hidden="true" />
       </button>
     </div>
   );
@@ -815,7 +816,7 @@ function UsageDetails({ usage }: { usage: NonNullable<AssistantMessage["usage"]>
   return (
     <details className={styles.usageDetails}>
       <summary title={details}>
-        <Info size={12} strokeWidth={1.9} aria-hidden="true" />
+        <Info size={UI_ICON_SIZE.inline} aria-hidden="true" />
         <span>{visibleCost ? `${t("chat.usage")} · ${visibleCost}` : t("chat.usage")}</span>
       </summary>
       <span className={styles.usagePopover}>{details}</span>

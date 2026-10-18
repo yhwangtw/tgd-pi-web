@@ -1,3 +1,4 @@
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 import {
   Braces,
   Container,
@@ -21,45 +22,45 @@ interface IconProps {
 
 const DIM = "var(--text-dim)";
 
-function FileGlyph({ icon: Icon, size = 14 }: IconProps & { icon: LucideIcon }) {
-  return <Icon size={size} strokeWidth={1.7} color={DIM} aria-hidden="true" />;
+function FileGlyph({ icon: Icon, size = UI_ICON_SIZE.compact }: IconProps & { icon: LucideIcon }) {
+  return <Icon size={size} color={DIM} aria-hidden="true" />;
 }
 
-export function FolderIcon({ size = 14, open = false }: IconProps & { open?: boolean }) {
+export function FolderIcon({ size = UI_ICON_SIZE.compact, open = false }: IconProps & { open?: boolean }) {
   return <FileGlyph icon={open ? FolderOpen : Folder} size={size} />;
 }
 
-export function GenericFileIcon({ size = 14 }: IconProps) {
+export function GenericFileIcon({ size = UI_ICON_SIZE.compact }: IconProps) {
   return <FileGlyph icon={File} size={size} />;
 }
 
-export function TypeScriptIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
-export function TypeScriptReactIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
-export function JavaScriptIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
-export function JavaScriptReactIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
-export function PythonIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
-export function JsonIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileJson2} size={size} />; }
-export function CssIcon({ size = 14 }: IconProps) { return <FileGlyph icon={Braces} size={size} />; }
-export function ScssIcon({ size = 14 }: IconProps) { return <FileGlyph icon={Braces} size={size} />; }
-export function HtmlIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
-export function MarkdownIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileText} size={size} />; }
-export function YamlIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCog} size={size} />; }
-export function TomlIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCog} size={size} />; }
-export function ShellIcon({ size = 14 }: IconProps) { return <FileGlyph icon={SquareTerminal} size={size} />; }
-export function RustIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
-export function GoIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
-export function SqlIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
-export function GraphqlIcon({ size = 14 }: IconProps) { return <FileGlyph icon={Braces} size={size} />; }
-export function TerraformIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
-export function DockerfileIcon({ size = 14 }: IconProps) { return <FileGlyph icon={Container} size={size} />; }
-export function EnvIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileKey2} size={size} />; }
-export function GitIcon({ size = 14 }: IconProps) { return <FileGlyph icon={GitBranch} size={size} />; }
-export function LockFileIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileLock2} size={size} />; }
-export function DocFileIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileText} size={size} />; }
-export function PdfFileIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileText} size={size} />; }
-export function ConfigIcon({ size = 14 }: IconProps) { return <FileGlyph icon={FileCog} size={size} />; }
+export function TypeScriptIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
+export function TypeScriptReactIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
+export function JavaScriptIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
+export function JavaScriptReactIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
+export function PythonIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
+export function JsonIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileJson2} size={size} />; }
+export function CssIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={Braces} size={size} />; }
+export function ScssIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={Braces} size={size} />; }
+export function HtmlIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
+export function MarkdownIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileText} size={size} />; }
+export function YamlIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCog} size={size} />; }
+export function TomlIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCog} size={size} />; }
+export function ShellIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={SquareTerminal} size={size} />; }
+export function RustIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
+export function GoIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
+export function SqlIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
+export function GraphqlIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={Braces} size={size} />; }
+export function TerraformIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCode2} size={size} />; }
+export function DockerfileIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={Container} size={size} />; }
+export function EnvIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileKey2} size={size} />; }
+export function GitIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={GitBranch} size={size} />; }
+export function LockFileIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileLock2} size={size} />; }
+export function DocFileIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileText} size={size} />; }
+export function PdfFileIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileText} size={size} />; }
+export function ConfigIcon({ size = UI_ICON_SIZE.compact }: IconProps) { return <FileGlyph icon={FileCog} size={size} />; }
 
-export function getFileIcon(name: string, size = 14): React.ReactNode {
+export function getFileIcon(name: string, size: number = UI_ICON_SIZE.compact): React.ReactNode {
   const lower = name.toLowerCase();
   const ext = lower.split(".").pop() ?? "";
 

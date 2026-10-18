@@ -149,7 +149,7 @@ for (const style of ["original", "trae"]) {
       if (style === "trae") {
         expect(await panel.getByRole("button", { name: "Ask Pi", exact: true }).evaluate(el => {
           const sample = document.createElement("span");
-          sample.style.color = "var(--color-accent-fg)";
+          sample.style.color = "var(--text-muted)";
           document.body.append(sample);
           const expected = getComputedStyle(sample).color;
           sample.remove();

@@ -17,10 +17,10 @@ for (const style of ["original", "trae"]) for (const skin of ["terminal", "trae"
     }, { style, skin, theme });
     await mockUnread(page, 150);
     await page.goto("/");
-    const button = page.getByRole("button", { name: "Attention · 150 unread", exact: true });
+    const button = page.getByRole("button", { name: "Attention · 150 unread notifications", exact: true });
     const dot = button.getByTestId("attention-unread-dot");
     await expect(dot).toBeVisible();
-    await expect(button).toHaveAttribute("title", "Attention · 150 unread");
+    await expect(button).toHaveAttribute("title", "Attention · 150 unread notifications");
     await expect(dot).toHaveText("");
     const geometry = await dot.evaluate(el => {
       const rect = el.getBoundingClientRect(); const button = el.parentElement!.getBoundingClientRect();
@@ -40,7 +40,7 @@ for (const style of ["original", "trae"]) for (const skin of ["terminal", "trae"
     await expect(button).toHaveAttribute("aria-pressed", "true");
     const panel = page.getByRole("region", { name: "Attention", exact: true });
     await expect(panel.getByRole("heading", { name: "Attention", exact: true })).toBeVisible();
-    await expect(panel).toContainText("150 unread");
+    await expect(panel).toContainText("150 unread notifications");
     await expect(panel.locator('[class*="unreadCount"]')).toHaveText("99+");
     await panel.getByRole("button", { name: "Read all", exact: true }).click();
     await expect(page.getByTestId("attention-unread-dot")).toHaveCount(0);
@@ -58,7 +58,7 @@ for (const style of ["original", "trae"]) for (const width of [320, 390]) {
     await mockUnread(page, 150);
     await page.goto("/");
     await page.getByRole("button", { name: "More", exact: true }).click();
-    const button = page.getByRole("button", { name: "Attention · 150 unread", exact: true });
+    const button = page.getByRole("button", { name: "Attention · 150 unread notifications", exact: true });
     const count = button.locator('[class*="mobileActionBadge"]');
     await expect(count).toHaveText("99+");
     const badgeBox = await count.boundingBox(); const iconBox = await button.locator("svg").boundingBox();

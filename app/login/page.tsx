@@ -1,4 +1,6 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
+
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -45,7 +47,7 @@ function LoginForm() {
     <div className={styles.wrap}>
       <div className={styles.card}>
         <div className={styles.brand}>
-          <LockKeyhole size={18} strokeWidth={1.8} aria-hidden />
+          <LockKeyhole size={UI_ICON_SIZE.control} aria-hidden />
           pi-web
         </div>
         <div className={styles.subtitle}>{t("login.description")}</div>

@@ -94,3 +94,183 @@ it("dismisses on an outside pointer without leaving focus on a removed menu item
   expect(document.querySelector('[role="menu"]')).toBeNull();
   expect(document.activeElement).toBe(host.querySelector('[role="tab"]'));
 });
+
+
+it("reveals the complete active tab after switching files or narrowing the strip without moving focus", async () => {
+  let resized: (() => void) | undefined;
+  const disconnect = vi.fn();
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: () => void) { resized = callback; }
+    observe() {}
+    disconnect = disconnect;
+  });
+  const strip = host.querySelector<HTMLElement>('[data-testid="file-tab-strip"]')!;
+  let stripWidth = 300;
+  vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (this: HTMLElement) {
+    const file = this.dataset.fileTab;
+    const x = file === "source" ? 240 - strip.scrollLeft : file === "readme" ? -strip.scrollLeft : 0;
+    const width = file ? 180 : stripWidth;
+    return { x, y: 0, left: x, top: 0, right: x + width, bottom: 36, width, height: 36, toJSON() {} };
+  });
+  const background = document.createElement("input"); host.append(background); background.focus();
+  await act(async () => root.render(<TabBar tabs={tabs} activeTabId="source" onSelectTab={vi.fn()} onCloseTab={vi.fn()} />));
+  expect(strip.scrollLeft).toBe(120);
+  expect(document.activeElement).toBe(background);
+  stripWidth = 220;
+  await act(async () => resized?.());
+  expect(strip.scrollLeft).toBe(200);
+  expect(document.activeElement).toBe(background);
+  await act(async () => root.render(<TabBar tabs={tabs} activeTabId="readme" onSelectTab={vi.fn()} onCloseTab={vi.fn()} />));
+  expect(strip.scrollLeft).toBe(0);
+  expect(disconnect).toHaveBeenCalled();
+});
+
+
+it.each([
+  { close: "readme", selected: "source" },
+  { close: "source", selected: "readme" },
+])("closing $close keeps selection and focus on $selected", async ({ close, selected }) => {
+  const onClose = vi.fn();
+  const onSelect = vi.fn();
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
+  await act(async () => root.render(<TabBar tabs={tabs} activeTabId="readme" onSelectTab={onSelect} onCloseTab={onClose} />));
+  const button = host.querySelector<HTMLButtonElement>(`[data-close-file-tab="${close}"]`)!;
+  // Close controls stay independently named and never become nested buttons.
+  expect(button.getAttribute("aria-label")).toContain(tabs.find(tab => tab.id === close)!.label);
+  expect(button.closest('[role="tab"], [role="tablist"]')).toBeNull();
+  button.focus();
+  await act(async () => button.click());
+  expect(onClose).toHaveBeenCalledExactlyOnceWith(close);
+  if (close === "readme") expect(onSelect).toHaveBeenCalledExactlyOnceWith(selected);
+  else expect(onSelect).not.toHaveBeenCalled();
+  expect(document.activeElement?.id).toBe(`file-tab-${selected}`);
+});
+
+it.each(['[data-file-tab="source"] [role="tab"]', '[data-close-file-tab="source"]'])(
+  "middle-click closes once without auto-scroll or changing selection: %s", async selector => {
+    const onClose = vi.fn();
+    const onSelect = vi.fn();
+    await act(async () => root.render(<TabBar tabs={tabs} activeTabId="readme" onSelectTab={onSelect} onCloseTab={onClose} />));
+    const target = host.querySelector(selector)!;
+    const down = new MouseEvent("mousedown", { button: 1, bubbles: true, cancelable: true });
+    await act(async () => target.dispatchEvent(down));
+    expect(down.defaultPrevented).toBe(true);
+    await act(async () => target.dispatchEvent(new MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true })));
+    expect(onClose).toHaveBeenCalledExactlyOnceWith("source");
+    expect(onSelect).not.toHaveBeenCalled();
+  },
+);
+
+it("keeps arrow, Home and End navigation on file tabs", async () => {
+  const onSelect = vi.fn();
+  await act(async () => root.render(<TabBar tabs={tabs} activeTabId="readme" onSelectTab={onSelect} onCloseTab={vi.fn()} />));
+  const first = host.querySelector<HTMLButtonElement>('#file-tab-readme')!;
+  const last = host.querySelector<HTMLButtonElement>('#file-tab-source')!;
+  first.focus();
+  await key(first, "ArrowLeft");
+  expect(onSelect).toHaveBeenLastCalledWith("source");
+  expect(document.activeElement).toBe(last);
+  await key(last, "ArrowRight");
+  expect(onSelect).toHaveBeenLastCalledWith("readme");
+  expect(document.activeElement).toBe(first);
+  await key(first, "End");
+  expect(document.activeElement).toBe(last);
+  await key(last, "Home");
+  expect(document.activeElement).toBe(first);
+});
+
+it("reorders dragged files and forgets a cancelled drag", async () => {
+  const onReorder = vi.fn();
+  await act(async () => root.render(<TabBar tabs={tabs} activeTabId="readme" onSelectTab={vi.fn()} onCloseTab={vi.fn()} onReorder={onReorder} />));
+  const first = host.querySelector('[data-file-tab="readme"]')!;
+  const last = host.querySelector('[data-file-tab="source"]')!;
+  const drag = async (target: Element, type: string) => act(async () => target.dispatchEvent(new Event(type, { bubbles: true, cancelable: true })));
+  await drag(first, "dragstart");
+  await drag(last, "drop");
+  expect(onReorder).toHaveBeenCalledExactlyOnceWith("readme", 1);
+  onReorder.mockClear();
+  await drag(first, "dragstart");
+  await drag(first, "dragend");
+  await drag(last, "drop");
+  expect(onReorder).not.toHaveBeenCalled();
+});
+
+function setStripSize(width: number, contentWidth: number) {
+  const strip = host.querySelector<HTMLElement>('[data-testid="file-tab-strip"]')!;
+  Object.defineProperty(strip, "clientWidth", { configurable: true, value: width });
+  Object.defineProperty(strip, "scrollWidth", { configurable: true, value: contentWidth });
+  return strip;
+}
+
+it("keeps overflow arrows outside the clipped strip and reaches both ends", async () => {
+  const strip = setStripSize(180, 720);
+  await act(async () => root.render(<TabBar tabs={[...tabs]} activeTabId="readme" onSelectTab={vi.fn()} onCloseTab={vi.fn()} />));
+  const left = host.querySelector<HTMLButtonElement>('[aria-label="tabs.scrollLeft"]')!;
+  const right = host.querySelector<HTMLButtonElement>('[aria-label="tabs.scrollRight"]')!;
+  expect(strip.contains(left)).toBe(false);
+  expect(strip.contains(right)).toBe(false);
+  expect(left.disabled).toBe(true);
+  expect(right.disabled).toBe(false);
+  await act(async () => right.click());
+  expect(strip.scrollLeft).toBe(135);
+  expect(left.disabled).toBe(false);
+  for (let count = 0; count < 4; count++) await act(async () => right.click());
+  expect(strip.scrollLeft).toBe(540);
+  expect(right.disabled).toBe(true);
+  for (let count = 0; count < 4; count++) await act(async () => left.click());
+  expect(strip.scrollLeft).toBe(0);
+  expect(left.disabled).toBe(true);
+});
+
+it("allows a regular mouse wheel to reveal hidden files without hijacking zoom or boundary scrolling", async () => {
+  const strip = setStripSize(180, 720);
+  await act(async () => root.render(<TabBar tabs={[...tabs]} activeTabId="readme" onSelectTab={vi.fn()} onCloseTab={vi.fn()} />));
+  const wheel = async (init: WheelEventInit) => {
+    const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, ...init });
+    await act(async () => strip.dispatchEvent(event));
+    return event;
+  };
+  expect((await wheel({ deltaY: 64 })).defaultPrevented).toBe(true);
+  expect(strip.scrollLeft).toBe(64);
+  expect((await wheel({ deltaY: 80, ctrlKey: true })).defaultPrevented).toBe(false);
+  expect((await wheel({ deltaX: 80, deltaY: 1 })).defaultPrevented).toBe(false);
+  expect(strip.scrollLeft).toBe(64);
+  await wheel({ deltaY: 1000 });
+  expect(strip.scrollLeft).toBe(540);
+  expect((await wheel({ deltaY: 64 })).defaultPrevented).toBe(false);
+  expect(strip.scrollLeft).toBe(540);
+});
+
+it("lists every open file outside the clipped toolbar and switches to a hidden file", async () => {
+  const manyTabs = Array.from({ length: 8 }, (_, index) => ({
+    id: `file-${index}`, label: "index.ts", filePath: `/demo/project-${index}/index.ts`,
+  }));
+  const onSelect = vi.fn();
+  await act(async () => root.render(<TabBar tabs={manyTabs} activeTabId="file-0" onSelectTab={onSelect} onCloseTab={vi.fn()} />));
+  const trigger = host.querySelector<HTMLButtonElement>('[aria-label="tabs.showAll"]')!;
+  expect(host.querySelector('[data-testid="file-tab-strip"]')!.contains(trigger)).toBe(false);
+  await key(trigger, "Enter");
+  const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+  expect(menu).not.toBeNull();
+  expect(host.contains(menu)).toBe(false);
+  const choices = menu.querySelectorAll<HTMLElement>('[role="menuitemradio"]');
+  expect(choices).toHaveLength(8);
+  expect(choices[0].getAttribute("aria-checked")).toBe("true");
+  expect(choices[7].textContent).toContain("/demo/project-7/index.ts");
+  await act(async () => choices[7].click());
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith("file-7");
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+});
+
+it("opens the file list with the keyboard and dismisses it with Escape", async () => {
+  const trigger = host.querySelector<HTMLButtonElement>('[aria-label="tabs.showAll"]')!;
+  trigger.focus();
+  await key(trigger, "ArrowDown");
+  const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+  expect(menu).not.toBeNull();
+  await key(menu, "Escape");
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+});

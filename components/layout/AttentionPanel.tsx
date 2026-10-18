@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Bell, BellRing, Check, CheckCheck, CircleCheckBig, RefreshCw, Trash2 } from "lucide-react";
@@ -112,6 +113,7 @@ export function AttentionPanel({
 
   const renderItem = (item: AttentionItem) => {
     const read = readIds.has(item.id);
+    const failed = item.status === "failed" || item.status === "interrupted";
     const sourceLabel = item.source === "agent"
       ? t("agents.title")
       : item.source === "schedule"
@@ -128,16 +130,20 @@ export function AttentionPanel({
           {!read && <i className={s.unreadDot} aria-label={t("attention.unreadItem")} />}
         </div>
         <strong className={s.title}>{item.title}</strong>
-        <p className={s.summary}>{item.summary}</p>
-        {item.cwd && <div className={`${s.path} chrome-mono`} title={item.cwd}>{item.cwd}</div>}
+        <p className={s.summary}>{failed ? t(item.status === "failed" ? "agents.status.failed" : "agents.status.interrupted") : item.summary}</p>
+        {(failed || item.cwd) && <details className={s.technicalDetails}>
+          <summary>{t("ui.technicalDetails")}</summary>
+          {failed && <p>{item.summary}</p>}
+          {item.cwd && <div className="chrome-mono">{item.cwd}</div>}
+        </details>}
         <div className={s.actions}>
           <button type="button" className={s.primaryAction} onClick={() => void open(item)}>
-            <ArrowUpRight size={15} aria-hidden />
+            <ArrowUpRight size={UI_ICON_SIZE.compact} aria-hidden />
             {item.sessionId ? t("attention.openSession") : t("attention.openSource")}
           </button>
           {!read && (
             <button type="button" className={s.secondary} onClick={() => onMarkRead(item.id)}>
-              <Check size={15} aria-hidden />
+              <Check size={UI_ICON_SIZE.compact} aria-hidden />
               {t("attention.markRead")}
             </button>
           )}
@@ -150,7 +156,7 @@ export function AttentionPanel({
     <section className={s.root} aria-label={t("attention.title")}>
       <header className={s.header}>
         <div className={s.heading}>
-          <span className={s.headingIcon} aria-hidden><Bell size={17} strokeWidth={1.8} /></span>
+          <span className={s.headingIcon} aria-hidden><Bell size={UI_ICON_SIZE.control} /></span>
           <div className={s.headingCopy}>
             <h2>{t("attention.title")}</h2>
             <p>{unreadCount > 0 ? `${unreadCount} ${t("attention.unread")}` : t("attention.caughtUp")}</p>
@@ -167,7 +173,7 @@ export function AttentionPanel({
             aria-label={pushState === "enabled" ? t("attention.pushDisable") : t("attention.pushEnable")}
             title={pushState === "enabled" ? t("attention.pushDisable") : t("attention.pushEnable")}
           >
-            {pushState === "enabled" ? <BellRing size={15} aria-hidden /> : <Bell size={15} aria-hidden />}
+            {pushState === "enabled" ? <BellRing size={UI_ICON_SIZE.compact} aria-hidden /> : <Bell size={UI_ICON_SIZE.compact} aria-hidden />}
             <span>{t("attention.push")}</span>
           </button>
           <IconButton
@@ -179,7 +185,7 @@ export function AttentionPanel({
             disabled={loading}
           />
           <button type="button" className={`${s.toolbarButton} ${s.markAllButton}`} onClick={onMarkAllRead} disabled={unreadCount === 0}>
-            <CheckCheck size={16} aria-hidden />
+            <CheckCheck size={UI_ICON_SIZE.compact} aria-hidden />
             <span>{t("attention.markAllRead")}</span>
           </button>
         </div>
@@ -197,7 +203,7 @@ export function AttentionPanel({
           <div className={s.empty}>{t("common.loading")}</div>
         ) : visibleItems.length === 0 ? (
           <div className={s.empty}>
-            <span aria-hidden><CircleCheckBig size={20} strokeWidth={1.8} /></span>
+            <span aria-hidden><CircleCheckBig size={UI_ICON_SIZE.navigation} /></span>
             <strong>{t("attention.empty")}</strong>
             <p>{t("attention.emptyHint")}</p>
           </div>
@@ -208,7 +214,7 @@ export function AttentionPanel({
               <span>{group.items.length}</span>
               {group.key === "completed" && (
                 <button type="button" className={s.clearGroup} onClick={() => onClearCompleted(group.items.map((item) => item.id))}>
-                  <Trash2 size={14} aria-hidden />
+                  <Trash2 size={UI_ICON_SIZE.compact} aria-hidden />
                   {t("attention.clearCompleted")}
                 </button>
               )}

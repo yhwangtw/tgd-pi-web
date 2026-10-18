@@ -69,7 +69,8 @@
   height: 9px;
   border-radius: var(--radius-pill);
   flex-shrink: 0;
-  background: var(--color-accent);
+  background: var(--accent-text);
+  outline: 2px solid var(--bg-panel);
 }
 
 .titleActions {
@@ -424,3 +425,5 @@
     padding: var(--space-2) var(--space-3);
   }
 }
+
+.tagChipRemove { display: inline-grid; flex-shrink: 0; place-items: center; }

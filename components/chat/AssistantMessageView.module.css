@@ -298,7 +298,7 @@
   color: var(--text);
   font-size: 0;
 }
-.actionToolbar .copyButton svg { width: 13px; height: 13px; }
+.actionToolbar .copyButton svg { width: var(--component-icon-button-glyph-compact); height: var(--component-icon-button-glyph-compact); }
 .actionToolbar .copyButton[aria-pressed="true"] { color: var(--color-warning-text-strong); }
 
 .usageDetails { position: relative; order: 1; flex: 0 0 auto; }

@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useId, useState, type ReactNode } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
@@ -59,7 +60,7 @@ export function TgdPipeline({ phases, statusOf, onRun, feature, onHide, active =
             {feature && <span className={styles.mobileFeature}>{feature}</span>}
           </span>
           <span className={styles.mobileProgress}>{doneCount}/{phases.length}</span>
-          <ChevronDown className={`${styles.mobileChevron} ${expanded ? styles.mobileChevronOpen : ""}`} size={13} aria-hidden />
+          <ChevronDown className={`${styles.mobileChevron} ${expanded ? styles.mobileChevronOpen : ""}`} size={UI_ICON_SIZE.compact} aria-hidden />
         </button>
       )}
       <div id={phaseListId} className={`${styles.track} ${expanded ? styles.trackOpen : ""}`}>
@@ -76,7 +77,7 @@ export function TgdPipeline({ phases, statusOf, onRun, feature, onHide, active =
               >
                 <span className={styles.icon} aria-hidden>
                   {status === "done" ? (
-                    <Check size={12} strokeWidth={3} />
+                    <Check size={UI_ICON_SIZE.inline} />
                   ) : phase.icon}
                 </span>
                 <span className={styles.label}>{phase.label}</span>
@@ -87,7 +88,7 @@ export function TgdPipeline({ phases, statusOf, onRun, feature, onHide, active =
       </div>
       {onHide && (
         <button onClick={onHide} className={styles.hide} title={t("chat.hidePipeline")} aria-label={t("chat.hidePipeline")}>
-          <X size={12} aria-hidden />
+          <X size={UI_ICON_SIZE.compact} aria-hidden />
         </button>
       )}
     </div>

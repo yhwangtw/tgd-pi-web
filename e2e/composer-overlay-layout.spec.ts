@@ -67,8 +67,8 @@ async function expectContained(page: Page, target: Locator) {
 }
 
 async function expectModelAnchored(page: Page) {
-  const listbox = page.getByRole("listbox", { name: "Model", exact: true });
-  const panel = listbox.locator("..");
+  const listbox = page.getByTestId("model-selector-popover");
+  const panel = listbox;
   await expectContained(page, panel);
   await expect.poll(async () => {
     const trigger = await page.getByTestId("model-selector-trigger").boundingBox();
@@ -89,6 +89,47 @@ async function expectBottomSheet(page: Page, dialog: Locator) {
 }
 
 for (const style of ["original", "trae"] as const) {
+  test(`${style}: icon controls stay compact, named, and keyboard operable`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await openFixture(page, style, 1100, 850);
+    const controls = page.getByRole("button", { name: "More composer controls", exact: true });
+    await expect(controls).toHaveText("");
+    await expect(controls).toHaveAttribute("title", "Composer controls");
+    const model = page.getByTestId("model-selector-trigger");
+    expect(await model.evaluate(el => getComputedStyle(el).fontFamily)).toBe(
+      await page.getByRole("textbox", { name: "Message…", exact: true }).evaluate(el => getComputedStyle(el).fontFamily));
+    await page.screenshot({ path: test.info().outputPath(`composer-icons-idle-${style}.png`) });
+    await controls.click();
+    const panel = page.getByRole("region", { name: "Composer controls", exact: true });
+    await expectContained(page, panel);
+    expect((await panel.boundingBox())!.height).toBeLessThan(65);
+    for (const name of ["Change reasoning level", "Change tool preset"]) {
+      const button = panel.getByRole("button", { name, exact: true });
+      await expect(button).toHaveText("");
+      await expect(button).toHaveAttribute("title", /.+: .+/);
+      await button.click();
+      await expectContained(page, page.getByRole("listbox", { name, exact: true }));
+      await page.keyboard.press("Escape");
+    }
+    const smart = panel.getByRole("radio", { name: "Smart follow", exact: true });
+    await smart.click();
+    await smart.press("ArrowRight");
+    await expect(panel.getByRole("radio", { name: "Always follow", exact: true })).toBeChecked();
+    await expect(panel.getByRole("radio", { name: "Always follow", exact: true })).toBeFocused();
+    await panel.getByRole("radio", { name: "Always follow", exact: true }).press("ArrowRight");
+    await expect(panel.getByRole("radio", { name: "Preserve position", exact: true })).toBeChecked();
+    await panel.getByRole("radio", { name: "Preserve position", exact: true }).press("Home");
+    await expect(smart).toBeChecked();
+    await page.screenshot({ path: test.info().outputPath(`composer-icons-open-${style}.png`) });
+    await page.setViewportSize({ width: 701, height: 850 });
+    await panel.getByRole("button", { name: "Change tool preset", exact: true }).click();
+    await expectContained(page, page.getByRole("listbox", { name: "Change tool preset", exact: true }));
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeVisible();
+    await controls.click();
+    await expect(panel).toBeHidden();
+  });
+
   test(`${style}: desktop model popup follows resizing and the sidebar beside an open file preview`, async ({ page }) => {
     const selections: unknown[] = [];
     await page.route(`**/api/agent/${SESSION}`, route => {
@@ -110,10 +151,10 @@ for (const style of ["original", "trae"] as const) {
     await expect(page.getByRole("region", { name: "Composer controls", exact: true })).toBeHidden();
     await expect(controls).toHaveAttribute("aria-expanded", "false");
     await expectModelAnchored(page);
-    const selected = page.getByRole("option", { name: new RegExp(LONG_MODEL) });
+    const selected = page.getByRole("button", { name: new RegExp(LONG_MODEL) });
     await selected.click();
     expect(selections).toEqual([{ type: "set_model", provider: "anthropic", modelId: "claude-sonnet-5" }]);
-    await expect(page.getByRole("listbox", { name: "Model", exact: true })).toBeHidden();
+    await expect(page.getByTestId("model-selector-popover")).toBeHidden();
     await expect(trigger).toBeFocused();
     await trigger.click();
     await expectModelAnchored(page);
@@ -127,7 +168,7 @@ for (const style of ["original", "trae"] as const) {
     await page.keyboard.press("ControlOrMeta+b");
     await expectModelAnchored(page);
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("listbox", { name: "Model", exact: true })).toBeHidden();
+    await expect(page.getByTestId("model-selector-popover")).toBeHidden();
     await expect(trigger).toBeFocused();
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
   });
@@ -161,7 +202,7 @@ for (const style of ["original", "trae"] as const) {
       await expect(controls).toBeFocused();
       await controls.click();
       await expectBottomSheet(page, controlsDialog);
-      await controlsDialog.getByRole("button", { name: "Done", exact: true }).click();
+      await controlsDialog.getByRole("button", { name: "Close", exact: true }).click();
       await expect(controlsDialog).toBeHidden();
       await expect(composer).toHaveValue("Keep this draft while using controls");
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);

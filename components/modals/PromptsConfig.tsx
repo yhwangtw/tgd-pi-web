@@ -38,11 +38,16 @@ export function PromptsConfig({ onClose }: { onClose: () => void }) {
     if (restoreFocus && (document.activeElement === document.body || editorRef.current?.contains(document.activeElement))) nameRef.current?.focus({ preventScroll: true });
   }, [name, body, editingId, savePrompt, resetForm]);
 
+  const original = prompts.find((prompt) => prompt.id === editingId);
+  const hasUnsavedChanges = name !== (original?.name ?? "") || body !== (original?.body ?? "");
+
   return (
     <DialogShell
       open
       title={t("prompts.title")}
       onClose={onClose}
+      canClose={!saving}
+      hasUnsavedChanges={hasUnsavedChanges}
       size="default"
       mobileMode="fullscreen"
       bodyClassName={styles.body}

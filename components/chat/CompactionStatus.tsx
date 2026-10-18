@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState } from "react";
 import { LoaderCircle, Shrink, X } from "lucide-react";
@@ -35,12 +36,12 @@ export function CompactionStatus({ state, queued, onCancel, onCheck, onRetry, on
       if ((event.target as HTMLElement).closest("button") && document.activeElement instanceof HTMLTextAreaElement) event.preventDefault();
     }}>
     <div className={styles.row}>
-      {running ? <LoaderCircle size={15} className={styles.spinner} aria-hidden /> : <Shrink size={15} aria-hidden />}
+      {running ? <LoaderCircle size={UI_ICON_SIZE.compact} className={styles.spinner} aria-hidden /> : <Shrink size={UI_ICON_SIZE.compact} aria-hidden />}
       <span className={styles.label} role="status">{title}</span>
       {running && <button disabled={busy} onClick={() => void action(onCancel)}>{t("compact.cancel")}</button>}
       {(state?.status === "checking" || state?.status === "unknown") && <button disabled={busy} onClick={() => void action(onCheck)}>{t("compact.check")}</button>}
       {(state?.status === "failed" || state?.status === "unknown") && <button disabled={busy} onClick={() => void action(onRetry)}>{t("compact.retry")}</button>}
-      {!running && state && <button className={styles.dismiss} onClick={onDismiss} aria-label={t("compact.dismiss")}><X size={14} /></button>}
+      {!running && state && <button className={styles.dismiss} onClick={onDismiss} aria-label={t("compact.dismiss")}><X size={UI_ICON_SIZE.control} /></button>}
     </div>
     {running && <p>{t(state?.status === "checking" ? "compact.reconciling" : "compact.queueHint")}</p>}
     {state?.status === "unknown" && <p>{t("compact.unknownHint")}</p>}

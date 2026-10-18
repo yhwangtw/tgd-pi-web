@@ -111,7 +111,7 @@ for (const width of [390, 1440]) test(`Original unread and mobile control sizes 
   await page.setViewportSize({ width, height: 900 });
   await page.goto(MAIN);
   if (width === 390) await page.getByRole("button", { name: "Sessions", exact: true }).click();
-  const unread = page.getByRole("button", { name: /^Unread \d+$/ });
+  const unread = page.getByRole("button", { name: /^Unread conversations \d+$/ });
   await expect(unread).toBeVisible();
   await unread.click();
   await expect(unread).toHaveAttribute("aria-pressed", "true");

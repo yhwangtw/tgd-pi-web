@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ExternalLink } from "lucide-react";
@@ -285,7 +286,7 @@ export function AddSkillPanel({
                         rel="noreferrer"
                         className={styles.skillsLink}
                       >
-                        {t("skills.add.directoryName")} <ExternalLink size={12} strokeWidth={1.8} aria-hidden="true" />
+                        {t("skills.add.directoryName")} <ExternalLink size={UI_ICON_SIZE.inline} aria-hidden="true" />
                       </a>
                     )}
                   </div>

@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useRef, useState } from "react";
 import { Check, LogOut, Moon, RotateCcw, Sun, X } from "lucide-react";
@@ -10,6 +11,7 @@ import { DEFAULT_FONT_FAMILY, FONT_FAMILIES, useFontFamily } from "@/lib/font-fa
 import { DEFAULT_MESSAGE_LAYOUT, MESSAGE_LAYOUTS, useMessageLayout } from "@/lib/message-layout";
 import { DEFAULT_DENSITY, DENSITIES, useDensity } from "@/lib/density";
 import { DEFAULT_UI_STYLE, UI_STYLES, useUiStyle } from "@/lib/ui-style";
+import { handleRadioGroupKeyDown } from "@/components/ui/radio-group";
 import styles from "./AppearancePanel.module.css";
 
 interface Props {
@@ -71,7 +73,7 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
       if (event.key !== "Tab") return;
       const focusable = [...(ref.current?.querySelectorAll<HTMLElement>(
         'button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex="-1"])',
-      ) ?? [])].filter((element) => element.offsetParent !== null);
+      ) ?? [])].filter((element) => element.offsetParent !== null && element.tabIndex >= 0);
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -102,39 +104,39 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
           <span>{t("appearance.subtitle")}</span>
         </div>
         <button ref={closeRef} type="button" className={styles.closeButton} onClick={onClose} aria-label={t("appearance.close")} title={t("appearance.close")}>
-          <X size={14} aria-hidden />
+          <X size={UI_ICON_SIZE.control} aria-hidden />
         </button>
       </div>
 
-      <div className={styles.themeRow} role="group" aria-label={t("appearance.title")}>
+      <div className={styles.themeRow} role="radiogroup" onKeyDown={handleRadioGroupKeyDown} aria-label={t("appearance.title")}>
         <button
           type="button"
           className={`${styles.themeBtn} ${!isDark ? styles.themeBtnActive : ""}`}
-          aria-pressed={!isDark}
+          role="radio" aria-checked={!isDark} tabIndex={!isDark ? 0 : -1}
           onClick={(e) => { if (isDark) toggleTheme(toggleOriginFromEvent(e)); }}
         >
-          <Sun size={12} aria-hidden />
+          <Sun size={UI_ICON_SIZE.inline} aria-hidden />
           {t("appearance.light")}
         </button>
         <button
           type="button"
           className={`${styles.themeBtn} ${isDark ? styles.themeBtnActive : ""}`}
-          aria-pressed={isDark}
+          role="radio" aria-checked={isDark} tabIndex={isDark ? 0 : -1}
           onClick={(e) => { if (!isDark) toggleTheme(toggleOriginFromEvent(e)); }}
         >
-          <Moon size={12} aria-hidden />
+          <Moon size={UI_ICON_SIZE.inline} aria-hidden />
           {t("appearance.dark")}
         </button>
       </div>
 
       <div className={styles.sectionLabel}>{t("appearance.interfaceStyle")}</div>
-      <div className={styles.messageLayoutRow} role="group" aria-label={t("appearance.interfaceStyle")}>
+      <div className={styles.messageLayoutRow} role="radiogroup" onKeyDown={handleRadioGroupKeyDown} aria-label={t("appearance.interfaceStyle")}>
         {UI_STYLES.map((style) => (
           <button
             key={style}
             type="button"
             className={`${styles.fontSizeBtn} ${style === uiStyle ? styles.fontSizeBtnActive : ""}`}
-            aria-pressed={style === uiStyle}
+            role="radio" aria-checked={style === uiStyle} tabIndex={style === uiStyle ? 0 : -1}
             onClick={() => setUiStyle(style)}
           >
             {t(`appearance.interfaceStyle.${style}`)}
@@ -143,13 +145,13 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
       </div>
 
       <div className={styles.sectionLabel}>{t("appearance.fontSize")}</div>
-      <div className={styles.fontSizeRow} role="group" aria-label={t("appearance.fontSize")}>
+      <div className={styles.fontSizeRow} role="radiogroup" onKeyDown={handleRadioGroupKeyDown} aria-label={t("appearance.fontSize")}>
         {FONT_SIZES.map((size) => (
           <button
             key={size}
             type="button"
             className={`${styles.fontSizeBtn} ${size === fontSize ? styles.fontSizeBtnActive : ""}`}
-            aria-pressed={size === fontSize}
+            role="radio" aria-checked={size === fontSize} tabIndex={size === fontSize ? 0 : -1}
             onClick={() => setFontSize(size)}
           >
             {t(`appearance.fontSize.${size}`)}
@@ -158,14 +160,14 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
       </div>
 
       <div className={styles.sectionLabel}>{t("appearance.fontFamily")}</div>
-      <div className={styles.fontFamilyRow} role="group" aria-label={t("appearance.fontFamily")}>
+      <div className={styles.fontFamilyRow} role="radiogroup" onKeyDown={handleRadioGroupKeyDown} aria-label={t("appearance.fontFamily")}>
         {FONT_FAMILIES.map((family) => (
           <button
             key={family}
             type="button"
             data-family={family}
             className={`${styles.fontSizeBtn} ${family === fontFamily ? styles.fontSizeBtnActive : ""}`}
-            aria-pressed={family === fontFamily}
+            role="radio" aria-checked={family === fontFamily} tabIndex={family === fontFamily ? 0 : -1}
             onClick={() => setFontFamily(family)}
           >
             {t(`appearance.fontFamily.${family}`)}
@@ -174,13 +176,13 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
       </div>
 
       <div className={styles.sectionLabel}>{t("appearance.messageLayout")}</div>
-      <div className={styles.messageLayoutRow} role="group" aria-label={t("appearance.messageLayout")}>
+      <div className={styles.messageLayoutRow} role="radiogroup" onKeyDown={handleRadioGroupKeyDown} aria-label={t("appearance.messageLayout")}>
         {MESSAGE_LAYOUTS.map((layout) => (
           <button
             key={layout}
             type="button"
             className={`${styles.fontSizeBtn} ${layout === messageLayout ? styles.fontSizeBtnActive : ""}`}
-            aria-pressed={layout === messageLayout}
+            role="radio" aria-checked={layout === messageLayout} tabIndex={layout === messageLayout ? 0 : -1}
             onClick={() => setMessageLayout(layout)}
           >
             {t(`appearance.messageLayout.${layout}`)}
@@ -189,13 +191,13 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
       </div>
 
       <div className={styles.sectionLabel}>{t("appearance.density")}</div>
-      <div className={styles.messageLayoutRow} role="group" aria-label={t("appearance.density")}>
+      <div className={styles.messageLayoutRow} role="radiogroup" onKeyDown={handleRadioGroupKeyDown} aria-label={t("appearance.density")}>
         {DENSITIES.map((value) => (
           <button
             key={value}
             type="button"
             className={`${styles.fontSizeBtn} ${value === density ? styles.fontSizeBtnActive : ""}`}
-            aria-pressed={value === density}
+            role="radio" aria-checked={value === density} tabIndex={value === density ? 0 : -1}
             onClick={() => setDensity(value)}
           >
             {t(`appearance.density.${value}`)}
@@ -204,19 +206,19 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
       </div>
 
       <div className={styles.sectionLabel}>{t("appearance.language")}</div>
-      <div className={styles.messageLayoutRow} role="group" aria-label={t("appearance.language")}>
-        <button type="button" className={`${styles.fontSizeBtn} ${locale === "zh" ? styles.fontSizeBtnActive : ""}`} aria-pressed={locale === "zh"} onClick={() => setLocale("zh")}>繁體中文</button>
-        <button type="button" className={`${styles.fontSizeBtn} ${locale === "en" ? styles.fontSizeBtnActive : ""}`} aria-pressed={locale === "en"} onClick={() => setLocale("en")}>English</button>
+      <div className={styles.messageLayoutRow} role="radiogroup" onKeyDown={handleRadioGroupKeyDown} aria-label={t("appearance.language")}>
+        <button type="button" className={`${styles.fontSizeBtn} ${locale === "zh" ? styles.fontSizeBtnActive : ""}`} role="radio" aria-checked={locale === "zh"} tabIndex={locale === "zh" ? 0 : -1} onClick={() => setLocale("zh")}>繁體中文</button>
+        <button type="button" className={`${styles.fontSizeBtn} ${locale === "en" ? styles.fontSizeBtnActive : ""}`} role="radio" aria-checked={locale === "en"} tabIndex={locale === "en" ? 0 : -1} onClick={() => setLocale("en")}>English</button>
       </div>
 
       <div className={styles.sectionLabel}>{t("appearance.colors")}</div>
-      <div className={styles.skinList} role="group" aria-label={t("appearance.colors")}>
+      <div className={styles.skinList} role="radiogroup" onKeyDown={handleRadioGroupKeyDown} aria-label={t("appearance.colors")}>
         {SKINS.map((sk) => (
           <button
             key={sk}
             type="button"
             className={`${styles.skinRow} ${sk === skin ? styles.skinRowActive : ""}`}
-            aria-pressed={sk === skin}
+            role="radio" aria-checked={sk === skin} tabIndex={sk === skin ? 0 : -1}
             onClick={() => setSkin(sk)}
           >
             <span className={styles.swatches} aria-hidden>
@@ -226,20 +228,20 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
             </span>
             <span className={styles.skinLabel}>{t(`appearance.skin.${sk}`)}</span>
             {sk === skin && (
-              <Check size={13} strokeWidth={2.5} className={styles.check} aria-hidden />
+              <Check size={UI_ICON_SIZE.compact} className={styles.check} aria-hidden />
             )}
           </button>
         ))}
       </div>
 
       <button type="button" className={styles.resetRow} onClick={resetAppearance}>
-        <RotateCcw size={13} aria-hidden />
+        <RotateCcw size={UI_ICON_SIZE.compact} aria-hidden />
         {t("appearance.reset")}
       </button>
 
       {gateEnabled && (
         <button type="button" className={styles.logoutRow} onClick={logout}>
-          <LogOut size={13} aria-hidden />
+          <LogOut size={UI_ICON_SIZE.compact} aria-hidden />
           {t("appearance.logout")}
         </button>
       )}

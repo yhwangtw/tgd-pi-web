@@ -21,11 +21,20 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
     const content = panel.locator('[class*="TextFileViewer_contentArea"]');
     await expect(active).toContainText("big-file.ts");
     await expect(panel.getByText("large-file mode")).toBeVisible();
-    await content.evaluate(element => {
-      element.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 640 }));
-      element.scrollTop = 640; element.dispatchEvent(new Event("scroll"));
+    await page.evaluate(() => document.fonts.ready);
+    await panel.evaluate(async element => {
+      await Promise.all(element.getAnimations({ subtree: true })
+        .filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map(animation => animation.finished.catch(() => {})));
     });
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("pi-file-workspace-v1")!).tabs.find((tab: { label: string }) => tab.label === "big-file.ts").viewState?.scrollTop)).toBe(640);
+    const savedScrollTop = await content.evaluate(element => {
+      element.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 640 }));
+      element.scrollTop = Math.min(640, Math.floor((element.scrollHeight - element.clientHeight) / 2));
+      element.dispatchEvent(new Event("scroll"));
+      return element.scrollTop;
+    });
+    expect(savedScrollTop).toBeGreaterThan(0);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("pi-file-workspace-v1")!).tabs.find((tab: { label: string }) => tab.label === "big-file.ts").viewState?.scrollTop)).toBe(savedScrollTop);
 
     async function complete(token: string) {
       const reviewResponse = page.waitForResponse(response => response.url().includes("/api/git/changes?") && response.ok());
@@ -39,10 +48,10 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
     if (width > 700) {
       await complete(`${style}-open-review`);
       await expect(active).toContainText("big-file.ts");
-      await expect.poll(() => content.evaluate(element => element.scrollTop)).toBe(640);
+      await expect.poll(() => content.evaluate(element => element.scrollTop)).toBe(savedScrollTop);
     }
 
-    await page.getByTestId(width < 700 ? "right-panel-tab-bar" : "top-bar").getByRole("button", { name: "Hide file panel", exact: true }).click();
+    await page.getByTestId(width < 700 ? "right-panel-tab-bar" : "top-bar").getByRole("button", { name: /^(Hide file panel|Back to chat)$/ }).click();
     await expect(panel).toHaveClass(/right-panel-closed/);
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("pi-file-workspace-v1")!).open)).toBe(false);
     await page.reload();
@@ -56,7 +65,7 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
     if (width < 700) await page.getByRole("button", { name: "Session actions", exact: true }).click();
     await page.getByRole("button", { name: "Show file panel", exact: true }).click();
     await expect(active).toContainText("big-file.ts");
-    await expect.poll(() => content.evaluate(element => element.scrollTop)).toBe(640);
+    await expect.poll(() => content.evaluate(element => element.scrollTop)).toBe(savedScrollTop);
     const review = panel.getByRole("button", { name: /\d+ to review/ });
     await expect(review).toBeVisible();
     await page.screenshot({ path: info.outputPath("passive-review.png") });

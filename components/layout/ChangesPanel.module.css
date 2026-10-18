@@ -271,7 +271,7 @@
   padding: var(--space-optical) var(--space-1);
   border-radius: var(--radius-pill);
   font-family: var(--font-ui);
-  font-size: var(--text-2xs);
+  font-size: var(--type-label-size);
   font-weight: var(--weight-semibold);
 }
 

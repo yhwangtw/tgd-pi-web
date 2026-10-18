@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useRef, useEffect } from "react";
 import type { ExtensionUIState } from "@/hooks/use-extension-ui";
@@ -106,7 +107,7 @@ export function PendingQuestionNotice({ onShow, wide = false }: { onShow: () => 
           // focus to the revealed question; keyboard activation is unchanged.
           if (event.isPrimary && event.button === 0) event.preventDefault();
         }} onClick={onShow}>
-          {t("extensionUI.viewQuestion")}<ArrowUp size={14} aria-hidden />
+          {t("extensionUI.viewQuestion")}<ArrowUp size={UI_ICON_SIZE.compact} aria-hidden />
         </button>
       </div>
     </div>
@@ -176,7 +177,7 @@ export function ExtensionWidgets({ state, placement, wide = false, bare = false,
             aria-label={t(key === "Goal" ? "workflow.hideGoal" : "workflow.hidePlan")}
             title={t("workflow.hideHint")}
             onPointerDown={event => { if (event.isPrimary && event.button === 0) event.preventDefault(); }}
-            onClick={event => setHidden(key, widget.lines[0] ?? "", true, event.currentTarget)}><X size={14} aria-hidden /></button>
+            onClick={event => setHidden(key, widget.lines[0] ?? "", true, event.currentTarget)}><X size={UI_ICON_SIZE.control} aria-hidden /></button>
           </div>
           <div className={styles.workflowActions}>
             {(key === "Goal" ? [

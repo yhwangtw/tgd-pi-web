@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { memo, useEffect, useRef } from "react";
 import { LoaderCircle } from "lucide-react";
@@ -47,7 +48,7 @@ export const BashBlock = memo(function BashBlock({ command, output, running, exi
         <span className={styles.command} title={command}>{command}</span>
         {running ? (
           <>
-            <LoaderCircle size={12} strokeWidth={2.5} className={styles.spinner} aria-label={t("bash.running")} />
+            <LoaderCircle size={UI_ICON_SIZE.inline} className={styles.spinner} aria-label={t("bash.running")} />
             {onAbort && (
               <button onClick={onAbort} className={styles.abortButton}>
                 {t("bash.cancel")}
