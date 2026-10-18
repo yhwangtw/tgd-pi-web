@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 
 const MiB = 1024 ** 2;
-export const DEFAULT_MINIMUM_FREE_BYTES = Object.freeze({ build: 3 * 1024 ** 3, prepare: 2 * 1024 ** 3 });
+// Installation, build output and compiler cache coexist until candidate validation.
+// A 3 GiB budget exhausted the filesystem during a production build.
+export const DEFAULT_MINIMUM_FREE_BYTES = Object.freeze({ build: 6 * 1024 ** 3, prepare: 2 * 1024 ** 3 });
 const RECORD_SPACE = 64 * MiB;
 
 export function validateSpaceRequirements(value) {
