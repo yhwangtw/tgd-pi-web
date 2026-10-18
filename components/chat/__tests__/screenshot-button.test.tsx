@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { ScreenshotButton } from "../ScreenshotButton";
 import { ChatInput, type ChatInputHandle } from "../ChatInput";
 import { captureScreenshot, screenCaptureSupport, type Screenshot } from "@/lib/screen-capture";
@@ -18,6 +18,7 @@ const props = { className: "capture-button", disabled: false, onAttach: attached
 const button = (name: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(b => b.getAttribute("aria-label") === name || b.textContent === name)!;
 const click = async (name: string) => { await act(async () => button(name).click()); };
 const render = async (node: React.ReactNode) => { await act(async () => root.render(node)); };
+beforeAll(async () => { await import("../ScreenshotDialog"); });
 beforeEach(() => {
   vi.clearAllMocks(); setLocale("en");
   vi.mocked(captureScreenshot).mockResolvedValue(screenshot);

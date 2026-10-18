@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ScanLine, Square } from "lucide-react";
-import { DialogShell } from "@/components/ui/DialogShell";
 import { captureScreenshot, screenCaptureSupport, type Screenshot } from "@/lib/screen-capture";
 import { useI18n } from "@/lib/i18n";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 import { showToast } from "@/hooks/useToast";
-import styles from "./ScreenshotButton.module.css";
+const ScreenshotDialog = lazy(() => import("./ScreenshotDialog"));
 
 /** Key this component by conversation/project so late captures cannot cross drafts. */
 export function ScreenshotButton({ className, disabled, onAttach, onChooseFile }: {
@@ -21,7 +20,6 @@ export function ScreenshotButton({ className, disabled, onAttach, onChooseFile }
   const [preview, setPreview] = useState<Screenshot | null>(null);
   const [help, setHelp] = useState<"unsupported" | "insecure" | "failed" | null>(null);
   const active = useRef<AbortController | null>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
   const close = () => { setPreview(null); setHelp(null); };
   useEffect(() => () => { active.current?.abort(); active.current = null; }, []);
 
@@ -57,24 +55,10 @@ export function ScreenshotButton({ className, disabled, onAttach, onChooseFile }
       aria-busy={busy || undefined}>
       {busy ? <Square size={UI_ICON_SIZE.control} aria-hidden="true" /> : <ScanLine size={UI_ICON_SIZE.control} aria-hidden="true" />}
     </button>
-    <DialogShell open={!!preview || !!help} title={t(preview ? "capture.preview" : "capture.take")}
-      description={t(preview ? "capture.localOnly" : `capture.${help ?? "unsupported"}`)}
-      modal placement="center" size={preview ? "wide" : "compact"} onClose={close}
-      initialFocusRef={confirmRef} testId="screenshot-dialog"
-      footer={<div className={styles.actions}>
-        <button type="button" className={styles.button} onClick={close}>{t("common.cancel")}</button>
-        {preview ? <>
-          <button type="button" className={styles.button} disabled={disabled} onClick={() => void capture()}>{t("capture.retake")}</button>
-          <button ref={confirmRef} type="button" className={styles.primary} disabled={disabled}
-            onClick={() => { onAttach(preview); close(); }}>{t("capture.attach")}</button>
-        </> : <button ref={confirmRef} type="button" className={styles.primary} disabled={disabled}
-          onClick={() => { close(); onChooseFile(); }}>{t("capture.chooseImage")}</button>}
-      </div>}>
-      {preview ? <>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={preview.dataUrl} alt={t("capture.preview")} className={styles.preview} />
-        <p className={styles.dimensions}>{preview.width} × {preview.height}</p>
-      </> : <p className={styles.help}>{t("capture.fallback")}</p>}
-    </DialogShell>
+    {(preview || help) && <Suspense fallback={null}>
+      <ScreenshotDialog preview={preview} help={help} disabled={disabled}
+        onClose={close} onRetake={() => void capture()} onChooseFile={onChooseFile}
+        onAttach={onAttach} />
+    </Suspense>}
   </>;
 }
