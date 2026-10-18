@@ -553,9 +553,6 @@
   color: var(--text);
   font-weight: var(--weight-medium);
 }
-.contextStat + .costStat {
-  padding-left: var(--space-2);
-}
 
 .contextStat {
   display: flex;
