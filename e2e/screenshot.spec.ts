@@ -13,6 +13,7 @@ async function installCapture(page: Page, support = true) {
         const canvas = document.createElement("canvas"); canvas.width = 1280; canvas.height = 720;
         const context = canvas.getContext("2d")!;
         context.fillStyle = "#19472b"; context.fillRect(0, 0, 1280, 720);
+        context.fillStyle = "#1144bb"; context.fillRect(320, 180, 640, 360);
         context.fillStyle = "#ffffff"; context.font = "32px sans-serif";
         context.fillText("Screenshot fixture", 50, 80);
         const stream = canvas.captureStream(10); probe.streams.push(stream);
@@ -49,11 +50,33 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
     await expect(page.getByRole("button", { name: "Remove image", exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.screenshot({ path: info.outputPath(`screenshot-${style}-${width}.png`), animations: "disabled" });
+    const crop = dialog.getByTestId("screenshot-crop");
+    const selectArea = async (reverse = false) => {
+      const box = (await crop.boundingBox())!;
+      const start = reverse ? 0.75 : 0.25; const end = reverse ? 0.25 : 0.75;
+      await page.mouse.move(box.x + box.width * start, box.y + box.height * start);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width * end, box.y + box.height * end, { steps: 5 });
+      await page.mouse.up();
+    };
+    await selectArea(true); await expect(dialog).toContainText("640 × 360");
+    await crop.press("Shift+ArrowRight"); await expect(dialog).toContainText("641 × 360");
+    await dialog.getByRole("button", { name: "Full image", exact: true }).click();
+    await expect(dialog).toContainText("1280 × 720");
     await dialog.getByRole("button", { name: "Retake", exact: true }).click();
     await expect(dialog.getByRole("img")).toBeVisible();
-    await dialog.getByRole("button", { name: "Attach screenshot", exact: true }).click();
+    await selectArea();
+    await dialog.getByRole("button", { name: "Attach selection", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Remove image", exact: true })).toBeVisible();
+    const attachment = composer.locator("img").first();
+    await expect(attachment).toBeVisible();
+    expect(await attachment.evaluate(async (image: HTMLImageElement) => {
+      await image.decode();
+      const canvas = document.createElement("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d")!; context.drawImage(image, 0, 0);
+      return { width: image.naturalWidth, height: image.naturalHeight, corner: [...context.getImageData(2, 2, 1, 1).data] };
+    })).toEqual({ width: 640, height: 360, corner: [17, 68, 187, 255] });
     await expect(composer.locator("textarea")).toHaveValue("inspect this screenshot");
     await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await expect.poll(() => stopped(page)).toBe(true);

@@ -1,8 +1,9 @@
 .preview {
   display: block;
   width: 100%;
-  max-height: 55dvh;
-  object-fit: contain;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
   border-radius: var(--radius-control);
   background: var(--bg);
 }
@@ -40,3 +41,28 @@
 .button:hover:not(:disabled) { background: var(--bg-hover); }
 .button:disabled,
 .primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.hint {
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-copy);
+}
+.cropStage {
+  position: relative;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+.cropStage:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.selection {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 9999px color-mix(in srgb, var(--bg) 65%, transparent);
+  pointer-events: none;
+}
+.error { color: var(--color-error-text); font-size: var(--text-sm); margin: var(--space-2) 0 0; }
