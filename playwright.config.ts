@@ -28,6 +28,8 @@ export default defineConfig({
   globalSetup: "./e2e/global-setup",
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
+  // Surface recurring failures early; successful runs still execute every test.
+  maxFailures: process.env.CI ? 5 : 0,
   workers: 1, // specs share one server + one session store
   reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
   use: {

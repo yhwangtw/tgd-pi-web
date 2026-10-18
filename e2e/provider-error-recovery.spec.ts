@@ -114,7 +114,7 @@ for (const style of ["original", "trae"] as const) {
       expect(overlappingLabels).toEqual([]);
       await page.screenshot({ path: test.info().outputPath(`thinking-${style}-${width}.png`) });
       await max.click();
-      await expect(page.getByRole("button", { name: "Change reasoning level", exact: true })).toContainText("max");
+      await expect(page.getByRole("button", { name: "Change reasoning level", exact: true })).toHaveAttribute("title", "Reasoning: max");
       expect(forbidden).toEqual([]);
     });
   }
