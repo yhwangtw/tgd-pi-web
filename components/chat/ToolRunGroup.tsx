@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, type ReactNode } from "react";
 import { Check, ChevronDown, LoaderCircle, TriangleAlert } from "lucide-react";
@@ -37,11 +38,11 @@ export function ToolRunGroup({ items, activeToolCallId, children }: Props) {
       >
         <span className={styles.stateIcon} aria-hidden>
           {active ? (
-            <LoaderCircle className={styles.spinner} size={13} strokeWidth={2.4} />
+            <LoaderCircle className={styles.spinner} size={UI_ICON_SIZE.compact} />
           ) : failedCount ? (
-            <TriangleAlert size={13} strokeWidth={2.2} />
+            <TriangleAlert size={UI_ICON_SIZE.compact} />
           ) : (
-            <Check size={13} strokeWidth={2.2} />
+            <Check size={UI_ICON_SIZE.compact} />
           )}
         </span>
         <span className={styles.label} aria-live={active ? "polite" : undefined}>
@@ -55,7 +56,7 @@ export function ToolRunGroup({ items, activeToolCallId, children }: Props) {
           {failedCount > 0 && <span className={styles.failed}>{failedCount} {t("chat.failed")}</span>}
           {elapsed > 0 && <span>{elapsed}s</span>}
         </span>
-        <ChevronDown className={styles.chevron} size={11} strokeWidth={1.6} aria-hidden />
+        <ChevronDown className={styles.chevron} size={UI_ICON_SIZE.inline} aria-hidden />
       </button>
       {expanded && <div className={styles.children}>{children}</div>}
     </section>

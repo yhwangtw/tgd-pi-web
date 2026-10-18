@@ -228,7 +228,7 @@
   background: var(--trae-control);
   font-size: 0;
 }
-:global(html[data-ui-style="trae"]) .mentionButton svg { width: 13px; height: 13px; }
+:global(html[data-ui-style="trae"]) .mentionButton svg { width: var(--component-icon-button-glyph-compact); height: var(--component-icon-button-glyph-compact); }
 :global(html[data-ui-style="trae"]) .contextMenu { border-color: var(--trae-hairline); border-radius: var(--radius-menu); background: var(--glass-bg); }
 :global(html[data-ui-style="trae"]) .menuItem { min-height: 36px; border-radius: var(--radius-row); }
 :global(html[data-ui-style="trae"]) .menuSep { background: var(--trae-hairline); }

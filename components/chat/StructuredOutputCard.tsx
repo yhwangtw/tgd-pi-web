@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import type { ReactNode } from "react";
 import { CheckCircle2, CircleAlert, CircleX, Info, ChevronDown } from "lucide-react";
@@ -39,7 +40,7 @@ export function StructuredOutputCard({
     >
       <div className={styles.eyebrow}>{label}</div>
       <div className={styles.contentRow}>
-        <Icon className={styles.icon} size={19} strokeWidth={2} aria-hidden="true" />
+        <Icon className={styles.icon} size={UI_ICON_SIZE.navigation} aria-hidden="true" />
         <div className={styles.content}>
           {title && <h4 className={styles.title}>{title}</h4>}
           {children}
@@ -49,7 +50,7 @@ export function StructuredOutputCard({
         <details className={styles.details}>
           <summary>
             <span className={styles.detailsTitle}>{detailsTitle || t("output.technicalDetails")}</span>
-            <ChevronDown className={styles.chevron} size={15} strokeWidth={1.8} aria-hidden="true" />
+            <ChevronDown className={styles.chevron} size={UI_ICON_SIZE.compact} aria-hidden="true" />
             <span className={styles.detailsHint}>{t("output.detailsHint")}</span>
           </summary>
           <div className={styles.detailsBody}>{details}</div>

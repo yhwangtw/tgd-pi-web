@@ -5,7 +5,7 @@ import { Star } from "lucide-react";
 import styles from "./MessageBookmarkAction.module.css";
 
 function BookmarkIcon({ filled, size }: { filled: boolean; size: number }) {
-  return <Star size={size} fill={filled ? "currentColor" : "none"} strokeWidth={1.9} aria-hidden />;
+  return <Star size={size} fill={filled ? "currentColor" : "none"} aria-hidden />;
 }
 
 export function MessageBookmarkAction({

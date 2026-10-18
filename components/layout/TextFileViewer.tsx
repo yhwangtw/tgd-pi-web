@@ -1,4 +1,7 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
+
+import { X } from "lucide-react";
 
 import { lazy, Suspense, useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -666,7 +669,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
             }}
           >
             <summary aria-label={t("files.info")} title={t("files.info")}>
-              <Info size={14} strokeWidth={1.8} aria-hidden />
+              <Info size={UI_ICON_SIZE.compact} aria-hidden />
               <span>{t("files.info")}</span>
             </summary>
             {infoOpen && visible && createPortal(<div
@@ -741,7 +744,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
         {!editing && <button ref={inspectorButtonRef} className={`${styles.toggleStandalone} ${inspectorTab ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setInspectorTab((current) => current ? null : "outline")} aria-expanded={Boolean(inspectorTab)}>{t("files.inspector")}</button>}
         <div className={styles.moreWrap}>
           <ActionMenu open={moreOpen} onOpenChange={setMoreOpen} label={t("files.moreActions")} trigger={
-            <button type="button" className={`${styles.moreButton} ${moreOpen ? styles.toggleActive : styles.toggleInactive}`} aria-label={t("files.moreActions")}><MoreHorizontal size={17} strokeWidth={1.8} aria-hidden /></button>
+            <button type="button" className={`${styles.moreButton} ${moreOpen ? styles.toggleActive : styles.toggleInactive}`} aria-label={t("files.moreActions")}><MoreHorizontal size={UI_ICON_SIZE.control} aria-hidden /></button>
           }>
             <ActionMenuItem><button onClick={copyContent}>{t("files.copyFile")}</button></ActionMenuItem>
             {viewMode === "source" && !previewMode && !structuredMode && !editing && !data.truncated && <ActionMenuItem><button disabled={!data.version} onClick={startEditing}>{t("files.editFile")}</button></ActionMenuItem>}
@@ -788,7 +791,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
         <div className={styles.selectionBar} role="toolbar" aria-label={`${t("files.selectedLines")} ${selection.startLine}–${selection.endLine}`}>
           <strong>L{selection.startLine}{selection.endLine !== selection.startLine ? `–${selection.endLine}` : ""}</strong>
           {onSendToAgent && <><button onClick={() => sendToAgent("explain")}>{t("files.explain")}</button><button onClick={() => sendToAgent("review")}>{t("files.review")}</button><button onClick={() => sendToAgent("fix")}>{t("files.fix")}</button><button onClick={() => sendToAgent("context")}>{t("files.addToPrompt")}</button></>}
-          <button className={styles.selectionClose} onClick={() => { window.getSelection()?.removeAllRanges(); setSelection(null); onViewStateChange?.({ scrollTop: contentAreaRef.current?.scrollTop ?? 0, selection: null }); }} aria-label={t("files.clearSelection")}>×</button>
+          <button className={styles.selectionClose} onClick={() => { window.getSelection()?.removeAllRanges(); setSelection(null); onViewStateChange?.({ scrollTop: contentAreaRef.current?.scrollTop ?? 0, selection: null }); }} aria-label={t("files.clearSelection")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>
         </div>
       )}
 

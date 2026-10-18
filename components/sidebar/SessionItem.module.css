@@ -425,3 +425,5 @@
     padding: var(--space-2) var(--space-3);
   }
 }
+
+.tagChipRemove { display: inline-grid; flex-shrink: 0; place-items: center; }

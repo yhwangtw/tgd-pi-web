@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Check, Copy, Ellipsis, GitFork, Pencil, Reply, RotateCcw } from "lucide-react";
@@ -177,7 +178,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
               <span className={styles.editHint}>{t("chat.editRerunHint")}</span>
               <button onClick={() => setEditing(false)} className={styles.editCancel}>{t("common.cancel")}</button>
               <button onClick={commitEdit} disabled={!draft.trim()} className={styles.editRerunBtn}>
-                <RotateCcw size={11} strokeWidth={2} aria-hidden="true" />
+                <RotateCcw size={UI_ICON_SIZE.inline} aria-hidden="true" />
                 {t("chat.rerun")}
               </button>
             </div>
@@ -263,15 +264,15 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
               className={`${styles.actionButton} ${copied ? "text-accent" : "text-dim hover-accent"}`}
             >
               {copied ? (
-                <Check size={11} strokeWidth={1.8} aria-hidden="true" />
+                <Check size={UI_ICON_SIZE.inline} aria-hidden="true" />
               ) : (
-                <Copy size={11} strokeWidth={1.8} aria-hidden="true" />
+                <Copy size={UI_ICON_SIZE.inline} aria-hidden="true" />
               )}
               {copied ? t("common.copied") : t("common.copy")}
             </button>
             {onQuote && (
               <button type="button" onClick={quoteContent} title={t("chat.quote")} className={`${styles.actionButton} text-dim hover-accent`}>
-                <Reply size={11} strokeWidth={1.8} aria-hidden="true" />
+                <Reply size={UI_ICON_SIZE.inline} aria-hidden="true" />
                 {t("chat.quote")}
               </button>
             )}
@@ -291,7 +292,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                   title={t("chat.editRerunHint")}
                   className={`${styles.actionButton} text-dim hover-accent`}
                 >
-                  <Pencil size={11} strokeWidth={1.8} aria-hidden="true" />
+                  <Pencil size={UI_ICON_SIZE.inline} aria-hidden="true" />
                   {t("chat.edit")}
                 </button>
               )}
@@ -302,7 +303,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                   title={forking ? t("chat.creating") : t("chat.newSession")}
                   className={`${styles.actionButton} ${forking ? "text-accent" : "text-dim hover-accent"}`}
                 >
-                  <GitFork size={11} strokeWidth={1.8} aria-hidden="true" />
+                  <GitFork size={UI_ICON_SIZE.inline} aria-hidden="true" />
                   {forking ? t("chat.creating") : t("chat.newSession")}
                 </button>
               )}
@@ -311,7 +312,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
           </div>
           <details ref={actionsRef} className={styles.mobileActionMenu}>
               <summary role="button" title={t("chat.moreActions")} aria-label={t("chat.moreActions")} onClick={() => setActionsOpen(!(actionsRef.current?.open ?? false))}>
-                <Ellipsis size={16} strokeWidth={2} aria-hidden="true" />
+                <Ellipsis size={UI_ICON_SIZE.compact} aria-hidden="true" />
               </summary>
               <div
                 data-testid="user-message-actions"
@@ -324,9 +325,9 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                   className={`${styles.actionButton} ${copied ? "text-accent" : "text-dim hover-accent"}`}
                 >
                   {copied ? (
-                    <Check size={13} strokeWidth={1.8} aria-hidden="true" />
+                    <Check size={UI_ICON_SIZE.compact} aria-hidden="true" />
                   ) : (
-                    <Copy size={13} strokeWidth={1.8} aria-hidden="true" />
+                    <Copy size={UI_ICON_SIZE.compact} aria-hidden="true" />
                   )}
                   {copied ? t("common.copied") : t("common.copy")}
                 </button>
@@ -336,7 +337,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                     onClick={() => { closeActions(); quoteContent(); }}
                     className={`${styles.actionButton} text-dim hover-accent`}
                   >
-                    <Reply size={13} strokeWidth={1.8} aria-hidden="true" />
+                    <Reply size={UI_ICON_SIZE.compact} aria-hidden="true" />
                     {t("chat.quote")}
                   </button>
                 )}
@@ -352,7 +353,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                     onClick={() => { closeActions(); startEdit(); }}
                     className={`${styles.actionButton} text-dim hover-accent`}
                   >
-                    <Pencil size={13} strokeWidth={1.8} aria-hidden="true" />
+                    <Pencil size={UI_ICON_SIZE.compact} aria-hidden="true" />
                     {t("chat.edit")}
                   </button>
                 )}
@@ -362,7 +363,7 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                     disabled={forking}
                     className={`${styles.actionButton} ${forking ? "text-accent" : "text-dim hover-accent"}`}
                   >
-                    <GitFork size={13} strokeWidth={1.8} aria-hidden="true" />
+                    <GitFork size={UI_ICON_SIZE.compact} aria-hidden="true" />
                     {forking ? t("chat.creating") : t("chat.newSession")}
                   </button>
                 )}

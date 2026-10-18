@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import type { Pluggable, PluggableList } from "unified";
 import { createElement, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -518,7 +519,7 @@ function CodeBlock({ code, lang, headerAction, plain }: { code: string; lang: st
             title={t("code.focus")}
             aria-label={t("code.focus")}
           >
-            <Maximize2 size={12} strokeWidth={1.8} aria-hidden />
+            <Maximize2 size={UI_ICON_SIZE.inline} aria-hidden />
           </button>
           <button
             onClick={copy}

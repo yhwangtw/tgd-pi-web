@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronRight, FileCode2, FileStack, FileText, RefreshCw } from "lucide-react";
@@ -36,8 +37,8 @@ interface Props {
 const PHASES = ["map", "define", "plan", "develop", "verify", "review", "release"] as const;
 function fileIcon(name: string) {
   return name.endsWith(".html")
-    ? <FileCode2 size={14} strokeWidth={1.8} aria-hidden="true" />
-    : <FileText size={14} strokeWidth={1.8} aria-hidden="true" />;
+    ? <FileCode2 size={UI_ICON_SIZE.compact} aria-hidden="true" />
+    : <FileText size={UI_ICON_SIZE.compact} aria-hidden="true" />;
 }
 
 // ── Full-tree view: browse the ENTIRE tGD dir (nothing hidden — .scans,
@@ -77,7 +78,7 @@ function TreeNode({
   return (
     <>
       <button type="button" onClick={() => setOpen((o) => !o)} className={s.dirRow} style={{ paddingLeft: pad }} title={abs} aria-expanded={open}>
-        <ChevronRight className={s.treeChevron} data-open={open || undefined} size={14} strokeWidth={1.8} aria-hidden="true" />
+        <ChevronRight className={s.treeChevron} data-open={open || undefined} size={UI_ICON_SIZE.compact} aria-hidden="true" />
         <span className={s.dirName}>{name}</span>
       </button>
       {open && children?.map((c) => (
@@ -152,7 +153,7 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
         </div>
         <IconButton
           label={t("common.refresh")}
-          icon={<RefreshCw strokeWidth={1.8} className={loading ? s.spinning : undefined} />}
+          icon={<RefreshCw className={loading ? s.spinning : undefined} />}
           size="compact"
           onClick={load}
           disabled={loading}
@@ -162,7 +163,7 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
 
       {!data || !data.exists ? (
         <div className={s.empty}>
-          <FileStack size={24} strokeWidth={1.6} aria-hidden="true" />
+          <FileStack size={24} aria-hidden="true" />
           <span>{t("tgd.emptyArtifacts")}</span>
           <span className={s.emptyHint}>{t("tgd.run")} <code>/tgd-map</code> {t("tgd.then")} <code>/tgd-define</code> {t("tgd.produceHint")}</span>
         </div>

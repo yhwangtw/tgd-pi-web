@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, type KeyboardEvent } from "react";
 import { ChevronDown, ChevronUp, Clock3, Pencil, X } from "lucide-react";
@@ -54,7 +55,7 @@ export function QueuedFollowUps({ items, busy, wide, onRemove, onUpdate, onMove,
       <section className={`${styles.panel} ${wide ? styles.panelWide : ""}`} aria-label={t("chat.queueTitle")} aria-busy={busy}>
         <header className={styles.header}>
           <div>
-            <Clock3 size={13} aria-hidden />
+            <Clock3 size={UI_ICON_SIZE.compact} aria-hidden />
             <strong>{t("chat.queueTitle")}</strong>
             <span>{items.length}</span>
           </div>
@@ -91,16 +92,16 @@ export function QueuedFollowUps({ items, busy, wide, onRemove, onUpdate, onMove,
                   </button>
                   <div className={styles.actions}>
                     <button type="button" onClick={() => void onMove(item.id, -1)} disabled={busy || index === 0 || (item.deliveryMode ?? "followUp") !== (items[index - 1]?.deliveryMode ?? "followUp")} aria-label={t("chat.queueMoveUp")} title={t("chat.queueMoveUp")}>
-                      <ChevronUp size={12} aria-hidden />
+                      <ChevronUp size={UI_ICON_SIZE.inline} aria-hidden />
                     </button>
                     <button type="button" onClick={() => void onMove(item.id, 1)} disabled={busy || index === items.length - 1 || (item.deliveryMode ?? "followUp") !== (items[index + 1]?.deliveryMode ?? "followUp")} aria-label={t("chat.queueMoveDown")} title={t("chat.queueMoveDown")}>
-                      <ChevronDown size={12} aria-hidden />
+                      <ChevronDown size={UI_ICON_SIZE.inline} aria-hidden />
                     </button>
                     <button type="button" onClick={() => beginEdit(item)} disabled={busy} aria-label={t("chat.queueEdit")} title={t("chat.queueEdit")}>
-                      <Pencil size={12} strokeWidth={1.8} aria-hidden />
+                      <Pencil size={UI_ICON_SIZE.inline} aria-hidden />
                     </button>
                     <button type="button" onClick={() => void onRemove(item.id)} disabled={busy} aria-label={t("chat.queueRemove")} title={t("chat.queueRemove")}>
-                      <X size={12} strokeWidth={2.2} aria-hidden />
+                      <X size={UI_ICON_SIZE.compact} aria-hidden />
                     </button>
                   </div>
                 </>

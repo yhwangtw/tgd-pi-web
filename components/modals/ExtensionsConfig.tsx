@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useEffect, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
@@ -136,7 +137,7 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
           {sessionId && <code className={styles.sessionCode}>{sessionId.slice(0, 8)}</code>}
           {view === "loaded" && (
             <button className={styles.reloadButton} onClick={() => void reload()} disabled={reloading || !sessionId}>
-              <RefreshCw size={15} strokeWidth={1.8} aria-hidden />
+              <RefreshCw size={UI_ICON_SIZE.compact} aria-hidden />
               {reloading ? t("extensions.reloading") : t("extensions.reload")}
             </button>
           )}

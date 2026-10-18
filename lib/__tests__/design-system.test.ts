@@ -97,7 +97,7 @@ describe("design system contracts", () => {
     for (const asset of [
       "inter-regular.woff2", "inter-medium.woff2", "inter-semibold.woff2", "inter-bold.woff2",
       "jetbrains-mono-regular.woff2", "jetbrains-mono-bold.woff2",
-      "noto-sans-tc-regular.woff2", "noto-sans-tc-medium.woff2", "noto-sans-tc-bold.woff2",
+      "noto-sans-tc-regular.woff2", "noto-sans-tc-medium.woff2", "noto-sans-tc-semibold.woff2", "noto-sans-tc-bold.woff2",
     ]) {
       expect(statSync(join(ROOT, "public/fonts", asset)).size, asset).toBeGreaterThan(1_000);
     }

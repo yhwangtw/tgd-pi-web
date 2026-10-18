@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -74,31 +75,31 @@ interface Props {
 const PHASE_ACTIONS: { cmd: string; label: string; labelKey: MsgKey; descKey: MsgKey; icon: React.ReactNode }[] = [
   {
     cmd: "/tgd-map", label: "Map", labelKey: "phase.label.map", descKey: "phase.map" as MsgKey,
-    icon: <MapIcon size={14} strokeWidth={2} aria-hidden="true" />,
+    icon: <MapIcon size={UI_ICON_SIZE.compact} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-define", label: "Define", labelKey: "phase.label.define", descKey: "phase.define" as MsgKey,
-    icon: <FilePenLine size={14} strokeWidth={2} aria-hidden="true" />,
+    icon: <FilePenLine size={UI_ICON_SIZE.compact} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-plan", label: "Plan", labelKey: "phase.label.plan", descKey: "phase.plan" as MsgKey,
-    icon: <ListChecks size={14} strokeWidth={2} aria-hidden="true" />,
+    icon: <ListChecks size={UI_ICON_SIZE.compact} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-develop", label: "Develop", labelKey: "phase.label.develop", descKey: "phase.develop" as MsgKey,
-    icon: <Code2 size={14} strokeWidth={2} aria-hidden="true" />,
+    icon: <Code2 size={UI_ICON_SIZE.compact} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-verify", label: "Verify", labelKey: "phase.label.verify", descKey: "phase.verify" as MsgKey,
-    icon: <BadgeCheck size={14} strokeWidth={2} aria-hidden="true" />,
+    icon: <BadgeCheck size={UI_ICON_SIZE.compact} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-review", label: "Review", labelKey: "phase.label.review", descKey: "phase.review" as MsgKey,
-    icon: <Search size={14} strokeWidth={2} aria-hidden="true" />,
+    icon: <Search size={UI_ICON_SIZE.compact} aria-hidden="true" />,
   },
   {
     cmd: "/tgd-release", label: "Release", labelKey: "phase.label.release", descKey: "phase.release" as MsgKey,
-    icon: <Send size={14} strokeWidth={2} aria-hidden="true" />,
+    icon: <Send size={UI_ICON_SIZE.compact} aria-hidden="true" />,
   },
 ];
 
@@ -1091,7 +1092,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </span>
           {onClosePane && (
             <button onClick={onClosePane} className={styles.paneClose} title={t("chat.closePane")} aria-label={t("chat.closePane")}>
-              <X size={11} strokeWidth={2.5} aria-hidden="true" />
+              <X size={UI_ICON_SIZE.compact} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -1109,7 +1110,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </div>
           <FileUp
             size={56}
-            strokeWidth={1.25}
+
             color="var(--color-accent-border)"
             className="drop-shadow-[0_6px_18px_var(--color-accent-glow)]"
             aria-hidden="true"
@@ -1212,19 +1213,19 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               onClick={() => { if (findMatches.length) { const p = (findPos - 1 + findMatches.length) % findMatches.length; setFindPos(p); gotoMatch(p); } }}
               className="rounded p-0.5 text-[var(--text-muted)] hover:bg-[var(--bg-hover)]" aria-label={t("chat.previousMatch")}
             >
-              <ChevronUp size={12} strokeWidth={2.5} aria-hidden="true" />
+              <ChevronUp size={UI_ICON_SIZE.inline} aria-hidden="true" />
             </button>
             <button
               onClick={() => { if (findMatches.length) { const p = (findPos + 1) % findMatches.length; setFindPos(p); gotoMatch(p); } }}
               className="rounded p-0.5 text-[var(--text-muted)] hover:bg-[var(--bg-hover)]" aria-label={t("chat.nextMatch")}
             >
-              <ChevronDown size={12} strokeWidth={2.5} aria-hidden="true" />
+              <ChevronDown size={UI_ICON_SIZE.inline} aria-hidden="true" />
             </button>
             <button
               onClick={() => { setFindOpen(false); setFindQuery(""); }}
               className="rounded p-0.5 text-[var(--text-muted)] hover:bg-[var(--bg-hover)]" aria-label={t("chat.closeFind")}
             >
-              <X size={12} strokeWidth={2.5} aria-hidden="true" />
+              <X size={UI_ICON_SIZE.compact} aria-hidden="true" />
             </button>
           </div>
         )}
@@ -1413,12 +1414,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <div className={styles.recoveryActions}>
                 {lastAssistantOutcome.stopReason === "aborted" && (
                   <button type="button" onClick={() => void handleSend(t("chat.continuePrompt"))}>
-                    <ChevronRight size={12} strokeWidth={2} aria-hidden="true" />
+                    <ChevronRight size={UI_ICON_SIZE.inline} aria-hidden="true" />
                     {t("chat.continue")}
                   </button>
                 )}
                 <button type="button" onClick={() => void handleRetry()}>
-                  <RotateCcw size={12} strokeWidth={2.2} aria-hidden="true" />
+                  <RotateCcw size={UI_ICON_SIZE.inline} aria-hidden="true" />
                   {t("chat.retry")}
                 </button>
               </div>
@@ -1501,7 +1502,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             aria-label={t("chat.jumpBottom")}
             className={`${styles.jumpButton} glass flex h-8 items-center justify-center gap-1.5 rounded-full border px-3 text-[var(--text-muted)] shadow-[var(--color-shadow-dropdown)] transition hover:text-[var(--text)] ${agentRunning ? "!border-[var(--color-accent-border)] text-[var(--accent)]" : ""}`}
           >
-            <ArrowDown size={14} strokeWidth={2.2} aria-hidden="true" />
+            <ArrowDown size={UI_ICON_SIZE.compact} aria-hidden="true" />
             <span className="text-[11.5px] font-medium whitespace-nowrap">
               {agentRunning && newLines > 0 ? `+${newLines} ${t("chat.lines")}` : t("chat.latest")}
             </span>
@@ -1516,7 +1517,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           <div className={`${styles.contextWarningWrap} pb-1 pl-4 pr-[52px]`}>
           <div className={`mx-auto flex items-center gap-2 ${wideChat ? "max-w-[1040px]" : "max-w-[780px]"}`}>
             <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-3 py-1.5 text-[12px] text-[var(--color-warning-text)]">
-              <TriangleAlert size={12} strokeWidth={2} className="shrink-0" aria-hidden="true" />
+              <TriangleAlert size={UI_ICON_SIZE.inline} className="shrink-0" aria-hidden="true" />
               {/* min-w-0 flex-1: a flex child's min-width:auto refuses to shrink,
                   so bare `truncate` never elides — the text collided with the
                   button on narrow screens. The percent is the key info, so it

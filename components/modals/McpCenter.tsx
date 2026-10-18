@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Library, Plus, RefreshCw } from "lucide-react";
@@ -249,11 +250,11 @@ export function McpCenter({ cwd, sessionId }: Props) {
         <div><h2>{t("mcp.title")}</h2><p>{t("mcp.description")}</p></div>
         <div className={styles.introActions}>
           <button type="button" className={styles.secondary} onClick={() => void resource.refresh()} disabled={!!busy || resource.refreshing}>
-            <RefreshCw size={15} strokeWidth={1.8} aria-hidden />
+            <RefreshCw size={UI_ICON_SIZE.compact} aria-hidden />
             {t("common.refresh")}
           </button>
           <button type="button" className={styles.primary} disabled={!!busy} onClick={() => setTemplatePickerOpen(true)}>
-            <Plus size={16} strokeWidth={1.8} aria-hidden />
+            <Plus size={UI_ICON_SIZE.compact} aria-hidden />
             {t("mcp.add")}
           </button>
         </div>
@@ -296,7 +297,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
         <div className={styles.templateGrid}>
           {OFFICIAL_MCP_TEMPLATES.map((template) => <article key={template.id} className={styles.templateCard}>
             <div className={styles.templateHead}>
-              <span className={styles.templateIcon}><Library size={18} strokeWidth={1.8} aria-hidden /></span>
+              <span className={styles.templateIcon}><Library size={UI_ICON_SIZE.control} aria-hidden /></span>
               <div>
                 <strong>{t(template.titleKey)}</strong>
                 <span>{t("mcp.officialReference")}{template.recommended ? ` · ${t("mcp.recommended")}` : ""}</span>
@@ -310,7 +311,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
             <div className={styles.templateActions}>
               <a href={template.sourceUrl} target="_blank" rel="noreferrer">
                 {t("mcp.viewSource")}
-                <ExternalLink size={14} strokeWidth={1.8} aria-hidden />
+                <ExternalLink size={UI_ICON_SIZE.compact} aria-hidden />
               </a>
               <button type="button" onClick={() => {
                 setSelectedTemplateId(template.id);
@@ -323,7 +324,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
           </article>)}
           <article className={`${styles.templateCard} ${styles.customTemplate}`}>
             <div className={styles.templateHead}>
-              <span className={styles.templateIcon}><Plus size={18} strokeWidth={1.8} aria-hidden /></span>
+              <span className={styles.templateIcon}><Plus size={UI_ICON_SIZE.control} aria-hidden /></span>
               <div><strong>{t("mcp.customTitle")}</strong><span>{t("mcp.advanced")}</span></div>
             </div>
             <p>{t("mcp.customDescription")}</p>
@@ -387,7 +388,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
             const template = getOfficialMcpTemplate(selectedTemplateId);
             return <div className={`${styles.templateSummary} ${styles.full}`}>
               <div><strong>{t(template.titleKey)}</strong><span>{t(template.descriptionKey)}</span></div>
-              <a href={template.sourceUrl} target="_blank" rel="noreferrer">{t("mcp.officialSource")}<ExternalLink size={13} strokeWidth={1.8} aria-hidden /></a>
+              <a href={template.sourceUrl} target="_blank" rel="noreferrer">{t("mcp.officialSource")}<ExternalLink size={UI_ICON_SIZE.compact} aria-hidden /></a>
               <dl>
                 <div><dt>{t("mcp.permissions")}</dt><dd>{t(template.permissionKey)}</dd></div>
                 <div><dt>{t("mcp.requirement")}</dt><dd>{t(template.requirementKey)}</dd></div>

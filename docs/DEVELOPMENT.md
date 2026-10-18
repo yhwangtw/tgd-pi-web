@@ -19,6 +19,13 @@ viewport indicator, with observer work coalesced into animation frames. Scroll
 before visibility assertions for offscreen controls. UI text uses the Unicode
 ellipsis (`Message…`, `Filter files…`).
 
+Floating `DialogShell` panels dismiss on a complete primary click/tap outside,
+including modeless panels whose overlay allows background interaction. Only the
+top dialog responds; child portals, internal selections and canceled gestures
+stay open. `canClose` protects in-flight work and `hasUnsavedChanges` asks before
+X, Escape or outside dismissal discards an edited form. Explicit Cancel buttons
+remain intentional discard actions.
+
 ## Workflow and delegation
 
 Goal has no fixed continuation count. `/goal --runs 50 <objective>` or
@@ -559,12 +566,17 @@ can search them.
 
 ### CSS Design Tokens (`app/globals.css`)
 Semantic tokens with light/dark + per-skin variants. `chrome-mono` class =
-JetBrains Mono for machine-y labels (group headers, stats, meta); message
-content stays Inter.
+JetBrains Mono for code, paths, identifiers and machine data. General headings,
+labels and actions follow `--font-ui`; body copy uses `--type-body-size`.
+Panel titles use `--type-title-size`, controls `--type-ui-size`, supporting labels
+`--type-label-size`, and only incidental timestamps/counts `--type-meta-size`.
+Lucide glyphs use `UI_ICON_SIZE` (12 inline, 16 compact, 18 control, 20 navigation)
+and `--component-icon-stroke`; provider artwork and large illustrations are
+separate. IconButton manages glyph size independently from the touch target.
 
 ### Bundled fonts (`public/fonts/`, `@font-face` in `globals.css`)
 Latin: **Inter** (400/500/600/700) + **JetBrains Mono** (400/700). CJK:
-**Noto Sans TC** (400/500/700, CJK-only subset ~7MB total) so Traditional
+**Noto Sans TC** (400/500/600/700, CJK-only subset ~9MB total) so Traditional
 Chinese renders with TC glyphs on every OS — without it, Linux/Windows fall
 back to a Simplified-default or bitmap system font (e.g. WenQuanYi) and draw
 Han codepoints with the wrong regional shapes. The `@font-face` blocks carry

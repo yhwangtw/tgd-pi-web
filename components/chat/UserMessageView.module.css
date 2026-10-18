@@ -218,7 +218,7 @@
   color: var(--text);
   font-size: 0;
 }
-.desktopActionToolbar .actionButton svg { width: 13px; height: 13px; }
+.desktopActionToolbar .actionButton svg { width: var(--component-icon-button-glyph-compact); height: var(--component-icon-button-glyph-compact); }
 .desktopActionToolbar .actionButton[aria-pressed="true"] { color: var(--color-warning-text-strong); }
 
 /* Action buttons */

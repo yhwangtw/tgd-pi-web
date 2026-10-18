@@ -108,6 +108,7 @@ export function AgentRunForm({ defaultCwd, onCancel, onCreated }: Props) {
       description={t("agents.newDescription")}
       onClose={onCancel}
       canClose={!saving}
+      hasUnsavedChanges={!!(name || prompt || cwd !== (defaultCwd ?? "") || model || thinkingLevel !== "auto" || toolMode !== "readonly" || durable)}
       mobileMode="fullscreen"
       initialFocusRef={nameRef}
       bodyClassName={s.dialogBody}

@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
@@ -42,7 +43,7 @@ export function RuntimeIdentityBar() {
     <summary>
       <strong>{t(`runtime.environment.${identity.environment}`)}</strong>
       {identity.build.dirty && <span title={t('runtime.dirtyHint')}>*</span>}
-      <span className={s.hint}>{t('runtime.identityDetails')}<ChevronDown size={12} aria-hidden /></span>
+      <span className={s.hint}>{t('runtime.identityDetails')}<ChevronDown size={UI_ICON_SIZE.inline} aria-hidden /></span>
     </summary>
     <div className={s.details}>
       {identity.environment === 'fixture' && <p>{t('runtime.fixtureHint')}</p>}

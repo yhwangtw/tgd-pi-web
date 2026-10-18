@@ -391,8 +391,8 @@
 .findInput {
   width: 110px;
   padding: var(--space-optical) var(--space-2);
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
+  font-size: var(--type-ui-size);
+  font-family: var(--font-ui);
   border: 1px solid var(--border);
   border-radius: var(--radius-control-compact);
   background: var(--bg);
@@ -500,7 +500,7 @@
 
   .fileSummary { gap: var(--space-2); }
   .fileMeta { gap: var(--space-2); }
-  .findInput { width: 92px; }
+  .findInput { width: 92px; font-family: var(--font-ui); font-size: var(--type-ui-size); }
   .markdownPreview,
   :global(html[data-ui-style="trae"]) .markdownPreview { padding: var(--space-4); }
 }
@@ -525,3 +525,5 @@
   .sourceTools::-webkit-scrollbar { display: none; }
   .selectionBar { min-height: var(--control-touch); }
 }
+
+.selectionBar .selectionClose { display: inline-grid; place-items: center; flex-shrink: 0; }

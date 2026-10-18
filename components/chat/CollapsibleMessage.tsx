@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -70,13 +71,13 @@ export function CollapsibleMessage({ collapsible, expanded, onToggle, children }
       </div>
       {collapsed && (
         <button type="button" className={styles.toggleBtn} onClick={onToggle}>
-          <ChevronDown size={11} strokeWidth={2.5} aria-hidden />
+          <ChevronDown size={UI_ICON_SIZE.inline} aria-hidden />
           {t("chat.showFull")} · ~{hiddenLines} {t("chat.lines")}
         </button>
       )}
       {overflows && expanded && (
         <button type="button" className={styles.toggleBtn} onClick={onToggle}>
-          <ChevronUp size={11} strokeWidth={2.5} aria-hidden />
+          <ChevronUp size={UI_ICON_SIZE.inline} aria-hidden />
           {t("chat.collapseMsg")}
         </button>
       )}

@@ -2,8 +2,8 @@
 
 import { useState, useRef, useLayoutEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Columns2, Pin, X } from "lucide-react";
-import { IconButton } from "@/components/ui/IconButton";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Columns2, Pin, X } from "lucide-react";
+import { ActionMenu, ActionMenuRadioGroup, ActionMenuRadioItem } from "@/components/ui/ActionMenu";
 import { getFileIcon } from "../sidebar/FileIcons";
 import { useI18n } from "@/lib/i18n";
 import type { FileOpenIntent, FileViewState } from "@/lib/file-open";
@@ -50,8 +50,58 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
   const [menu, setMenu] = useState<{ offsetX: number; offsetY: number; tab: Tab } | null>(null);
   const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const dragId = useRef<string | null>(null);
+  const [fileListOpen, setFileListOpen] = useState(false);
+  const [overflow, setOverflow] = useState({ left: false, right: false });
+  const updateOverflow = useCallback(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const max = strip.scrollWidth - strip.clientWidth;
+    const next = { left: max > 1 && strip.scrollLeft > 1, right: max > 1 && strip.scrollLeft < max - 1 };
+    setOverflow(previous => previous.left === next.left && previous.right === next.right ? previous : next);
+  }, []);
+  const scrollTabs = (direction: number) => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    strip.scrollLeft = Math.max(0, Math.min(strip.scrollWidth - strip.clientWidth,
+      strip.scrollLeft + direction * Math.max(80, strip.clientWidth * 0.75)));
+    updateOverflow();
+  };
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+
+  useLayoutEffect(() => {
+    const strip = stripRef.current;
+    const active = tabRefs.current.get(activeTabId)?.closest<HTMLElement>("[data-file-tab]");
+    if (!strip || !active) return;
+    const revealActive = () => {
+      const viewport = strip.getBoundingClientRect();
+      const tab = active.getBoundingClientRect();
+      // Scroll only this strip; opening a file must not move the chat/page.
+      if (tab.width > viewport.width || tab.left < viewport.left) strip.scrollLeft += tab.left - viewport.left;
+      else if (tab.right > viewport.right) strip.scrollLeft += tab.right - viewport.right;
+      updateOverflow();
+    };
+    revealActive();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(revealActive) : null;
+    observer?.observe(strip);
+    const wheel = (event: WheelEvent) => {
+      // Regular mouse wheels can reach offscreen tabs; keep trackpad and zoom native.
+      if (event.ctrlKey || event.metaKey || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? strip.clientWidth : 1;
+      const before = strip.scrollLeft;
+      strip.scrollLeft = Math.max(0, Math.min(strip.scrollWidth - strip.clientWidth, before + event.deltaY * unit));
+      if (strip.scrollLeft !== before) event.preventDefault();
+      updateOverflow();
+    };
+    strip.addEventListener("scroll", updateOverflow, { passive: true });
+    strip.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      observer?.disconnect();
+      strip.removeEventListener("scroll", updateOverflow);
+      strip.removeEventListener("wheel", wheel);
+    };
+  }, [activeTabId, tabs, updateOverflow]);
 
   const dismissMenu = useCallback((restoreFocus = true) => {
     if (restoreFocus && menu) tabRefs.current.get(menu.tab.id)?.focus({ preventScroll: true });
@@ -61,6 +111,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
   const openMenu = (tab: Tab, point?: { x: number; y: number }) => {
     const anchor = tabRefs.current.get(tab.id)?.getBoundingClientRect();
     if (!anchor) return;
+    setFileListOpen(false);
     setMenu({ tab, offsetX: point ? point.x - anchor.left : 0, offsetY: point ? point.y - anchor.top : anchor.height });
   };
 
@@ -117,7 +168,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
   };
 
   return (
-    <div className={styles.tabBar}>
+    <div className={styles.container}>
+    <div ref={stripRef} className={styles.tabBar} data-testid="file-tab-strip">
       <div className={styles.tabList} role="tablist" aria-label={t("tabs.files")}>
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
@@ -128,13 +180,15 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
             data-file-tab={tab.id}
             draggable={!!onReorder}
             onDragStart={() => { dragId.current = tab.id; }}
+            onDragEnd={() => { dragId.current = null; }}
             onDragOver={(e) => { if (dragId.current && dragId.current !== tab.id) e.preventDefault(); }}
             onDrop={(e) => {
               e.preventDefault();
               if (dragId.current && dragId.current !== tab.id) onReorder?.(dragId.current, index);
               dragId.current = null;
             }}
-            // Middle-click closes, like a browser tab.
+            // Prevent Windows auto-scroll before closing on middle-click.
+            onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}
             onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(tab.id); } }}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -173,7 +227,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
               }}
             >
               <span className={`${styles.tabIcon} ${isActive ? styles.tabIconActive : styles.tabIconInactive}`}>
-                {getFileIcon(tab.label, 13)}
+                {getFileIcon(tab.label)}
               </span>
               <span
                 className={`${styles.tabLabel} ${isActive ? styles.tabLabelActive : styles.tabLabelInactive}`}
@@ -190,18 +244,60 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
       })}
 
       </div>
+      {/* Share each tab’s grid cell visually, but keep close buttons outside
+          the ARIA tablist and its tab buttons. */}
       {tabs.map((tab, index) => (
-        <IconButton
+        <button
           key={`close:${tab.id}`}
+          type="button"
           data-close-file-tab={tab.id}
-          label={`${t("tabs.close")}: ${tab.label}`}
-          icon={<X strokeWidth={1.8} />}
-          size="compact"
+          aria-label={`${t("tabs.close")}: ${tab.label}`}
+          title={`${t("tabs.close")}: ${tab.label}`}
           onClick={() => closeTab(tab.id)}
+          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}
+          onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(tab.id); } }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            openMenu(tab, event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : undefined);
+          }}
           className={styles.closeBtn}
           style={{ gridColumn: index + 1, gridRow: 1 }}
-        />
+        >
+          <X aria-hidden="true" />
+        </button>
       ))}
+
+    </div>
+    {tabs.length > 1 && <div className={styles.navigation}>
+      {(overflow.left || overflow.right) && <>
+        <button type="button" className={styles.navigationButton} disabled={!overflow.left}
+          aria-label={t("tabs.scrollLeft")} title={t("tabs.scrollLeft")} onClick={() => scrollTabs(-1)}>
+          <ChevronLeft aria-hidden="true" />
+        </button>
+        <button type="button" className={styles.navigationButton} disabled={!overflow.right}
+          aria-label={t("tabs.scrollRight")} title={t("tabs.scrollRight")} onClick={() => scrollTabs(1)}>
+          <ChevronRight aria-hidden="true" />
+        </button>
+      </>}
+      <ActionMenu open={fileListOpen} onOpenChange={open => { setFileListOpen(open); if (open) setMenu(null); }}
+        label={t("tabs.files")} trigger={
+          <button type="button" className={`${styles.navigationButton} ${styles.allTabsButton}`}
+            aria-label={t("tabs.showAll")} title={t("tabs.showAll")}>
+            <span aria-hidden="true">{tabs.length}</span><ChevronDown aria-hidden="true" />
+          </button>
+        }>
+        <ActionMenuRadioGroup value={activeTabId} onValueChange={id => { onSelectTab(id); setFileListOpen(false); }}>
+          {tabs.map(tab => <ActionMenuRadioItem key={tab.id} value={tab.id}>
+            <span className={styles.tabIcon}>{getFileIcon(tab.label)}</span>
+            <span className={styles.fileOption} title={tab.filePath}>
+              <span className={styles.fileOptionName}>{tab.label}</span>
+              <span className={styles.fileOptionPath}>{tab.filePath}</span>
+            </span>
+            <span className={styles.selectionMark} aria-hidden="true">{tab.id === activeTabId && <Check />}</span>
+          </ActionMenuRadioItem>)}
+        </ActionMenuRadioGroup>
+      </ActionMenu>
+    </div>}
 
       {menu && createPortal(
         <>

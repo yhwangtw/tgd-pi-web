@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, ChevronDown, GitBranch, RefreshCw, RotateCcw } from "lucide-react";
@@ -228,12 +229,12 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
     <div className={s.container}>
       {confirmation}
       <div className={`${s.header} chrome-mono`}>
-        <GitBranch size={14} strokeWidth={1.8} aria-hidden="true" />
+        <GitBranch size={UI_ICON_SIZE.compact} aria-hidden="true" />
         <span className={s.branch} title={branch ?? undefined}>{branch ?? "—"}</span>
         <span className={s.count}>{files.length}</span>
         <IconButton
           label={t("common.refresh")}
-          icon={<RefreshCw className={loading ? s.spinning : undefined} strokeWidth={1.8} />}
+          icon={<RefreshCw className={loading ? s.spinning : undefined} />}
           size="compact"
           onClick={() => { if (!loading) void load(); }}
           className={s.refresh}
@@ -245,7 +246,7 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
         <div className={s.empty}>{t("changes.notGit")}</div>
       ) : files.length === 0 ? (
         <div className={s.empty}>
-          <CheckCircle2 size={22} strokeWidth={1.6} aria-hidden="true" />
+          <CheckCircle2 size={UI_ICON_SIZE.navigation} aria-hidden="true" />
           <span>{t("changes.clean")}</span>
         </div>
       ) : (
@@ -278,7 +279,7 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
               )}
               <IconButton
                 label={t("changes.discard")}
-                icon={<RotateCcw strokeWidth={1.8} />}
+                icon={<RotateCcw />}
                 size="compact"
                 onClick={(e) => { e.stopPropagation(); void discard(f.path); }}
                 disabled={discarding === f.path}
@@ -321,7 +322,7 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
             onClick={() => setSnapsOpen((v) => !v)}
             aria-expanded={snapsOpen}
           >
-            <ChevronDown size={14} strokeWidth={1.8} aria-hidden="true" className={snapsOpen ? s.caretOpen : s.caretClosed} />
+            <ChevronDown size={UI_ICON_SIZE.compact} aria-hidden="true" className={snapsOpen ? s.caretOpen : s.caretClosed} />
             <span>{t("changes.restorePoints")}</span>
             <span className={s.count}>{snapshots.length}</span>
           </button>

@@ -19,7 +19,7 @@ function DefaultErrorFallback({ error, onRetry }: { error: Error | null; onRetry
   const { t } = useI18n();
   return (
     <div className={styles.container} role="alert">
-      <AlertTriangle className={styles.icon} size={32} strokeWidth={1.6} aria-hidden="true" />
+      <AlertTriangle className={styles.icon} size={32} aria-hidden="true" />
       <div className={styles.title}>{t("errorBoundary.title")}</div>
       <div className={styles.message}>{error?.message ?? t("errorBoundary.unexpected")}</div>
       <div className={styles.actions}>

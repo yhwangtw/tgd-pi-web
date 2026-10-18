@@ -46,6 +46,38 @@ async function fixture() {
 }
 
 describe('resumable release and deployment', () => {
+  it('runs retention only after public verification and rechecks the live process', async () => {
+    const f = await fixture();
+    f.plan.retention = { backupRoot: join(f.root, 'backups'), keepPrevious: 1 };
+    f.dependencies.retain = vi.fn(async () => ({ status: 'complete', kept: 'previous', removed: [] }));
+    f.dependencies.verifyPublic.mockRejectedValueOnce(new Error('public unavailable'));
+    await expect(f.run()).rejects.toThrow('public unavailable');
+    expect(f.dependencies.retain).not.toHaveBeenCalled();
+    const result = await f.run();
+    expect(result.state.retention.status).toBe('complete');
+    expect(f.dependencies.retain).toHaveBeenCalledTimes(1);
+    expect(f.dependencies.deploy).toHaveBeenCalledTimes(1);
+  });
+  it('defers cleanup failures without restarting a successfully deployed release', async () => {
+    const f = await fixture();
+    f.plan.retention = { backupRoot: join(f.root, 'backups'), keepPrevious: 1 };
+    f.dependencies.retain = vi.fn(async () => { throw new Error('incomplete recovery backup'); });
+    const result = await f.run();
+    expect(result.status).toBe('succeeded');
+    expect(result.state.retention).toEqual({ status: 'deferred', message: 'incomplete recovery backup' });
+    expect(result.state.phase).toBe('complete');
+    expect(f.dependencies.deploy).toHaveBeenCalledTimes(1);
+    expect(f.dependencies.execute.mock.calls.map(([phase]) => phase)).toEqual(['build', 'stop']);
+  });
+  it('keeps all backups when the service changes after public verification', async () => {
+    const f = await fixture();
+    f.plan.retention = { backupRoot: join(f.root, 'backups'), keepPrevious: 1 };
+    f.dependencies.retain = vi.fn();
+    f.dependencies.localIdentity.mockResolvedValueOnce(f.identity).mockResolvedValue({ ...f.identity, pid: 9999 });
+    const result = await f.run();
+    expect(result.state.retention.status).toBe('deferred');
+    expect(f.dependencies.retain).not.toHaveBeenCalled();
+  });
   it('refuses low disk space before publication, adapters or operation locks', async () => {
     const f = await fixture();
     f.dependencies.assertDeploymentSpace.mockRejectedValue(new Error('insufficient disk space'));

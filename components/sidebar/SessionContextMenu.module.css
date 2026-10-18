@@ -163,3 +163,5 @@
   .menuItem,
   :global(html[data-ui-style="trae"]) .menuItem { min-height: var(--control-mobile); }
 }
+
+.tagListRemove { display: inline-grid; flex-shrink: 0; place-items: center; }

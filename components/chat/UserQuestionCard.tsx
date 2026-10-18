@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
@@ -162,7 +163,7 @@ export function UserQuestionCard({ request, pendingCount, onRespond, cardRef }: 
               disabled={submitting}
               onClick={() => setActiveQuestionIndex((current) => Math.max(0, current - 1))}
             >
-              <ArrowLeft size={15} strokeWidth={2} aria-hidden />
+              <ArrowLeft size={UI_ICON_SIZE.compact} aria-hidden />
               {t("extensionUI.back")}
             </button>
           )}
@@ -174,7 +175,7 @@ export function UserQuestionCard({ request, pendingCount, onRespond, cardRef }: 
                   ? t("extensionUI.next")
                   : t("extensionUI.submit")}
             </span>
-            {!submitting && <ArrowRight size={15} strokeWidth={2} aria-hidden />}
+            {!submitting && <ArrowRight size={UI_ICON_SIZE.compact} aria-hidden />}
           </button>
         </>
       )}
@@ -269,7 +270,7 @@ function QuestionSurface({ cardRef, ...props }: {
           {props.headerActions}
           <button ref={toggleRef} type="button" className={styles.deferButton} aria-expanded={!collapsed} aria-controls={bodyId} onClick={() => setCollapsed(value => !value)}>
             <span>{t(collapsed ? "extensionUI.expandQuestion" : "extensionUI.answerLater")}</span>
-            {collapsed ? <ChevronDown size={15} aria-hidden /> : <ChevronUp size={15} aria-hidden />}
+            {collapsed ? <ChevronDown size={UI_ICON_SIZE.compact} aria-hidden /> : <ChevronUp size={UI_ICON_SIZE.compact} aria-hidden />}
           </button>
         </div>
       </header>

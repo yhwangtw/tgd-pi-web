@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import type { Dispatch, KeyboardEvent, RefObject, SetStateAction } from "react";
 import { CheckCircle2, Circle } from "lucide-react";
@@ -59,8 +60,8 @@ export function QuestionChoiceList({
         >
           <span className={styles.choiceMark} aria-hidden>
             {selected === option.label
-              ? <CheckCircle2 size={19} strokeWidth={2.1} />
-              : <Circle size={19} strokeWidth={1.7} />}
+              ? <CheckCircle2 size={UI_ICON_SIZE.navigation} />
+              : <Circle size={UI_ICON_SIZE.navigation} />}
           </span>
           <span className={styles.choiceCopy}>
             <span className={styles.choiceLabel}>{option.label}</span>
@@ -81,8 +82,8 @@ export function QuestionChoiceList({
         >
           <span className={styles.choiceMark} aria-hidden>
             {otherSelected
-              ? <CheckCircle2 size={19} strokeWidth={2.1} />
-              : <Circle size={19} strokeWidth={1.7} />}
+              ? <CheckCircle2 size={UI_ICON_SIZE.navigation} />
+              : <Circle size={UI_ICON_SIZE.navigation} />}
           </span>
           <span className={styles.choiceCopy}>
             <span className={styles.choiceLabel}>{otherLabel}</span>

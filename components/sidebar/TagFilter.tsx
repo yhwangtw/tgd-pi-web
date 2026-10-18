@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import type { SessionTags } from "@/hooks/useTags";
 import { getTagStyle } from "@/lib/tag-colors";
@@ -60,7 +61,7 @@ export function TagFilter({ tags, activeTag, onSelectTag }: Props) {
       })}
       {activeTag && (
         <button type="button" onClick={() => onSelectTag(null)} className={styles.clear} title={t("tags.clearFilter")} aria-label={t("tags.clearFilter")}>
-          <X size={12} strokeWidth={2} aria-hidden="true" />
+          <X size={UI_ICON_SIZE.compact} aria-hidden="true" />
         </button>
       )}
     </div>

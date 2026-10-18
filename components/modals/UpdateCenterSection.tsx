@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -267,7 +268,7 @@ export function UpdateCenterSection() {
           <p>{t("updateCenter.description")}</p>
         </div>
         <button type="button" className={styles.refresh} onClick={() => void refresh()} disabled={updateCenter.refreshing || forceRefreshing}>
-          <RefreshCw size={16} strokeWidth={1.8} aria-hidden />
+          <RefreshCw size={UI_ICON_SIZE.compact} aria-hidden />
           {updateCenter.refreshing || forceRefreshing ? t("updateCenter.refreshing") : t("updateCenter.refresh")}
         </button>
       </header>
@@ -337,7 +338,7 @@ export function UpdateCenterSection() {
               <span>{status.latest.publishedAt ? dateFormatter.format(new Date(status.latest.publishedAt)) : t("updateCenter.releaseUnavailable")}</span>
             </div>
             <a href={status.latest.url} target="_blank" rel="noreferrer" aria-label={t("updateCenter.openRelease")}>
-              <ExternalLink size={16} strokeWidth={1.8} aria-hidden />
+              <ExternalLink size={UI_ICON_SIZE.compact} aria-hidden />
             </a>
           </div>
           {status.latest.notes ? <pre>{status.latest.notes}</pre> : <p>{t("updateCenter.noReleaseNotes")}</p>}
@@ -351,7 +352,7 @@ export function UpdateCenterSection() {
             <span>{t("updateCenter.backupDescription")}</span>
           </div>
           <button type="button" className={styles.secondaryAction} onClick={() => void prepare("backup")} disabled={busyAction !== null || operationBusy || !status.actions.backup.ready}>
-            <Archive size={16} strokeWidth={1.8} aria-hidden />
+            <Archive size={UI_ICON_SIZE.compact} aria-hidden />
             {busyAction === "backup" ? t("updateCenter.preparing") : t("updateCenter.createBackup")}
           </button>
         </div>
@@ -388,7 +389,7 @@ export function UpdateCenterSection() {
           </article>
         </div>
         <div className={styles.dataImpact}>
-          <Check size={16} strokeWidth={1.8} aria-hidden />
+          <Check size={UI_ICON_SIZE.compact} aria-hidden />
           <span>{t("updateCenter.dataPreserved")}</span>
         </div>
       </section>

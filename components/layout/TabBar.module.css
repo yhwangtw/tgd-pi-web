@@ -1,12 +1,33 @@
+.container {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+}
+
 .tabBar {
+  --file-tab-min-width: 112px;
+  --file-tab-max-width: 180px;
+  --file-tab-close-size: var(--control-xs);
   display: grid;
-  grid-auto-columns: max-content;
+  /* Share available width before allowing horizontal overflow. */
+  grid-auto-columns: minmax(var(--file-tab-min-width), var(--file-tab-max-width));
+  grid-template-rows: minmax(0, 1fr);
   align-items: center;
   background: var(--bg-panel);
+  min-width: 0;
+  min-height: 0;
   overflow-x: auto;
-  flex-shrink: 0;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  /* A native scrollbar steals height from the fixed toolbar and creates a
+     second scrollbar. Tabs still scroll by trackpad, touch and keyboard. */
+  scrollbar-width: none;
+  flex: 1 1 0;
   height: 36px;
 }
+
+.tabBar::-webkit-scrollbar { display: none; }
 
 .tabList { display: contents; }
 
@@ -15,15 +36,15 @@
   align-items: center;
   gap: var(--space-2);
   height: 36px;
-  padding-left: var(--space-3);
-  padding-right: calc(var(--space-2) + var(--control-compact) + var(--space-2));
+  padding-left: var(--space-2);
+  padding-right: calc(var(--file-tab-close-size) + var(--space-2));
   border-right: 1px solid var(--border);
   cursor: pointer;
   font-size: var(--text-sm);
   white-space: nowrap;
-  max-width: 180px;
-  min-width: 80px;
-  flex-shrink: 0;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   user-select: none;
   transition: background 0.1s, color 0.1s;
 }
@@ -39,7 +60,7 @@
   min-width: 0;
   height: 100%;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   padding: 0;
   border: 0;
   background: transparent;
@@ -56,6 +77,11 @@
 .tabInactive {
   background: var(--bg-panel);
   color: var(--text-muted);
+}
+
+.tabInactive:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .tabIcon {
@@ -89,13 +115,33 @@
 }
 
 .closeBtn {
+  display: inline-grid;
+  place-items: center;
   justify-self: end;
-  margin-right: var(--space-2);
+  width: var(--file-tab-close-size);
+  height: var(--file-tab-close-size);
+  margin-right: var(--space-1);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-circle);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  touch-action: manipulation;
   z-index: 1;
-  flex-shrink: 0;
+}
+.closeBtn svg {
+  width: var(--component-icon-button-glyph-compact);
+  height: var(--component-icon-button-glyph-compact);
+  pointer-events: none;
+}
+.closeBtn:hover { background: var(--bg-hover); color: var(--text); }
+.closeBtn:focus-visible {
+  outline: 2px solid var(--color-accent-border-focus);
+  outline-offset: -2px;
 }
 .pinned,
-.splitMark { display: inline-grid; width: 14px; height: 14px; flex: 0 0 14px; place-items: center; }
+.splitMark { display: inline-grid; width: var(--component-icon-button-glyph-compact); height: var(--component-icon-button-glyph-compact); flex: 0 0 var(--component-icon-button-glyph-compact); place-items: center; }
 .pinned { color: var(--color-accent); }
 .splitMark { color: var(--text-dim); }
 .pinned svg,
@@ -139,36 +185,65 @@
 }
 :global(html[data-ui-style="trae"]) .tab {
   height: 30px;
-  min-width: 88px;
-  padding: 0 calc(var(--space-2) + var(--control-compact) + var(--space-2)) 0 var(--space-2);
+  padding: 0 calc(var(--file-tab-close-size) + var(--space-2)) 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-control);
 }
 :global(html[data-ui-style="trae"]) .tabActive { background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .tabInactive { background: transparent; }
+:global(html[data-ui-style="trae"]) .tabInactive:hover { background: var(--bg-hover); }
 :global(html[data-ui-style="trae"]) .tabMenu { border-color: var(--trae-hairline); border-radius: var(--radius-menu); background: var(--glass-bg); }
 
 @media (max-width: 700px), (pointer: coarse) {
   .tabBar,
   :global(html[data-ui-style="trae"]) .tabBar {
+    --file-tab-min-width: 132px;
+    --file-tab-close-size: var(--control-touch);
     height: var(--control-touch);
   }
 
   .tab,
   :global(html[data-ui-style="trae"]) .tab {
     height: var(--control-touch);
-    padding-right: calc(var(--space-2) + var(--control-touch) + var(--space-2));
   }
 
   .tabMenuItem {
     min-height: var(--control-touch);
   }
 
-  .closeBtn {
-    width: var(--control-touch);
-    height: var(--control-touch);
-    min-width: var(--control-touch);
-    min-height: var(--control-touch);
-    flex-basis: var(--control-touch);
-  }
+}
+
+/* Navigation stays outside the scroller so it cannot disappear with the tabs. */
+.navigation { display: flex; align-items: center; flex: 0 0 auto; }
+.navigationButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--control-xs);
+  height: var(--control-sm);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.navigationButton svg, .selectionMark svg {
+  width: var(--component-icon-button-glyph-compact);
+  height: var(--component-icon-button-glyph-compact);
+}
+.navigationButton:hover:not(:disabled), .navigationButton[data-state="open"] { background: var(--bg-hover); color: var(--text); }
+.navigationButton:disabled { opacity: 0.35; cursor: default; }
+.navigationButton:focus-visible { outline: 2px solid var(--color-accent-border-focus); outline-offset: -2px; }
+.allTabsButton { width: auto; min-width: var(--control-sm); padding-inline: var(--space-1); gap: var(--space-optical); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.fileOption { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: var(--space-optical); }
+.fileOptionName, .fileOptionPath { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fileOptionName { color: var(--text); }
+.fileOptionPath { color: var(--text-muted); font-size: var(--text-xs); }
+.selectionMark { display: inline-flex; flex: 0 0 var(--component-icon-button-glyph-compact); color: var(--color-accent); }
+@media (max-width: 700px), (pointer: coarse) {
+  .navigationButton { min-width: var(--control-touch); height: var(--control-touch); }
 }

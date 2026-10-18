@@ -128,7 +128,7 @@
 
   .eyebrow { margin-bottom: 8px; }
   .contentRow { grid-template-columns: 18px minmax(0, 1fr); gap: var(--space-2); }
-  .icon { width: 17px; height: 17px; }
+  .icon { width: var(--component-icon-button-glyph-compact); height: var(--component-icon-button-glyph-compact); }
   .details { margin-top: 12px; }
   .details > summary { min-height: 44px; }
   .detailsHint { display: none; }

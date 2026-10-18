@@ -15,9 +15,9 @@
   padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
   border-bottom: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--type-ui-size);
 }
-.header strong { color: var(--text); flex: 1; }
+.header strong { color: var(--text); flex: 1; font-size: var(--type-title-size); font-weight: var(--weight-semibold); }
 
 .newButton,
 .primaryButton,
@@ -157,7 +157,7 @@
   padding: var(--space-optical) var(--space-2);
   background: var(--bg-elev-2);
   color: inherit;
-  font-size: var(--text-2xs);
+  font-size: var(--type-label-size);
 }
 
 .cardActions { margin-top: 8px; display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
@@ -166,7 +166,7 @@
   padding: var(--space-1) var(--space-2);
   background: transparent;
   color: var(--text-muted);
-  font-size: var(--text-2xs);
+  font-size: var(--type-label-size);
 }
 .cardActions button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 .cardActions button:disabled,
@@ -191,7 +191,7 @@
 .historyMain span { color: var(--text-dim); font-size: var(--text-2xs); white-space: nowrap; }
 .historyStatus { margin-top: 5px; display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
 .statusBadge { padding: var(--space-optical) var(--space-2); border-radius: var(--radius-pill); background: var(--bg-hover); font-size: var(--text-2xs); }
-.runError { margin-top: 5px; color: var(--color-error-text); font-size: var(--text-2xs); line-height: var(--leading-snug); overflow-wrap: anywhere; }
+.runError { margin-top: 5px; color: var(--color-error-text); font-size: var(--type-label-size); line-height: var(--leading-copy); overflow-wrap: anywhere; }
 .noHistory { padding: var(--space-2); color: var(--text-dim); text-align: center; font-size: var(--text-xs); }
 
 .status_running { color: var(--accent-text); }
@@ -244,7 +244,7 @@
   border-color: var(--color-error-border-strong);
   box-shadow: 0 0 0 2px var(--color-error-bg);
 }
-.monoInput { font-family: var(--font-mono) !important; font-size: var(--text-xs) !important; }
+.monoInput { font-family: var(--font-mono) !important; font-size: var(--type-ui-size); }
 .twoColumns { display: grid; grid-template-columns: 1.35fr 1fr; gap: var(--space-2); }
 
 .dialogBody { padding: 0 !important; }
@@ -286,7 +286,7 @@
   background: transparent;
   color: var(--text-dim);
   font: inherit;
-  font-size: var(--text-2xs);
+  font-size: var(--type-label-size);
   cursor: pointer;
 }
 .segmentActive { background: var(--color-accent-bg-strong); color: var(--accent-text); }
@@ -302,7 +302,7 @@
   background: var(--bg-elev-1);
   color: var(--text-dim);
   font: inherit;
-  font-size: var(--text-2xs);
+  font-size: var(--type-label-size);
   cursor: pointer;
 }
 .weekdayActive { border-color: var(--color-accent-border-focus); background: var(--color-accent-bg); color: var(--accent-text); }
@@ -320,7 +320,7 @@
 .primaryButton:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
 .secondaryButton { background: var(--bg-elev-1); color: var(--text-muted); }
 .formError,
-.listError { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--color-error-border); border-radius: var(--radius-control); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--text-2xs); overflow-wrap: anywhere; }
+.listError { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--color-error-border); border-radius: var(--radius-control); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--type-label-size); overflow-wrap: anywhere; }
 .listError button { min-height: var(--control-compact); padding: 0 var(--space-2); border: 1px solid var(--color-error-border); border-radius: var(--radius-control-compact); background: var(--bg-elev-1); color: inherit; cursor: pointer; }
 .listError { margin-top: 8px; }
 
@@ -338,7 +338,7 @@
   border-bottom: 0;
   background: transparent;
 }
-:global(html[data-ui-style="trae"]) .header strong { font-size: var(--text-sm); }
+:global(html[data-ui-style="trae"]) .header strong { font-size: var(--type-title-size); }
 :global(html[data-ui-style="trae"]) .newButton { min-height: var(--control-md); }
 :global(html[data-ui-style="trae"]) .newButton,
 :global(html[data-ui-style="trae"]) .primaryButton,
@@ -389,4 +389,8 @@
 }
 
 .deletePrompt { width: 100%; color: var(--color-error-text); font-size: var(--text-xs); overflow-wrap: anywhere; }
-@media (max-width: 700px), (pointer: coarse) { .cardActions button { min-height: 44px; } }
+@media (max-width: 700px), (pointer: coarse) { .cardActions button { min-height: 44px; font-size: var(--type-label-size); } }
+
+@media (max-width: 700px), (pointer: coarse) {
+  .field input, .field textarea, .field select { font-size: var(--text-input-mobile); min-height: var(--control-touch); }
+}

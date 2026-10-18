@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import React, { useState, useRef, useEffect, useLayoutEffect, useId, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -262,7 +263,7 @@ export function ModelSelector({
           onClick={() => selectModel(option)}
         >
           <span className={styles.mobileModelLeading} aria-hidden>
-            {isActive ? <Check size={16} strokeWidth={2.2} /> : <Cpu size={16} strokeWidth={1.8} />}
+            {isActive ? <Check size={UI_ICON_SIZE.compact} /> : <Cpu size={UI_ICON_SIZE.compact} />}
           </span>
           <span className={styles.mobileModelCopy}>
             <span className={styles.mobileModelName}>{option.name}</span>
@@ -270,7 +271,7 @@ export function ModelSelector({
               <span>{option.provider}</span>
               <span aria-hidden>·</span>
               <span className={option.available === false ? styles.modelUnavailable : styles.modelAvailable}>
-                <BadgeCheck size={12} aria-hidden />
+                <BadgeCheck size={UI_ICON_SIZE.inline} aria-hidden />
                 {t(option.available === false ? "model.unavailable" : "model.available")}
               </span>
               {option.contextWindow && <><span aria-hidden>·</span><span>{formatContextWindow(option.contextWindow)}</span></>}
@@ -286,7 +287,7 @@ export function ModelSelector({
           title={t(isPinned ? "model.unpin" : "model.pin")}
           onClick={() => togglePin(option)}
         >
-          <Pin size={16} strokeWidth={1.8} fill={isPinned ? "currentColor" : "none"} aria-hidden />
+          <Pin size={UI_ICON_SIZE.compact} fill={isPinned ? "currentColor" : "none"} aria-hidden />
         </button>
       </div>
     );
@@ -296,7 +297,7 @@ export function ModelSelector({
   const triggerLabel = currentName || model?.modelId || (needsRecovery ? statusLabel : t("model.choose"));
   const refreshRejected = modelOptions.some((option) => option.available === false) && onRetry ? (
     <button type="button" className={styles.catalogAction} onClick={() => { closeMenu(); onRetry(); }}>
-      <RefreshCw size={14} aria-hidden />{t("model.recheck")}
+      <RefreshCw size={UI_ICON_SIZE.compact} aria-hidden />{t("model.recheck")}
     </button>
   ) : null;
 
@@ -316,7 +317,7 @@ export function ModelSelector({
       choices[next]?.focus();
     }}>
           <div className={styles.modelSheetSearch}>
-            <Search size={17} strokeWidth={1.8} aria-hidden />
+            <Search size={UI_ICON_SIZE.control} aria-hidden />
             <input
               ref={searchRef}
               type="search"
@@ -381,10 +382,10 @@ export function ModelSelector({
         className={`${styles.trigger} ${open ? styles.triggerOpen : ""}`}
       >
         {status === "loading"
-          ? <RefreshCw size={13} strokeWidth={1.8} aria-hidden />
-          : needsRecovery ? <TriangleAlert size={13} strokeWidth={1.8} aria-hidden /> : <Cpu size={13} strokeWidth={1.8} aria-hidden />}
+          ? <RefreshCw size={UI_ICON_SIZE.compact} aria-hidden />
+          : needsRecovery ? <TriangleAlert size={UI_ICON_SIZE.compact} aria-hidden /> : <Cpu size={UI_ICON_SIZE.compact} aria-hidden />}
         <span className={styles.triggerLabel}>{model?.provider ? triggerLabel.replace(` (${model.provider})`, "") : triggerLabel}</span>
-        <ChevronDown className={styles.chevron} size={13} strokeWidth={1.8} aria-hidden />
+        <ChevronDown className={styles.chevron} size={UI_ICON_SIZE.compact} aria-hidden />
       </button>
       {open && needsRecovery && (
         <DialogShell
@@ -404,8 +405,8 @@ export function ModelSelector({
               </ul>
             )}
             <div className={styles.catalogActions}>
-              {onRetry && <button type="button" className={styles.catalogAction} disabled={status === "loading"} onClick={onRetry} data-testid="model-catalog-retry"><RefreshCw size={16} aria-hidden />{t("model.catalogRetry")}</button>}
-              {onOpenModels && <button type="button" className={styles.catalogAction} onClick={() => { closeMenu(); onOpenModels(); }} data-testid="model-catalog-configure"><Settings2 size={16} aria-hidden />{t("model.configure")}</button>}
+              {onRetry && <button type="button" className={styles.catalogAction} disabled={status === "loading"} onClick={onRetry} data-testid="model-catalog-retry"><RefreshCw size={UI_ICON_SIZE.compact} aria-hidden />{t("model.catalogRetry")}</button>}
+              {onOpenModels && <button type="button" className={styles.catalogAction} onClick={() => { closeMenu(); onOpenModels(); }} data-testid="model-catalog-configure"><Settings2 size={UI_ICON_SIZE.compact} aria-hidden />{t("model.configure")}</button>}
             </div>
           </div>
         </DialogShell>

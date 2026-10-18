@@ -1,4 +1,7 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
+
+import { X } from "lucide-react";
 
 import { useId, type ComponentProps } from "react";
 import type { DialogShell } from "./DialogShell";
@@ -12,7 +15,7 @@ export function InlinePanel({ open, title, description, onClose, canClose = true
   if (!open) return null;
   return <section className={styles.panel} aria-labelledby={id} data-testid={testId}>
     <header><div><h3 id={id}>{title}</h3>{description && <p>{description}</p>}</div>
-      <button type="button" onClick={onClose} disabled={!canClose} aria-label={t("common.close")}>×</button>
+      <button type="button" onClick={onClose} disabled={!canClose} aria-label={t("common.close")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>
     </header>
     <div className={styles.body}>{children}</div>
     {footer && <footer>{footer}</footer>}

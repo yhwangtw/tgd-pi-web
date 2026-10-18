@@ -116,8 +116,8 @@
 
 .icon {
   display: inline-flex;
-  width: 13px;
-  height: 13px;
+  width: var(--component-icon-button-glyph-compact);
+  height: var(--component-icon-button-glyph-compact);
   align-items: center;
   justify-content: center;
 }
@@ -245,8 +245,8 @@
     font-size: var(--text-xs);
   }
   .icon {
-    width: 12px;
-    height: 12px;
+    width: var(--component-icon-button-glyph-compact);
+    height: var(--component-icon-button-glyph-compact);
   }
   .connector { width: 6px; }
   .hide {

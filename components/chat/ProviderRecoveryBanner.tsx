@@ -1,4 +1,7 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
+
+import { X } from "lucide-react";
 
 import { classifyProviderError, type ProviderErrorKind, type ProviderRecoveryModel } from "@/lib/provider-recovery";
 import { useI18n } from "@/lib/i18n";
@@ -29,7 +32,7 @@ export function ProviderRecoveryBanner({ recovery, busy, onRetryWithModel, onAut
       <div className={s.body}>
         <div className={s.titleRow}>
           <strong>{t("recovery.options")}</strong>
-          <button type="button" className={s.dismiss} onClick={onDismiss} aria-label={t("common.close")}>×</button>
+          <button type="button" className={s.dismiss} onClick={onDismiss} aria-label={t("common.close")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>
         </div>
         {recovery.kind === "model_unavailable" && <p>{t("recovery.chooseModel")}</p>}
         {recovery.retryAfterSeconds !== null && <span className={s.retryAfter}>{t("recovery.retryAfter").replace("{seconds}", String(recovery.retryAfterSeconds))}</span>}

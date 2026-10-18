@@ -1,4 +1,7 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
+
+import { X } from "lucide-react";
 
 import { useState, useCallback, useRef, useId } from "react";
 import type { SessionInfo } from "@/lib/types";
@@ -187,7 +190,7 @@ export function SessionItem({
             </div>
             <div className={styles.deleteActions}>
               <button type="button" onClick={handleDeleteConfirm} className={styles.deleteConfirmButton}>
-                <Trash2 size={12} strokeWidth={2} aria-hidden="true" />
+                <Trash2 size={UI_ICON_SIZE.inline} aria-hidden="true" />
                 {t("session.delete")}
               </button>
               <button type="button" onClick={handleDeleteCancel} className={styles.cancelButton}>
@@ -222,7 +225,7 @@ export function SessionItem({
                 <span id={unreadLabelId} hidden>{t("session.unread")}</span>
               </>}
               {depth > 0 && (
-                <GitFork size={13} strokeWidth={1.8} className={styles.forkIndicator} aria-label={t("session.fork")} />
+                <GitFork size={UI_ICON_SIZE.compact} className={styles.forkIndicator} aria-label={t("session.fork")} />
               )}
               <div
                 className={`${styles.sessionTitle} ${isUnread ? styles.sessionTitleUnread : isSelected ? styles.sessionTitleSelected : styles.sessionTitleDefault}`}
@@ -242,7 +245,7 @@ export function SessionItem({
                     aria-label={collapsed ? t("session.expandForks") : t("session.collapseForks")}
                     className={`${styles.collapseToggle} ${collapsed ? styles.collapseToggleCollapsed : styles.collapseToggleExpanded}`}
                   >
-                    <ChevronDown size={14} strokeWidth={1.8} aria-hidden />
+                    <ChevronDown size={UI_ICON_SIZE.compact} aria-hidden />
                   </button>
                 )}
                 <button
@@ -254,7 +257,7 @@ export function SessionItem({
                   aria-expanded={contextMenu !== null}
                   className={`${styles.overflowButton} ${contextMenu ? styles.overflowButtonOpen : ""}`}
                 >
-                  <MoreHorizontal size={15} strokeWidth={1.8} aria-hidden />
+                  <MoreHorizontal size={UI_ICON_SIZE.compact} aria-hidden />
                 </button>
               </div>
             </div>
@@ -287,7 +290,7 @@ export function SessionItem({
                         className={styles.tagChipRemove}
                         title={`${t("session.removeTag")} #${tag}`}
                         aria-label={`${t("session.removeTag")} #${tag}`}
-                      >×</button>
+                      ><X size={UI_ICON_SIZE.compact} aria-hidden="true" /></button>
                     )}
                   </span>
                 );

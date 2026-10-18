@@ -32,6 +32,9 @@
   publishes; `--deploy /absolute/plan.json --execute` also deploys.
 - Release preparation must not reset/clean the caller's checkout. Preserve source
   identity, immutable tags, shared update locks and rollback capability.
+- After a successful deployment and public verification, keep the current build
+  plus one recoverable previous build. Preserve failed/unverified attempts and
+  manual backups; cleanup failure must not restart or roll back a healthy release.
 - Resume a failed deployment with the same tag/plan. Verify the actual running
   build and authenticated public hostname before declaring deployment complete.
 - Docs/CI-only work normally ends at merge. Do not restart production unless

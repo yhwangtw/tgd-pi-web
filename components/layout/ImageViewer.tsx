@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { encodeFilePathForApi, getFileName, getRelativeFilePath } from "@/lib/file-paths";
@@ -77,7 +78,7 @@ export function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string 
         {formatSizeStr && <span>{formatSizeStr}</span>}
         {zoom !== 1 && (
           <button type="button" className={styles.zoomReset} onClick={resetView} title={t("files.resetZoom")} aria-label={t("files.resetZoom")}>
-            {Math.round(zoom * 100)}% <RotateCcw size={12} strokeWidth={1.8} aria-hidden="true" />
+            {Math.round(zoom * 100)}% <RotateCcw size={UI_ICON_SIZE.inline} aria-hidden="true" />
           </button>
         )}
         <span

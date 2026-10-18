@@ -48,9 +48,9 @@
    every platform (was falling back to system CJK: PingFang on macOS, but on
    Linux/Windows often a Simplified-default Noto or an ugly bitmap font, so
    the same Han codepoints drew with the wrong regional shapes). Subset to CJK
-   only — the unicode-range keeps Latin/digits on Inter — and shipped in 3
-   weights (600 rounds up to 700). Full ideograph coverage, so no character
-   ever falls through to a system font. */
+   only — the unicode-range keeps Latin/digits on Inter — and shipped in 4
+   weights, including a real 600 face to match Inter semibold. Characters
+   outside the bundled subset continue through the configured CJK stack. */
 @font-face {
   font-family: 'Noto Sans TC';
   src: url('/fonts/noto-sans-tc-regular.woff2') format('woff2');
@@ -63,6 +63,14 @@
   font-family: 'Noto Sans TC';
   src: url('/fonts/noto-sans-tc-medium.woff2') format('woff2');
   font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3000-303F, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE30-FE4F, U+FF00-FFEF;
+}
+@font-face {
+  font-family: 'Noto Sans TC';
+  src: url('/fonts/noto-sans-tc-semibold.woff2') format('woff2');
+  font-weight: 600;
   font-style: normal;
   font-display: swap;
   unicode-range: U+3000-303F, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE30-FE4F, U+FF00-FFEF;
@@ -247,7 +255,7 @@
   --component-icon-button-compact: var(--control-compact);
   --component-icon-button-default: var(--control-default);
   --component-icon-button-touch: var(--control-mobile);
-  --component-icon-button-glyph-compact: 15px;
+  --component-icon-button-glyph-compact: 16px;
   --component-icon-button-glyph-default: 18px;
   --component-icon-button-glyph-touch: 20px;
   --component-chat-minimap-gutter: 52px;
@@ -1511,3 +1519,6 @@ span.linenumber {
     padding: var(--space-2) var(--space-2);
   }
 }
+
+/* Lucide UI glyphs share one stroke; brand artwork is intentionally excluded. */
+svg.lucide { stroke-width: var(--component-icon-stroke); flex-shrink: 0; }

@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useMemo, useState } from "react";
 import { Download, RefreshCw, Search, ShieldCheck, Trash2 } from "lucide-react";
@@ -90,7 +91,7 @@ export function SecurityActivityCenter() {
   return (
     <div className={styles.root} data-testid="security-activity-center">
       <section className={styles.hero}>
-        <div className={styles.heroIcon}><ShieldCheck size={22} strokeWidth={1.8} aria-hidden /></div>
+        <div className={styles.heroIcon}><ShieldCheck size={UI_ICON_SIZE.navigation} aria-hidden /></div>
         <div className={styles.heroCopy}>
           <h2>{t("securityActivity.title")}</h2>
           <p>{t("securityActivity.description").replace("{days}", String(retentionDays))}</p>
@@ -103,7 +104,7 @@ export function SecurityActivityCenter() {
 
       <div className={styles.toolbar}>
         <label className={styles.search}>
-          <Search size={15} strokeWidth={1.8} aria-hidden />
+          <Search size={UI_ICON_SIZE.compact} aria-hidden />
           <input aria-label={t("securityActivity.search")} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("securityActivity.search")} />
         </label>
         <select aria-label={t("securityActivity.category")} value={category} onChange={(event) => setCategory(event.target.value as SecurityActivityCategory | "all")}>
@@ -119,16 +120,16 @@ export function SecurityActivityCenter() {
           size="compact"
           variant="surface"
           label={t("securityActivity.refresh")}
-          icon={<RefreshCw strokeWidth={1.8} />}
+          icon={<RefreshCw />}
           onClick={() => void activity.refresh()}
           disabled={activity.loading || activity.refreshing}
         />
         <button type="button" className={styles.secondaryButton} onClick={exportEntries} disabled={filtered.length === 0}>
-          <Download size={15} strokeWidth={1.8} aria-hidden />
+          <Download size={UI_ICON_SIZE.compact} aria-hidden />
           {t("securityActivity.export")}
         </button>
         <button type="button" className={styles.dangerButton} onClick={() => setConfirmClear(true)} disabled={entries.length === 0}>
-          <Trash2 size={15} strokeWidth={1.8} aria-hidden />
+          <Trash2 size={UI_ICON_SIZE.compact} aria-hidden />
           {t("securityActivity.clear")}
         </button>
       </div>
@@ -142,7 +143,7 @@ export function SecurityActivityCenter() {
         <div className={styles.state}>{t("common.loading")}</div>
       ) : filtered.length === 0 ? (
         <div className={styles.empty}>
-          <ShieldCheck size={24} strokeWidth={1.6} aria-hidden />
+          <ShieldCheck size={24} aria-hidden />
           <strong>{t("securityActivity.emptyTitle")}</strong>
           <span>{entries.length ? t("securityActivity.emptyFiltered") : t("securityActivity.emptyBody")}</span>
         </div>

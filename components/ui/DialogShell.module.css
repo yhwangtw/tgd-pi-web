@@ -47,7 +47,7 @@
 
 .body { min-height: 0; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; padding: var(--component-dialog-padding); }
 .body[hidden], .footer[hidden] { display: none; }
-.collapse { min-width: 36px; min-height: 36px; color: var(--text-muted); font-size: var(--text-lg); border-radius: var(--radius-control); }
+.collapse { color: var(--text-muted); }
 .overlay[data-modeless] { background: transparent; backdrop-filter: none; pointer-events: none; place-items: start end; padding-top: var(--space-4); }
 .overlay[data-modeless] .dialog { pointer-events: auto; width: min(680px, calc(100vw - 32px)); max-height: min(80dvh, 900px); }
 .overlay[data-modeless][data-placement="center"] { place-items: center; }

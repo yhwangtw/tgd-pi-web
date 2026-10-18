@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState } from "react";
 import { fetchJson, useRequestResource } from "@/hooks/useRequestResource";
@@ -122,7 +123,7 @@ export function RuntimeCenter() {
         <div className={styles.heroActions}>
           <button type="button" className={styles.refresh} onClick={() => void runtime.refresh()} disabled={runtime.refreshing}>{runtime.refreshing ? t("runtime.checking") : t("runtime.refresh")}</button>
           <button type="button" className={styles.refresh} onClick={() => void exportDiagnostics()} disabled={exporting}>
-            <Download size={15} strokeWidth={1.8} aria-hidden />
+            <Download size={UI_ICON_SIZE.compact} aria-hidden />
             {exporting ? t("runtime.exportingDiagnostics") : t("runtime.exportDiagnostics")}
           </button>
         </div>

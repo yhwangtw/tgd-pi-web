@@ -1,9 +1,11 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import React, { useState, useRef, useEffect, useId } from "react";
 import { Check, Lightbulb } from "lucide-react";
 import { THINKING_LEVELS, type ThinkingLevelOption } from "./chat-input-constants";
 import { useI18n, type MsgKey } from "@/lib/i18n";
+import { useComposerPopupPosition } from "./useComposerPopupPosition";
 import styles from "./ComposerSelector.module.css";
 import { announceComposerSelectorOpen, onAnotherComposerSelectorOpen } from "./composer-selector-coordination";
 
@@ -35,6 +37,7 @@ interface ThinkingSelectorProps {
   availableThinkingLevels?: string[] | null;
   isStreaming: boolean;
   presentation?: "popover" | "inline";
+  iconOnly?: boolean;
   onThinkingLevelChange?: (level: ThinkingLevelOption) => void;
 }
 
@@ -44,6 +47,7 @@ export function ThinkingSelector({
   availableThinkingLevels,
   isStreaming,
   presentation = "popover",
+  iconOnly = false,
   onThinkingLevelChange,
 }: ThinkingSelectorProps) {
   const { t } = useI18n();
@@ -51,6 +55,7 @@ export function ThinkingSelector({
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listboxId = useId();
+  const panelRef = useComposerPopupPosition(open && presentation === "popover", triggerRef);
 
   useEffect(() => onAnotherComposerSelectorOpen(listboxId, () => setOpen(false)), [listboxId]);
 
@@ -61,7 +66,10 @@ export function ThinkingSelector({
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        requestAnimationFrame(() => triggerRef.current?.focus());
+      }
     };
     document.addEventListener("mousedown", handler);
     document.addEventListener("keydown", onKeyDown);
@@ -72,6 +80,9 @@ export function ThinkingSelector({
   }, [open]);
 
   if (!onThinkingLevelChange) return null;
+  const level = thinkingLevel ?? "auto";
+  const currentLabel = level === "auto" || !thinkingLevelMap
+    ? t(THINKING_LABEL_KEYS[level]) : thinkingLevelMap[level] ?? t(THINKING_LABEL_KEYS[level]);
 
   return (
     <div
@@ -92,19 +103,17 @@ export function ThinkingSelector({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-controls={open ? listboxId : undefined}
-        title={t("input.thinkingTitle")}
-        className={`${styles.trigger} ${open ? styles.triggerOpen : ""}`}
+        title={`${t("input.reasoning")}: ${currentLabel}`}
+        aria-describedby={`${listboxId}-value`}
+        className={`${styles.trigger} ${iconOnly ? styles.iconTrigger : ""} ${open ? styles.triggerOpen : ""}`}
       >
-        <Lightbulb size={11} aria-hidden />
-        <span>{(() => {
-          const lvl = thinkingLevel ?? "auto";
-          if (lvl === "auto" || !thinkingLevelMap) return t(THINKING_LABEL_KEYS[lvl]);
-          const mapped = thinkingLevelMap[lvl];
-          return mapped != null ? mapped : t(THINKING_LABEL_KEYS[lvl]);
-        })()}</span>
+        <Lightbulb size={UI_ICON_SIZE.control} aria-hidden />
+        {!iconOnly && <span>{currentLabel}</span>}
       </button>
+      <span id={`${listboxId}-value`} hidden>{currentLabel}</span>
       {open && (
         <div
+          ref={panelRef}
           id={listboxId}
           className={`${styles.panel} ${presentation === "inline" ? styles.panelInline : styles.panelAbsolute}`}
           role="listbox"
@@ -134,7 +143,7 @@ export function ThinkingSelector({
                 className={`${styles.option} ${isActive ? styles.optionActive : ""}`}
               >
                 {isActive
-                  ? <Check className={styles.check} size={10} strokeWidth={2} aria-hidden />
+                  ? <Check className={styles.check} size={UI_ICON_SIZE.inline} aria-hidden />
                   : <span className={styles.checkSpacer} />}
                 <span className={styles.optionLabel}>
                   {displayLabel}

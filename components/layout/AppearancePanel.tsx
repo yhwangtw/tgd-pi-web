@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useRef, useState } from "react";
 import { Check, LogOut, Moon, RotateCcw, Sun, X } from "lucide-react";
@@ -103,7 +104,7 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
           <span>{t("appearance.subtitle")}</span>
         </div>
         <button ref={closeRef} type="button" className={styles.closeButton} onClick={onClose} aria-label={t("appearance.close")} title={t("appearance.close")}>
-          <X size={14} aria-hidden />
+          <X size={UI_ICON_SIZE.control} aria-hidden />
         </button>
       </div>
 
@@ -114,7 +115,7 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
           role="radio" aria-checked={!isDark} tabIndex={!isDark ? 0 : -1}
           onClick={(e) => { if (isDark) toggleTheme(toggleOriginFromEvent(e)); }}
         >
-          <Sun size={12} aria-hidden />
+          <Sun size={UI_ICON_SIZE.inline} aria-hidden />
           {t("appearance.light")}
         </button>
         <button
@@ -123,7 +124,7 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
           role="radio" aria-checked={isDark} tabIndex={isDark ? 0 : -1}
           onClick={(e) => { if (!isDark) toggleTheme(toggleOriginFromEvent(e)); }}
         >
-          <Moon size={12} aria-hidden />
+          <Moon size={UI_ICON_SIZE.inline} aria-hidden />
           {t("appearance.dark")}
         </button>
       </div>
@@ -227,20 +228,20 @@ export function AppearancePanel({ onClose, returnFocus }: Props) {
             </span>
             <span className={styles.skinLabel}>{t(`appearance.skin.${sk}`)}</span>
             {sk === skin && (
-              <Check size={13} strokeWidth={2.5} className={styles.check} aria-hidden />
+              <Check size={UI_ICON_SIZE.compact} className={styles.check} aria-hidden />
             )}
           </button>
         ))}
       </div>
 
       <button type="button" className={styles.resetRow} onClick={resetAppearance}>
-        <RotateCcw size={13} aria-hidden />
+        <RotateCcw size={UI_ICON_SIZE.compact} aria-hidden />
         {t("appearance.reset")}
       </button>
 
       {gateEnabled && (
         <button type="button" className={styles.logoutRow} onClick={logout}>
-          <LogOut size={13} aria-hidden />
+          <LogOut size={UI_ICON_SIZE.compact} aria-hidden />
           {t("appearance.logout")}
         </button>
       )}

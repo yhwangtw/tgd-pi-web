@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { Minus, Plus, X } from "lucide-react";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { useI18n } from "@/lib/i18n";
 import { IconButton } from "./IconButton";
@@ -15,6 +15,7 @@ export function DialogShell({
   descriptionDetail,
   onClose,
   canClose = true,
+  hasUnsavedChanges = false,
   size = "default",
   mobileMode = "sheet",
   modal = false,
@@ -32,6 +33,8 @@ export function DialogShell({
   descriptionDetail?: string;
   onClose: () => void;
   canClose?: boolean;
+  /** Ask before dismissing an edited form through the backdrop, Escape or X. */
+  hasUnsavedChanges?: boolean;
   size?: "compact" | "default" | "wide" | "xwide";
   mobileMode?: "sheet" | "fullscreen";
   /** Opt in only for a genuinely blocking flow; normal panels stay modeless. */
@@ -49,7 +52,45 @@ export function DialogShell({
   const titleId = useId();
   const descriptionId = useId();
   const [collapsed, setCollapsed] = useState(false);
-  const { panelRef } = useModalDialog<HTMLElement>({ open: open && modal, onClose, canClose, initialFocusRef });
+  const requestClose = () => {
+    if (!canClose) return;
+    if (hasUnsavedChanges && !window.confirm(t("common.discardUnsavedChanges"))) return;
+    onClose();
+  };
+  const closeRef = useRef(requestClose);
+  closeRef.current = requestClose;
+  const pointerInsideReactTree = useRef(false);
+  const { panelRef } = useModalDialog<HTMLElement>({ open: open && modal, onClose: requestClose, canClose, initialFocusRef });
+
+  useEffect(() => {
+    if (!open) return;
+    const panel = panelRef.current;
+    const root = panel?.closest("[data-dialog-root]");
+    const isTopDialog = () => [...document.querySelectorAll("[data-dialog-root]")].at(-1) === root;
+    let outsidePress = false;
+    const startPress = (event: PointerEvent) => {
+      pointerInsideReactTree.current = false;
+      outsidePress = event.button === 0 && event.isPrimary !== false && isTopDialog()
+        && !panel?.contains(event.target as Node);
+    };
+    const cancelPress = () => { outsidePress = false; };
+    const finishPress = (event: MouseEvent) => {
+      const shouldDismiss = outsidePress && !pointerInsideReactTree.current;
+      outsidePress = false;
+      // Require a complete outside gesture. Opening clicks, text selections,
+      // canceled touch gestures and clicks in a child portal must not dismiss.
+      if (!shouldDismiss || event.button !== 0 || !isTopDialog() || panel?.contains(event.target as Node)) return;
+      closeRef.current();
+    };
+    document.addEventListener("pointerdown", startPress, true);
+    document.addEventListener("pointercancel", cancelPress, true);
+    document.addEventListener("click", finishPress);
+    return () => {
+      document.removeEventListener("pointerdown", startPress, true);
+      document.removeEventListener("pointercancel", cancelPress, true);
+      document.removeEventListener("click", finishPress);
+    };
+  }, [open, panelRef]);
   useEffect(() => {
     if (!open || modal) return;
     const panel = panelRef.current;
@@ -80,9 +121,6 @@ export function DialogShell({
       data-dialog-root
       data-modeless={!modal || undefined}
       data-placement={placement}
-      onMouseDown={(event) => {
-        if (modal && canClose && event.target === event.currentTarget) onClose();
-      }}
     >
       <section
         ref={panelRef}
@@ -95,8 +133,10 @@ export function DialogShell({
         data-size={size}
         data-mobile-mode={mobileMode}
         data-testid={testId}
+        onPointerDownCapture={() => { pointerInsideReactTree.current = true; }}
+        onClickCapture={() => { pointerInsideReactTree.current = true; }}
         onKeyDown={(event) => {
-          if (!modal && canClose && event.key === "Escape") { event.stopPropagation(); onClose(); }
+          if (!modal && canClose && !event.defaultPrevented && event.key === "Escape") { event.stopPropagation(); requestClose(); }
         }}
       >
         <header className={styles.header}>
@@ -107,12 +147,12 @@ export function DialogShell({
           </div>
           <div className={styles.headerActions}>
             {headerActions}
-            {!modal && <button className={styles.collapse} type="button" aria-expanded={!collapsed} aria-label={t(collapsed ? "interaction.expand" : "interaction.minimize")} onClick={() => setCollapsed(!collapsed)}>{collapsed ? "+" : "−"}</button>}
+            {!modal && <IconButton className={styles.collapse} aria-expanded={!collapsed} label={t(collapsed ? "interaction.expand" : "interaction.minimize")} onClick={() => setCollapsed(!collapsed)} icon={collapsed ? <Plus /> : <Minus />} />}
             <IconButton
               className={styles.close}
               label={t("common.close")}
-              icon={<X strokeWidth={1.8} />}
-              onClick={onClose}
+              icon={<X />}
+              onClick={requestClose}
               disabled={!canClose}
             />
           </div>

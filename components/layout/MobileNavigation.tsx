@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import {
@@ -142,25 +143,25 @@ export function MobileNavigation({
           active={!panelOpen && !filePanelOpen && !moreOpen}
           label={t("mobile.chat")}
           onClick={onShowChat}
-          icon={<MessageSquare size={20} strokeWidth={1.8} />}
+          icon={<MessageSquare size={UI_ICON_SIZE.navigation} />}
         />
         <NavButton
           active={panelOpen && panelView === "sessions"}
           label={t("mobile.sessions")}
           onClick={() => onSelectView("sessions")}
-          icon={<List size={20} strokeWidth={1.8} />}
+          icon={<List size={UI_ICON_SIZE.navigation} />}
         />
         <NavButton
           active={panelOpen && panelView === "files"}
           label={t("mobile.files")}
           onClick={() => onSelectView("files")}
-          icon={<Folder size={20} strokeWidth={1.8} />}
+          icon={<Folder size={UI_ICON_SIZE.navigation} />}
         />
         <NavButton
           active={panelOpen && panelView === "search"}
           label={t("mobile.search")}
           onClick={() => onSelectView("search")}
-          icon={<Search size={20} strokeWidth={1.8} />}
+          icon={<Search size={UI_ICON_SIZE.navigation} />}
         />
         <NavButton
           active={moreOpen || secondaryViewActive}
@@ -168,7 +169,7 @@ export function MobileNavigation({
           expanded={moreOpen}
           label={t("mobile.more")}
           onClick={() => setMoreOpen(!moreOpen)}
-          icon={<Ellipsis size={20} strokeWidth={1.8} />}
+          icon={<Ellipsis size={UI_ICON_SIZE.navigation} />}
         />
       </nav>
 
@@ -177,27 +178,27 @@ export function MobileNavigation({
           <div className={s.mobileSheetHandle} aria-hidden />
           <div className={s.mobileSheetHeader}>
             <strong>{t("mobile.moreActions")}</strong>
-            <button type="button" onClick={() => setMoreOpen(false)} aria-label={t("mobile.closeMore")}><X size={18} strokeWidth={2} aria-hidden="true" /></button>
+            <button type="button" onClick={() => setMoreOpen(false)} aria-label={t("mobile.closeMore")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>
           </div>
           <div className={s.mobileMoreGroup}>
             <div className={s.mobileMoreGroupTitle}>{t("mobile.work")}</div>
             <div className={s.mobileMoreGrid}>
-              <MoreAction label={t("attention.title")} badge={attentionUnreadCount} active={panelOpen && panelView === "attention"} onClick={() => run(() => onSelectView("attention"))} icon={<Bell size={20} strokeWidth={1.8} />} />
-              <MoreAction label={t("agents.title")} active={panelOpen && panelView === "agents"} onClick={() => run(() => onSelectView("agents"))} icon={<Bot size={20} strokeWidth={1.8} />} />
-              <MoreAction label={t("schedule.title")} active={panelOpen && panelView === "schedule"} onClick={() => run(() => onSelectView("schedule"))} icon={<CalendarDays size={20} strokeWidth={1.8} />} />
-              <MoreAction label={t("mobile.changes")} active={panelOpen && panelView === "changes"} onClick={() => run(() => onSelectView("changes"))} icon={<GitBranch size={20} strokeWidth={1.8} />} />
-              <MoreAction label={t("tgd.artifacts")} active={panelOpen && panelView === "tgd"} onClick={() => run(() => onSelectView("tgd"))} icon={<FileText size={20} strokeWidth={1.8} />} />
-              <MoreAction label={t("topbar.analytics")} onClick={() => run(onOpenAnalytics)} icon={<BarChart3 size={20} strokeWidth={1.8} />} />
+              <MoreAction label={t("attention.title")} badge={attentionUnreadCount} active={panelOpen && panelView === "attention"} onClick={() => run(() => onSelectView("attention"))} icon={<Bell size={UI_ICON_SIZE.navigation} />} />
+              <MoreAction label={t("agents.title")} active={panelOpen && panelView === "agents"} onClick={() => run(() => onSelectView("agents"))} icon={<Bot size={UI_ICON_SIZE.navigation} />} />
+              <MoreAction label={t("schedule.title")} active={panelOpen && panelView === "schedule"} onClick={() => run(() => onSelectView("schedule"))} icon={<CalendarDays size={UI_ICON_SIZE.navigation} />} />
+              <MoreAction label={t("mobile.changes")} active={panelOpen && panelView === "changes"} onClick={() => run(() => onSelectView("changes"))} icon={<GitBranch size={UI_ICON_SIZE.navigation} />} />
+              <MoreAction label={t("tgd.artifacts")} active={panelOpen && panelView === "tgd"} onClick={() => run(() => onSelectView("tgd"))} icon={<FileText size={UI_ICON_SIZE.navigation} />} />
+              <MoreAction label={t("topbar.analytics")} onClick={() => run(onOpenAnalytics)} icon={<BarChart3 size={UI_ICON_SIZE.navigation} />} />
             </div>
           </div>
           <div className={s.mobileMoreGroup}>
             <div className={s.mobileMoreGroupTitle}>{t("mobile.settings")}</div>
             <div className={s.mobileMoreGrid}>
-              <MoreAction label={t("sidebar.models")} onClick={() => run(onOpenModels)} icon={<Cpu size={20} strokeWidth={1.8} />} />
-              <MoreAction label={t("sidebar.skills")} disabled={skillsDisabled} onClick={() => run(onOpenSkills)} icon={<Layers3 size={20} strokeWidth={1.8} />} />
-              <MoreAction label={t("extensions.title")} onClick={() => run(onOpenExtensions)} icon={<Puzzle size={20} strokeWidth={1.8} />} />
-              <MoreAction label={t("appearance.title")} onClick={() => run(() => onOpenAppearance(moreRef.current))} icon={<Palette size={20} strokeWidth={1.8} />} />
-              {onOpenDesignMode && <MoreAction label={t("topbar.designMode")} onClick={() => run(() => onOpenDesignMode())} icon={<Box size={20} strokeWidth={1.8} />} />}
+              <MoreAction label={t("sidebar.models")} onClick={() => run(onOpenModels)} icon={<Cpu size={UI_ICON_SIZE.navigation} />} />
+              <MoreAction label={t("sidebar.skills")} disabled={skillsDisabled} onClick={() => run(onOpenSkills)} icon={<Layers3 size={UI_ICON_SIZE.navigation} />} />
+              <MoreAction label={t("extensions.title")} onClick={() => run(onOpenExtensions)} icon={<Puzzle size={UI_ICON_SIZE.navigation} />} />
+              <MoreAction label={t("appearance.title")} onClick={() => run(() => onOpenAppearance(moreRef.current))} icon={<Palette size={UI_ICON_SIZE.navigation} />} />
+              {onOpenDesignMode && <MoreAction label={t("topbar.designMode")} onClick={() => run(() => onOpenDesignMode())} icon={<Box size={UI_ICON_SIZE.navigation} />} />}
             </div>
           </div>
         </section>

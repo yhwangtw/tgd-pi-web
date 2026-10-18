@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { X } from "lucide-react";
@@ -74,7 +75,7 @@ export function MobileTurnNavigator({ turns, scrollContainer, messageRefs }: Pro
                   ★ {t("chat.bookmarks")}
                 </button>
                 <button ref={closeRef} type="button" className={styles.close} onClick={() => setOpen(false)} aria-label={t("common.close")}>
-                  <X size={16} aria-hidden />
+                  <X size={UI_ICON_SIZE.control} aria-hidden />
                 </button>
               </div>
             </header>

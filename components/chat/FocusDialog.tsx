@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -71,7 +72,7 @@ export function FocusDialog({ open, title, onClose, children, wrap, onWrapChange
             )}
             {actions}
             <button ref={closeRef} type="button" className={styles.close} onClick={onClose} aria-label={t("common.close")} title={t("common.close")}>
-              <X size={16} aria-hidden />
+              <X size={UI_ICON_SIZE.control} aria-hidden />
             </button>
           </div>
         </header>

@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ArrowLeft, CheckCircle2, Cpu, Plus } from "lucide-react";
@@ -295,7 +296,7 @@ function ModelDetail({
             className={`${styles.testButton} ${isTestDisabled ? styles.testButtonDisabled : ""} ${testState.phase === "success" ? styles.testButtonSuccess : ""}`}
           >
             {testState.phase === "success" && (
-              <CheckCircle2 size={14} strokeWidth={2.4} aria-hidden="true" />
+              <CheckCircle2 size={UI_ICON_SIZE.compact} aria-hidden="true" />
             )}
             {testState.phase === "testing" ? t("models.testing") : testState.phase === "success" ? "OK" : t("models.test")}
           </button>
@@ -613,6 +614,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         description={configPath?.split(/[\\/]/).filter(Boolean).at(-1) ?? t("models.pathUnavailable")}
         descriptionDetail={configPath ?? undefined}
         onClose={onClose}
+        canClose={!saving}
+        hasUnsavedChanges={hasUnsavedChanges}
         size="xwide"
         mobileMode="fullscreen"
         bodyClassName={styles.shellBody}
@@ -621,12 +624,12 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           <div className={styles.footerContent}>
             {saveError && <span className={styles.saveErrorText} role="alert">{saveError}</span>}
             {(conflict || (!revision && !loading && !loadError)) && <button type="button" onClick={() => void loadConfig()} className={styles.cancelButton}>{t("models.reloadDiscard")}</button>}
-            <button type="button" onClick={onClose} className={styles.cancelButton}>
+            <button type="button" onClick={onClose} disabled={saving} className={styles.cancelButton}>
               {t("common.cancel")}
             </button>
             <button type="button" onClick={handleSave} disabled={loading || loadError || conflict || !revision || saving || savedOk || !hasUnsavedChanges}
               className={`${styles.saveButton} ${savedOk ? styles.saveButtonSaved : saving ? styles.saveButtonSaving : styles.saveButtonReady}`}>
-              {savedOk && <CheckCircle2 size={16} strokeWidth={2.4} aria-hidden="true" className={styles.saveCheckIcon} />}
+              {savedOk && <CheckCircle2 size={UI_ICON_SIZE.compact} aria-hidden="true" className={styles.saveCheckIcon} />}
               <span>{savedOk ? t("common.saved") : saving ? t("common.saving") : t("common.save")}</span>
             </button>
           </div>
@@ -644,7 +647,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                 data-testid="provider-health-nav"
                 aria-pressed={selection?.type === "health"}
               >
-                <CheckCircle2 className={styles.healthIcon} strokeWidth={1.8} aria-hidden="true" />
+                <CheckCircle2 className={styles.healthIcon} aria-hidden="true" />
                 <span className={styles.treeItemText}>{t("providerHealth.title")}</span>
               </button>
               <div className={styles.divider} />
@@ -702,7 +705,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                       className={`${styles.providerRow} ${isProviderSelected ? styles.providerRowSelected : ""} ${!isProviderSelected ? "hover-bg" : ""}`}
                       aria-pressed={isProviderSelected}
                     >
-                      <Cpu size={15} strokeWidth={1.8} aria-hidden="true" className={styles.providerIcon} />
+                      <Cpu size={UI_ICON_SIZE.compact} aria-hidden="true" className={styles.providerIcon} />
                       <span className={`${styles.providerName} ${isProviderSelected ? styles.providerNameSelected : ""}`}>
                         {pName}
                       </span>
@@ -735,7 +738,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                       onClick={(e) => { e.stopPropagation(); addModel(pName); }}
                       className={`${styles.addModelButton} hover-bg-text`}
                     >
-                      <Plus size={14} strokeWidth={1.8} aria-hidden="true" />
+                      <Plus size={UI_ICON_SIZE.compact} aria-hidden="true" />
                       <span className={styles.addModelText}>{t("models.addModel")}</span>
                     </button>
                   </div>
@@ -748,7 +751,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
               <button type="button" onClick={() => setPickerOpen(true)} disabled={loading || loadError}
                 className={`${styles.addProviderButton} hover-border-accent`}
               >
-                <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
+                <Plus size={UI_ICON_SIZE.compact} aria-hidden="true" />
                 {t("providers.add")}
               </button>
             </div>
@@ -757,12 +760,12 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           {/* Right: detail */}
           <div className={styles.rightPanel} data-testid="models-config-detail">
             <button type="button" className={styles.mobileBack} onClick={() => setMobilePane("list")}>
-              <ArrowLeft size={16} strokeWidth={1.8} aria-hidden="true" />
+              <ArrowLeft size={UI_ICON_SIZE.compact} aria-hidden="true" />
               {t("models.back")}
             </button>
             {loadError ? <div className={styles.emptyState}><span className={styles.saveErrorText} role="alert">{t("models.loadFailed")}</span><button type="button" onClick={() => void loadConfig()}>{t(hasUnsavedChanges ? "models.reloadDiscard" : "common.refresh")}</button></div> : loading ? null : detailContent ?? (
               <div className={styles.emptyState}>
-                <Cpu size={30} strokeWidth={1.6} aria-hidden="true" />
+                <Cpu size={30} aria-hidden="true" />
                 <strong>{t("models.noneSelected")}</strong>
                 <span>{t("models.noneSelectedHint")}</span>
                 <button type="button" onClick={() => setPickerOpen(true)}>{t("providers.add")}</button>

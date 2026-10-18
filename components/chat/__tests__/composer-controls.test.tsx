@@ -466,6 +466,31 @@ describe("composer controls", () => {
     expect(toolbar?.textContent).toContain("Enter 傳送 · Shift+Enter 換行");
   });
 
+  it("keeps icon actions named and announces their current settings", async () => {
+    const compact = vi.fn();
+    await render(<ChatInput onSend={vi.fn()} onAbort={vi.fn()} isStreaming={false}
+      thinkingLevel="high" onThinkingLevelChange={vi.fn()} toolPreset="default" onToolPresetChange={vi.fn()}
+      onCompact={compact} onEphemeralChange={vi.fn()} onDurableChange={vi.fn()} />);
+    const controls = container!.querySelector<HTMLButtonElement>('[aria-label="More composer controls"]')!;
+    expect(controls.textContent).toBe("");
+    expect(controls.title).toBe("Composer controls");
+    await act(async () => controls.click());
+    const thinking = container!.querySelector<HTMLButtonElement>('[aria-label="Change reasoning level"]')!;
+    expect(thinking.textContent).toBe("");
+    expect(document.getElementById(thinking.getAttribute("aria-describedby")!)?.textContent).toBe("High");
+    expect(thinking.title).toContain("High");
+    await act(async () => thinking.click());
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    await nextFrame();
+    expect(controls.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(thinking);
+    const tools = container!.querySelector<HTMLButtonElement>('[aria-label="Change tool preset"]')!;
+    expect(tools.textContent).toBe("");
+    expect(document.getElementById(tools.getAttribute("aria-describedby")!)?.textContent).toBeTruthy();
+    await act(async () => container!.querySelector<HTMLButtonElement>('[aria-label="Compact"]')!.click());
+    expect(compact).toHaveBeenCalledOnce();
+  });
+
   it("keeps secondary controls behind one disclosure button", async () => {
     await render(
       <ChatInput
@@ -490,7 +515,7 @@ describe("composer controls", () => {
     expect(panel.textContent).toContain("Reasoning");
     expect(panel.textContent).toContain("Tools");
     expect(panel.textContent).toContain("Response scroll");
-    expect(panel.textContent).toContain("Smart follow");
+    expect(panel.querySelector('[role="radio"][aria-label="Smart follow"]')).not.toBeNull();
     expect(panel.querySelector('[role="radiogroup"][aria-label="Change response scroll mode"]')).not.toBeNull();
     expect(panel.textContent).toContain("Close");
 

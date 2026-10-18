@@ -8,12 +8,12 @@
 .tabActive { background: var(--bg-selected); color: var(--text); font-weight: var(--weight-semibold); }
 .body { flex: 1; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere; }
 .symbolSearch { padding: var(--space-2); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-1); border-bottom: 1px solid var(--border); }
-.symbolSearch input { grid-column: 1 / -1; min-width: 0; height: 30px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text); font: inherit; font-size: var(--text-2xs); }
-.symbolSearch button { min-height: 30px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--text-2xs); cursor: pointer; }
+.symbolSearch input { grid-column: 1 / -1; min-width: 0; height: 30px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text); font: inherit; font-size: var(--type-ui-size); }
+.symbolSearch button { min-height: 30px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--type-label-size); cursor: pointer; }
 .symbolSearch button:disabled { opacity: .4; cursor: default; }
 .symbolResult { width: 100%; padding: var(--space-2) var(--space-2); display: grid; gap: var(--space-optical); border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
 .symbolResult:hover { background: var(--bg-hover); }
-.symbolResult span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-2xs); }
+.symbolResult span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-label-size); }
 .list { display: flex; flex-direction: column; padding: var(--space-2); }
 .row, .commit { width: 100%; min-height: 34px; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-row); background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
 .row:hover, .commit:hover { background: var(--bg-hover); color: var(--text); }
@@ -25,7 +25,7 @@
 .groupLabel { padding: var(--space-2) var(--space-2) var(--space-1); color: var(--text-dim); font: var(--text-2xs) var(--font-mono); letter-spacing: var(--tracking-wide); text-transform: uppercase; }
 .problem { margin: 3px 0; border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; }
 .problemsPane { min-height: 100%; }
-.problemActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-2); border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: var(--text-2xs); }
+.problemActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-2); border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: var(--type-label-size); }
 .problemActions button { min-height: 30px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-hover); color: var(--text-muted); cursor: pointer; }
 .problemMain { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-2); border: 0; background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
 .problemError { color: var(--color-error-text); }.problemWarning { color: var(--color-warning-text); }
@@ -56,3 +56,8 @@
 @media (max-width: 700px) and (max-height: 500px) {
   .drawer { height: 100%; border-radius: 0; }
 }
+
+.header button, .note > button:last-child { display: inline-grid; place-items: center; }
+
+.header strong { font-size: var(--type-title-size); font-weight: var(--weight-semibold); }
+.groupLabel { font-family: var(--font-ui); font-size: var(--type-label-size); letter-spacing: var(--tracking-normal); text-transform: none; }

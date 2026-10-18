@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -297,9 +298,9 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
       <div className={s.modal} role="dialog" aria-modal="true" aria-label={t("cwd.switcherTitle")} data-testid="project-switcher">
         <div className={s.inputRow}>
           {pathMode ? (
-            <Folder size={16} strokeWidth={1.8} color="var(--color-accent)" aria-hidden="true" />
+            <Folder size={UI_ICON_SIZE.compact} color="var(--color-accent)" aria-hidden="true" />
           ) : (
-            <Search size={16} strokeWidth={1.8} color="var(--text-dim)" aria-hidden="true" />
+            <Search size={UI_ICON_SIZE.compact} color="var(--text-dim)" aria-hidden="true" />
           )}
           <input
             ref={inputRef}
@@ -351,13 +352,13 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
                     >
                       <span className={s.rowIcon}>
                         {row.kind === "worktree" || row.kind === "discovered" ? (
-                          <GitBranch size={14} strokeWidth={1.8} aria-hidden="true" />
+                          <GitBranch size={UI_ICON_SIZE.compact} aria-hidden="true" />
                         ) : (
-                          <Folder size={15} strokeWidth={1.8} aria-hidden="true" />
+                          <Folder size={UI_ICON_SIZE.compact} aria-hidden="true" />
                         )}
                       </span>
                       <span className={s.rowName}>
-                        {row.pinned && <Star className={s.pinDot} size={12} strokeWidth={1.8} fill="currentColor" aria-hidden="true" />}
+                        {row.pinned && <Star className={s.pinDot} size={UI_ICON_SIZE.inline} fill="currentColor" aria-hidden="true" />}
                         <Name text={row.name} q={pathMode ? "" : query.trim()} />
                       </span>
                       <span className={s.rowPath}>{row.kind === "dir" ? "" : shortenCwd(row.path, homeDir)}</span>
@@ -370,7 +371,7 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
                         <span className={s.rowActions}>
                           <IconButton
                             label={row.pinned ? t("cwd.unpin") : t("cwd.pin")}
-                            icon={<Star strokeWidth={1.8} fill={row.pinned ? "currentColor" : "none"} />}
+                            icon={<Star fill={row.pinned ? "currentColor" : "none"} />}
                             size="compact"
                             onClick={(e) => { e.stopPropagation(); togglePin(row.path); }}
                             className={s.rowActionBtn}
@@ -378,7 +379,7 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
                           {row.path !== selectedCwd && (
                             <IconButton
                               label={t("cwd.hide")}
-                              icon={<X strokeWidth={2} />}
+                              icon={<X />}
                               size="compact"
                               onClick={(e) => { e.stopPropagation(); hideProject(row.path); }}
                               className={s.rowActionBtn}

@@ -344,6 +344,9 @@ const MESSAGES = {
   "explorer.download": { en: "Download", zh: "下載" },
   "tabs.close": { en: "Close file", zh: "關閉檔案" },
   "tabs.files": { en: "Open files", zh: "已開啟的檔案" },
+  "tabs.showAll": { en: "Show all open files", zh: "顯示所有分頁" },
+  "tabs.scrollLeft": { en: "Scroll tabs left", zh: "向左捲動分頁" },
+  "tabs.scrollRight": { en: "Scroll tabs right", zh: "向右捲動分頁" },
   "tabs.closeOthers": { en: "Close others", zh: "關閉其他" },
   "tabs.closeAll": { en: "Close all", zh: "全部關閉" },
   "tabs.pinned": { en: "Pinned", zh: "已釘選" },
@@ -1313,6 +1316,7 @@ const MESSAGES = {
   "attention.push": { en: "Push", zh: "推播" },
 
   // ── Chat transcript ──
+  "common.discardUnsavedChanges": { en: "Discard unsaved changes and close?", zh: "要捨棄尚未儲存的變更並關閉嗎？" },
   "common.close": { en: "Close", zh: "關閉" },
   "common.dismiss": { en: "Dismiss", zh: "關閉通知" },
   "common.notifications": { en: "Notifications", zh: "通知" },

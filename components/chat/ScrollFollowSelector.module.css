@@ -19,9 +19,10 @@
   border: 0;
   border-radius: var(--radius-row);
   background: transparent;
-  color: var(--text-dim);
+  color: var(--text-muted);
   cursor: pointer;
-  font-size: var(--text-xs);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   white-space: nowrap;
 }
@@ -42,22 +43,34 @@
   box-shadow: var(--color-shadow-control);
 }
 
-.dot {
-  display: none;
-  width: 5px;
-  height: 5px;
-  flex: 0 0 auto;
-  border-radius: var(--radius-circle);
-  background: currentColor;
+.option > svg { flex-shrink: 0; }
+.iconGroup {
+  padding: 0 var(--space-2);
+  margin-inline: var(--space-1);
+  border: 0;
+  border-inline: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
 }
-
-.optionActive .dot { display: block; }
+.iconGroup .option {
+  width: var(--control-md);
+  height: var(--control-md);
+  padding: 0;
+  border-radius: var(--radius-control);
+}
+.iconGroup .optionActive { box-shadow: none; }
+@media (pointer: coarse) {
+  .iconGroup .option { width: var(--control-touch); height: var(--control-touch); }
+}
+@media (max-width: 700px) {
+  .option > svg { display: none; }
+}
 
 @media (pointer: coarse) {
   .option { min-height: var(--control-touch); }
 }
 
-:global(html[data-ui-style="trae"]) .group {
+:global(html[data-ui-style="trae"]) .group:not(.iconGroup) {
   border-color: var(--trae-hairline);
   background: var(--trae-control);
 }

@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
@@ -106,7 +107,7 @@ export function DiffPanel({ cwd, path, onClose, onAnnotate }: Props) {
           <button className={s.revertHunk} disabled={reverting} onClick={() => void revertHunk()}>{t(reverting ? "files.diff.reverting" : "files.diff.revertHunk")}</button>
         </div>}
         <button onClick={onClose} className={s.close} aria-label={t("files.diff.close")}>
-          <X size={15} strokeWidth={2} aria-hidden />
+          <X size={UI_ICON_SIZE.control} aria-hidden />
         </button>
       </div>
       <div className={s.body} ref={bodyRef}>

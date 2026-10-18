@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CommandPaletteApi, PaletteResult } from "@/hooks/useCommandPalette";
@@ -121,7 +122,7 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
       <div className={styles.header}>
         <div className={`${styles.title} chrome-mono`}>{t("search.unifiedTitle")}</div>
         <div className={styles.inputRow}>
-          <span className={styles.searchIcon} aria-hidden><Search size={15} strokeWidth={1.8} /></span>
+          <span className={styles.searchIcon} aria-hidden><Search size={UI_ICON_SIZE.compact} /></span>
           <input
             ref={inputRef}
             className={styles.input}
@@ -148,7 +149,7 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
           />
           {query && (
             <button className={styles.clearButton} onClick={() => palette.setQuery("")} aria-label={t("search.clear")}>
-              <X size={15} strokeWidth={1.8} aria-hidden />
+              <X size={UI_ICON_SIZE.control} aria-hidden />
             </button>
           )}
         </div>
@@ -173,14 +174,14 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
             aria-label={t("search.filters")}
             aria-haspopup="dialog"
           >
-            <SlidersHorizontal size={14} strokeWidth={1.8} aria-hidden />
+            <SlidersHorizontal size={UI_ICON_SIZE.compact} aria-hidden />
             <span>{t("search.filters")}</span>
             {filterCount > 0 && <strong>{filterCount}</strong>}
           </button>
         )}
         {(showFiles || showContent) && (
           <button type="button" className={`${styles.filterButton} ${fileOptionCount ? styles.filterButtonActive : ""}`} onClick={() => setFileScopeOpen(true)} aria-haspopup="dialog" disabled={!cwd}>
-            <SlidersHorizontal size={14} aria-hidden />
+            <SlidersHorizontal size={UI_ICON_SIZE.compact} aria-hidden />
             <span>{t("search.fileScope")}</span>
             {fileOptionCount > 0 && <strong>{fileOptionCount}</strong>}
           </button>
@@ -191,11 +192,11 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
         </p>}
         {showSessions && filterCount > 0 && (
           <div className={styles.activeFilters} aria-label={t("search.activeFilters")}>
-            {sessionFilters.repository && <button onClick={() => setSessionFilters((value) => ({ ...value, repository: null }))}>{sessionFilters.repository}<X size={12} aria-hidden /></button>}
-            {sessionFilters.branch && <button onClick={() => setSessionFilters((value) => ({ ...value, branch: null }))}>{sessionFilters.branch === "not-git" ? t("topbar.notGitRepository") : sessionFilters.branch}<X size={12} aria-hidden /></button>}
-            {sessionFilters.model && <button onClick={() => setSessionFilters((value) => ({ ...value, model: null }))}>{sessionFilters.model}<X size={12} aria-hidden /></button>}
-            {sessionFilters.status && <button onClick={() => setSessionFilters((value) => ({ ...value, status: null }))}>{t(`search.status.${sessionFilters.status}` as MsgKey)}<X size={12} aria-hidden /></button>}
-            {sessionFilters.date !== "any" && <button onClick={() => setSessionFilters((value) => ({ ...value, date: "any" }))}>{t(`search.date.${sessionFilters.date}` as MsgKey)}<X size={12} aria-hidden /></button>}
+            {sessionFilters.repository && <button onClick={() => setSessionFilters((value) => ({ ...value, repository: null }))}>{sessionFilters.repository}<X size={UI_ICON_SIZE.compact} aria-hidden /></button>}
+            {sessionFilters.branch && <button onClick={() => setSessionFilters((value) => ({ ...value, branch: null }))}>{sessionFilters.branch === "not-git" ? t("topbar.notGitRepository") : sessionFilters.branch}<X size={UI_ICON_SIZE.compact} aria-hidden /></button>}
+            {sessionFilters.model && <button onClick={() => setSessionFilters((value) => ({ ...value, model: null }))}>{sessionFilters.model}<X size={UI_ICON_SIZE.compact} aria-hidden /></button>}
+            {sessionFilters.status && <button onClick={() => setSessionFilters((value) => ({ ...value, status: null }))}>{t(`search.status.${sessionFilters.status}` as MsgKey)}<X size={UI_ICON_SIZE.compact} aria-hidden /></button>}
+            {sessionFilters.date !== "any" && <button onClick={() => setSessionFilters((value) => ({ ...value, date: "any" }))}>{t(`search.date.${sessionFilters.date}` as MsgKey)}<X size={UI_ICON_SIZE.compact} aria-hidden /></button>}
           </div>
         )}
         <div className={styles.savedViews} aria-label={t("search.savedViews")}>
@@ -209,12 +210,12 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
                 aria-label={t("search.deleteSavedView").replace("{name}", view.name)}
                 onClick={() => setSavedViews(deleteSavedSearchView(view.id, savedViews))}
               >
-                <X size={12} strokeWidth={2} aria-hidden />
+                <X size={UI_ICON_SIZE.compact} aria-hidden />
               </button>
             </div>
           ))}
           <button type="button" className={styles.saveViewButton} onClick={() => setSaveViewOpen(true)} disabled={!trimmed && filterCount === 0 && fileOptionCount === 0 && !caseSensitive}>
-            <BookmarkPlus size={13} strokeWidth={1.8} aria-hidden />
+            <BookmarkPlus size={UI_ICON_SIZE.compact} aria-hidden />
             {t("search.saveView")}
           </button>
         </div>

@@ -38,7 +38,7 @@ beforeEach(() => {
   getCount = 0; failRead = false; conflict = false; conflictStatus = 409; unknownOutcome = null; requests.length = 0; fetchMock.mockClear(); vi.stubGlobal("fetch", fetchMock);
   container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const button = (label: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label)!;
 async function input(value: string) {
   const field = document.querySelector<HTMLInputElement>('input[aria-label="Provider name"]')!;
@@ -74,6 +74,28 @@ describe("models config draft safety", () => {
     const reload = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.includes("discard draft"))!;
     await act(async () => reload.click());
     expect(getCount).toBe(2); expect(button("alpha")).toBeTruthy(); expect(button("renamed")).toBeUndefined();
+  });
+  it("protects an edited config from accidental outside dismissal", async () => {
+    const close = vi.fn();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await act(async () => root.render(<ModelsConfig onClose={close} />));
+    await act(async () => {
+      document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, isPrimary: true }));
+      document.body.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    });
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(confirm).not.toHaveBeenCalled();
+    close.mockClear();
+    await act(async () => button("alpha").click());
+    await input("renamed");
+    await act(async () => button("Rename").click());
+    await act(async () => {
+      document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, isPrimary: true }));
+      document.body.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    expect(button("renamed")).toBeTruthy();
   });
   it("fails closed on read errors, suppresses server details and disables save", async () => {
     failRead = true;

@@ -1,4 +1,5 @@
 "use client";
+import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useEffect, useCallback } from "react";
 import { Check } from "lucide-react";
@@ -109,7 +110,7 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
             className={saveBtnClass}
           >
             {savedOk && (
-              <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+              <Check size={UI_ICON_SIZE.compact} aria-hidden="true" />
             )}
             {savedOk ? t("common.saved") : saving ? t("common.saving") : t("common.save")}
           </button>
