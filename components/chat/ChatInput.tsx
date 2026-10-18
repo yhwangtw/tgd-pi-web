@@ -1,7 +1,7 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import React, { useRef, useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef, KeyboardEvent, type ReactNode, type RefObject } from "react";
+import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo, useImperativeHandle, forwardRef, KeyboardEvent, type ReactNode, type RefObject } from "react";
 import {
   ArrowRight,
   History,
@@ -42,12 +42,13 @@ import { loadStreamingSendMode, resolveStreamingSendMode, saveStreamingSendMode,
 import { requestOpenFile } from "@/lib/file-links";
 import type { ModelCatalogEntry } from "@/lib/model-catalog-types";
 import type { ModelCatalogDiagnostic, ModelCatalogStatus } from "@/hooks/use-model-catalog";
+import { ScreenshotButton } from "./ScreenshotButton";
 import { DialogShell } from "@/components/ui/DialogShell";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
   mimeType: string;
-  previewUrl: string; // object URL for display
+  previewUrl: string; // local object/data URL for display
 }
 
 export interface MessageQuote {
@@ -224,6 +225,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // Failed uploads must be retried or dismissed, not silently omitted on send.
   const uploadsPending = fileUploads.items.length > 0;
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  const imageEpoch = useRef(0);
+  const imagesRef = useRef(attachedImages);
+  imagesRef.current = attachedImages;
+  useLayoutEffect(() => {
+    setAttachedImages([]);
+    return () => {
+      // Invalidate pending reads; this ref is a generation counter, not a DOM node.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      imageEpoch.current++;
+      imagesRef.current.forEach(image => URL.revokeObjectURL(image.previewUrl));
+    };
+  }, [cwd, persistKey]);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashFilter, setSlashFilter] = useState("");
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
@@ -316,6 +329,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const processImageFiles = useCallback(async (files: File[]) => {
     const imageFiles = files.filter((f) => f.type.startsWith("image/"));
     if (!imageFiles.length) return;
+    const epoch = imageEpoch.current;
     const newImages = await Promise.all(
       imageFiles.map(
         (file) =>
@@ -332,6 +346,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           })
       )
     );
+    if (epoch !== imageEpoch.current) {
+      newImages.forEach(image => URL.revokeObjectURL(image.previewUrl));
+      return;
+    }
     setAttachedImages((prev) => [...prev, ...newImages]);
   }, []);
 
@@ -1114,6 +1132,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             >
               <Paperclip size={UI_ICON_SIZE.control} aria-hidden="true" />
             </button>
+            <ScreenshotButton
+              key={JSON.stringify([cwd, persistKey])}
+              className={isSubmitting ? styles.attachButtonDisabled : styles.attachButtonEnabled}
+              disabled={isSubmitting}
+              onChooseFile={() => fileInputRef.current?.click()}
+              onAttach={({ dataUrl }) => setAttachedImages(previous => [...previous, {
+                data: dataUrl.slice(dataUrl.indexOf(",") + 1), mimeType: "image/png", previewUrl: dataUrl,
+              }])}
+            />
             {isStreaming && onSteer && onFollowUp && (
               <div className={styles.sendModeSwitch} aria-label={t("input.sendMode")} role="group">
                 <button

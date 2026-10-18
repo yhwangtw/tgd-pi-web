@@ -266,6 +266,7 @@ MCP guide for API revisions, validation limits and saved-but-reload-failed warni
 ### Files and git
 
 - Attach images or general files using the composer's paperclip or drag-and-drop. Documents are saved in the selected project (up to 50 MB each) and inserted as `@file` references; their contents are read with the agent's available tools, not automatically extracted. Upload errors remain inline with retry/dismiss actions. Removing a reference does not delete the saved file.
+- Use the screenshot icon beside the paperclip to capture a screen, window or tab in supported desktop browsers on Windows, macOS and Linux. The browser asks you to select a source each time; sharing stops after one frame. Drag in the preview to select an area, redraw to reselect, or restore the full image. Arrow keys move the selection; Shift+arrows resize it. Attach exports only the selected pixels. You can also cancel or retake. The image stays local until you send the message. HTTPS or localhost is required. Unsupported browsers and mobile devices can use system screenshots, then paste or choose the saved image.
 - The Files explorer has a visible **Upload files** button. Uploads never overwrite an existing filename.
 
 - Project tree, recursive filename search, text editing, Markdown/HTML/image preview, and clickable file paths in chat.
