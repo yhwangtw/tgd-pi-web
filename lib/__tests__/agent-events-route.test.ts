@@ -1,16 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const harness = vi.hoisted(() => ({ subscribe: vi.fn(), unsubscribe: vi.fn(), get: vi.fn(), resume: vi.fn(), start: vi.fn(), resolve: vi.fn() }));
+const harness = vi.hoisted(() => ({ subscribe: vi.fn(), unsubscribe: vi.fn(), get: vi.fn(), durable: vi.fn(), resume: vi.fn(), start: vi.fn(), resolve: vi.fn() }));
 vi.mock("@/lib/rpc-manager", () => ({ getRpcSession: harness.get, getResumableRpcSession: harness.resume, startRpcSession: harness.start }));
 vi.mock("@/lib/session-reader", () => ({ resolveSessionPath: harness.resolve }));
+vi.mock("@/lib/durable-chat", () => ({ getDurableChat: harness.durable, openDurableChat: vi.fn() }));
 import { GET } from "../../app/api/agent/[id]/events/route";
 import { decodeSessionData, encodeSessionData } from "../session-tree-wire";
 import type { SessionTreeNode } from "../types";
+import { AgentEventLog, type AgentStreamRecord } from "../agent-event-log";
+import { AgentStreamDecoder } from "../agent-stream-wire";
 
 describe("agent events HTTP replay transport", () => {
   beforeEach(() => {
     vi.useFakeTimers(); harness.subscribe.mockReset(); harness.unsubscribe.mockReset();
-    harness.resume.mockReset(); harness.start.mockReset(); harness.resolve.mockReset();
+    harness.resume.mockReset(); harness.start.mockReset(); harness.resolve.mockReset(); harness.durable.mockReset();
     harness.get.mockReturnValue({ isAlive: () => true, onStreamEvent: harness.subscribe });
     harness.subscribe.mockImplementation((listener) => {
       listener({ id: "epoch:3", data: JSON.stringify({ type: "message_end", message: "complete" }) });
@@ -100,6 +103,53 @@ describe("agent events HTTP replay transport", () => {
     expect(restored).toEqual({ ...snapshot, protocolVersion: format ? 2 : 1, sessionData: format === "flat-v2" ? data : format ? encodeSessionData(original) : original });
     expect(decodeSessionData(restored.sessionData)).toEqual(original);
     await reader.cancel(); expect(harness.unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it.each(["standard", "durable"])("negotiates exact incremental updates for %s, preserving cursor replay and full snapshots", async engine => {
+    const log = new AgentEventLog("delta");
+    const update = (text: string) => ({ type: "message_update", message: { role: "assistant", content: [{ type: "text", text }] } });
+    const first = log.append(update("x".repeat(4000)));
+    const second = log.append(update("x".repeat(4000) + "2"));
+    const third = log.append(update("x".repeat(4000) + "3"));
+    const snapshot = { id: third.id, type: "session_snapshot", data: JSON.stringify({ type: "session_snapshot", streamingMessage: update("snapshot").message }) };
+    const fourth = log.append(update("x".repeat(4000) + "4"));
+    const fifth = log.append(update("x".repeat(4000) + "5"));
+    const end = log.append({ type: "message_end", message: update("complete").message });
+    let deliver!: (record: AgentStreamRecord) => void;
+    harness.subscribe.mockImplementation(listener => { deliver = listener; for (const record of [second, third, snapshot]) listener(record); return harness.unsubscribe; });
+    const sid = engine === "durable" ? "dw_00000000-0000-0000-0000-000000000000_1" : "one";
+    if (engine === "durable") harness.durable.mockReturnValue({ sessionId: sid, isAlive: () => true, resume: async () => {}, onStreamEvent: harness.subscribe });
+    const response = await GET(new Request(`http://localhost/api/agent/${sid}/events?tree=flat-v2&stream=delta-v1&cursor=${encodeURIComponent(first.id!)}`), { params: Promise.resolve({ id: sid }) });
+    deliver(fourth); deliver(fifth); deliver(end);
+    const reader = response.body!.getReader(); await reader.read();
+    const decoder = new AgentStreamDecoder();
+    const native = [second, third, snapshot, fourth, fifth, end];
+    const types: string[] = [];
+    for (const original of native) {
+      const frame = new TextDecoder().decode((await reader.read()).value);
+      const data = frame.split("data: ")[1].trim();
+      types.push(JSON.parse(data).type);
+      expect(frame).toContain(`id: ${original.id}\n`);
+      expect(decoder.decode(JSON.parse(data), data, original.id!)).toEqual(JSON.parse(original.data));
+    }
+    expect(types).toEqual(["message_update", "message_update_delta", "session_snapshot", "message_update", "message_update_delta", "message_end"]);
+    expect(harness.subscribe).toHaveBeenCalledWith(expect.any(Function), first.id);
+    await reader.cancel();
+    expect(harness.unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it.each(["", "&stream=unknown"])("keeps exact legacy message frames without supported negotiation (%s)", async query => {
+    const log = new AgentEventLog("legacy");
+    const first = log.append({ type: "message_update", message: { content: "x".repeat(4000) } });
+    const second = log.append({ type: "message_update", message: { content: "x".repeat(4000) + "y" } });
+    expect(second.delta).toBeDefined();
+    harness.subscribe.mockImplementation(listener => { listener(first); listener(second); return harness.unsubscribe; });
+    const response = await GET(new Request(`http://localhost/api/agent/one/events?tree=flat-v2${query}`), { params: Promise.resolve({ id: "one" }) });
+    const reader = response.body!.getReader(); await reader.read();
+    for (const original of [first, second]) {
+      expect(new TextDecoder().decode((await reader.read()).value)).toBe(`id: ${original.id}\ndata: ${original.data}\n\n`);
+    }
+    await reader.cancel();
   });
 
   it("recovers a lost replacement event and POST response from the old cursor without reopening its old file", async () => {

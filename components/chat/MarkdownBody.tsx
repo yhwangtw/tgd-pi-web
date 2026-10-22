@@ -2,7 +2,7 @@
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import type { Pluggable, PluggableList } from "unified";
-import { createElement, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createElement, Fragment, memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createContext, useContext } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeRaw from "rehype-raw";
@@ -17,6 +17,7 @@ import { looksLikeFilePath, parseMarkdownFileLink, requestOpenFile } from "@/lib
 import { encodeFilePathForApi, normalizeFilePathSlashes } from "@/lib/file-paths";
 import { useI18n } from "@/lib/i18n";
 import { parseOutputSegments } from "@/lib/output-design";
+import { splitStreamingMarkdown } from "@/lib/streaming-markdown";
 import { FocusDialog } from "./FocusDialog";
 import { StructuredOutputCard } from "./StructuredOutputCard";
 import styles from "./MarkdownBody.module.css";
@@ -223,6 +224,7 @@ export function MarkdownBody({ children, className, isStreaming, allowSafeHtml =
     <div className={[styles.outputStack, className].filter(Boolean).join(" ")}>
       <MarkdownRenderer
         markdown={normalizedMarkdown}
+        allowStreamingChunks={!allowSafeHtml && !sourceFilePath}
         isStreaming={isStreaming}
         sourceFilePath={sourceFilePath}
         remarkPlugins={remarkPlugins}
@@ -238,6 +240,7 @@ const MarkdownContext = createContext<{ isStreaming?: boolean; sourceFilePath?: 
 function MarkdownRenderer({
   markdown,
   className,
+  allowStreamingChunks = false,
   isStreaming,
   sourceFilePath,
   remarkPlugins,
@@ -245,6 +248,7 @@ function MarkdownRenderer({
 }: {
   markdown: string;
   className?: string;
+  allowStreamingChunks?: boolean;
   isStreaming?: boolean;
   sourceFilePath?: string;
   remarkPlugins: PluggableList;
@@ -352,16 +356,19 @@ function MarkdownRenderer({
   }), [sourceFilePath]);
   // Keep the parsed Markdown element stable when only stream/context metadata
   // changes. Context consumers (code blocks/links) still receive those updates.
-  const renderedMarkdown = useMemo(() => (
-      <ReactMarkdown
-        urlTransform={(url, key) => key === "href" && parseMarkdownFileLink(url) ? url : defaultUrlTransform(url)}
-        remarkPlugins={remarkPlugins}
-        rehypePlugins={rehypePlugins}
-        components={components}
-      >
-        {markdown}
-      </ReactMarkdown>
-  ), [markdown, remarkPlugins, rehypePlugins, components]);
+  const streamingChunks = useMemo(
+    () => allowStreamingChunks && isStreaming ? splitStreamingMarkdown(markdown) : null,
+    [allowStreamingChunks, isStreaming, markdown],
+  );
+  const renderedMarkdown = useMemo(() => streamingChunks ? (
+    streamingChunks.map((chunk, index) => <Fragment key={index}>
+      {/* Match the full parser's inter-block whitespace without extra wrappers. */}
+      {index > 0 && "\n"}
+      <MarkdownChunk markdown={chunk} components={components} remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} />
+    </Fragment>)
+  ) : (
+    <MarkdownChunk markdown={markdown} components={components} remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} />
+  ), [markdown, streamingChunks, remarkPlugins, rehypePlugins, components]);
   const context = useMemo(() => ({ isStreaming, sourceFilePath }), [isStreaming, sourceFilePath]);
   return (
     <MarkdownContext.Provider value={context}><div className={["markdown-body", className].filter(Boolean).join(" ")}>
@@ -369,6 +376,23 @@ function MarkdownRenderer({
     </div></MarkdownContext.Provider>
   );
 }
+
+
+// Memoize the parser, not a surrounding layout element: completed chunks keep
+// their DOM and CSS first/last-child behavior while only the active tail grows.
+const MarkdownChunk = memo(function MarkdownChunk({ markdown, components, remarkPlugins, rehypePlugins }: {
+  markdown: string;
+  components: Components;
+  remarkPlugins: PluggableList;
+  rehypePlugins: PluggableList;
+}) {
+  return <ReactMarkdown
+    urlTransform={(url, key) => key === "href" && parseMarkdownFileLink(url) ? url : defaultUrlTransform(url)}
+    remarkPlugins={remarkPlugins}
+    rehypePlugins={rehypePlugins}
+    components={components}
+  >{markdown}</ReactMarkdown>;
+});
 
 function normalizeDisplayMath(markdown: string): string {
   const lineBreak = markdown.includes("\r\n") ? "\r\n" : "\n";

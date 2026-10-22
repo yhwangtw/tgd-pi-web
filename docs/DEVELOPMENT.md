@@ -565,6 +565,60 @@ retain the nested version-1 format until reloaded; its historical depth limit st
 Do not serialize a nested internal tree on a version-2 transport path. Labels,
 root order, branch order and parent IDs must round-trip unchanged.
 
+### Streaming latency and incremental transport
+Current clients additionally negotiate `stream=delta-v1`. The runtime retains
+immutable full events, plus a bounded JSON-splice delta when it is smaller.
+Each connection/replay starts with a full message update; snapshots and message
+boundaries reset the delta baseline. Completed messages stay full and native.
+A missing or invalid base triggers one cursorless snapshot reconnect and turns
+off deltas for that session. Older clients keep the original full-event format.
+This reduces wire bytes; both server serialization and client reconstruction /
+JSON parsing still work on the full message. The replay log counts full and delta
+bytes within its existing limit.
+
+The first nonempty text, thinking, tool or image update is published immediately.
+Later snapshots coalesce at 16 ms, backing off to 33 / 80 ms for long messages or
+a late event loop. Completion uses the authoritative final message; session
+changes cancel queued updates. Plain streaming paragraphs and ATX headings reuse
+parsed blocks; context-dependent Markdown falls back to full parsing, as does the
+final completed message. There is no truncation or new visual style.
+
+Normal foreground prompts carry an ephemeral `timingId`. `run_timing` SSE frames
+are live observations, excluded from the replay log and cursor deduplication.
+Client diagnostics are bounded to 30 local records, with no prompt, response,
+credentials, persistence or telemetry. Listen for `pi-run-latency` during a local
+audit, or read terminal `performance.getEntriesByType("measure")` entries named
+`pi.web.run:<id>`. Client durations start at Send handling; `requestSentMs` marks
+the command boundary, `firstContentMs` means first assistant **text** received,
+`firstCommitMs` means a React DOM commit with that text, and `displayLagMs` is the
+difference. A DOM commit is not physical display paint.
+
+Server durations have their own clock: `accepted`, `provider_request`,
+`first_content`, `completed`. The native before-request hook is a dispatch
+boundary, not proof of remote receipt. Server first content includes thinking,
+tools and images and is therefore different from client first text. Durable's
+existing 100 ms progress checkpoint interval is preserved and included in its
+host-observed output time. Never subtract client and server clock readings.
+Switching/reconnecting, including the normal new-session remount, interrupts the
+local observation rather than mislabelling replay as live first output. A failed
+abort does not count as an acknowledged cancellation.
+
+Offline comparison helpers use only generated fixture data and the project's
+bundled Pi version, never a global CLI or a paid provider:
+
+```bash
+node scripts/bench-stream-transport.mjs BASE_REVISION
+node scripts/bench-streaming-runtime.mjs --profile short --runs 5 --output /tmp/cli-short.json
+# Build an isolated candidate first; this opt-in suite starts it on port 30177.
+PI_STREAM_EXPECT_TIMING=1 npx playwright test --config e2e/benchmarks/playwright.config.ts
+```
+
+The opt-in browser suite uses real Chromium, a deterministic offline provider and
+exact output assertions. It measures Send click to DOM text and records session
+setup separately. Its extra model does not enter the normal E2E suite. CLI cold
+process startup, CLI warm JSON receipt and browser DOM time have different
+boundaries; offline numbers do not prove production provider or TUI performance.
+
 ### Two kinds of branching — don't confuse them
 - **Fork**: new independent `.jsonl` file; shown as a child via
   `parentSession` header (display metadata only — safe to rewrite files).

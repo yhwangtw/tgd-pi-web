@@ -13,6 +13,7 @@ vi.mock("../use-model-catalog", () => ({ useModelCatalog: () => ({ modelNames: {
 import { useAgentSession } from "../useAgentSession";
 import { setIdleTitle, setRunningTitle } from "@/lib/attention";
 import { encodeSessionData } from "@/lib/session-tree-wire";
+import { readRunLatencyRecords } from "@/lib/run-latency";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 class FakeEventSource {
@@ -87,6 +88,85 @@ describe("session reconciliation and first-prompt ordering", () => {
     expect(setRunningTitle).toHaveBeenLastCalledWith("Running renamed");
     await act(async () => root.render(<Harness key="new" selected={null} />));
     expect(setIdleTitle).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it("shows first content immediately and coalesces subsequent updates without delaying completion", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    const update = (text: string) => ({ ...assistant, content: [{ type: "text", text }] }) as AgentMessage;
+    await act(async () => current.handleAgentEventRef.current?.({ type: "message_start", message: update("") }));
+    await act(async () => current.handleAgentEventRef.current?.({ type: "message_update", message: update("first") }));
+    expect(current.streamState.streamingMessage).toMatchObject(update("first"));
+    await act(async () => {
+      current.handleAgentEventRef.current?.({ type: "message_update", message: update("second") });
+      current.handleAgentEventRef.current?.({ type: "message_update", message: update("latest") });
+      vi.advanceTimersByTime(15);
+    });
+    expect(current.streamState.streamingMessage).toMatchObject(update("first"));
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(current.streamState.streamingMessage).toMatchObject(update("latest"));
+    await act(async () => {
+      current.handleAgentEventRef.current?.({ type: "message_update", message: update("pending") });
+      current.handleAgentEventRef.current?.({ type: "message_end", message: update("complete") });
+    });
+    expect(current.messages.at(-1)).toMatchObject(update("complete"));
+    expect(current.streamState.streamingMessage).toBeNull();
+    await act(async () => vi.advanceTimersByTime(100));
+    expect(current.streamState.streamingMessage).toBeNull();
+  });
+
+  it("flushes pending thinking/tool progress before stop and cancels aborted run frames", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    await act(async () => current.handleAgentEventRef.current?.({ type: "message_start", message: { ...assistant, content: [] } }));
+    const thought = { ...assistant, content: [{ type: "thinking", thinking: "reasoning" }] };
+    await act(async () => current.handleAgentEventRef.current?.({ type: "message_update", message: thought }));
+    expect(current.streamState.streamingMessage).toMatchObject(thought);
+    await act(async () => current.handleAgentEventRef.current?.({ type: "message_update", message: { ...assistant, content: [{ type: "toolCall", id: "c1", name: "read", arguments: { path: "fixture" } }] } }));
+    await act(async () => current.handleAbort());
+    expect(current.streamState.streamingMessage).toMatchObject({ content: [{ type: "toolCall", toolCallId: "c1", toolName: "read", input: { path: "fixture" } }] });
+    await act(async () => {
+      current.handleAgentEventRef.current?.({ type: "message_update", message: thought });
+      current.handleAgentEventRef.current?.({ type: "agent_end", messages: [] });
+    });
+    expect(current.streamState.streamingMessage).toBeNull();
+    await act(async () => vi.advanceTimersByTime(100));
+    expect(current.streamState.streamingMessage).toBeNull();
+  });
+
+  it("flushes the latest progress when the tab becomes visible", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    await act(async () => current.handleAgentEventRef.current?.({ type: "message_update", message: assistant }));
+    const latest = { ...assistant, content: [{ type: "text", text: "latest hidden progress" }] };
+    await act(async () => current.handleAgentEventRef.current?.({ type: "message_update", message: latest }));
+    expect(current.streamState.streamingMessage).toMatchObject(assistant);
+    await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+    expect(current.streamState.streamingMessage).toMatchObject(latest);
+  });
+
+  it("discards pending updates on a snapshot, session replacement and unmount", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    const queue = async () => {
+      await act(async () => {
+        current.handleAgentEventRef.current?.({ type: "message_start", message: assistant });
+        current.handleAgentEventRef.current?.({ type: "message_update", message: { ...assistant, content: [{ type: "text", text: "old pending" }] } });
+      });
+    };
+    await queue();
+    await act(async () => current.handleAgentEventRef.current?.(snapshot([user])));
+    await act(async () => vi.advanceTimersByTime(100));
+    expect(current.streamState.streamingMessage).toBeNull();
+    await queue();
+    await act(async () => current.handleAgentEventRef.current?.({ type: "session_replaced", previousSessionId: "one", newSessionId: "two" }));
+    await act(async () => vi.advanceTimersByTime(100));
+    expect(current.streamState.streamingMessage).toMatchObject(assistant);
+    await queue();
+    const previousHandler = current.handleAgentEventRef.current;
+    await act(async () => root.render(<Harness key="new-session" selected={{ ...session, id: "three" }} />));
+    await act(async () => {
+      previousHandler?.({ type: "message_update", message: assistant });
+      vi.advanceTimersByTime(100);
+    });
+    expect(current.streamState.streamingMessage).toBeNull();
+    expect(current.sessionIdRef.current).toBe("three");
   });
 
   it("retains live generation metrics after authoritative transcript replacement", async () => {
@@ -191,10 +271,78 @@ describe("session reconciliation and first-prompt ordering", () => {
     });
     await act(async () => { source.message(snapshot([]), "epoch:0"); await sending; });
     await expect(sending).resolves.toBe(true);
-    expect(harness.send).toHaveBeenCalledWith("one", { type: "prompt", message: "hello" });
+    expect(harness.send).toHaveBeenCalledWith("one", { type: "prompt", message: "hello", timingId: expect.stringMatching(/^[0-9a-f-]{36}$/) });
     expect(current.messages).toEqual([user, assistant]);
     expect(current.agentRunning).toBe(false); expect(current.streamState.isStreaming).toBe(false);
     expect(harness.created).toHaveBeenCalledOnce();
+  });
+
+  it("ends a new-session observation on remount instead of timing its replay as cold output", async () => {
+    await act(async () => root.render(<Harness key="new" selected={null} />));
+    let sending!: Promise<boolean>;
+    await act(async () => { sending = current.handleSend("new session"); });
+    const first = FakeEventSource.instances[0];
+    await act(async () => { first.open(); first.message(snapshot([]), "epoch:0"); await sending; });
+    const timingId = harness.send.mock.calls.find(([, command]) => command.type === "prompt")![1].timingId;
+    const record = () => readRunLatencyRecords().find(item => item.timingId === timingId)!;
+    expect(record().status).toBe("running");
+    serverMessages = [user, assistant];
+    serverStreaming = true;
+    await act(async () => root.render(<Harness key="created" selected={session} />));
+    expect(record().status).toBe("interrupted");
+    const next = FakeEventSource.instances.at(-1)!;
+    await act(async () => {
+      next.open();
+      next.message({ type: "connected" }, "");
+      next.message({ type: "message_end", message: assistant }, "epoch:2");
+      next.message(snapshot([user, assistant]), "epoch:3");
+    });
+    expect(record().firstContentMs).toBeUndefined();
+    expect(record().firstCommitMs).toBeUndefined();
+    expect(record().status).toBe("interrupted");
+  });
+
+  it("keeps latency running until abort is acknowledged and preserves it when stop fails", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    const source = FakeEventSource.instances[0];
+    await act(async () => { source.open(); source.message(snapshot([]), "epoch:0"); });
+    await act(async () => { await current.handleSend("still running"); });
+    const timingId = harness.send.mock.calls.find(([, command]) => command.type === "prompt")![1].timingId;
+    const record = () => readRunLatencyRecords().find(item => item.timingId === timingId)!;
+    let rejectAbort!: (reason: Error) => void;
+    harness.send.mockImplementation((_sid, command) => command.type === "abort"
+      ? new Promise((_resolve, reject) => { rejectAbort = reject; }) : Promise.resolve(null));
+    let stopping!: Promise<void>;
+    await act(async () => { stopping = current.handleAbort(); });
+    expect(record().status).toBe("running");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await act(async () => { rejectAbort(new Error("stop request failed")); await stopping; });
+      expect(record().status).toBe("running");
+      expect(current.agentPhase).toEqual({ kind: "waiting_model" });
+      await act(async () => {
+        source.message({ type: "message_end", message: assistant }, "epoch:2");
+        source.message({ type: "agent_end", messages: [assistant] }, "epoch:3");
+      });
+      expect(record()).toMatchObject({ status: "completed", firstContentMs: expect.any(Number), firstCommitMs: expect.any(Number) });
+    } finally { error.mockRestore(); }
+  });
+
+  it("marks a successful stop aborted only after its command receipt", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    const source = FakeEventSource.instances[0];
+    await act(async () => { source.open(); source.message(snapshot([]), "epoch:0"); });
+    await act(async () => { await current.handleSend("stop after ack"); });
+    const timingId = harness.send.mock.calls.find(([, command]) => command.type === "prompt")![1].timingId;
+    const record = () => readRunLatencyRecords().find(item => item.timingId === timingId)!;
+    let acknowledge!: () => void;
+    harness.send.mockImplementation((_sid, command) => command.type === "abort"
+      ? new Promise(resolve => { acknowledge = () => resolve(null); }) : Promise.resolve(null));
+    let stopping!: Promise<void>;
+    await act(async () => { stopping = current.handleAbort(); });
+    expect(record().status).toBe("running");
+    await act(async () => { acknowledge(); await stopping; });
+    expect(record().status).toBe("aborted");
   });
 
   it("waits through slow bootstrap and sends only once", async () => {
@@ -212,7 +360,9 @@ describe("session reconciliation and first-prompt ordering", () => {
     await act(async () => root.render(<Harness selected={session} />));
     let sending!: Promise<boolean>;
     await act(async () => { sending = current.handleSend("cancel this draft"); });
+    const timingId = readRunLatencyRecords().at(-1)!.timingId;
     await act(async () => { await current.handleAbort(); await sending; });
+    expect(readRunLatencyRecords().find(item => item.timingId === timingId)?.status).toBe("aborted");
     await expect(sending).resolves.toBe(false);
     await act(async () => FakeEventSource.instances[0].message(snapshot([]), "epoch:0"));
     expect(harness.send.mock.calls.some(([, command]) => command.type === "prompt")).toBe(false);
@@ -231,6 +381,30 @@ describe("session reconciliation and first-prompt ordering", () => {
     await act(async () => { acknowledge(); await sending; });
     expect(harness.send.mock.calls.map(([, command]) => command.type).filter(type => type !== "get_tools")).toEqual(["prompt", "abort", "abort"]);
     await expect(sending).resolves.toBe(false);
+  });
+
+  it("invalidates latency when a dispatched prompt is cancelled but both stop receipts fail", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    const source = FakeEventSource.instances[0];
+    await act(async () => { source.open(); source.message(snapshot([]), "epoch:0"); });
+    let acknowledge!: () => void;
+    harness.send.mockImplementation((_sid, command) => {
+      if (command.type === "prompt") return new Promise(resolve => { acknowledge = () => resolve(null); });
+      if (command.type === "abort") return Promise.reject(new Error("stop receipt unavailable"));
+      return Promise.resolve(null);
+    });
+    let sending!: Promise<boolean>;
+    await act(async () => { sending = current.handleSend("cancel an unacknowledged prompt"); });
+    const timingId = harness.send.mock.calls.find(([, command]) => command.type === "prompt")![1].timingId;
+    const record = () => readRunLatencyRecords().find(item => item.timingId === timingId)!;
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await act(async () => current.handleAbort());
+      expect(record().status).toBe("running");
+      await act(async () => { acknowledge(); await sending; });
+      await expect(sending).resolves.toBe(false);
+      expect(record().status).toBe("interrupted");
+    } finally { error.mockRestore(); }
   });
 
   it("reconciles official SDK queues with stable IDs and image metadata", async () => {

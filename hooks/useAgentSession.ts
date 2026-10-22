@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect, useReducer, useMemo } from "react";
 import type { AgentMessage } from "@/lib/types";
 import { browserMetricsStorage, GenerationMetricsTracker } from "@/lib/generation-metrics";
+import { RunLatencyTracker } from "@/lib/run-latency";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { decodeSessionData, type SessionTreeWire } from "@/lib/session-tree-wire";
 import { sendAgentCommand } from "@/lib/agent-client";
@@ -22,6 +23,7 @@ import type { SessionData, AgentEvent, AgentPhase, UseAgentSessionOptions, Think
 import { streamReducer, getRunError, computeSessionStats, shouldApplySessionLoad } from "./use-agent-session-types";
 import { useSessionCompaction, type CompactionLiveState } from "./use-session-compaction";
 import { useAgentEvents, useRunProgress } from "./use-agent-connection";
+import { createStreamUpdateScheduler, hasStreamMessageContent, streamMessageSize } from "./stream-update-scheduler";
 import { useTranscriptScroll } from "./use-transcript-scroll";
 import { shouldResyncOnVisible } from "@/lib/wake-resync";
 import { useModelCatalog } from "./use-model-catalog";
@@ -78,9 +80,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [runtimeFailure, setRuntimeFailure] = useState<{ message: string; recoveryError?: string } | null>(null);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [generationMetrics] = useState(() => new GenerationMetricsTracker(browserMetricsStorage()));
+  const [runLatency] = useState(() => new RunLatencyTracker());
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
+  useLayoutEffect(() => { runLatency.committed(streamState.streamingMessage ?? messages.at(-1)); }, [messages, streamState.streamingMessage, runLatency]);
   const [agentRunning, setAgentRunning] = useState(false);
   const [toolPreset, setToolPreset] = useState<ToolSelectionMode>("inherit");
   const [availableTools, setAvailableTools] = useState<ToolCatalogEntry[]>(DEFAULT_TOOL_CATALOG);
@@ -114,12 +118,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [queueUpdating, setQueueUpdating] = useState(false);
   const [bashRun, setBashRun] = useState<{ command: string; output: string; running: boolean } | null>(null);
   const [extensionUIState, dispatchExtensionUI] = useReducer(extensionUIReducer, initialExtensionUIState);
-  // Streaming-update throttle (see the message_update case)
-  const pendingStreamMsgRef = useRef<AgentMessage | null>(null);
-  const streamFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const authReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
+  const streamMountedRef = useRef(true);
+  const [streamScheduler] = useState(() => createStreamUpdateScheduler<{ sessionId: string | null; message: AgentMessage }>({
+    publish: ({ message }) => dispatch({ type: "update", message: normalizeToolCalls(message) }),
+    hasContent: ({ message }) => hasStreamMessageContent(message),
+    size: ({ message }) => streamMessageSize(message),
+    isCurrent: ({ sessionId }) => streamMountedRef.current && sessionId === sessionIdRef.current,
+    isHidden: () => document.visibilityState === "hidden",
+  }));
+  useEffect(() => {
+    streamMountedRef.current = true;
+    return () => { streamMountedRef.current = false; streamScheduler.cancel(); };
+  }, [streamScheduler]);
+  // AppShell normally remounts per session. Also invalidate pending output when
+  // a caller changes the selection without remounting this hook.
+  // New-session creation also remounts the chat and bootstraps a new SSE stream.
+  // End this observation: replay after remount cannot establish a cold TTFT.
+  useEffect(() => () => { streamScheduler.cancel(); runLatency.finish("interrupted"); }, [session?.id, streamScheduler, runLatency]);
   const pendingPromptMessageRef = useRef<AgentMessage | null>(null);
   const pendingSendRef = useRef<AbortController | null>(null);
   const abortInFlightRef = useRef(false);
@@ -283,6 +301,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleAgentEvent = useCallback((event: AgentEvent) => {
     if (event.type !== "session_snapshot" || event.sessionId === sessionIdRef.current) {
       generationMetrics.record(sessionIdRef.current, event, performance.now());
+      runLatency.record(event);
     }
     if (handleCompactionEvent(event)) return;
     if (event.type === "queue_update") { setQueuedFollowUps(previous => normalizeQueuedFollowUps(event, previous)); return; }
@@ -298,9 +317,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // A checkpoint wins over fetches begun before replay, including loads
       // scheduled by replayed agent_start/end events.
       sessionLoadRequestRef.current += 1;
-      pendingStreamMsgRef.current = null;
-      if (streamFlushTimerRef.current !== null) clearTimeout(streamFlushTimerRef.current);
-      streamFlushTimerRef.current = null;
+      streamScheduler.cancel();
       const state = event.state as LiveAgentState | undefined;
       const wire = event.sessionData as (Omit<SessionData, "tree"> & { tree: SessionData["tree"] | SessionTreeWire }) | undefined;
       if (wire?.context && Array.isArray(wire.context.messages)) {
@@ -329,7 +346,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const model = (event.state as { model?: { provider: string; id: string } } | undefined)?.model;
       if (model) setCurrentModelOverride({ provider: model.provider, modelId: model.id });
       setBashRun((event.bashRun as { command: string; output: string; running: boolean } | null) ?? null);
-      if (running && event.streamingMessage) dispatch({ type: "update", message: normalizeToolCalls(event.streamingMessage as AgentMessage) });
+      if (running && event.streamingMessage) streamScheduler.start({ sessionId: sessionIdRef.current, message: event.streamingMessage as AgentMessage });
       else dispatch({ type: running ? "start" : "end" });
       if (!running) {
         setRetryInfo(null);
@@ -366,9 +383,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     switch (event.type) {
       case "session_closed":
         agentRunningRef.current = false;
-        pendingStreamMsgRef.current = null;
-        if (streamFlushTimerRef.current !== null) clearTimeout(streamFlushTimerRef.current);
-        streamFlushTimerRef.current = null;
+        streamScheduler.cancel();
         // The terminal event is authoritative even if an individual question
         // close frame was lost before disconnect.
         dispatchExtensionUI({ type: "reset" });
@@ -384,6 +399,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const previousSessionId = typeof event.previousSessionId === "string" ? event.previousSessionId : sessionIdRef.current ?? "";
         const nextSessionId = typeof event.newSessionId === "string" ? event.newSessionId : "";
         if (!nextSessionId) break;
+        streamScheduler.cancel();
         sessionIdRef.current = nextSessionId;
         dispatchExtensionUI({ type: "reset" });
         replacementChannelRef.current?.publish({
@@ -409,6 +425,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             : translate("toast.runtimeRecovered");
           showToast(`${recoveryLabel}: ${message}`, { type: "warning", duration: 8000 });
           if (activeSessionId && activeSessionId !== sessionIdRef.current) {
+            streamScheduler.cancel();
             sessionIdRef.current = activeSessionId;
             onSessionForked?.(
               activeSessionId,
@@ -417,6 +434,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             );
           }
         } else {
+          streamScheduler.cancel();
           setRuntimeFailure({
             message,
             ...(typeof event.recoveryError === "string" ? { recoveryError: event.recoveryError } : {}),
@@ -429,6 +447,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setRuntimeFailure(null);
         const activeSessionId = typeof event.sessionId === "string" ? event.sessionId : "";
         if (activeSessionId && activeSessionId !== sessionIdRef.current) {
+          streamScheduler.cancel();
           sessionIdRef.current = activeSessionId;
           onSessionForked?.(
             activeSessionId,
@@ -443,6 +462,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         showToast(translate("toast.authRefreshDeferred"), { type: "info", duration: 6000 });
         break;
       case "session_restart": {
+        streamScheduler.cancel();
         eventSourceRef.current?.close();
         eventSourceRef.current = null;
         const sid = sessionIdRef.current;
@@ -463,6 +483,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       }
       case "agent_start":
+        streamScheduler.cancel();
         agentRunningRef.current = true;
         setAgentRunning(true);
         setAgentPhase({ kind: "waiting_model" });
@@ -477,13 +498,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       case "agent_end":
         agentRunningRef.current = false;
-        // Cancel any throttled streaming frame (aborted runs may end without
-        // a message_end).
-        pendingStreamMsgRef.current = null;
-        if (streamFlushTimerRef.current != null) {
-          clearTimeout(streamFlushTimerRef.current);
-          streamFlushTimerRef.current = null;
-        }
+        streamScheduler.cancel();
         setAgentRunning(false);
         setAgentPhase(null);
         setRetryInfo(null);
@@ -566,23 +581,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           break;
         }
         if (msg) {
-          if (event.type === "message_start") {
-            dispatch({ type: "update", message: normalizeToolCalls(msg as AgentMessage) });
-          } else {
-            // Throttle streaming updates: every chunk re-parses the whole
-            // message's markdown (O(length) per token). Batch to ~12
-            // frames/sec — the last chunk in each window wins.
-            pendingStreamMsgRef.current = msg as AgentMessage;
-            if (streamFlushTimerRef.current == null) {
-              streamFlushTimerRef.current = setTimeout(() => {
-                streamFlushTimerRef.current = null;
-                if (pendingStreamMsgRef.current) {
-                  dispatch({ type: "update", message: normalizeToolCalls(pendingStreamMsgRef.current as AgentMessage) });
-                  pendingStreamMsgRef.current = null;
-                }
-              }, 80);
-            }
-          }
+          const update = { sessionId: sessionIdRef.current, message: msg as AgentMessage };
+          if (event.type === "message_start") streamScheduler.start(update);
+          else streamScheduler.push(update);
         }
         setAgentPhase(null);
         break;
@@ -591,11 +592,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         sessionLoadRequestRef.current += 1;
         // Drop any pending throttled frame — the completed message wins, and
         // a late flush after the reset would resurrect the streaming bubble.
-        pendingStreamMsgRef.current = null;
-        if (streamFlushTimerRef.current != null) {
-          clearTimeout(streamFlushTimerRef.current);
-          streamFlushTimerRef.current = null;
-        }
+        streamScheduler.cancel();
         const completed = event.message as AgentMessage | undefined;
         if (completed && completed.role !== "user") {
           setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
@@ -639,13 +636,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setBashRun((prev) => prev ? { ...prev, running: false } : prev);
         break;
       case "auto_retry_start":
+        streamScheduler.flush();
         setRetryInfo({ attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
         break;
       case "auto_retry_end":
         setRetryInfo(null);
         break;
     }
-  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef, reportModelUnavailable, handleCompactionEvent, reconcileCompaction, generationMetrics]);
+  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef, reportModelUnavailable, handleCompactionEvent, reconcileCompaction, generationMetrics, streamScheduler, runLatency]);
   handleAgentEventRef.current = handleAgentEvent;
 
   useEffect(() => {
@@ -667,6 +665,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   useEffect(() => {
     const channel = createSessionReplacementChannel((replacement) => {
       if (sessionIdRef.current !== replacement.previousSessionId) return;
+      streamScheduler.cancel();
       sessionIdRef.current = replacement.newSessionId;
       dispatchExtensionUI({ type: "reset" });
       onSessionForked?.(
@@ -680,7 +679,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (replacementChannelRef.current === channel) replacementChannelRef.current = null;
       channel.close();
     };
-  }, [onSessionForked]);
+  }, [onSessionForked, streamScheduler]);
 
   const handleExtensionUIResponse = useCallback(async (response: WebExtensionUIResponse) => {
     const sid = sessionIdRef.current;
@@ -703,6 +702,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     message: string,
     piImages?: Array<{ type: "image"; data: string; mimeType: string }>,
     signal?: AbortSignal,
+    timingId?: string,
   ): Promise<string> => {
     if (!newSessionCwd) throw new Error("No cwd for new session");
     const selectedModel = newSessionModel;
@@ -734,8 +734,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!(await connectEvents(result.sessionId, false, signal))) throw new Error(translate("connection.streamNotReady"));
     signal?.throwIfAborted();
     pendingPromptMessageRef.current = null;
-    await sendAgentCommand(result.sessionId, { type: "prompt", message, ...(piImages?.length ? { images: piImages } : {}) });
-    if (signal?.aborted) { await sendAgentCommand(result.sessionId, { type: "abort" }); signal.throwIfAborted(); }
+    if (timingId) runLatency.requestSent(timingId);
+    await sendAgentCommand(result.sessionId, { type: "prompt", message, ...(timingId ? { timingId } : {}), ...(piImages?.length ? { images: piImages } : {}) });
+    if (signal?.aborted) {
+      await sendAgentCommand(result.sessionId, { type: "abort" });
+      runLatency.finish("aborted");
+      signal.throwIfAborted();
+    }
     onSessionCreated?.({
       id: result.sessionId,
       path: "",
@@ -749,7 +754,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       engine: durableNewSession ? "durable" : "legacy",
     });
     return result.sessionId;
-  }, [newSessionCwd, newSessionModel, catalogStatus, toolPreset, customToolNames, thinkingLevel, ephemeralNewSession, durableNewSession, connectEvents, onSessionCreated]);
+  }, [newSessionCwd, newSessionModel, catalogStatus, toolPreset, customToolNames, thinkingLevel, ephemeralNewSession, durableNewSession, connectEvents, onSessionCreated, runLatency]);
 
   const handleWorkflowCommand = useCallback(async (message: string): Promise<boolean> => {
     const command = parseWorkflowCommand(message);
@@ -839,6 +844,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     lastEventAtRef.current = Date.now();
     resetRunProgress();
     const start = new AbortController();
+    const timingId = runLatency.begin();
     pendingSendRef.current = start;
     pendingPromptMessageRef.current = userMsg;
     agentRunningRef.current = true;
@@ -853,7 +859,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     try {
       if (isNew && newSessionCwd) {
-        await createNewSession(message, piImages, start.signal);
+        await createNewSession(message, piImages, start.signal, timingId);
       } else if (session) {
         // Wait for the SSE stream to be open before prompting, so the run's
         // first events aren't emitted before we're subscribed.
@@ -863,17 +869,25 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         start.signal.throwIfAborted();
         pendingPromptMessageRef.current = null;
+        runLatency.requestSent(timingId);
         await sendAgentCommand(session.id, {
           type: "prompt",
+          timingId,
           message,
           ...(piImages?.length ? { images: piImages } : {}),
         });
-        if (start.signal.aborted) { await sendAgentCommand(session.id, { type: "abort" }); start.signal.throwIfAborted(); }
+        if (start.signal.aborted) {
+          await sendAgentCommand(session.id, { type: "abort" });
+          runLatency.finish("aborted");
+          start.signal.throwIfAborted();
+        }
       } else {
         throw new Error("No active session");
       }
       return true;
     } catch (e) {
+      if (start.signal.aborted) runLatency.cancelPendingSend();
+      else runLatency.finish("failed");
       pendingPromptMessageRef.current = null;
       if (!start.signal.aborted) console.error("Failed to send message:", e);
       if (!start.signal.aborted) showToast(`${translate("toast.messageNotSent")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
@@ -882,6 +896,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         return index < 0 ? prev : [...prev.slice(0, index), ...prev.slice(index + 1)];
       });
       agentRunningRef.current = false;
+      streamScheduler.cancel();
       setAgentRunning(false);
       setAgentStartedAt(null);
       setAgentPhase(null);
@@ -890,23 +905,25 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (pendingSendRef.current === start) pendingSendRef.current = null;
     }
-  }, [isNew, newSessionCwd, newSessionModel, catalogStatus, session, agentRunning, connectEvents, createNewSession, loadSession, lastEventAtRef, pendingScrollToUserRef, resetRunProgress, isCompacting, enqueueCompaction, handleCompact, handleWorkflowCommand]);
+  }, [isNew, newSessionCwd, newSessionModel, catalogStatus, session, agentRunning, connectEvents, createNewSession, loadSession, lastEventAtRef, pendingScrollToUserRef, resetRunProgress, isCompacting, enqueueCompaction, handleCompact, handleWorkflowCommand, streamScheduler, runLatency]);
 
   const handleAbort = useCallback(async () => {
     if (abortInFlightRef.current) return;
     abortInFlightRef.current = true;
+    streamScheduler.flush();
     setAgentPhase({ kind: "stopping" });
     pendingSendRef.current?.abort();
     const sid = sessionIdRef.current;
     if (!sid) { abortInFlightRef.current = false; return; }
     try {
       await sendAgentCommand(sid, { type: "abort" });
+      runLatency.finish("aborted");
     } catch (e) {
       console.error("Failed to abort:", e);
       showToast(translate("toast.stopFailed"), { type: "error" });
       setAgentPhase({ kind: "waiting_model" });
     } finally { abortInFlightRef.current = false; }
-  }, []);
+  }, [streamScheduler, runLatency]);
 
   const handleRuntimeReconnect = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -1298,6 +1315,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       } else if (agentRunningRef.current && !agentState.state?.isStreaming) {
         // The run finished while we were away — the "end" event was lost, so
         // reflect idle now instead of showing a stuck spinner.
+        streamScheduler.cancel();
         setAgentRunning(false);
         agentRunningRef.current = false;
         setAgentPhase(null);
@@ -1308,10 +1326,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // hidden. Reopen with the cursor to recover them and reconcile a snapshot.
       if (agentState.running) void connectEvents(sid, true);
     });
-  }, [agentStartedAt, connectEvents, lastEventAtRef, loadSession, resetRunProgress, reconcileCompaction]);
+  }, [agentStartedAt, connectEvents, lastEventAtRef, loadSession, resetRunProgress, reconcileCompaction, streamScheduler]);
 
   useEffect(() => {
     const onVisibility = () => {
+      // Timer delivery can be delayed while backgrounded; publish the latest
+      // queued progress immediately on either visibility transition.
+      streamScheduler.flush();
       if (document.visibilityState === "hidden") {
         hiddenSinceRef.current = Date.now();
         return;
@@ -1326,7 +1347,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("online", onOnline);
     };
-  }, [resync]);
+  }, [resync, streamScheduler]);
 
   useEffect(() => {
     onSystemPromptChange?.(systemPrompt);

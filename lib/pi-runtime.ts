@@ -11,6 +11,7 @@ import {
   type ExtensionUIContext,
   type LoadExtensionsResult,
   type ProviderConfig,
+  type InlineExtension,
 } from "@earendil-works/pi-coding-agent";
 import type { ExtensionProviderInfo } from "./extensions-info";
 import { appendPiWebOutputGuidance } from "./output-design";
@@ -201,7 +202,19 @@ export function createAgentModelCatalogRefresher(
   };
 }
 
-export async function createTrackedAgentServices(cwd: string): Promise<{
+/** Observe Pi's documented pre-request boundary without inspecting/replacing its payload. */
+export function createRunTimingExtension(onBeforeProviderRequest: () => void): InlineExtension {
+  return { name: "Pi Web run timing", hidden: true, factory(pi) {
+    pi.on("before_provider_request", () => {
+      try { onBeforeProviderRequest(); } catch { /* diagnostics must not change model execution */ }
+      return undefined;
+    });
+  } };
+}
+
+export async function createTrackedAgentServices(cwd: string, observations?: {
+  onBeforeProviderRequest?: () => void;
+}): Promise<{
   services: AgentSessionServices;
   modelRegistry: ModelRegistry;
   providerTracker: ExtensionProviderTracker;
@@ -221,6 +234,7 @@ export async function createTrackedAgentServices(cwd: string): Promise<{
     modelRuntime,
     resourceLoaderOptions: {
       extensionFactories: [
+        ...(observations?.onBeforeProviderRequest ? [createRunTimingExtension(observations.onBeforeProviderRequest)] : []),
         createPlanModeExtension(),
         createWorkflowExtension(),
         createStructuredOutputExtension(),

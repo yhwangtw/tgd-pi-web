@@ -21,6 +21,28 @@ describe("bounded agent event log", () => {
     expect(JSON.parse(record.data).type).toBe("message_update");
   });
 
+  it("counts compact metadata in the byte budget and does not retain an evicted baseline", () => {
+    const first = { type: "message_update", message: { content: "x".repeat(1000) } };
+    const second = { type: "message_update", message: { content: "x".repeat(1000) + "y" } };
+    const nativeBytes = Buffer.byteLength(JSON.stringify(first)) + Buffer.byteLength(JSON.stringify(second));
+    const log = new AgentEventLog("epoch", 10, nativeBytes);
+    log.append(first);
+    expect(log.append(second).delta).toBeDefined();
+    // Two native events fit exactly; retaining their compact alternative must
+    // still evict the first record instead of exceeding the configured budget.
+    expect(log.replay("epoch:0").status).toBe("reset");
+    log.append({ type: "other", payload: "z".repeat(1500) });
+    expect(log.append(second).delta).toBeUndefined();
+  });
+
+  it("keeps oversized updates complete but does not cache their unbounded baseline", () => {
+    const log = new AgentEventLog("epoch", 10, 100);
+    const event = { type: "message_update", message: { content: "x".repeat(1000) } };
+    expect(JSON.parse(log.append(event).data)).toEqual(event);
+    expect(log.append({ ...event, finalMetadata: true }).delta).toBeUndefined();
+    expect(log.replay("epoch:0").status).toBe("reset");
+  });
+
   it("rejects future, malformed, negative and foreign cursors", () => {
     const log = new AgentEventLog("epoch");
     log.append({ type: "agent_start" });

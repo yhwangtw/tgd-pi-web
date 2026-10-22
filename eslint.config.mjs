@@ -24,6 +24,9 @@ const eslintConfig = [
       "react-hooks/immutability": "off",
       "react-hooks/refs": "off",
       "react-hooks/set-state-in-effect": "off",
+      // React Compiler is not enabled. Keep its optimization-preservation
+      // diagnostics advisory; stable callbacks intentionally read live refs.
+      "react-hooks/preserve-manual-memoization": "warn",
       "@typescript-eslint/no-unused-vars": [
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },

@@ -3,6 +3,7 @@ import { resolveSessionPath } from "@/lib/session-reader";
 import { getRpcSession, getResumableRpcSession, startRpcSession, type AgentSessionWrapper } from "@/lib/rpc-manager";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { encodeAgentStreamRecord, type AgentStreamRecord } from "@/lib/agent-event-log";
+import { AGENT_STREAM_DELTA_FORMAT, AgentStreamTransport } from "@/lib/agent-stream-wire";
 import { getDurableChat, openDurableChat } from "@/lib/durable-chat";
 import { isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 import { decodeSessionData, encodeSessionData } from "@/lib/session-tree-wire";
@@ -18,6 +19,7 @@ export async function GET(
   const id = await waitForSessionMigration(requestedId);
   const url = new URL(req.url);
   const cursor = req.headers.get("last-event-id") || url.searchParams.get("cursor");
+  const deltas = url.searchParams.get("stream") === AGENT_STREAM_DELTA_FORMAT;
   const requestedTree = url.searchParams.get("tree");
   const wireFormat = requestedTree === "flat-v1" || requestedTree === "flat-v2" ? requestedTree : undefined;
   const durable = isDurableSessionId(id);
@@ -54,6 +56,7 @@ export async function GET(
   const stream = new ReadableStream({
     start(controller) {
       let closed = false;
+      const transport = new AgentStreamTransport(deltas);
       const encode = (record: AgentStreamRecord) => {
         if (closed) return;
         controller.enqueue(new TextEncoder().encode(encodeAgentStreamRecord(record)));
@@ -68,10 +71,11 @@ export async function GET(
         encode({ data: JSON.stringify({ type: "session_replaced", previousSessionId: requestedId, newSessionId: active.sessionId, ...(requestedId !== id ? { migrated: true } : {}), cwd: active.cwd, sessionFile: active.sessionFile }) });
       }
 
-      const unsubscribe = active.onStreamEvent((record) => {
+      const unsubscribe = active.onStreamEvent((nativeRecord) => {
         // Retained frames already carry their type: avoid parsing full message
         // bodies and transcript snapshots again for transport cleanup.
-        const type = record.type ?? JSON.parse(record.data).type;
+        const type = nativeRecord.type ?? JSON.parse(nativeRecord.data).type;
+        const record = transport.select(nativeRecord, type);
         if (wireFormat !== "flat-v2" && type === "session_snapshot") {
           // Existing tabs retain their original contract. Modern clients receive
           // the immutable compact frame without parsing or another encoding pass.

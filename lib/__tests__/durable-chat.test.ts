@@ -26,6 +26,49 @@ async function open(options: DurableChatOptions) { const chat = await createDura
 afterEach(async () => { for (const chat of chats.splice(0)) await chat.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
 describe("Durable chat host", () => {
+  it("reports live run timing at native request/host-output boundaries without replay or duplicate receipt leaks", async () => {
+    const { options, faux } = fixture(); faux.setResponses([fauxAssistantMessage("First private answer"), fauxAssistantMessage("Next private answer")]);
+    const chat = await open(options);
+    const events: Record<string, unknown>[] = [];
+    const stop = chat.onEvent(event => events.push(event));
+    const records: Array<{ id?: string; data: string }> = [];
+    const stopStream = chat.onStreamEvent(record => records.push(record), null);
+    const cursor = records[0].id!;
+    const first = "88deba82-f371-4f25-bd5d-cab39107d41f";
+    const duplicate = "06ef2648-aa0b-4b84-a25a-cad2188e73ec";
+    const next = "4c330e55-8ef5-4937-a287-1e14af77b32d";
+    const stages = (id: string) => events.filter(event => event.type === "run_timing" && event.timingId === id).map(event => event.stage);
+    try {
+      await chat.send({ type: "prompt", message: "First private question", requestId: "traced-receipt", timingId: first, awaitCompletion: true });
+      await vi.waitFor(() => expect(stages(first)).toEqual(["accepted", "provider_request", "first_content", "completed"]));
+      const timings = events.filter(event => event.type === "run_timing");
+      expect(timings.every(event => Object.keys(event).sort().join() === "elapsedMs,stage,timingId,type")).toBe(true);
+      expect(JSON.stringify(timings)).not.toContain("private");
+      expect(records.filter(record => JSON.parse(record.data).type === "run_timing").every(record => !record.id)).toBe(true);
+      const replay: string[] = []; const stopReplay = chat.onStreamEvent(record => replay.push(record.data), cursor); stopReplay();
+      expect(replay.some(data => JSON.parse(data).type === "run_timing")).toBe(false);
+      await chat.send({ type: "prompt", message: "First private question", requestId: "traced-receipt", timingId: duplicate, awaitCompletion: true });
+      expect(stages(duplicate)).toEqual(["accepted", "completed"]);
+      expect(faux.state.callCount).toBe(1);
+      await chat.send({ type: "prompt", message: "Next private question", requestId: "next-traced-receipt", timingId: next, awaitCompletion: true });
+      await vi.waitFor(() => expect(stages(next)).toEqual(["accepted", "provider_request", "first_content", "completed"]));
+      expect(faux.state.callCount).toBe(2);
+    } finally { stopStream(); stop(); }
+  });
+
+  it("keeps untraced Durable prompts and management-only timing free of provider calls", async () => {
+    const { options, faux } = fixture(); faux.setResponses([fauxAssistantMessage("Offline answer")]);
+    const chat = await open(options); const events: Record<string, unknown>[] = []; const stop = chat.onEvent(event => events.push(event));
+    try {
+      await chat.send({ type: "prompt", message: "Question", awaitCompletion: true });
+      await chat.harness.waitForIdle(BACKGROUND_CONTEXT);
+      expect(events.some(event => event.type === "run_timing")).toBe(false);
+      await chat.send({ type: "prompt", message: "/goal status", timingId: "88deba82-f371-4f25-bd5d-cab39107d41f" });
+      expect(events.filter(event => event.type === "run_timing").map(event => event.stage)).toEqual(["accepted", "completed"]);
+      expect(faux.state.callCount).toBe(1);
+    } finally { stop(); }
+  });
+
   it("serializes a deep reconnect snapshot without resuming or truncating its history", async () => {
     const { options, faux } = fixture(); const chat = await open(options);
     const entries = Array.from({ length: 10_000 }, (_, i): SessionEntry => ({ type: "message", id: String(i), parentId: i ? String(i - 1) : null,

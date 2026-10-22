@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { AgentEvent, AgentPhase, RunProgressState } from "./use-agent-session-types";
+import { AGENT_STREAM_DELTA_FORMAT, AgentStreamDecoder } from "@/lib/agent-stream-wire";
 
 const HEALTHY_PROGRESS: RunProgressState = {
   idleSeconds: 0,
@@ -39,6 +40,7 @@ export function useAgentEvents(
   const [connectionState, setConnectionState] = useState<RunProgressState["connection"]>("connected");
   const sessionRef = useRef<string | null>(null);
   const cursorRef = useRef<string | null>(null);
+  const deltasEnabledRef = useRef(true);
   const readyRef = useRef(false);
   const pendingReadyRef = useRef<Promise<boolean> | null>(null);
   const generationRef = useRef(0);
@@ -68,6 +70,7 @@ export function useAgentEvents(
     }
     if (sessionRef.current !== sid) {
       cursorRef.current = null;
+      deltasEnabledRef.current = true;
       reconnectAttemptRef.current = 0;
       reconnectStartedAtRef.current = null;
     }
@@ -80,7 +83,8 @@ export function useAgentEvents(
     current?.close();
     readyRef.current = false;
     setConnectionState(cursorRef.current ? "reconnecting" : "connecting");
-    const url = `/api/agent/${encodeURIComponent(sid)}/events?${cursorRef.current ? `cursor=${encodeURIComponent(cursorRef.current)}&` : ""}tree=flat-v2`;
+    const url = `/api/agent/${encodeURIComponent(sid)}/events?${cursorRef.current ? `cursor=${encodeURIComponent(cursorRef.current)}&` : ""}tree=flat-v2${deltasEnabledRef.current ? `&stream=${AGENT_STREAM_DELTA_FORMAT}` : ""}`;
+    const decoder = new AgentStreamDecoder();
     const es = new EventSource(url);
     eventSourceRef.current = es;
     const pending = new Promise<boolean>((resolve) => {
@@ -106,10 +110,11 @@ export function useAgentEvents(
         if (eventSourceRef.current !== es) return;
         if (readyRef.current) setConnectionState("connected");
         try {
-          const event = JSON.parse(e.data) as AgentEvent;
-          const snapshot = event.type === "session_snapshot";
-          const sequenced = event.type !== "connected" && !event.type.startsWith("extension_ui_");
+          const frame = JSON.parse(e.data) as AgentEvent;
+          const snapshot = frame.type === "session_snapshot";
+          const sequenced = frame.type !== "connected" && frame.type !== "run_timing" && !frame.type.startsWith("extension_ui_");
           if (sequenced && !snapshot && e.lastEventId && isDuplicateAgentCursor(cursorRef.current, e.lastEventId)) return;
+          const event = decoder.decode(frame, e.data, e.lastEventId);
           handleAgentEventRef.current?.(event);
           if (sequenced && e.lastEventId) cursorRef.current = e.lastEventId;
           if (event.type === "session_closed") {
@@ -130,8 +135,20 @@ export function useAgentEvents(
             lastEventAtRef.current = Date.now();
           }
         } catch {
-          // Leave the cursor unchanged so a malformed/unhandled frame is not
-          // acknowledged as delivered; reconnect can recover from a snapshot.
+          // A missing/corrupt delta base cannot be repaired by replaying from the
+          // same cursor. Ask for an authoritative snapshot and disable deltas for
+          // this session, so a bad frame cannot cause an endless replay loop.
+          settle(false);
+          readyRef.current = false;
+          cursorRef.current = null;
+          const recover = deltasEnabledRef.current;
+          deltasEnabledRef.current = false;
+          setConnectionState("reconnecting");
+          es.close();
+          eventSourceRef.current = null;
+          if (recover) reconnectTimerRef.current = setTimeout(() => {
+            if (generationRef.current === generation && sessionRef.current === sid) void connectEvents(sid);
+          }, 0);
         }
       };
       es.onerror = () => {

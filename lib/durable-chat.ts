@@ -14,6 +14,7 @@ import { createReadTool, createBashTool, createEditTool, createWriteTool, create
   createAgentSessionServices, type AgentSessionServices, type ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { AgentEventLog, type AgentStreamRecord } from "./agent-event-log";
+import { RunLatencyServer } from "./run-latency-server";
 import { encodeSessionData } from "./session-tree-wire";
 import { createPiModelRuntime } from "./pi-model-runtime";
 import { durableModels } from "./durable-models";
@@ -177,6 +178,9 @@ async function openHost(options: DurableChatOptions): Promise<Host> {
     // the decision, then enforce it synchronously at the actual provider boundary.
     const admission = defineExtension({ name: "pi-web-admission", hooks: [
       hook(GenerationTask, { beforeRequest: (request, api) => {
+        // Observes the native request hook, before provider dispatch. It does
+        // not claim remote receipt or inspect/modify the request payload.
+        host.chats.get(api.conversationId)?.markProviderRequest();
         const reason = workflowBlocks.get(api.taskId);
         if (reason) for (const message of request.messages) requestBlocks.set(message, reason);
         return undefined;
@@ -308,6 +312,7 @@ export class DurableChat {
   readonly cwd: string;
   private watcher!: AgentEventStream;
   private eventLog = new AgentEventLog();
+  private readonly runTiming = new RunLatencyServer(event => this.emit({ ...event }));
   private listeners = new Set<(record: AgentStreamRecord) => void>();
   private eventListeners = new Set<(event: Record<string, unknown>) => void>();
   private ui: WebExtensionUIEvent[] = [];
@@ -436,9 +441,12 @@ export class DurableChat {
     this.emit(this.streamSnapshot());
   }
   async resume(): Promise<void> { await flushDurableWorkflowCommand(this.conversation, this.harness); this.harness.resume(); }
+  markProviderRequest(): void { this.runTiming.mark("provider_request"); }
   private emit(event: Record<string, unknown>): void {
+    this.runTiming.observe(event);
     const isUI = typeof event.type === "string" && event.type.startsWith("extension_ui_");
-    const record = isUI ? { type: String(event.type), data: JSON.stringify(event) } : this.eventLog.append(event);
+    // Timing is an ephemeral live observation, never a persisted/replayed stage.
+    const record = isUI || event.type === "run_timing" ? { type: String(event.type), data: JSON.stringify(event) } : this.eventLog.append(event);
     if (isUI && event.method === "set_editor_text" && (this.listeners.size || this.eventListeners.size)) this.extensionUI.acknowledgeDelivery(String(event.id));
     for (const listener of this.listeners) listener(record);
     for (const listener of this.eventListeners) listener(event);
@@ -736,6 +744,7 @@ export class DurableChat {
   }
   async fork(entryId?: string, before = false): Promise<DurableChat> {
     if (this.live?.run) throw new Error("Wait for the current response before branching");
+    this.runTiming.cancel();
     const archive = legacyArchive(this.projection.entries);
     const legacyEntry = archive?.entries.find(entry => entry.id === entryId);
     if (archive && legacyEntry) {
@@ -771,27 +780,48 @@ export class DurableChat {
     switch (command.type) {
       case "get_state": await this.refresh(); return this.getState();
       case "prompt": case "steer": case "follow_up": case "queue_compaction_prompt": {
-        const message = typeof command.message === "string" ? command.message : "";
-        if (command.type === "prompt" && await handleDurableWorkflowCommand(this.conversation, this.harness, message, context, this.host.services ? { ui: this.persistentUI() } : {})) { await this.refresh(); await this.refreshUI(); this.emit(this.streamSnapshot()); return null; }
-        if (command.type === "prompt" && await this.extensionHost?.handleCommand(message)) return null;
-        const images = Array.isArray(command.images) ? command.images as Array<{ type: "image"; data: string; mimeType: string }> : [];
-        const requestId = typeof command.requestId === "string" ? command.requestId : typeof command.id === "string" ? command.id : randomUUID();
-        const prepared = await this.extensionHost?.beforePrompt(message, images, requestId);
-        if (prepared?.handled) { await this.refresh(); this.emit(this.streamSnapshot()); return null; }
-        this.host.refreshExecutionGuards();
-        const text = prepared?.text ?? message, attachments = prepared?.images ?? images;
-        const content = attachments.length ? [...(text ? [{ type: "text" as const, text }] : []), ...attachments] : text;
-        const submission = await this.conversation.submit({ type: "input", content, requestId,
-          whenBusy: command.type === "steer" || command.mode === "steer" ? "steer" : "followUp" }, context);
-        if (command.awaitCompletion === true) { const result = await submission.wait(context); if (result.status !== "done") throw new Error(`Response did not complete: ${result.reason}`); await this.refresh(); }
-        return { submissionId: submission.id };
+        const timing = command.type === "prompt" && !this.live?.run ? this.runTiming.accept(command.timingId) : null;
+        try {
+          const message = typeof command.message === "string" ? command.message : "";
+          if (command.type === "prompt" && await handleDurableWorkflowCommand(this.conversation, this.harness, message, context, this.host.services ? { ui: this.persistentUI() } : {})) { await this.refresh(); if (timing && !this.live?.run) this.runTiming.complete(timing); await this.refreshUI(); this.emit(this.streamSnapshot()); return null; }
+          if (command.type === "prompt" && await this.extensionHost?.handleCommand(message)) {
+            if (timing) {
+              try { await this.refresh(); if (!this.live?.run) this.runTiming.complete(timing); }
+              catch { this.runTiming.complete(timing); }
+            }
+            return null;
+          }
+          const images = Array.isArray(command.images) ? command.images as Array<{ type: "image"; data: string; mimeType: string }> : [];
+          const requestId = typeof command.requestId === "string" ? command.requestId : typeof command.id === "string" ? command.id : randomUUID();
+          const prepared = await this.extensionHost?.beforePrompt(message, images, requestId);
+          if (prepared?.handled) { await this.refresh(); if (timing && !this.live?.run) this.runTiming.complete(timing); this.emit(this.streamSnapshot()); return null; }
+          this.host.refreshExecutionGuards();
+          const text = prepared?.text ?? message, attachments = prepared?.images ?? images;
+          const content = attachments.length ? [...(text ? [{ type: "text" as const, text }] : []), ...attachments] : text;
+          const submission = await this.conversation.submit({ type: "input", content, requestId,
+            whenBusy: command.type === "steer" || command.mode === "steer" ? "steer" : "followUp" }, context);
+          if (command.awaitCompletion === true) { const result = await submission.wait(context); if (result.status !== "done") throw new Error(`Response did not complete: ${result.reason}`); await this.refresh(); }
+          // A repeated requestId can return an already-settled receipt with no
+          // new run events. Only traced calls need this read; do not retain that
+          // trace or attach it to a later unrelated prompt.
+          if (timing && this.runTiming.isActive(timing) && !this.runTiming.has("provider_request")) {
+            try {
+              const status = await submission.status(context);
+              if (status.status === "done" || status.status === "unanswered") this.runTiming.complete(timing);
+            } catch { this.runTiming.complete(timing); }
+          }
+          return { submissionId: submission.id };
+        } catch (error) {
+          if (timing) this.runTiming.complete(timing);
+          throw error;
+        }
       }
       case "workflow_command": {
         if (!["goal", "plan"].includes(String(command.command))) throw new Error("Unknown workflow command");
         await handleDurableWorkflowCommand(this.conversation, this.harness, `/${command.command} ${command.args ?? ""}`, context, this.host.services ? { ui: this.persistentUI() } : {});
         await this.refresh(); await this.refreshUI(); this.emit(this.streamSnapshot()); return null;
       }
-      case "abort": await pauseDurableWorkflow(this.conversation); await this.conversation.abort(context, { background: true }); await cancelDurableQuestions(this.harness, this.conversation); await this.refresh(); return null;
+      case "abort": this.runTiming.cancel(); await pauseDurableWorkflow(this.conversation); await this.conversation.abort(context, { background: true }); await cancelDurableQuestions(this.harness, this.conversation); await this.refresh(); return null;
       case "extension_ui_response": return respondDurableQuestion(this.harness, this.conversation, command as unknown as WebExtensionUIResponse, { emit: event => { this.emit(event as unknown as Record<string, unknown>); } });
       case "set_model": {
         const provider = String(command.provider); const modelId = String(command.modelId);
@@ -849,7 +879,7 @@ export class DurableChat {
   /** Stops this host without cancelling durable tasks; a later open can resume. */
   async close(): Promise<void> {
     if (this.host.closed) return;
-    for (const chat of this.host.chats.values()) chat.hostAbort.abort();
+    for (const chat of this.host.chats.values()) { chat.runTiming.cancel(); chat.hostAbort.abort(); }
     this.host.closed = true;
     for (const chat of this.host.chats.values()) { await chat.watcher.stop(); chat.emit({ type: "session_restart" }); }
     await this.harness.close(context);
