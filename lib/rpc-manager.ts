@@ -15,6 +15,7 @@ import { CompactionController } from "./compaction-controller";
 import { normalizeQueuedFollowUps, type QueuedFollowUp } from "./queued-follow-ups";
 import type { SessionEntry } from "./types";
 import { createSnapshot } from "./git-snapshot";
+import { RunLatencyServer } from "./run-latency-server";
 import { applyWorkflowToolSelection } from "./workflow-extension";
 import { isPlanToolSelection } from "./plan-mode";
 import { readWorkflow, WORKFLOW_ENTRY } from "./workflow-state";
@@ -120,6 +121,7 @@ export class AgentSessionWrapper {
   private listeners: EventListener[] = [];
   private streamListeners = new Set<(record: AgentStreamRecord) => void>();
   private readonly eventLog = new AgentEventLog();
+  private readonly runTiming = new RunLatencyServer(event => this.emitEvent({ ...event }));
   // Resume-only aliases belong to this live epoch, never ordinary session
   // reads/commands. Keep them finite even for long-running replacement chains.
   private readonly streamAliases = new Map<string, number>();
@@ -314,6 +316,7 @@ export class AgentSessionWrapper {
   }
 
   private prepareForSessionReplacement(): void {
+    this.runTiming.cancel();
     this.compactionQueue = [];
     this.compactionQueueIds.clear();
     this.compaction = this.createCompactionController();
@@ -699,7 +702,11 @@ export class AgentSessionWrapper {
     };
   }
 
+  /** Called only at the current official runtime's before_provider_request boundary. */
+  markProviderRequest(): void { this.runTiming.mark("provider_request"); }
+
   private emitEvent(event: AgentEvent | WebExtensionUIEvent): void {
+    this.runTiming.observe(event);
     if (event.type === "queue_update") {
       const pending = this.pendingQueueItem;
       if (pending) {
@@ -753,7 +760,7 @@ export class AgentSessionWrapper {
     } else if (event.type === "bash_end") {
       this.streamBash = null;
     }
-    const record: AgentStreamRecord = event.type.startsWith("extension_ui_")
+    const record: AgentStreamRecord = (event.type.startsWith("extension_ui_") || event.type === "run_timing")
       ? { type: event.type, data: JSON.stringify(event) }
       : this.eventLog.append(event);
     if (event.type === "agent_end") this.lastAgentEndCursor = record.id ?? null;
@@ -835,32 +842,42 @@ export class AgentSessionWrapper {
 
     switch (type) {
       case "prompt": {
-        // Snapshot the working tree before the run so its file changes can be
-        // rolled back later (best-effort; no-op outside a git repo). Awaited so
-        // the capture lands before the agent starts editing.
-        if (this.cwd) {
-          await createSnapshot(this.cwd, this.inner.sessionId, "Before run").catch(() => {});
-        }
-        // Browser chat is fire-and-forget because events come via subscribe.
-        // Background schedulers can opt into awaiting the underlying Promise
-        // so an immediate setup/model rejection cannot leave a run stuck.
-        const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        const previousEnd = this.lastAgentEndCursor;
-        const prompt = this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined);
-        const settled = () => {
-          // Management-only extension commands have no agent_end event.
-          if (!this.inner.isStreaming && !this.runActive) this.emitEvent(this.getStreamSnapshot());
-        };
-        if (command.awaitCompletion === true) {
-          await prompt;
-          settled();
-        } else void prompt.then(settled, (error: unknown) => {
-          // Setup/model errors can reject before Pi emits any run events.
-          if (this.lastAgentEndCursor === previousEnd) this.emitEvent({
-            type: "agent_end", messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage: this.errorMessage(error) }],
+        const timing = !this.runActive && !this.inner.isStreaming ? this.runTiming.accept(command.timingId) : null;
+        try {
+          // Snapshot the working tree before the run so its file changes can be
+          // rolled back later (best-effort; no-op outside a git repo). Awaited so
+          // the capture lands before the agent starts editing.
+          if (this.cwd) {
+            await createSnapshot(this.cwd, this.inner.sessionId, "Before run").catch(() => {});
+          }
+          // Browser chat is fire-and-forget because events come via subscribe.
+          // Background schedulers can opt into awaiting the underlying Promise
+          // so an immediate setup/model rejection cannot leave a run stuck.
+          const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
+          const previousEnd = this.lastAgentEndCursor;
+          const prompt = this.inner.prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined);
+          const settled = () => {
+            // Management-only extension commands have no agent_end event.
+            if (!this.inner.isStreaming && !this.runActive) {
+              if (timing) this.runTiming.complete(timing);
+              this.emitEvent(this.getStreamSnapshot());
+            }
+          };
+          if (command.awaitCompletion === true) {
+            await prompt;
+            settled();
+          } else void prompt.then(settled, (error: unknown) => {
+            if (timing) this.runTiming.complete(timing);
+            // Setup/model errors can reject before Pi emits any run events.
+            if (this.lastAgentEndCursor === previousEnd) this.emitEvent({
+              type: "agent_end", messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage: this.errorMessage(error) }],
+            });
           });
-        });
-        return null;
+          return null;
+        } catch (error) {
+          if (timing) this.runTiming.complete(timing);
+          throw error;
+        }
       }
 
       case "workflow_command": {
@@ -878,6 +895,7 @@ export class AgentSessionWrapper {
       }
 
       case "abort": {
+        this.runTiming.cancel();
         // Stop also revokes automatic Goal continuation, including the gap
         // between two SDK runs when abort alone has nothing to cancel.
         const runner = this.inner.extensionRunner;
@@ -1175,6 +1193,7 @@ export class AgentSessionWrapper {
   destroy(): void {
     if (!this._alive) return;
     this._alive = false;
+    this.runTiming.cancel();
     this.streamAliases.clear();
     this.runtimeState = "disposed";
     // Flush pending question closures before the terminal frame makes the
@@ -1323,18 +1342,24 @@ export async function startRpcSession(
         : withAskUserTool(toolNames);
     const webExtensionUI = new WebExtensionUIBridge({ acceptDialogs: false });
     const metadataBySession = new WeakMap<object, RuntimeSessionMetadata>();
+    const observation: { wrapper?: AgentSessionWrapper } = {};
     const createRuntime: CreateAgentSessionRuntimeFactory = async ({
       cwd: runtimeCwd,
       sessionManager: runtimeSessionManager,
       sessionStartEvent,
     }) => {
-      const tracked = await createTrackedAgentServices(runtimeCwd);
+      const sessionObservation: { session?: AgentSessionLike } = {};
+      const tracked = await createTrackedAgentServices(runtimeCwd, { onBeforeProviderRequest: () => {
+        if (sessionObservation.session && observation.wrapper?.inner === sessionObservation.session) observation.wrapper.markProviderRequest();
+      } });
       const result = await createAgentSessionFromServices({
         services: tracked.services,
         sessionManager: runtimeSessionManager,
         sessionStartEvent,
         customTools: [createAskUserTool(webExtensionUI)],
       });
+
+      sessionObservation.session = result.session as unknown as AgentSessionLike;
 
       // Explicit selections narrow the active set after all built-in and extension
       // tools have registered. Undefined preserves Pi's official defaultTools plus
@@ -1378,6 +1403,7 @@ export async function startRpcSession(
         selectedToolNames = nextToolNames ? [...nextToolNames] : undefined;
       },
     );
+    observation.wrapper = wrapper;
     const runtimeMetadata = (session: AgentSessionLike) => metadataBySession.get(session as unknown as object);
     const onSessionReplaced: SessionReplacementListener = (activeWrapper, previousSessionId, nextSessionId) => {
       const conflict = registry.get(nextSessionId);
