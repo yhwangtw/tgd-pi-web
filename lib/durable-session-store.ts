@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { defineDoc, type AgentState, type EntryRecord } from "@earendil-works/pi-durable";
@@ -36,43 +36,133 @@ export function durableSessionDirectory(group: string): string {
   if (!durableSessionIdentity(durableSessionId(group, 1))) throw new Error("Invalid Durable store ID");
   return join(durableSessionsDirectory(), group);
 }
-export function writeDurableJson(path: string, value: unknown): void {
+export function writeDurableJson(path: string, value: unknown): number | undefined {
   const temporary = `${path}.${randomUUID()}.tmp`;
   writeFileSync(temporary, JSON.stringify(value), { mode: 0o600 });
+  let inode: number | undefined;
+  try { inode = statSync(temporary).ino; } catch { /* Optional index identity only. */ }
   renameSync(temporary, path);
+  return inode;
+}
+interface DurableFingerprint {
+  mtimeMs: number;
+  ctimeMs: number;
+  size: number;
+  ino: number;
+}
+interface DurableIndexEntry extends DurableFingerprint {
+  value?: { info: SessionInfo; agentRun?: AgentRun };
+}
+interface DurableDiskIndex {
+  version: 1;
+  sessionId: string;
+  source: DurableFingerprint;
+  value: DurableIndexEntry["value"] | null;
+}
+const fingerprint = (path: string): DurableFingerprint => {
+  const { mtimeMs, ctimeMs, size, ino } = statSync(path);
+  return { mtimeMs, ctimeMs, size, ino };
+};
+function sameFingerprint(a: DurableFingerprint, b: DurableFingerprint): boolean {
+  return a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs && a.size === b.size && a.ino === b.ino;
+}
+const indexPath = (path: string) => path.replace(/\.json$/, ".index.json");
+function projectionIndex(projection: DurableSessionProjection): DurableIndexEntry["value"] {
+  return projection.version === 1 && !projection.deleted
+    ? { info: { ...projection.info }, ...(projection.agentRun ? { agentRun: structuredClone(projection.agentRun) } : {}) } : undefined;
+}
+function readDiskIndex(path: string, id: string, metadata: DurableFingerprint): DurableIndexEntry["value"] | null {
+  try {
+    const saved = JSON.parse(readFileSync(indexPath(path), "utf8")) as DurableDiskIndex;
+    if (saved.version !== 1 || saved.sessionId !== id || !saved.source || !sameFingerprint(saved.source, metadata)) return null;
+    if (saved.value === null) return undefined;
+    return saved.value?.info?.id === id ? saved.value : null;
+  } catch { return null; }
+}
+declare global {
+  var __piDurableSessionIndex: Map<string, DurableIndexEntry> | undefined;
+}
+function durableIndex(): Map<string, DurableIndexEntry> {
+  return globalThis.__piDurableSessionIndex ??= new Map();
 }
 export function saveDurableProjection(directory: string, conversation: number, projection: DurableSessionProjection): void {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
-  writeDurableJson(join(directory, `${conversation}.json`), projection);
+  const path = join(directory, `${conversation}.json`);
+  const writtenInode = writeDurableJson(path, projection);
+  // The projection remains authoritative. A crash or failed optional index write
+  // leaves a stale fingerprint and readers fall back to the complete projection.
+  durableIndex().delete(path);
+  try {
+    const source = fingerprint(path);
+    // Another writer may have installed its projection after our rename. Never
+    // pair its fingerprint with our older sidebar metadata.
+    if (writtenInode === undefined || source.ino !== writtenInode) return;
+    const value = projectionIndex(projection);
+    writeDurableJson(indexPath(path), { version: 1, sessionId: projection.info.id, source, value: value ?? null } satisfies DurableDiskIndex);
+    durableIndex().set(path, { ...source, value });
+  } catch { /* Optional derived metadata must never fail a durable save. */ }
+}
+function readProjectionFile(path: string, id: string): DurableSessionProjection | undefined {
+  try {
+    const projection = JSON.parse(readFileSync(path, "utf8")) as DurableSessionProjection;
+    return projection.version === 1 && projection.info.id === id && !projection.deleted ? projection : undefined;
+  } catch { return undefined; }
+}
+function visibleProjection(info: SessionInfo): boolean {
+  return !info.sourceSessionId || resolveMigratedSessionId(info.sourceSessionId) === info.id;
 }
 /** Read-only derived index. Opening the sidebar never resumes paid work. */
 export function readDurableProjection(id: string): DurableSessionProjection | undefined {
   const identity = durableSessionIdentity(id);
   if (!identity) return undefined;
-  try {
-    const projection = JSON.parse(readFileSync(join(durableSessionDirectory(identity.group), `${identity.conversation}.json`), "utf8")) as DurableSessionProjection;
-    return projection.version === 1 && projection.info.id === id && !projection.deleted
-      && (!projection.info.sourceSessionId || resolveMigratedSessionId(projection.info.sourceSessionId) === id) ? projection : undefined;
-  } catch { return undefined; }
+  const projection = readProjectionFile(join(durableSessionDirectory(identity.group), `${identity.conversation}.json`), id);
+  return projection && visibleProjection(projection.info) ? projection : undefined;
 }
-export function listDurableSessions(): SessionInfo[] {
-  const sessions: SessionInfo[] = [];
+function listDurableIndex(): NonNullable<DurableIndexEntry["value"]>[] {
+  const sessions: NonNullable<DurableIndexEntry["value"]>[] = [];
+  const directory = durableSessionsDirectory();
+  const cache = durableIndex();
+  const seen = new Set<string>();
   try {
-    for (const group of readdirSync(durableSessionsDirectory())) {
+    for (const group of readdirSync(directory)) {
       if (!durableSessionIdentity(durableSessionId(group, 1))) continue;
       try {
         for (const file of readdirSync(durableSessionDirectory(group))) {
           if (!/^[1-9][0-9]*\.json$/.test(file)) continue;
-          const projection = readDurableProjection(durableSessionId(group, Number(file.slice(0, -5))));
-          if (projection && (!projection.info.sourceSessionId || resolveMigratedSessionId(projection.info.sourceSessionId) === projection.info.id)) sessions.push(projection.info);
+          const id = durableSessionId(group, Number(file.slice(0, -5)));
+          if (!durableSessionIdentity(id)) continue;
+          const path = join(directory, group, file);
+          try {
+            const metadata = fingerprint(path);
+            seen.add(path);
+            let indexed = cache.get(path);
+            if (!indexed || !sameFingerprint(indexed, metadata)) {
+              let value = readDiskIndex(path, id, metadata);
+              if (value === null) {
+                const projection = readProjectionFile(path, id);
+                value = projection ? projectionIndex(projection) : undefined;
+              }
+              indexed = { ...metadata, value };
+              // Retain sidebar/run metadata only; never pin complete transcripts in memory.
+              cache.set(path, indexed);
+            }
+            // A migration can be published without rewriting this projection.
+            if (indexed.value && visibleProjection(indexed.value.info)) sessions.push(indexed.value);
+          } catch { /* A concurrently removed or inaccessible projection is omitted. */ }
         }
       } catch { /* A concurrently removed or inaccessible store is omitted. */ }
     }
   } catch { /* First Durable session has not been created. */ }
+  for (const path of cache.keys()) {
+    if (dirname(dirname(path)) === directory && !seen.has(path)) cache.delete(path);
+  }
   return sessions;
 }
+export function listDurableSessions(): SessionInfo[] {
+  return listDurableIndex().map(({ info }) => ({ ...info }));
+}
 export function listDurableChildRuns(): AgentRun[] {
-  return listDurableSessions().flatMap(info => { const run = readDurableProjection(info.id)?.agentRun; return run ? [run] : []; });
+  return listDurableIndex().flatMap(({ agentRun }) => agentRun ? [structuredClone(agentRun)] : []);
 }
 
 export function durableMessage(message: NonNullable<EntryRecord["model"]>[number]): AgentMessage | undefined {

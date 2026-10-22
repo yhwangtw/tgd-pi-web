@@ -1,6 +1,6 @@
 import type { SessionInfo } from "@/lib/types";
 
-type RestoreFetcher = (url: string) => Promise<{
+type RestoreFetcher = (url: string, init?: RequestInit) => Promise<{
   ok: boolean;
   json(): Promise<unknown>;
 }>;
@@ -14,7 +14,7 @@ export async function resolveSessionForRestore(
   const listed = sessions.find((session) => session.id === sessionId || session.sourceSessionId === sessionId);
   if (listed) return listed;
 
-  const response = await fetcher(`/api/sessions/${encodeURIComponent(sessionId)}`);
+  const response = await fetcher(`/api/sessions/${encodeURIComponent(sessionId)}`, { headers: { "X-Pi-Session-Tree": "flat-v2" } });
   if (!response.ok) return null;
 
   const payload = await response.json() as { info?: SessionInfo | null };

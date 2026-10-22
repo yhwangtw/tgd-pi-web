@@ -5,6 +5,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import {
   ArrowDown,
   BadgeCheck,
+  Bookmark,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -24,7 +25,9 @@ import { markSessionRead } from "@/lib/session-read-state";
 import { motionScrollBehavior, prefersReducedMotion } from "@/lib/motion";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle, type MessageQuote } from "./ChatInput";
-import { ExtensionUIPanel, ExtensionWidgets, PendingQuestionNotice } from "./ExtensionUIPanel";
+import { ExtensionUIPanel, ExtensionWidgets, PendingQuestionNotice, WorkflowToolbar } from "./ExtensionUIPanel";
+import { useWorkflowVisibility } from "@/hooks/use-workflow-visibility";
+import { useWorkflowCommand } from "@/hooks/use-workflow-command";
 import { UserQuestionCard, type UserQuestionCardHandle } from "./UserQuestionCard";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { BashBlock } from "./BashBlock";
@@ -33,6 +36,7 @@ import { TgdPipeline, type PhaseStatus } from "./TgdPipeline";
 import { CompactionSummary, getCompactionSummary } from "./CompactionSummary";
 import { pickRovingMessageTarget, pickTurnTarget, type MessageFocusDirection } from "./turn-nav";
 import { useScrollFollowMode } from "@/lib/prefs";
+import { useTranscriptHistory } from "@/hooks/use-transcript-history";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { isTranscriptTailOutOfView, preservedRunSpacerHeight } from "@/hooks/use-transcript-scroll";
 import { getRunError } from "@/hooks/use-agent-session-types";
@@ -45,6 +49,7 @@ import { QueuedFollowUps } from "./QueuedFollowUps";
 import { CompactionStatus } from "./CompactionStatus";
 import { isProviderAuthError } from "./AssistantMessageView";
 import { buildConversationLayout } from "./conversation-turns";
+import { buildTranscriptSearchIndex, findTranscriptMatches, messageText, type FindScope } from "./transcript-search";
 import { assistantModelKey, shouldShowAssistantModelLabel } from "./message-chrome";
 import { ProviderRecoveryBanner } from "./ProviderRecoveryBanner";
 import { RunStatus } from "./RunStatus";
@@ -148,34 +153,6 @@ const TYPEWRITER_PHRASES = [
   "rubber-duck with me.",
 ];
 
-/** Plain-text view of a message for in-conversation search. */
-function messageText(msg: AgentMessage): string {
-  const content = (msg as { content?: unknown }).content;
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return (content as Array<{ type?: string; text?: string; thinking?: string }>)
-    .map((b) => b.text ?? b.thinking ?? "")
-    .join(" ");
-}
-
-type FindScope = "all" | "user" | "assistant" | "tools" | "errors";
-
-function activityText(messages: import("@/lib/types").AssistantMessage[], toolResults: Map<string, ToolResultMessage>): string {
-  const parts: string[] = [];
-  for (const message of messages) {
-    if (message.errorMessage) parts.push(message.errorMessage);
-    for (const block of message.content) {
-      if (block.type === "thinking") parts.push(block.thinking);
-      if (block.type === "toolCall") {
-        parts.push(block.toolName, JSON.stringify(block.input));
-        const result = toolResults.get(block.toolCallId);
-        if (result) parts.push(messageText(result));
-      }
-    }
-  }
-  return parts.join(" ");
-}
-
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef: providedChatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange, onSessionNamed, isParallel, paneLabel, onClosePane, wideChat, onOpenModels }: Props) {
   const localChatInputRef = useRef<ChatInputHandle>(null);
   const chatInputRef = providedChatInputRef ?? localChatInputRef;
@@ -205,6 +182,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const scrollFollowMode = useScrollFollowMode();
   const questionCardRef = useRef<UserQuestionCardHandle>(null);
   const pendingQuestion = extensionUIState.dialogs[0];
+  const workflowVisibility = useWorkflowVisibility(session?.id);
+  const workflowCommand = useWorkflowCommand(session?.id, handleSend);
 
   // ── tGD pipeline: detect which phases have run in this session ──
   const [pipelineHidden, setPipelineHidden] = useState(false);
@@ -359,6 +338,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     () => conversationLayout.displayIndices.map((index) => messages[index]),
     [conversationLayout.displayIndices, messages],
   );
+  // Keys of visible messages, parallel to messageRefs — used to auto-expand a
+  // collapsed message before jumping a find match into it.
+  const visibleKeys = useMemo(() => {
+    return conversationLayout.displayIndices.map((index) => entryIds[index] ?? index);
+  }, [conversationLayout.displayIndices, entryIds]);
+
   const messageRefs = useMessageRefs(visibleMessages.length);
 
   // Scope quotes to the session that created them instead of clearing from an
@@ -371,14 +356,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const messageQuote = messageQuoteState && messageQuoteState.sessionId === session?.id
     ? messageQuoteState.quote
     : null;
-  const openQuotedMessage = useCallback((entryId: string) => {
-    const target = document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(entryId)}"]`);
-    target?.scrollIntoView({ block: "center", behavior: motionScrollBehavior() });
-    target?.animate(
-      [{ boxShadow: "0 0 0 3px var(--color-accent-border)" }, { boxShadow: "0 0 0 3px transparent" }],
-      { duration: prefersReducedMotion() ? 120 : 1200, easing: "ease-out" },
-    );
-  }, []);
+  // Stable across token updates so historical MessageView memoization can skip rendering.
+  const quoteMessage = useCallback((entryId: string, role: "user" | "assistant", text: string) => {
+    setMessageQuoteState({ sessionId: session?.id, quote: { entryId, role, text } });
+  }, [session?.id]);
+
 
   // ── Message bookmarks (per session, persisted) ──────────────────────────
   const bookmarkStorageKey = session?.id ? `pi-bookmarks:${session.id}` : null;
@@ -532,6 +514,92 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     return map;
   }, [messages]);
 
+  // Historical outcome/recovery text does not change for every streaming token.
+  const { lastUserIdx, recoveredAuthIndices } = useMemo(() => {
+    let lastUserIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user" && getCompactionSummary(messages[i]) === null) { lastUserIdx = i; break; }
+    }
+    const recoveredAuthIndices = new Set<number>();
+    const laterSuccessfulProviders = new Set<string>();
+    let hasLaterAssistantSuccess = false;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role !== "assistant") continue;
+      const assistant = messages[i] as import("@/lib/types").AssistantMessage;
+      const provider = assistant.provider ?? "";
+      if (assistant.stopReason === "error" && isProviderAuthError(assistant.errorMessage)) {
+        if (provider ? laterSuccessfulProviders.has(provider) : hasLaterAssistantSuccess) {
+          recoveredAuthIndices.add(i);
+        }
+        continue;
+      }
+      if (assistant.stopReason !== "error" && messageText(assistant).trim()) {
+        hasLaterAssistantSuccess = true;
+        if (provider) laterSuccessfulProviders.add(provider);
+      }
+    }
+    return { lastUserIdx, recoveredAuthIndices };
+  }, [messages]);
+
+  const currentTurnStartIndex = useMemo(() => {
+    if (lastUserIdx < 0) return Math.max(0, visibleKeys.length - 1);
+    return conversationLayout.displayIndices.findIndex(index => index >= lastUserIdx);
+  }, [lastUserIdx, visibleKeys.length, conversationLayout.displayIndices]);
+  const { startIndex: historyStartIndex, hasPrevious: hasEarlierHistory, loadPrevious,
+    reveal: revealHistory, isPrependingRef } = useTranscriptHistory({
+    visibleKeys, sessionKey: session?.id, currentTurnStartIndex,
+    scrollContainerRef, messageRefs,
+  });
+  const followStreamRef = useRef(false);
+  const userPausedSmartFollowRef = useRef(false);
+  const pauseForHistoryNavigation = useCallback(() => {
+    if (scrollFollowMode === "always") return;
+    followStreamRef.current = false;
+    if (scrollFollowMode === "smart") userPausedSmartFollowRef.current = true;
+  }, [scrollFollowMode]);
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    index: number; key: string | number; run: (element: HTMLDivElement) => void;
+  } | null>(null);
+  const navigateToMessage = useCallback((index: number, run: (element: HTMLDivElement) => void) => {
+    const key = visibleKeys[index];
+    if (key === undefined) return;
+    pauseForHistoryNavigation();
+    revealHistory(index);
+    setPendingNavigation({ index, key, run });
+  }, [visibleKeys, pauseForHistoryNavigation, revealHistory]);
+  useLayoutEffect(() => {
+    if (!pendingNavigation) return;
+    if (visibleKeys[pendingNavigation.index] !== pendingNavigation.key) {
+      setPendingNavigation(null);
+      return;
+    }
+    const element = messageRefs.current[pendingNavigation.index];
+    if (!element) return;
+    // Schedule only after the requested row has committed. A frame requested
+    // directly from the click can precede React's larger history commit.
+    const frame = requestAnimationFrame(() => {
+      if (element.isConnected) pendingNavigation.run(element);
+      setPendingNavigation(previous => previous === pendingNavigation ? null : previous);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingNavigation, visibleKeys, messageRefs, historyStartIndex]);
+  const openQuotedMessage = useCallback((entryId: string) => {
+    const index = visibleKeys.indexOf(entryId);
+    if (index < 0) return;
+    navigateToMessage(index, target => {
+      target?.scrollIntoView({ block: "center", behavior: motionScrollBehavior() });
+      target?.animate(
+        [{ boxShadow: "0 0 0 3px var(--color-accent-border)" }, { boxShadow: "0 0 0 3px transparent" }],
+        { duration: prefersReducedMotion() ? 120 : 1200, easing: "ease-out" },
+      );
+    });
+  }, [visibleKeys, navigateToMessage]);
+  const earlierBookmarkIndex = useMemo(() => {
+    for (const index of bookmarkedIndices) if (index < historyStartIndex) return index;
+    return null;
+  }, [bookmarkedIndices, historyStartIndex]);
+  const unreadVisibleIndex = unreadMessageIndex === null ? -1 : conversationLayout.displayIndices.indexOf(unreadMessageIndex);
+
   const historicalAssistantModelKey = useMemo<string | null>(() => {
     for (let i = conversationLayout.displayIndices.length - 1; i >= 0; i--) {
       const message = messages[conversationLayout.displayIndices[i]];
@@ -582,12 +650,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   // the jump button) — content growth alone never changes intent, so the
   // top-anchored reading position is never captured against the user's will.
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
-  const followStreamRef = useRef(false);
   // "+N lines below" counter: how much new content has accumulated under the
   // viewport while the reader is NOT following a running stream.
   const [newLines, setNewLines] = useState(0);
   const newBaselineRef = useRef(0);
-  const userPausedSmartFollowRef = useRef(false);
   const hasMessages = messages.length > 0;
   const updateJumpVisibility = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -627,6 +693,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       const movedDown = el.scrollTop > lastScrollTop + 1;
       lastScrollTop = el.scrollTop;
       updateJumpVisibility();
+      if (isPrependingRef.current) return;
       const end = messagesEndRef.current;
       if (end) {
         const containerBottom = el.getBoundingClientRect().bottom;
@@ -667,7 +734,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("keydown", onKeyDown);
     };
-  }, [scrollContainerRef, messagesEndRef, hasMessages, loading, scrollFollowMode, updateJumpVisibility]);
+  }, [scrollContainerRef, messagesEndRef, hasMessages, loading, scrollFollowMode, updateJumpVisibility, isPrependingRef]);
 
   // Follow policy at run start. Smart mode starts engaged so the reply is
   // visible without manual work, but the user's upward scroll disengages it.
@@ -695,7 +762,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     if (!el) return;
     newBaselineRef.current = el.scrollHeight;
     setNewLines(0);
-  }, [agentRunning, spacerHeight, expandedKeys, scrollContainerRef]);
+  }, [agentRunning, spacerHeight, expandedKeys, historyStartIndex, scrollContainerRef]);
 
   // Reconcile every kind of output with the reader's existing follow intent.
   // message_end clears streamingMessage before committing the last chunk;
@@ -703,7 +770,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const reconcileTranscriptTail = useCallback(() => {
     const el = scrollContainerRef.current;
     const end = messagesEndRef.current;
-    if (!el || !end) return;
+    if (!el || !end || isPrependingRef.current) return;
     if (followStreamRef.current && end.getBoundingClientRect().top > el.getBoundingClientRect().bottom) {
       // Instant automatic scrolling avoids queuing animations at token rate.
       // The marker precedes the run spacer, so short replies keep their anchor.
@@ -719,7 +786,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     const delta = el.scrollHeight - newBaselineRef.current;
     const lines = delta > 12 ? Math.max(1, Math.round(delta / 24)) : 0;
     setNewLines((v) => (v === lines ? v : lines));
-  }, [agentRunning, messagesEndRef, scrollContainerRef, updateJumpVisibility]);
+  }, [agentRunning, messagesEndRef, scrollContainerRef, updateJumpVisibility, isPrependingRef]);
 
   useLayoutEffect(() => {
     reconcileTranscriptTail();
@@ -770,35 +837,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const [findPos, setFindPos] = useState(0);
   const findInputRef = useRef<HTMLInputElement | null>(null);
 
-  const findMatches = useMemo(() => {
-    const q = findQuery.trim().toLowerCase();
-    if (!q) return [];
-    const hits: number[] = [];
-    conversationLayout.displayIndices.forEach((messageIndex, visIdx) => {
-      const msg = messages[messageIndex];
-      const activityMessages = conversationLayout.activityByOwner.get(messageIndex) ?? [];
-      const activity = activityText(activityMessages, toolResultsMap);
-      const hasError = msg.role === "assistant" && (
-        msg.stopReason === "error"
-        || activityMessages.some((item) => item.stopReason === "error")
-        || activityMessages.some((item) => item.content.some((block) => block.type === "toolCall" && toolResultsMap.get(block.toolCallId)?.isError))
-      );
-      let haystack = "";
-      if (findScope === "all") haystack = `${messageText(msg)} ${activity}`;
-      else if (findScope === "user" && msg.role === "user") haystack = messageText(msg);
-      else if (findScope === "assistant" && msg.role === "assistant") haystack = messageText(msg);
-      else if (findScope === "tools") haystack = activity;
-      else if (findScope === "errors" && hasError) haystack = `${messageText(msg)} ${activity}`;
-      if (haystack.toLowerCase().includes(q)) hits.push(visIdx);
-    });
-    return hits;
-  }, [conversationLayout.activityByOwner, conversationLayout.displayIndices, findQuery, findScope, messages, toolResultsMap]);
-
-  // Keys of visible messages, parallel to messageRefs — used to auto-expand a
-  // collapsed message before jumping a find match into it.
-  const visibleKeys = useMemo(() => {
-    return conversationLayout.displayIndices.map((index) => entryIds[index] ?? index);
-  }, [conversationLayout.displayIndices, entryIds]);
+  const findIndex = useMemo(() => findOpen
+    ? buildTranscriptSearchIndex(messages, conversationLayout, toolResultsMap)
+    : [], [findOpen, messages, conversationLayout, toolResultsMap]);
+  const findMatches = useMemo(() => findTranscriptMatches(findIndex, findQuery, findScope),
+    [findIndex, findQuery, findScope]);
 
   // Roving focus keeps one transcript message in the page tab order. This
   // makes long sessions keyboard-navigable without forcing a user to tab
@@ -835,12 +878,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
     event.preventDefault();
     setFocusedMessageKey(visibleKeys[targetIndex] ?? null);
-    requestAnimationFrame(() => {
-      const target = messageRefs.current[targetIndex];
+    navigateToMessage(targetIndex, target => {
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: "nearest", behavior: motionScrollBehavior() });
     });
-  }, [messageRefs, visibleKeys]);
+  }, [visibleKeys, navigateToMessage]);
 
   useEffect(() => {
     const query = findQuery.trim().toLocaleLowerCase();
@@ -895,7 +937,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       observers.forEach((observer) => observer.disconnect());
       registry.delete("conversation-find");
     };
-  }, [findMatches, findQuery, messageRefs]);
+  }, [findMatches, findQuery, messageRefs, historyStartIndex]);
 
   const gotoMatch = useCallback((pos: number) => {
     const target = findMatches[pos];
@@ -904,10 +946,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     if (key !== undefined) {
       setExpandedKeys((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
     }
-    // Give a collapsed target a beat to expand before scrolling to it.
-    setTimeout(() => {
-      const el = messageRefs.current[target];
-      if (!el) return;
+    navigateToMessage(target, el => {
       if (findScope === "tools" || findScope === "errors") {
         const workLog = [...el.querySelectorAll<HTMLButtonElement>('section > button[aria-expanded]')]
           .find((button) => button.parentElement?.getAttribute("aria-label") === t("chat.workLog"));
@@ -921,8 +960,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         ],
         { duration: prefersReducedMotion() ? 120 : 700, easing: "ease-out" },
       );
-    }, 60);
-  }, [findMatches, findScope, messageRefs, t, visibleKeys]);
+    });
+  }, [findMatches, findScope, t, visibleKeys, navigateToMessage]);
 
   // ⌥↑ / ⌥↓ — walk between user turns (each jump aligns a user message to
   // the viewport top, mirroring the send-time anchor position).
@@ -935,24 +974,31 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       const cTop = container.getBoundingClientRect().top;
       const els: HTMLElement[] = [];
       const tops: number[] = [];
-      let visIdx = 0;
-      for (const msg of messages) {
-        if (msg.role !== "user" && msg.role !== "assistant") continue;
+      conversationLayout.displayIndices.forEach((messageIndex, visIdx) => {
         const el = messageRefs.current[visIdx];
-        if (msg.role === "user" && el) {
+        if (messages[messageIndex].role === "user" && el) {
           els.push(el);
           tops.push(el.getBoundingClientRect().top - cTop);
         }
-        visIdx++;
-      }
+      });
       const target = pickTurnTarget(tops, e.key === "ArrowUp" ? "prev" : "next");
-      if (target === null) return;
+      if (target === null) {
+        if (e.key === "ArrowUp" && historyStartIndex > 0) {
+          const previous = conversationLayout.displayIndices.findLastIndex((index, visibleIndex) => visibleIndex < historyStartIndex && messages[index].role === "user");
+          if (previous >= 0) {
+            e.preventDefault();
+            navigateToMessage(previous, element => element.scrollIntoView({ block: "start", behavior: motionScrollBehavior() }));
+          }
+        }
+        return;
+      }
       e.preventDefault();
+      pauseForHistoryNavigation();
       els[target].scrollIntoView({ block: "start", behavior: motionScrollBehavior() });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isParallel, messages, scrollContainerRef, messageRefs]);
+  }, [isParallel, messages, scrollContainerRef, messageRefs, conversationLayout.displayIndices, historyStartIndex, navigateToMessage, pauseForHistoryNavigation]);
 
   useEffect(() => {
     if (isParallel) return; // one handler per app — main pane owns ⌘F
@@ -1035,6 +1081,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       availableTools={availableTools}
       customToolNames={customToolNames}
       onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
+      onExitPlan={session ? () => workflowCommand.run("/plan exit") : undefined}
+      workflowPending={workflowCommand.pending}
+      workflowControls={<WorkflowToolbar state={extensionUIState} workflowVisibility={workflowVisibility} />}
       thinkingLevel={thinkingLevel}
       onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
       availableThinkingLevels={availableThinkingLevels}
@@ -1054,6 +1103,156 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       wide={wideChat}
     />
   );
+
+  const historyRows = useMemo(() => {
+    let refIdx = 0;
+    let seenUserMessage = false;
+    let previousAssistantModelKey: string | null = null;
+    let previousEntryId: string | undefined;
+    return messages.map((msg, idx) => {
+      const compactionSummary = getCompactionSummary(msg);
+      const prevAssistantEntryId = msg.role === "user" && compactionSummary === null ? previousEntryId : undefined;
+      if (entryIds[idx]) previousEntryId = entryIds[idx];
+      const isVisible = conversationLayout.displayIndexSet.has(idx);
+      if (msg.role === "assistant" && !isVisible) return null;
+      const startsNewTurn = msg.role === "user" && compactionSummary === null && seenUserMessage;
+      const currentAssistantModelKey = msg.role === "assistant"
+        ? assistantModelKey(msg)
+        : null;
+      const showModelLabel = msg.role === "assistant"
+        && shouldShowAssistantModelLabel(previousAssistantModelKey, msg);
+      const currentRefIdx = isVisible ? refIdx++ : -1;
+      if (idx < (conversationLayout.displayIndices[historyStartIndex] ?? 0)) {
+        if (isVisible && msg.role === "user" && compactionSummary === null) seenUserMessage = true;
+        if (isVisible && currentAssistantModelKey !== null) previousAssistantModelKey = currentAssistantModelKey;
+        return null;
+      }
+      let showTimestamp = msg.role === "assistant" && conversationLayout.finalAssistantIndices.has(idx);
+      if (msg.role === "assistant") {
+        // Hide on the currently-streaming tail (the streaming bubble owns the live timestamp)
+        if (showTimestamp && streamState.isStreaming && idx === messages.length - 1) {
+          showTimestamp = false;
+        }
+      }
+      const turnIndex = conversationLayout.turnIndexByMessageIndex.get(idx);
+      const turn = turnIndex === undefined ? undefined : conversationLayout.turns[turnIndex];
+      const firstTurnMessageIndex = turn?.userIndex
+        ?? turn?.displayAssistantIndices[0]
+        ?? null;
+      const lastTurnMessageIndex = turn?.finalAssistantIndex
+        ?? turn?.userIndex
+        ?? null;
+      const turnPosition = turnIndex === undefined
+        ? undefined
+        : firstTurnMessageIndex === idx && lastTurnMessageIndex === idx
+          ? "single"
+          : firstTurnMessageIndex === idx
+            ? "start"
+            : lastTurnMessageIndex === idx
+              ? "end"
+              : "middle";
+      const turnStartedAt = turn?.userIndex !== null && turn?.userIndex !== undefined
+        ? (messages[turn.userIndex] as AgentMessage & { timestamp?: number }).timestamp
+        : undefined;
+      // entryIds is parallel to messages after a session load; freshly
+      // streamed messages have no entry id yet, so fall back to index
+      // (hex entry ids never collide with numeric keys).
+      const key = entryIds[idx] ?? idx;
+      const entryId = entryIds[idx];
+      const canBookmark = compactionSummary === null
+        && !!entryId
+        && (msg.role === "user" || msg.role === "assistant");
+      const isBookmarked = canBookmark && bookmarks.has(entryId);
+      const view = compactionSummary !== null ? (
+        <CompactionSummary key={key} summary={compactionSummary} />
+      ) : (
+        <MessageView
+          key={key}
+          message={msg}
+          generationMetrics={getGenerationMetrics(msg)}
+          toolResults={toolResultsMap}
+          modelNames={modelNames}
+          entryId={entryIds[idx]}
+          onFork={agentRunning || isNew || (idx === 0 && msg.role === "user") ? undefined : handleFork}
+          forking={forkingEntryId === entryIds[idx]}
+          onNavigate={agentRunning ? undefined : handleNavigate}
+          prevAssistantEntryId={agentRunning ? undefined : prevAssistantEntryId}
+          onEditContent={handleEditContent}
+          onEditRerun={agentRunning ? undefined : handleEditRerun}
+          showTimestamp={showTimestamp}
+          prevTimestamp={idx > 0 ? (messages[idx - 1] as import("@/lib/types").AgentMessage & { timestamp?: number }).timestamp : undefined}
+          onOpenModels={onOpenModels}
+          authRecovered={recoveredAuthIndices.has(idx)}
+          showModelLabel={showModelLabel}
+          turnActivityMessages={conversationLayout.activityByOwner.get(idx)}
+          suppressActivityBlocks={conversationLayout.activityAssistantIndices.has(idx)}
+          turnStartedAt={turnStartedAt}
+          usageOverride={conversationLayout.usageByFinalAssistant.get(idx)}
+          showUsage={conversationLayout.finalAssistantIndices.has(idx)}
+          showActions={conversationLayout.finalAssistantIndices.has(idx)}
+          onQuote={entryIds[idx] && (msg.role === "user" || msg.role === "assistant") ? quoteMessage : undefined}
+          isBookmarked={isBookmarked}
+          onToggleBookmark={canBookmark ? toggleBookmark : undefined}
+        />
+      );
+      if (!isVisible) return view;
+      if (msg.role === "user" && compactionSummary === null) seenUserMessage = true;
+      if (currentAssistantModelKey !== null) previousAssistantModelKey = currentAssistantModelKey;
+      // The current turn (last user message onward) never collapses.
+      const currentTurn = lastUserIdx === -1 ? idx === messages.length - 1 : idx >= lastUserIdx;
+      const collapsible = compactionSummary === null && !currentTurn;
+      return (
+        <Fragment key={key}>
+          {idx === unreadMessageIndex && (
+            <div className={styles.unreadDivider} role="separator">
+              <span>{t("chat.unread")}</span>
+            </div>
+          )}
+        <div
+          data-message-role={compactionSummary === null ? msg.role : "summary"}
+          data-current-turn={currentTurn || undefined}
+          data-entry-id={entryId}
+          data-bookmarked={isBookmarked || undefined}
+          data-turn-start={startsNewTurn || undefined}
+          data-turn-index={turnIndex}
+          data-turn-position={turnPosition}
+          role={compactionSummary !== null ? "note" : "article"}
+          aria-label={compactionSummary !== null
+            ? t("chat.compactionSummary")
+            : `${msg.role === "user" ? t("chat.userMessage") : t("chat.assistantMessage")}${turnIndex === undefined ? "" : ` · ${t("chat.turns")} ${turnIndex + 1}`}`}
+          tabIndex={currentRefIdx === rovingMessageIndex ? 0 : -1}
+          data-roving-tabstop={currentRefIdx === rovingMessageIndex || undefined}
+          onFocus={(event) => {
+            // Only the article itself participates in roving focus.
+            // Letting focus from nested links and disclosures bubble
+            // into this state update can re-render their subtree
+            // between pointerdown and click, swallowing the user's
+            // first activation.
+            if (event.target === event.currentTarget) setFocusedMessageKey(key);
+          }}
+          onKeyDown={(event) => handleMessageRovingKeyDown(event, currentRefIdx)}
+          className={`msg-item hover-group relative ${styles.messageItem} ${msg.role === "user" && compactionSummary === null ? styles.messageItemUser : styles.messageItemAssistant} ${startsNewTurn ? styles.turnStart : ""}`}
+          ref={(el) => {
+          messageRefs.current[currentRefIdx] = el;
+          if (idx === lastUserIdx) { (lastUserMsgRef as { current: HTMLDivElement | null }).current = el; }
+        }}>
+          <CollapsibleMessage
+            collapsible={collapsible}
+            expanded={expandedKeys.has(key)}
+            onToggle={() => toggleExpanded(key)}
+          >
+            {view}
+          </CollapsibleMessage>
+        </div>
+        </Fragment>
+      );
+    });
+  }, [messages, entryIds, conversationLayout, streamState.isStreaming, getGenerationMetrics,
+    toolResultsMap, modelNames, agentRunning, isNew, handleFork, forkingEntryId,
+    handleNavigate, handleEditContent, handleEditRerun, onOpenModels, recoveredAuthIndices,
+    quoteMessage, toggleBookmark, bookmarks, lastUserIdx, unreadMessageIndex, t,
+    rovingMessageIndex, handleMessageRovingKeyDown, messageRefs, lastUserMsgRef,
+    expandedKeys, toggleExpanded, historyStartIndex]);
 
   if (loading) {
     return (
@@ -1238,175 +1437,29 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             aria-live="off"
           >
 
-            {(() => {
-              let lastUserIdx = -1;
-              for (let i = messages.length - 1; i >= 0; i--) {
-                if (messages[i].role === "user" && getCompactionSummary(messages[i]) === null) { lastUserIdx = i; break; }
-              }
-              const recoveredAuthIndices = new Set<number>();
-              const laterSuccessfulProviders = new Set<string>();
-              let hasLaterAssistantSuccess = false;
-              for (let i = messages.length - 1; i >= 0; i--) {
-                if (messages[i].role !== "assistant") continue;
-                const assistant = messages[i] as import("@/lib/types").AssistantMessage;
-                const provider = assistant.provider ?? "";
-                if (assistant.stopReason === "error" && isProviderAuthError(assistant.errorMessage)) {
-                  if (provider ? laterSuccessfulProviders.has(provider) : hasLaterAssistantSuccess) {
-                    recoveredAuthIndices.add(i);
-                  }
-                  continue;
-                }
-                if (assistant.stopReason !== "error" && messageText(assistant).trim()) {
-                  hasLaterAssistantSuccess = true;
-                  if (provider) laterSuccessfulProviders.add(provider);
-                }
-              }
-              let refIdx = 0;
-              let seenUserMessage = false;
-              let previousAssistantModelKey: string | null = null;
-              return messages.map((msg, idx) => {
-                const compactionSummary = getCompactionSummary(msg);
-                let prevAssistantEntryId: string | undefined;
-                if (msg.role === "user" && compactionSummary === null) {
-                  for (let j = idx - 1; j >= 0; j--) {
-                    if (entryIds[j]) { prevAssistantEntryId = entryIds[j]; break; }
-                  }
-                }
-                const isVisible = conversationLayout.displayIndexSet.has(idx);
-                if (msg.role === "assistant" && !isVisible) return null;
-                const startsNewTurn = msg.role === "user" && compactionSummary === null && seenUserMessage;
-                const currentAssistantModelKey = msg.role === "assistant"
-                  ? assistantModelKey(msg)
-                  : null;
-                const showModelLabel = msg.role === "assistant"
-                  && shouldShowAssistantModelLabel(previousAssistantModelKey, msg);
-                const currentRefIdx = isVisible ? refIdx++ : -1;
-                let showTimestamp = msg.role === "assistant" && conversationLayout.finalAssistantIndices.has(idx);
-                if (msg.role === "assistant") {
-                  // Hide on the currently-streaming tail (the streaming bubble owns the live timestamp)
-                  if (showTimestamp && streamState.isStreaming && idx === messages.length - 1) {
-                    showTimestamp = false;
-                  }
-                }
-                const turnIndex = conversationLayout.turnIndexByMessageIndex.get(idx);
-                const turn = turnIndex === undefined ? undefined : conversationLayout.turns[turnIndex];
-                const firstTurnMessageIndex = turn?.userIndex
-                  ?? turn?.displayAssistantIndices[0]
-                  ?? null;
-                const lastTurnMessageIndex = turn?.finalAssistantIndex
-                  ?? turn?.userIndex
-                  ?? null;
-                const turnPosition = turnIndex === undefined
-                  ? undefined
-                  : firstTurnMessageIndex === idx && lastTurnMessageIndex === idx
-                    ? "single"
-                    : firstTurnMessageIndex === idx
-                      ? "start"
-                      : lastTurnMessageIndex === idx
-                        ? "end"
-                        : "middle";
-                const turnStartedAt = turn?.userIndex !== null && turn?.userIndex !== undefined
-                  ? (messages[turn.userIndex] as AgentMessage & { timestamp?: number }).timestamp
-                  : undefined;
-                // entryIds is parallel to messages after a session load; freshly
-                // streamed messages have no entry id yet, so fall back to index
-                // (hex entry ids never collide with numeric keys).
-                const key = entryIds[idx] ?? idx;
-                const entryId = entryIds[idx];
-                const canBookmark = compactionSummary === null
-                  && !!entryId
-                  && (msg.role === "user" || msg.role === "assistant");
-                const isBookmarked = canBookmark && bookmarks.has(entryId);
-                const view = compactionSummary !== null ? (
-                  <CompactionSummary key={key} summary={compactionSummary} />
-                ) : (
-                  <MessageView
-                    key={key}
-                    message={msg}
-                    generationMetrics={getGenerationMetrics(msg)}
-                    toolResults={toolResultsMap}
-                    modelNames={modelNames}
-                    entryId={entryIds[idx]}
-                    onFork={agentRunning || isNew || (idx === 0 && msg.role === "user") ? undefined : handleFork}
-                    forking={forkingEntryId === entryIds[idx]}
-                    onNavigate={agentRunning ? undefined : handleNavigate}
-                    prevAssistantEntryId={agentRunning ? undefined : prevAssistantEntryId}
-                    onEditContent={handleEditContent}
-                    onEditRerun={agentRunning ? undefined : handleEditRerun}
-                    showTimestamp={showTimestamp}
-                    prevTimestamp={idx > 0 ? (messages[idx - 1] as import("@/lib/types").AgentMessage & { timestamp?: number }).timestamp : undefined}
-                    onOpenModels={onOpenModels}
-                    authRecovered={recoveredAuthIndices.has(idx)}
-                    showModelLabel={showModelLabel}
-                    turnActivityMessages={conversationLayout.activityByOwner.get(idx)}
-                    suppressActivityBlocks={conversationLayout.activityAssistantIndices.has(idx)}
-                    turnStartedAt={turnStartedAt}
-                    usageOverride={conversationLayout.usageByFinalAssistant.get(idx)}
-                    showUsage={conversationLayout.finalAssistantIndices.has(idx)}
-                    showActions={conversationLayout.finalAssistantIndices.has(idx)}
-                    onQuote={entryIds[idx] && (msg.role === "user" || msg.role === "assistant")
-                      ? (text) => {
-                          const nextQuote: MessageQuote = { entryId: entryIds[idx]!, role: msg.role, text };
-                          setMessageQuoteState({ sessionId: session?.id, quote: nextQuote });
-                        }
-                      : undefined}
-                    isBookmarked={isBookmarked}
-                    onToggleBookmark={canBookmark ? toggleBookmark : undefined}
-                  />
-                );
-                if (!isVisible) return view;
-                if (msg.role === "user" && compactionSummary === null) seenUserMessage = true;
-                if (currentAssistantModelKey !== null) previousAssistantModelKey = currentAssistantModelKey;
-                // The current turn (last user message onward) never collapses.
-                const currentTurn = lastUserIdx === -1 ? idx === messages.length - 1 : idx >= lastUserIdx;
-                const collapsible = compactionSummary === null && !currentTurn;
-                return (
-                  <Fragment key={key}>
-                    {idx === unreadMessageIndex && (
-                      <div className={styles.unreadDivider} role="separator">
-                        <span>{t("chat.unread")}</span>
-                      </div>
-                    )}
-                  <div
-                    data-message-role={compactionSummary === null ? msg.role : "summary"}
-                    data-current-turn={currentTurn || undefined}
-                    data-entry-id={entryId}
-                    data-bookmarked={isBookmarked || undefined}
-                    data-turn-start={startsNewTurn || undefined}
-                    data-turn-index={turnIndex}
-                    data-turn-position={turnPosition}
-                    role={compactionSummary !== null ? "note" : "article"}
-                    aria-label={compactionSummary !== null
-                      ? t("chat.compactionSummary")
-                      : `${msg.role === "user" ? t("chat.userMessage") : t("chat.assistantMessage")}${turnIndex === undefined ? "" : ` · ${t("chat.turns")} ${turnIndex + 1}`}`}
-                    tabIndex={currentRefIdx === rovingMessageIndex ? 0 : -1}
-                    data-roving-tabstop={currentRefIdx === rovingMessageIndex || undefined}
-                    onFocus={(event) => {
-                      // Only the article itself participates in roving focus.
-                      // Letting focus from nested links and disclosures bubble
-                      // into this state update can re-render their subtree
-                      // between pointerdown and click, swallowing the user's
-                      // first activation.
-                      if (event.target === event.currentTarget) setFocusedMessageKey(key);
-                    }}
-                    onKeyDown={(event) => handleMessageRovingKeyDown(event, currentRefIdx)}
-                    className={`msg-item hover-group relative ${styles.messageItem} ${msg.role === "user" && compactionSummary === null ? styles.messageItemUser : styles.messageItemAssistant} ${startsNewTurn ? styles.turnStart : ""}`}
-                    ref={(el) => {
-                    messageRefs.current[currentRefIdx] = el;
-                    if (idx === lastUserIdx) { (lastUserMsgRef as { current: HTMLDivElement | null }).current = el; }
-                  }}>
-                    <CollapsibleMessage
-                      collapsible={collapsible}
-                      expanded={expandedKeys.has(key)}
-                      onToggle={() => toggleExpanded(key)}
-                    >
-                      {view}
-                    </CollapsibleMessage>
-                  </div>
-                  </Fragment>
-                );
-              });
-            })()}
+            {hasEarlierHistory && (
+              <div className={styles.historyControls}>
+                <button type="button" onClick={loadPrevious}>
+                  <ChevronUp size={UI_ICON_SIZE.inline} aria-hidden />
+                  {t("chat.loadEarlier").replace("{count}", String(historyStartIndex))}
+                </button>
+                {earlierBookmarkIndex !== null && (
+                  <button type="button" onClick={() => {
+                    const key = visibleKeys[earlierBookmarkIndex];
+                    if (typeof key === "string") openQuotedMessage(key);
+                  }} aria-label={t("chat.earlierBookmarks")} title={t("chat.earlierBookmarks")}>
+                    <Bookmark size={UI_ICON_SIZE.inline} aria-hidden />
+                  </button>
+                )}
+                {unreadVisibleIndex >= 0 && unreadVisibleIndex < historyStartIndex && (
+                  <button type="button" onClick={() => {
+                    const key = visibleKeys[unreadVisibleIndex];
+                    if (typeof key === "string") openQuotedMessage(key);
+                  }}>{t("chat.unread")}</button>
+                )}
+              </div>
+            )}
+            {historyRows}
 
             {/* Recovery actions stay next to the interrupted outcome. Earlier
                 turns already expose edit/rerun + fork from the user message. */}
@@ -1566,7 +1619,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               state={extensionUIState}
               sessionId={session?.id}
               onRespond={handleExtensionUIResponse}
-              onWorkflowCommand={handleSend}
+              onWorkflowCommand={workflowCommand.run}
+              workflowPending={workflowCommand.pending}
+              workflowVisibility={workflowVisibility}
+              workflowBusy={agentRunning || isCompacting}
               wide={wideChat}
               questionInTranscript
             />
@@ -1576,7 +1632,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             <div className={styles.composerMount}>
               {chatInputElement}
             </div>
-            <ExtensionWidgets state={extensionUIState} placement="belowEditor" wide={wideChat} />
+            <ExtensionWidgets key={session?.id ?? "unsaved"} state={extensionUIState} placement="belowEditor" wide={wideChat} workflowVisibility={workflowVisibility} onWorkflowCommand={workflowCommand.run} workflowPending={workflowCommand.pending} workflowBusy={agentRunning || isCompacting} />
           </>
         )}
       </div>

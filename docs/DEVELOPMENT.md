@@ -14,6 +14,14 @@ normal TypeScript/lint scope so offline installations do not need Playwright.
 Transcript rows use normal layout because scroll restoration, disclosures and
 the minimap measure their geometry. Do not add `content-visibility` to these rows:
 display locking conflicts with descendant measurement and changes scroll anchors.
+Long transcripts initially mount the latest 200 visible messages (or the whole
+current turn when larger). The earlier-history button adds 200 at a time; find,
+quotes, bookmarks, unread navigation and Home reveal older targets before moving
+focus. Full data stays available for search and branching. Range memory accompanies
+scroll memory; prepend compensation uses a committed row's real position, never
+estimated-height placeholders. `isPrependingRef` suppresses stream following while
+anchoring, and explicit history navigation pauses smart follow before scrolling.
+This is progressive mounting, not a permanent 200-row cap after manual expansion.
 Minimap geometry is cached between layout changes; scrolling only updates its
 viewport indicator, with observer work coalesced into animation frames. Scroll
 before visibility assertions for offscreen controls. UI text uses the Unicode
@@ -35,6 +43,15 @@ a standard runtime restores goals paused; Durable resumes saved state when work
 is explicitly resumed (see [recovery semantics](DURABLE.md#storage-and-recovery)). Plan permits independent `in_progress` steps and
 ordinary Markdown summaries; `structured_output` is optional. Explicit `/plan`
 remains read-only until execution is requested.
+
+Goal/Plan cards can be hidden completely and reopened from the composer toolbar.
+Visibility is remembered per session, independently of changing titles or replayed
+events, and never changes the task state. `/plan exit` (also `/plan cancel`)
+clears the saved plan and restores its previous tools without starting a run.
+Leaving the Plan tool preset also clears a planning/ready plan atomically with
+the tool change; busy or queued work must settle first. Switching tools alone
+keeps an executing plan's progress. A preset-only Plan with no saved prior tools
+exits to the default tools; an explicitly saved empty selection remains empty.
 
 Subagents default to no artificial time/turn/cost cap (`0`). Saved user budgets
 remain authoritative. The model can allocate smaller per-task `limits` and narrow
@@ -535,6 +552,18 @@ Same-session connections are reused; epoch/sequence cursors deduplicate replay
 restart. Extension one-shot editor text never enters the replay log. Prompt and
 bash paths both await readiness. Closed/idle-disposed streams are recreated;
 stale fetches must not overwrite a newer snapshot or resurrect a finished run.
+
+Session detail requests from current clients advertise `X-Pi-Session-Tree: flat-v2`;
+SSE connections use `tree=flat-v2`. Their `sessionData.tree` is a flat indexed
+`{ format, roots, nodes }` payload (snapshot protocol version 2), so JSON depth
+does not grow with conversation length. `session-tree-wire.ts` reconstructs the
+existing tree iteratively at the client boundary. The v2 tree references context
+messages only when entry IDs and complete message structures agree; transformed,
+compacted or edited messages remain inline. No history is truncated. Older clients
+negotiating `flat-v1` receive the original flat payload; tabs without negotiation
+retain the nested version-1 format until reloaded; its historical depth limit still applies.
+Do not serialize a nested internal tree on a version-2 transport path. Labels,
+root order, branch order and parent IDs must round-trip unchanged.
 
 ### Two kinds of branching — don't confuse them
 - **Fork**: new independent `.jsonl` file; shown as a child via

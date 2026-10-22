@@ -151,7 +151,7 @@ for (const style of ["original", "trae"] as const) {
     await expect(page.getByRole("region", { name: "Composer controls", exact: true })).toBeHidden();
     await expect(controls).toHaveAttribute("aria-expanded", "false");
     await expectModelAnchored(page);
-    const selected = page.getByRole("button", { name: new RegExp(LONG_MODEL) });
+    const selected = page.getByTestId("model-selector-popover").getByRole("button", { name: new RegExp(LONG_MODEL) });
     await selected.click();
     expect(selections).toEqual([{ type: "set_model", provider: "anthropic", modelId: "claude-sonnet-5" }]);
     await expect(page.getByTestId("model-selector-popover")).toBeHidden();

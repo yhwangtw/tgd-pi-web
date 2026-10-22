@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
-  createRegistry, defineExtension, defineTool, GenerationTask, Harness,
+  AgentDoc, createRegistry, defineExtension, defineTool, GenerationTask, Harness,
   type GenerationHooks, type HarnessOptions,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type, type FauxContentBlock } from "@earendil-works/pi-ai";
 import {
   createDurableWorkflowExtension, DurableWorkflowDoc, durableWorkflowUIEvents,
-  handleDurableWorkflowCommand, pauseDurableWorkflow, readDurableWorkflow,
+  handleDurableWorkflowCommand, pauseDurableWorkflow, readDurableWorkflow, setDurableWorkflowTools,
 } from "../durable-workflow";
 
 const context = BACKGROUND_CONTEXT;
@@ -251,6 +251,92 @@ describe("native Durable Goal, Plan and structured output on SQLite", () => {
     await f.close();
     const reopened = await f.open();
     expect((await readDurableWorkflow(reopened.harness, reopened.root.id)).plan?.title).toBe("Refined plan");
+  });
+
+  it.each(["planning", "ready"] as const)("atomically leaves a saved %s plan when another tool mode is selected", async status => {
+    const f = await fixture();
+    await f.root.commit(async tx => {
+      const state = await tx.doc(DurableWorkflowDoc, f.root.id);
+      state.plan = { title: "Pending", status, steps: [], previousTools: ["write", "bash"] };
+      (await tx.doc(AgentDoc, f.root.id)).tools = ["bash", "update_plan"];
+    }, context);
+    await setDurableWorkflowTools(f.root, f.harness, ["write"], context);
+    expect((await readDurableWorkflow(f.harness, f.root.id)).plan).toBeNull();
+    expect((await f.root.agent(context)).tools.map(tool => tool.name)).toEqual(["write"]);
+    await f.close();
+    const reopened = await f.open();
+    expect((await readDurableWorkflow(reopened.harness, reopened.root.id)).plan).toBeNull();
+    expect((await reopened.root.agent(context)).tools.map(tool => tool.name)).toEqual(["write"]);
+    expect(f.faux.state.callCount).toBe(0);
+  });
+
+  it("keeps executing progress across a selection and explicitly exits without a model request", async () => {
+    const f = await fixture();
+    await f.root.commit(async tx => {
+      const state = await tx.doc(DurableWorkflowDoc, f.root.id);
+      state.plan = { title: "Executing", status: "executing", steps: [], previousTools: ["write", "bash"] };
+    }, context);
+    await setDurableWorkflowTools(f.root, f.harness, ["bash"], context);
+    expect((await readDurableWorkflow(f.harness, f.root.id)).plan?.status).toBe("executing");
+    await handleDurableWorkflowCommand(f.root, f.harness, "/plan exit");
+    expect((await readDurableWorkflow(f.harness, f.root.id)).plan).toBeNull();
+    expect((await f.root.agent(context)).tools.map(tool => tool.name).sort()).toEqual(["bash", "write"]);
+    expect(f.faux.state.callCount).toBe(0);
+  });
+
+  it("rejects exiting or switching a pending plan while a response and follow-up are outstanding", async () => {
+    const f = await fixture();
+    f.faux.setResponses([async (_transcript, options) => {
+      await new Promise<void>(resolve => { options?.signal?.addEventListener("abort", () => resolve(), { once: true }); });
+      return fauxAssistantMessage("", { stopReason: "aborted" });
+    }]);
+    await f.root.submit({ type: "input", content: "Hold this response" }, context);
+    await vi.waitFor(() => expect(f.faux.state.callCount).toBe(1));
+    await f.root.submit({ type: "input", content: "Queued follow-up", whenBusy: "followUp" }, context);
+    await f.root.commit(async tx => {
+      (await tx.doc(DurableWorkflowDoc, f.root.id)).plan = { title: "Pending", status: "ready", steps: [], previousTools: ["write"] };
+      (await tx.doc(AgentDoc, f.root.id)).tools = ["bash", "update_plan"];
+    }, context);
+    const before = await readDurableWorkflow(f.harness, f.root.id);
+    await expect(setDurableWorkflowTools(f.root, f.harness, ["write"], context)).rejects.toThrow("current response");
+    await expect(handleDurableWorkflowCommand(f.root, f.harness, "/plan exit")).rejects.toThrow("current response");
+    expect(await readDurableWorkflow(f.harness, f.root.id)).toEqual(before);
+    expect((await f.root.agent(context)).tools.map(tool => tool.name).sort()).toEqual(["bash", "update_plan"]);
+    await f.close();
+  });
+
+  it("keeps a pending plan unchanged when another workflow dialog is open", async () => {
+    const f = await fixture();
+    await f.root.commit(async tx => {
+      (await tx.doc(DurableWorkflowDoc, f.root.id)).plan = { title: "Pending", status: "ready", steps: [], previousTools: ["write"] };
+    }, context);
+    let resolveSelection!: (value: string | undefined) => void;
+    const select = vi.fn(() => new Promise<string | undefined>(resolve => { resolveSelection = resolve; }));
+    const action = handleDurableWorkflowCommand(f.root, f.harness, "/plan", context, { ui: { select, input: vi.fn(), confirm: vi.fn() } });
+    await vi.waitFor(() => expect(select).toHaveBeenCalledOnce());
+    await expect(setDurableWorkflowTools(f.root, f.harness, ["write"], context)).rejects.toThrow("open Goal/Plan");
+    expect((await readDurableWorkflow(f.harness, f.root.id)).plan?.status).toBe("ready");
+    resolveSelection(undefined);
+    await action;
+    expect(f.faux.state.callCount).toBe(0);
+  });
+
+  it.each(["exit", "cancel", "preset"])("revokes an interrupted pending Plan request on %s without submitting it", async action => {
+    const f = await fixture();
+    await f.root.commit(async tx => {
+      const state = await tx.doc(DurableWorkflowDoc, f.root.id);
+      state.plan = { title: "Interrupted", status: "planning", steps: [], previousTools: ["write"] };
+      state.pendingCommand = { requestId: "workflow:interrupted-plan", text: "Prepare an implementation plan: Interrupted" };
+    }, context);
+    if (action === "preset") await setDurableWorkflowTools(f.root, f.harness, ["write"], context);
+    else await handleDurableWorkflowCommand(f.root, f.harness, `/plan ${action}`);
+    const state = await f.harness.snapshot(DurableWorkflowDoc, f.root.id, context);
+    expect(state?.plan).toBeNull();
+    expect(state?.pendingCommand).toBeNull();
+    expect(f.faux.state.callCount).toBe(0);
+    await f.close();
+    const reopened = await f.open();
+    expect((await reopened.harness.snapshot(DurableWorkflowDoc, reopened.root.id, context))?.pendingCommand).toBeNull();
   });
 
   it("persists structured output details and terminates without a second model turn", async () => {

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { createWorkflowExtension } from "../workflow-extension";
+import type { ExtensionAPI, ToolDefinition, RegisteredCommand } from "@earendil-works/pi-coding-agent";
+import { applyWorkflowToolSelection, createWorkflowExtension } from "../workflow-extension";
 import { emptyWorkflow, parseTokenBudget, parseWorkflowCommand, readWorkflow, WORKFLOW_ENTRY, type WorkflowState } from "../workflow-state";
-import { TOOL_PRESET_PLAN } from "../tool-selection";
+import { TOOL_PRESET_DEFAULT, TOOL_PRESET_PLAN } from "../tool-selection";
 
 async function harness(initial: WorkflowState = emptyWorkflow()) {
   const handlers = new Map<string, (event: unknown, ctx: unknown) => unknown>();
@@ -23,7 +23,7 @@ async function harness(initial: WorkflowState = emptyWorkflow()) {
     registerCommand: (name: string, c: { handler: (args: string, ctx: unknown) => Promise<void> }) => commands.set(name, c),
     registerTool: (tool: ToolDefinition) => tools.set(tool.name, tool),
     appendEntry: (_name: string, data: WorkflowState) => entries.push({ type: "custom", customType: WORKFLOW_ENTRY, data: structuredClone(data) }),
-    getActiveTools: () => [...active], setActiveTools: (names: string[]) => { active = [...names]; },
+    getActiveTools: () => [...active], setActiveTools: vi.fn((names: string[]) => { active = [...names]; }),
     sendUserMessage: send, sendMessage: send,
   };
   const extension = createWorkflowExtension();
@@ -38,6 +38,7 @@ async function harness(initial: WorkflowState = emptyWorkflow()) {
     setIdle: (value: boolean) => { idle = value; },
     setQueued: (value: boolean) => { queued = value; },
     command: (name: string, args: string) => commands.get(name)!.handler(args, ctx),
+    selectTools: (names: string[]) => applyWorkflowToolSelection(commands.get("plan")!.handler as RegisteredCommand["handler"], names, ctx as never),
     tool: (name: string, params: unknown) => tools.get(name)!.execute("call", params, undefined, undefined, ctx as never),
     message: (text = "Progress", stopReason = "stop", tokens = 10) => emit("message_end", { message: {
       role: "assistant", content: [{ type: "text", text }], stopReason, usage: { input: tokens, output: 0 },
@@ -163,6 +164,62 @@ describe("persistent Web goals and plans", () => {
     expect(h.active()).toContain("mcp_custom"); expect(h.active()).toContain("edit");
     await h.tool("update_plan", { title: "Fix", steps: [{ text: "Change loader", status: "completed" }] });
     expect(h.state().plan?.status).toBe("complete");
+  });
+
+  it.each(["exit", "cancel"])("%s clears a saved plan, restores its tools, and stays cleared on reopen", async action => {
+    const h = await harness();
+    const originalTools = [...h.active()];
+    await h.command("plan", "Inspect fixture");
+    await h.tool("update_plan", { title: "Inspect fixture", steps: [{ text: "Review", status: "pending" }] });
+    const sends = h.api.sendUserMessage.mock.calls.length;
+    await h.command("plan", action);
+    expect(h.state().plan).toBeNull();
+    expect(h.active()).toEqual(originalTools);
+    expect(h.ctx.ui.setWidget).toHaveBeenLastCalledWith("Plan", undefined);
+    expect(h.api.sendUserMessage).toHaveBeenCalledTimes(sends);
+    await h.emit("session_start");
+    expect(h.active()).toEqual(originalTools);
+    expect(h.state().plan).toBeNull();
+  });
+
+  it("exits a preset-only Plan without creating a model turn or leaving the read-only tools", async () => {
+    const h = await harness();
+    h.api.setActiveTools([...TOOL_PRESET_PLAN]);
+    await h.command("plan", "exit");
+    expect(h.state().plan).toBeNull();
+    expect(h.active()).toEqual([...TOOL_PRESET_DEFAULT]);
+    expect(h.api.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it.each(["planning", "ready"] as const)("synchronizes a non-Plan tool selection with a saved %s plan", async status => {
+    const h = await harness({ ...emptyWorkflow(), plan: { title: "Pending", status, steps: [], previousTools: ["write"] } });
+    expect(h.selectTools(["read", "edit"])).toBe(true);
+    expect(h.active()).toEqual(["read", "edit"]);
+    expect(h.state().plan).toBeNull();
+    await h.emit("session_start");
+    expect(h.active()).toEqual(["read", "edit"]);
+    expect(h.api.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not clear executing progress when only the tool selection changes", async () => {
+    const h = await harness({ ...emptyWorkflow(), plan: { title: "Executing", status: "executing", steps: [], previousTools: ["write"] } });
+    expect(h.selectTools(["read"])).toBe(false);
+    expect(h.state().plan?.status).toBe("executing");
+    await h.command("plan", "exit");
+    expect(h.state().plan).toBeNull();
+    expect(h.active()).toEqual(["write"]);
+  });
+
+  it.each(["busy", "queued", "failed-tools"])("keeps the plan and tools intact after a %s mode change", async reason => {
+    const h = await harness({ ...emptyWorkflow(), plan: { title: "Pending", status: "ready", steps: [], previousTools: ["write"] } });
+    const before = structuredClone(h.state()); const tools = [...h.active()];
+    if (reason === "busy") h.setIdle(false);
+    if (reason === "queued") h.setQueued(true);
+    if (reason === "failed-tools") h.api.setActiveTools.mockImplementationOnce(() => { throw new Error("Invalid selection"); });
+    expect(() => h.selectTools(["read", "edit"])).toThrow();
+    expect(h.state()).toEqual(before);
+    expect(h.active()).toEqual(tools);
+    expect(h.api.sendUserMessage).not.toHaveBeenCalled();
   });
 
   it("rejects premature or stale completion and does not continue completed goals", async () => {

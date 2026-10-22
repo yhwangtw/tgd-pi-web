@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { withFixtureMessages } from "./session-response-fixture";
 
 test.afterEach(async ({ page }) => {
   // Let in-flight fixture reads finish before Playwright disposes responses.
@@ -44,10 +45,10 @@ async function installFailure(page: Page, rejected = false) {
   } }));
   await page.route(new RegExp(`/api/sessions/${SESSION}(?:\\?includeState)?$`), async (route) => {
     const response = await route.fetch();
-    const data = await response.json();
+    const data = withFixtureMessages(await response.json(), messages, ["fixture-user", "fixture-error"]);
     await route.fulfill({ response, json: {
       ...data, info: { ...data.info, name: "Provider recovery fixture" },
-      context: { ...data.context, messages, entryIds: ["fixture-user", "fixture-error"], model: { provider, modelId }, thinkingLevel },
+      context: { ...data.context, model: { provider, modelId }, thinkingLevel },
       agentState: { running: true, state: { isStreaming: false, thinkingLevel, model: { provider, id: modelId } } },
     } });
   });

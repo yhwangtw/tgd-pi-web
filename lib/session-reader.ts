@@ -46,6 +46,7 @@ interface SessionInfoCacheEntry {
 
 declare global {
   var __piSessionInfoCache: Map<string, SessionInfoCacheEntry> | undefined;
+  var __piSessionListings: Map<string, Promise<SessionInfo[]>> | undefined;
 }
 
 function getInfoCache(): Map<string, SessionInfoCacheEntry> {
@@ -128,8 +129,23 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
 }
 
 export async function listAllSessions(): Promise<SessionInfo[]> {
-  const durable = listDurableSessions();
   const sessionsDir = getSessionsDir();
+  const listings: Map<string, Promise<SessionInfo[]>> = globalThis.__piSessionListings ??= new Map();
+  let pending = listings.get(sessionsDir);
+  if (!pending) {
+    pending = scanAllSessions(sessionsDir);
+    listings.set(sessionsDir, pending);
+  }
+  try {
+    // Concurrent sidebar/security requests share disk work, but not mutable results.
+    return (await pending).map(info => ({ ...info }));
+  } finally {
+    if (listings.get(sessionsDir) === pending) listings.delete(sessionsDir);
+  }
+}
+
+async function scanAllSessions(sessionsDir: string): Promise<SessionInfo[]> {
+  const durable = listDurableSessions();
   const cache = getInfoCache();
 
   let topLevel;
@@ -154,22 +170,28 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
 
   const seen = new Set<string>();
   const infos: RawSessionInfo[] = [];
-  await Promise.all(files.map(async (filePath) => {
-    let st;
-    try {
-      st = await stat(filePath);
-    } catch {
-      return; // deleted between readdir and stat
+  // Bound open files and parsed transcripts even on a cold index with thousands
+  // of sessions. A sidebar refresh must not enqueue the entire archive at once.
+  let nextFile = 0;
+  await Promise.all(Array.from({ length: Math.min(32, files.length) }, async () => {
+    while (nextFile < files.length) {
+      const filePath = files[nextFile++];
+      let st;
+      try {
+        st = await stat(filePath);
+      } catch {
+        continue; // deleted between readdir and stat
+      }
+      seen.add(filePath);
+      const cached = cache.get(filePath);
+      if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
+        if (cached.info) infos.push(cached.info);
+        continue;
+      }
+      const info = await parseSessionFile(filePath, st.mtimeMs);
+      cache.set(filePath, { mtimeMs: st.mtimeMs, size: st.size, info });
+      if (info) infos.push(info);
     }
-    seen.add(filePath);
-    const cached = cache.get(filePath);
-    if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
-      if (cached.info) infos.push(cached.info);
-      return;
-    }
-    const info = await parseSessionFile(filePath, st.mtimeMs);
-    cache.set(filePath, { mtimeMs: st.mtimeMs, size: st.size, info });
-    if (info) infos.push(info);
   }));
 
   // Evict cache entries for files that no longer exist

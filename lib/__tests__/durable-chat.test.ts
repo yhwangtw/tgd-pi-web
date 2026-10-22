@@ -2,10 +2,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { AgentDoc } from "@earendil-works/pi-durable";
+import { DurableWorkflowDoc, readDurableWorkflow } from "../durable-workflow";
+import { TOOL_PRESET_DEFAULT, TOOL_PRESET_PLAN } from "../tool-selection";
 import { createModels, fauxProvider, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import type { HarnessOptions } from "@earendil-works/pi-durable";
 import { createDurableChat, openDurableChat, type DurableChat, type DurableChatOptions } from "../durable-chat";
 import { durableContext } from "../durable-session-store";
+import { decodeSessionData } from "../session-tree-wire";
+import { buildTree } from "../session-reader";
+import type { SessionEntry } from "../types";
 
 const roots: string[] = [];
 const chats: DurableChat[] = [];
@@ -19,6 +26,99 @@ async function open(options: DurableChatOptions) { const chat = await createDura
 afterEach(async () => { for (const chat of chats.splice(0)) await chat.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
 describe("Durable chat host", () => {
+  it("serializes a deep reconnect snapshot without resuming or truncating its history", async () => {
+    const { options, faux } = fixture(); const chat = await open(options);
+    const entries = Array.from({ length: 10_000 }, (_, i): SessionEntry => ({ type: "message", id: String(i), parentId: i ? String(i - 1) : null,
+      timestamp: new Date(i).toISOString(), message: { role: "user", content: `Turn ${i}`, timestamp: i } }));
+    const original = chat.getSessionData();
+    vi.spyOn(chat, "getSessionData").mockReturnValue({ ...original, tree: buildTree(entries), leafId: "9999" });
+    const records: Record<string, unknown>[] = [];
+    const stop = chat.onStreamEvent(record => records.push(JSON.parse(record.data)), "expired:1"); stop();
+    const snapshot = records.find(record => record.type === "session_snapshot")!;
+    expect(snapshot.protocolVersion).toBe(2);
+    const restored = decodeSessionData(snapshot.sessionData as ReturnType<typeof chat.getSessionData>);
+    expect(restored.leafId).toBe("9999");
+    let node = restored.tree[0]; let count = 1;
+    while (node.children.length) { node = node.children[0]; count++; }
+    expect(count).toBe(10_000);
+    expect(faux.state.callCount).toBe(0);
+  });
+  it("exits preset-only Plan and clears reviewed plans through tool selections with UI reconciliation", async () => {
+    const { options, faux } = fixture(); const chat = await open(options);
+    await chat.send({ type: "set_tools", mode: "plan" });
+    await chat.send({ type: "workflow_command", command: "plan", args: "exit" });
+    expect((await chat.send({ type: "get_tools" }) as { selectedNames: string[] }).selectedNames.sort()).toEqual([...TOOL_PRESET_DEFAULT].sort());
+    await chat.send({ type: "set_tools", mode: "plan" });
+    await chat.conversation.commit(async tx => {
+      const state = await tx.doc(DurableWorkflowDoc, chat.conversation.id);
+      state.plan = { title: "Pending", status: "ready", steps: [], previousTools: ["read", "write"] };
+    }, BACKGROUND_CONTEXT);
+    const events: Record<string, unknown>[] = []; const stop = chat.onEvent(event => events.push(event));
+    await expect(chat.send({ type: "set_tools", mode: "custom", toolNames: ["missing_fixture_tool"] })).rejects.toThrow("Unknown tool");
+    expect((await readDurableWorkflow(chat.harness, chat.conversation.id)).plan?.status).toBe("ready");
+    await chat.send({ type: "set_tools", mode: "default" });
+    expect((await readDurableWorkflow(chat.harness, chat.conversation.id)).plan).toBeNull();
+    expect(events).toContainEqual(expect.objectContaining({ method: "setWidget", widgetKey: "Plan", widgetLines: undefined }));
+    stop();
+    await chat.send({ type: "set_tools", mode: "plan" });
+    await chat.conversation.commit(async tx => {
+      const state = await tx.doc(DurableWorkflowDoc, chat.conversation.id);
+      state.plan = { title: "Pending", status: "planning", steps: [], previousTools: ["write"] };
+    }, BACKGROUND_CONTEXT);
+    await chat.send({ type: "set_tools", mode: "inherit" });
+    expect((await readDurableWorkflow(chat.harness, chat.conversation.id)).plan).toBeNull();
+    expect((await chat.harness.snapshot(AgentDoc, chat.conversation.id, BACKGROUND_CONTEXT))?.tools).toBeUndefined();
+    expect(faux.state.callCount).toBe(0);
+  });
+
+  it.each(["command", "model-tool"])("restores execution tools after a plan is created from the Plan preset through %s", async source => {
+    const { options, faux } = fixture(); const chat = await open(options);
+    faux.setResponses([
+      fauxAssistantMessage(fauxToolCall("update_plan", { title: "Preset plan", steps: [{ text: "Inspect", status: "pending" }] }), { stopReason: "toolUse" }),
+      fauxAssistantMessage("Ready for review."),
+    ]);
+    await chat.send({ type: "set_tools", mode: "plan" });
+    if (source === "command") {
+      await chat.send({ type: "workflow_command", command: "plan", args: "Inspect fixture" });
+      await chat.harness.waitForIdle(BACKGROUND_CONTEXT);
+    } else await chat.send({ type: "prompt", message: "Plan the fixture", awaitCompletion: true });
+    const plan = (await readDurableWorkflow(chat.harness, chat.conversation.id)).plan;
+    expect(plan?.status).toBe("ready");
+    expect(plan?.previousTools).toEqual([...TOOL_PRESET_DEFAULT]);
+    const sends = faux.state.callCount;
+    await chat.send({ type: "workflow_command", command: "plan", args: "exit" });
+    expect((await chat.send({ type: "get_tools" }) as { selectedNames: string[] }).selectedNames.sort()).toEqual([...TOOL_PRESET_DEFAULT].sort());
+    expect((await readDurableWorkflow(chat.harness, chat.conversation.id)).plan).toBeNull();
+    expect(faux.state.callCount).toBe(sends);
+  });
+
+  it("restores an intentionally empty tool selection after leaving a new saved plan", async () => {
+    const { options, faux } = fixture(); const chat = await open(options);
+    faux.setResponses([fauxAssistantMessage("Inspecting only.")]);
+    await chat.send({ type: "set_tools", mode: "none" });
+    await chat.send({ type: "workflow_command", command: "plan", args: "Inspect fixture" });
+    await chat.harness.waitForIdle(BACKGROUND_CONTEXT);
+    expect((await readDurableWorkflow(chat.harness, chat.conversation.id)).plan?.previousTools).toEqual([]);
+    await chat.send({ type: "workflow_command", command: "plan", args: "exit" });
+    expect((await chat.send({ type: "get_tools" }) as { selectedNames: string[] }).selectedNames).toEqual([]);
+  });
+
+  it.each(["exit", "execute"])("repairs legacy plans whose restore tools are themselves Plan tools on %s", async action => {
+    const { options, faux } = fixture(); const chat = await open(options);
+    await chat.send({ type: "set_tools", mode: "plan" });
+    await chat.conversation.commit(async tx => {
+      (await tx.doc(DurableWorkflowDoc, chat.conversation.id)).plan = { title: "Legacy", status: "ready", steps: [{ text: "Inspect", status: "pending" }], previousTools: [...TOOL_PRESET_PLAN] };
+    }, BACKGROUND_CONTEXT);
+    faux.setResponses([fauxAssistantMessage("Continue reviewed work.")]);
+    await chat.send({ type: "workflow_command", command: "plan", args: action });
+    await chat.harness.waitForIdle(BACKGROUND_CONTEXT);
+    const names = (await chat.send({ type: "get_tools" }) as { selectedNames: string[] }).selectedNames;
+    expect(names).toContain("write");
+    expect(names).toContain("edit");
+    expect((await readDurableWorkflow(chat.harness, chat.conversation.id)).plan?.previousTools ?? [...TOOL_PRESET_DEFAULT]).toEqual([...TOOL_PRESET_DEFAULT]);
+    expect(faux.state.callCount).toBe(action === "exit" ? 0 : 1);
+  });
+
   it("uses one persisted receipt for repeated prompts and projects a reconnect snapshot", async () => {
     const { options, faux } = fixture(); faux.setResponses([fauxAssistantMessage("One saved answer")]);
     const chat = await open(options);

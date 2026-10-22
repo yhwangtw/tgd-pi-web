@@ -1,10 +1,11 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { useState, useRef, useEffect } from "react";
+import { useRef, useState } from "react";
 import type { ExtensionUIState } from "@/hooks/use-extension-ui";
+import type { WorkflowKey, WorkflowVisibility } from "@/hooks/use-workflow-visibility";
 import type { WebExtensionUIResponse, WebExtensionUIWidgetPlacement } from "@/lib/web-extension-ui-types";
-import { ArrowUp, X } from "lucide-react";
+import { ArrowUp, ListChecks, Target, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { UserQuestionCard } from "./UserQuestionCard";
 import styles from "./ExtensionUIPanel.module.css";
@@ -14,6 +15,9 @@ interface Props {
   onRespond: (response: WebExtensionUIResponse) => Promise<void>;
   onWorkflowCommand?: (message: string) => Promise<boolean>;
   sessionId?: string;
+  workflowVisibility?: WorkflowVisibility;
+  workflowBusy?: boolean;
+  workflowPending?: boolean;
   wide?: boolean;
   /** ChatWindow renders all agent questions in its transcript, never over the composer. */
   questionInTranscript?: boolean;
@@ -53,12 +57,38 @@ function visibleStatuses(statuses: ExtensionUIState["statuses"]) {
   });
 }
 
-export function ExtensionUIPanel({ state, onRespond, onWorkflowCommand, sessionId, wide = false, questionInTranscript = false }: Props) {
+function hiddenWorkflow(key: string, visibility?: WorkflowVisibility) {
+  return (key === "Goal" || key === "Plan") && visibility?.hidden[key] === true;
+}
+
+export function WorkflowToolbar({ state, workflowVisibility }: { state: ExtensionUIState; workflowVisibility: WorkflowVisibility }) {
+  const { t } = useI18n();
+  const keys = (["Goal", "Plan"] as const).filter(key =>
+    Object.keys(state.widgets).some(rawKey => stripTerminalFormatting(rawKey) === key)
+    && !terminalWorkflow(key, state.statuses[key] ?? ""));
+  if (!keys.length) return null;
+  return <div className={styles.workflowToolbar} data-workflow-toolbar>
+    {keys.map(key => {
+      const visible = !workflowVisibility.hidden[key];
+      const label = t(key === "Goal" ? visible ? "workflow.hideGoal" : "workflow.showGoal" : visible ? "workflow.hidePlan" : "workflow.showPlan");
+      const Icon = key === "Goal" ? Target : ListChecks;
+      return <button key={key} type="button" className={styles.workflowToggle}
+        ref={element => { workflowVisibility.toolbarRefs.current[key] = element; }}
+        aria-label={label} title={label} aria-expanded={visible} aria-controls={workflowVisibility.cardId(key)}
+        onPointerDown={event => { if (event.isPrimary && event.button === 0) event.preventDefault(); }}
+        onClick={event => workflowVisibility.setHidden(key, visible, event.currentTarget)}>
+        <Icon size={UI_ICON_SIZE.control} aria-hidden />
+      </button>;
+    })}
+  </div>;
+}
+
+export function ExtensionUIPanel({ state, onRespond, onWorkflowCommand, sessionId, workflowVisibility, workflowBusy, workflowPending, wide = false, questionInTranscript = false }: Props) {
   const { t } = useI18n();
   const first = state.dialogs[0];
   const dialog = questionInTranscript ? undefined : first;
-  const hasAboveWidgets = Object.entries(state.widgets).some(([key, widget]) => widget.placement === "aboveEditor" && !terminalWorkflow(stripTerminalFormatting(key), state.statuses[key] ?? ""));
-  const statuses = visibleStatuses(state.statuses).filter(([key]) => !(
+  const hasAboveWidgets = Object.entries(state.widgets).some(([key, widget]) => widget.placement === "aboveEditor" && !hiddenWorkflow(stripTerminalFormatting(key), workflowVisibility) && !terminalWorkflow(stripTerminalFormatting(key), state.statuses[key] ?? ""));
+  const statuses = visibleStatuses(state.statuses).filter(([key]) => !hiddenWorkflow(key, workflowVisibility) && !(
     onWorkflowCommand && (key === "Goal" || key === "Plan") && state.widgets[key]?.placement === "aboveEditor"
   ))
     .sort((a, b) => Number(/error|fail|blocked|✗|waiting/i.test(b[1])) - Number(/error|fail|blocked|✗|waiting/i.test(a[1])));
@@ -70,7 +100,7 @@ export function ExtensionUIPanel({ state, onRespond, onWorkflowCommand, sessionI
       {(hasAboveWidgets || hasStatuses) && (
         <div className={styles.outer} data-testid="extension-status">
           <div className={`${styles.inner} ${wide ? styles.innerWide : ""}`}>
-            <ExtensionWidgets state={state} placement="aboveEditor" bare onWorkflowCommand={onWorkflowCommand} sessionId={sessionId} />
+            <ExtensionWidgets key={sessionId ?? "unsaved"} state={state} placement="aboveEditor" bare onWorkflowCommand={onWorkflowCommand} workflowVisibility={workflowVisibility} workflowBusy={workflowBusy} workflowPending={workflowPending} />
             {hasStatuses && (
               <div className={styles.statusRow} role="status">
                 <span className={styles.statusChip}>
@@ -114,70 +144,39 @@ export function PendingQuestionNotice({ onShow, wide = false }: { onShow: () => 
   );
 }
 
-// Persist presentation preferences, never a pause/cancel command or task content.
-function widgetFingerprint(title: string) {
-  let hash = 2166136261;
-  for (const character of title) hash = Math.imul(hash ^ character.codePointAt(0)!, 16777619);
-  return (hash >>> 0).toString(36);
-}
-function readHiddenWidgets(scope: string): Record<string, string> {
-  try {
-    const stored = JSON.parse(localStorage.getItem(scope) ?? "{}");
-    return Object.fromEntries(["Goal", "Plan"].filter(key => typeof stored?.[key] === "string").map(key => [key, stored[key]]));
-  } catch { return {}; }
-}
-
-export function ExtensionWidgets({ state, placement, wide = false, bare = false, onWorkflowCommand, sessionId }: {
+export function ExtensionWidgets({ state, placement, wide = false, bare = false, onWorkflowCommand, workflowVisibility, workflowBusy = false, workflowPending = false }: {
   state: ExtensionUIState;
   placement: WebExtensionUIWidgetPlacement;
   wide?: boolean;
   bare?: boolean;
   onWorkflowCommand?: (message: string) => Promise<boolean>;
-  sessionId?: string;
+  workflowVisibility?: WorkflowVisibility;
+  workflowBusy?: boolean;
+  workflowPending?: boolean;
 }) {
   const { t } = useI18n();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const scope = `pi-workflow-hidden:${sessionId ?? "unsaved"}`;
-  const [hiddenState, setHiddenState] = useState(() => ({ scope, values: readHiddenWidgets(scope) }));
-  const hidden = hiddenState.scope === scope ? hiddenState.values : readHiddenWidgets(scope);
-  const toggleControls = useRef<Record<string, HTMLButtonElement | null>>({});
-  const returnFocus = useRef<string | null>(null);
-  useEffect(() => {
-    if (returnFocus.current) toggleControls.current[returnFocus.current]?.focus();
-    returnFocus.current = null;
-  }, [hiddenState]);
-  const setHidden = (key: string, title: string, hide: boolean, control: HTMLButtonElement) => {
-    if (document.activeElement === control) returnFocus.current = key;
-    const values = { ...hidden };
-    if (hide) values[key] = widgetFingerprint(title); else delete values[key];
-    setHiddenState({ scope, values });
-    try { localStorage.setItem(scope, JSON.stringify(values)); } catch { /* In-memory hiding still works. */ }
-  };
+  const pendingRef = useRef(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const widgets = Object.entries(state.widgets)
-    .filter(([key, widget]) => widget.placement === placement && !terminalWorkflow(stripTerminalFormatting(key), state.statuses[key] ?? ""))
+    .filter(([key, widget]) => widget.placement === placement && !hiddenWorkflow(stripTerminalFormatting(key), workflowVisibility) && !terminalWorkflow(stripTerminalFormatting(key), state.statuses[key] ?? ""))
     .map(([key, widget]) => [stripTerminalFormatting(key), widget] as const);
   if (widgets.length === 0) return null;
   const content = (
     <div className={styles.widgets}>
-      {widgets.map(([key, widget]) => (key === "Goal" || key === "Plan") && onWorkflowCommand ? hidden[key] === widgetFingerprint(widget.lines[0] ?? "") ? (
-        <button key={key} type="button" className={styles.workflowReopen} ref={element => { toggleControls.current[key] = element; }}
-          onPointerDown={event => { if (event.isPrimary && event.button === 0) event.preventDefault(); }}
-          onClick={event => setHidden(key, widget.lines[0] ?? "", false, event.currentTarget)}>
-          {t(key === "Goal" ? "workflow.showGoal" : "workflow.showPlan")}
-        </button>
-      ) : (
-        <section key={key} className={`${styles.widget} ${styles.workflow}`} aria-label={key} data-testid={`workflow-${key.toLowerCase()}`}>
+      {widgets.map(([key, widget]) => (key === "Goal" || key === "Plan") && onWorkflowCommand ? (
+        <section key={key} id={workflowVisibility?.cardId(key)} className={`${styles.widget} ${styles.workflow}`} aria-label={key} data-testid={`workflow-${key.toLowerCase()}`}>
           <div className={styles.workflowHeader}>
             <details>
             <summary onPointerDown={event => { if (event.isPrimary && event.button === 0) event.preventDefault(); }}><span className={styles.widgetKey}>{key}</span><span className={styles.workflowState}>{stripTerminalFormatting(state.statuses[key] ?? "")}</span> {stripTerminalFormatting(widget.lines[0] ?? "").slice(0, 160)}{(widget.lines[0]?.length ?? 0) > 160 ? "…" : ""}</summary>
             <div className={styles.workflowSteps}>{stripTerminalFormatting(widget.lines.slice((widget.lines[0]?.length ?? 0) > 160 ? 0 : 1).join("\n"))}</div>
             </details>
-          <button type="button" className={styles.workflowHide}
-            ref={element => { toggleControls.current[key] = element; }}
+          {workflowVisibility && <button type="button" className={styles.workflowHide}
+            ref={element => { workflowVisibility.cardRefs.current[key as WorkflowKey] = element; }}
             aria-label={t(key === "Goal" ? "workflow.hideGoal" : "workflow.hidePlan")}
             title={t("workflow.hideHint")}
             onPointerDown={event => { if (event.isPrimary && event.button === 0) event.preventDefault(); }}
-            onClick={event => setHidden(key, widget.lines[0] ?? "", true, event.currentTarget)}><X size={UI_ICON_SIZE.control} aria-hidden /></button>
+            onClick={event => workflowVisibility.setHidden(key, true, event.currentTarget)}><X size={UI_ICON_SIZE.control} aria-hidden /></button>}
           </div>
           <div className={styles.workflowActions}>
             {(key === "Goal" ? [
@@ -187,17 +186,24 @@ export function ExtensionWidgets({ state, placement, wide = false, bare = false,
             ] : [
               { command: "/plan", label: t("workflow.review") },
               ...(state.statuses.Plan?.startsWith("ready") ? [{ command: "/plan execute", label: t("workflow.execute") }] : []),
-            ]).map(action => <button key={action.command} type="button" disabled={pendingAction !== null}
+              { command: "/plan exit", label: t("workflow.exitPlan") },
+            ]).map(action => <button key={action.command} type="button" disabled={workflowPending || pendingAction !== null || (workflowBusy && key === "Plan" && action.command !== "/plan")}
               onPointerDown={event => {
                 // Preserve composer focus: mobile navigation returning on blur
                 // can move this control before pointerup and swallow the click.
                 if (event.isPrimary && event.button === 0) event.preventDefault();
               }}
               onClick={async () => {
+                if (pendingRef.current) return;
+                pendingRef.current = true;
+                setActionError(null);
                 setPendingAction(action.command);
-                try { await onWorkflowCommand(action.command); } finally { setPendingAction(null); }
+                try { await onWorkflowCommand(action.command); }
+                catch (error) { setActionError(error instanceof Error ? error.message : String(error)); }
+                finally { pendingRef.current = false; setPendingAction(null); }
               }}>{action.label}</button>)}
           </div>
+          {actionError && <span role="alert">{actionError}</span>}
         </section>
       ) : (
         <details key={key} className={styles.widget} aria-label={key}>

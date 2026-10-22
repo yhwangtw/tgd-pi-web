@@ -26,19 +26,24 @@ interface Props {
   hideTrigger?: boolean;
 }
 
-// Find the set of entry IDs on the path from root to activeLeafId
-function buildActivePath(nodes: SessionTreeNode[], targetId: string | null): Set<string> {
+// Parent links avoid recursive traversal and quadratic path copies in long histories.
+export function buildActivePath(nodes: SessionTreeNode[], targetId: string | null): Set<string> {
   if (!targetId) return new Set();
-  function search(nodes: SessionTreeNode[], path: string[]): string[] | null {
-    for (const node of nodes) {
-      const next = [...path, node.entry.id];
-      if (node.entry.id === targetId) return next;
-      const found = search(node.children, next);
-      if (found) return found;
+  type Path = { id: string; parent: Path | null };
+  const stack = nodes.map((node) => ({ node, parent: null as Path | null })).reverse();
+  while (stack.length > 0) {
+    const { node, parent } = stack.pop()!;
+    const path: Path = { id: node.entry.id, parent };
+    if (node.entry.id === targetId) {
+      const ids = new Set<string>();
+      for (let current: Path | null = path; current; current = current.parent) ids.add(current.id);
+      return ids;
     }
-    return null;
+    for (let i = node.children.length - 1; i >= 0; i--) {
+      stack.push({ node: node.children[i], parent: path });
+    }
   }
-  return new Set(search(nodes, []) ?? []);
+  return new Set();
 }
 
 // Compress a linear chain into the first branching/leaf node.
@@ -76,9 +81,11 @@ function getLabel(entry: SessionEntry): string {
 // Does the tree have any branching at all? A populated tree can still be a
 // purely linear history, which should not expose a dead "Branches" action.
 export function hasSessionBranches(nodes: SessionTreeNode[]): boolean {
-  for (const node of nodes) {
+  const stack = [...nodes];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
     if (node.children.length > 1) return true;
-    if (hasSessionBranches(node.children)) return true;
+    if (node.children.length === 1) stack.push(node.children[0]);
   }
   return false;
 }
@@ -204,8 +211,8 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
   }, [open, inline, containerRef]);
 
   const activePathIds = useMemo(
-    () => buildActivePath(tree, activeLeafId),
-    [tree, activeLeafId]
+    () => open ? buildActivePath(tree, activeLeafId) : new Set<string>(),
+    [tree, activeLeafId, open]
   );
 
   const handleSelect = useCallback((id: string) => {
@@ -214,15 +221,15 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
     btnRef.current?.focus();
   }, [onLeafChange, onToggle]);
 
+  const hasBranches = useMemo(() => hasSessionBranches(tree), [tree]);
   const noBranchReason = !hasSession
     ? t("session.branch.noneActive")
-    : !hasSessionBranches(tree)
+    : !hasBranches
       ? t("session.branch.none")
       : null;
 
   // Find first meaningful node (skip pure linear prefix)
-  const compressed = tree.length > 0 ? compress(tree[0]) : null;
-  const firstNode = compressed?.node ?? null;
+  const firstNode = useMemo(() => tree.length > 0 ? compress(tree[0]).node : null, [tree]);
   const hasContent = !noBranchReason && firstNode && firstNode.children.length > 1;
 
   const branchIcon = <GitBranch size={UI_ICON_SIZE.inline} className={hasContent ? styles.branchIconActive : styles.branchIconInactive} aria-hidden />;

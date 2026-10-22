@@ -9,11 +9,14 @@ import {
   type ModelRegistry,
 } from "@earendil-works/pi-coding-agent";
 import { buildSessionContext, buildTree, cacheSessionPath, getLeafId } from "./session-reader";
+import { encodeSessionData } from "./session-tree-wire";
 import { AgentEventLog, type AgentStreamRecord, type ReplayStatus } from "./agent-event-log";
 import { CompactionController } from "./compaction-controller";
 import { normalizeQueuedFollowUps, type QueuedFollowUp } from "./queued-follow-ups";
 import type { SessionEntry } from "./types";
 import { createSnapshot } from "./git-snapshot";
+import { applyWorkflowToolSelection } from "./workflow-extension";
+import { isPlanToolSelection } from "./plan-mode";
 import { readWorkflow, WORKFLOW_ENTRY } from "./workflow-state";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 import { bindWebExtensions, createTrackedAgentServices, emitWebBeforeFork, type ExtensionProviderTracker } from "./pi-runtime";
@@ -626,10 +629,10 @@ export class AgentSessionWrapper {
     try {
       const replay = this.eventLog.replay(cursor);
       for (const record of replay.records) listener(record);
-      listener({ id: this.eventLog.cursor, data: JSON.stringify(this.getStreamSnapshot(replay.status)) });
+      listener({ id: this.eventLog.cursor, type: "session_snapshot", data: JSON.stringify(this.getStreamSnapshot(replay.status)) });
       // The bridge owns reconnect policy for dialogs and one-shot editor text.
       // Do not retain/replay UI commands in the agent event log.
-      for (const event of this.webExtensionUI?.snapshot() ?? []) listener({ data: JSON.stringify(event) });
+      for (const event of this.webExtensionUI?.snapshot() ?? []) listener({ type: event.type, data: JSON.stringify(event) });
     } catch (error) {
       this.streamListeners.delete(listener);
       throw error;
@@ -683,12 +686,12 @@ export class AgentSessionWrapper {
     const entries = (this.inner.sessionManager?.getEntries?.() ?? []) as unknown as SessionEntry[];
     const leafId = this.inner.sessionManager?.getLeafId ? this.inner.sessionManager.getLeafId() : getLeafId(entries);
     return {
-      type: "session_snapshot", protocolVersion: 1, sessionId: this.sessionId,
+      type: "session_snapshot", protocolVersion: 2, sessionId: this.sessionId,
       cursor: this.eventLog.cursor, replayStatus, state: this.getLiveState(),
-      sessionData: {
+      sessionData: encodeSessionData({
         sessionId: this.sessionId, filePath: this.sessionFile, leafId,
         tree: buildTree(entries), context: buildSessionContext(entries, leafId),
-      },
+      }, "flat-v2"),
       streamingMessage: this.streamingMessage,
       phase: this.activeTools.size ? { kind: "running_tools", tools: [...this.activeTools.values()] } : null,
       bashRun: this.streamBash,
@@ -751,7 +754,7 @@ export class AgentSessionWrapper {
       this.streamBash = null;
     }
     const record: AgentStreamRecord = event.type.startsWith("extension_ui_")
-      ? { data: JSON.stringify(event) }
+      ? { type: event.type, data: JSON.stringify(event) }
       : this.eventLog.append(event);
     if (event.type === "agent_end") this.lastAgentEndCursor = record.id ?? null;
     for (const listener of this.listeners) listener(event);
@@ -866,7 +869,7 @@ export class AgentSessionWrapper {
         const handler = runner?.getCommand(command.command);
         if (!runner || !handler) throw new Error("Workflow extension is unavailable");
         const args = typeof command.args === "string" ? command.args : "";
-        if (this.cwd && !["pause", "status", "clear", "cancel"].includes(args.trim()) && !args.startsWith("budget ") && !args.startsWith("runs ")) {
+        if (this.cwd && !["pause", "status", "clear", "cancel", "exit"].includes(args.trim()) && !args.startsWith("budget ") && !args.startsWith("runs ")) {
           await createSnapshot(this.cwd, this.inner.sessionId, `Before /${command.command}`).catch(() => {});
         }
         await handler.handler(args, runner.createCommandContext());
@@ -1090,7 +1093,13 @@ export class AgentSessionWrapper {
             ? [...new Set(requestedNames ?? [])]
             : withAskUserTool(requestedNames ?? []);
         }
-        this.inner.setActiveToolsByName(toolNames);
+        let applied = false;
+        if (mode !== "plan" && !isPlanToolSelection(toolNames)) {
+          const runner = this.inner.extensionRunner;
+          const handler = runner?.getCommand("plan");
+          if (runner && handler) applied = applyWorkflowToolSelection(handler.handler, toolNames, runner.createCommandContext());
+        }
+        if (!applied) this.inner.setActiveToolsByName(toolNames);
         this.onActiveToolsChanged?.(mode, mode === "inherit" ? undefined : toolNames);
         return { mode, selectedNames: mode === "inherit" ? [] : toolNames };
       }

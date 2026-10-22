@@ -11,6 +11,10 @@ import { ModelSelector } from "../ModelSelector";
 import { ThinkingSelector } from "../ThinkingSelector";
 import { ToolPresetSelector } from "../ToolPresetSelector";
 import { ProviderRecoveryBanner } from "../ProviderRecoveryBanner";
+import { ExtensionUIPanel, WorkflowToolbar } from "../ExtensionUIPanel";
+import { useWorkflowVisibility } from "@/hooks/use-workflow-visibility";
+import { useWorkflowCommand } from "@/hooks/use-workflow-command";
+import type { ExtensionUIState } from "@/hooks/use-extension-ui";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,6 +47,7 @@ describe("composer controls", () => {
     container?.remove();
     container = null;
     localStorage.removeItem("pi-stream-send-mode");
+    localStorage.removeItem("pi-workflow-hidden:composer-workflow");
     localStorage.removeItem(MODEL_RECENT_STORAGE_KEY);
     localStorage.removeItem(MODEL_PINNED_STORAGE_KEY);
     Object.defineProperty(window, "matchMedia", {
@@ -63,6 +68,25 @@ describe("composer controls", () => {
   async function nextFrame() {
     await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
   }
+
+  it("does not format or create hidden model rows while the composer is being edited", async () => {
+    const costRead = vi.fn(() => ({ input: 1, output: 2 }));
+    const options = Array.from({ length: 200 }, (_, i) => ({
+      provider: "fixture", modelId: `model-${i}`, name: `Model ${i}`,
+      get cost() { return costRead(); },
+    }));
+    const groups = [{ provider: "fixture", options }];
+    const change = vi.fn();
+    await render(<ModelSelector modelOptions={options} modelsByProvider={groups} currentName="Model 0" isStreaming={false} onModelChange={change} />);
+    for (let i = 0; i < 5; i++) {
+      await act(async () => root!.render(<ModelSelector modelOptions={options} modelsByProvider={groups} currentName="Model 0" isStreaming={false} onModelChange={change} className={`draft-${i}`} />));
+    }
+    expect(costRead).not.toHaveBeenCalled();
+    expect(document.querySelectorAll("[data-model-choice]")).toHaveLength(0);
+    await act(async () => container!.querySelector<HTMLButtonElement>('[data-testid="model-selector-trigger"]')!.click());
+    expect(costRead).toHaveBeenCalled();
+    expect(document.querySelectorAll("[data-model-choice]")).toHaveLength(200);
+  });
 
   it("offers Max only when the model supports it, including sparse level maps", async () => {
     const change = vi.fn();
@@ -489,6 +513,78 @@ describe("composer controls", () => {
     expect(document.getElementById(tools.getAttribute("aria-describedby")!)?.textContent).toBeTruthy();
     await act(async () => container!.querySelector<HTMLButtonElement>('[aria-label="Compact"]')!.click());
     expect(compact).toHaveBeenCalledOnce();
+  });
+
+  function WorkflowComposerHarness({ run, onSend, isStreaming = false }: { run: (command: string) => Promise<boolean>; onSend: () => Promise<boolean>; isStreaming?: boolean }) {
+    const state: ExtensionUIState = { dialogs: [], statuses: { Goal: "active" }, widgets: { Goal: { placement: "aboveEditor", lines: ["Composer workflow"] } } };
+    const workflowVisibility = useWorkflowVisibility("composer-workflow");
+    const command = useWorkflowCommand("composer-workflow", run);
+    return <>
+      <ExtensionUIPanel state={state} onRespond={vi.fn().mockResolvedValue(undefined)} onWorkflowCommand={command.run} workflowVisibility={workflowVisibility} workflowPending={command.pending} />
+      <ChatInput onSend={onSend} onAbort={vi.fn()} isStreaming={isStreaming} workflowPending={command.pending}
+        workflowControls={<WorkflowToolbar state={state} workflowVisibility={workflowVisibility} />} />
+    </>;
+  }
+
+  it.each([false, true])("keeps workflow reopen icons in the main composer toolbar while controls are closed or streaming (mobile=%s)", async mobile => {
+    if (mobile) useMobileViewport();
+    const run = vi.fn().mockResolvedValue(true);
+    const onSend = vi.fn().mockResolvedValue(true);
+    await render(<WorkflowComposerHarness run={run} onSend={onSend} />);
+    await act(async () => container!.querySelector<HTMLButtonElement>('[data-testid="workflow-goal"] [aria-label="Hide Goal"]')!.click());
+    const toolbar = container!.querySelector('[data-testid="composer-toolbar"]')!;
+    const show = container!.querySelector<HTMLButtonElement>('[aria-label="Show Goal"]')!;
+    expect(show).not.toBeNull();
+    expect(toolbar.contains(show)).toBe(true);
+    expect(container!.querySelector("#composer-secondary-tools")?.contains(show) ?? false).toBe(false);
+    expect(container!.querySelector('[aria-label="More composer controls"]')?.getAttribute("aria-expanded")).toBe("false");
+    expect(container!.querySelector('[data-testid="extension-status"]')).toBeNull();
+    expect(show.textContent).toBe("");
+    expect(show.disabled).toBe(false);
+    await act(async () => root?.render(<WorkflowComposerHarness run={run} onSend={onSend} isStreaming />));
+    const streamingShow = container!.querySelector<HTMLButtonElement>('[aria-label="Show Goal"]')!;
+    expect(container!.querySelector('[data-testid="composer-toolbar"]')?.contains(streamingShow)).toBe(true);
+    expect(container!.querySelector("#composer-secondary-tools")?.contains(streamingShow) ?? false).toBe(false);
+    expect(streamingShow.disabled).toBe(false);
+    await act(async () => streamingShow.click());
+    expect(container!.querySelector('[data-testid="workflow-goal"]')).not.toBeNull();
+    expect(run).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("exits preset-only plan mode with pending protection and retry without a saved plan widget (mobile=%s)", async mobile => {
+    if (mobile) useMobileViewport();
+    let complete: (result: boolean) => void = () => {};
+    const exitPlan = vi.fn().mockImplementationOnce(() => new Promise<boolean>(resolve => { complete = resolve; })).mockResolvedValue(true);
+    const send = vi.fn();
+    const view = (isStreaming = false, isCompacting = false, workflowPending = false) => <ChatInput onSend={send} onAbort={vi.fn()}
+      isStreaming={isStreaming} isCompacting={isCompacting} workflowPending={workflowPending} toolPreset="plan" onToolPresetChange={vi.fn()} onExitPlan={exitPlan} />;
+    await render(view());
+    await act(async () => container!.querySelector<HTMLButtonElement>('[aria-label="More composer controls"]')!.click());
+    await nextFrame();
+    const exit = document.body.querySelector<HTMLButtonElement>('[aria-label="Exit plan"]')!;
+    expect(exit).not.toBeNull();
+    expect(document.querySelector('[data-testid="workflow-plan"]')).toBeNull();
+    expect(exit.disabled).toBe(false);
+    await act(async () => { exit.click(); exit.click(); });
+    expect(exitPlan).toHaveBeenCalledOnce();
+    expect(exit.disabled).toBe(true);
+    await act(async () => complete(false));
+    expect(exit.disabled).toBe(false);
+    await act(async () => exit.click());
+    expect(exitPlan).toHaveBeenCalledTimes(2);
+    await act(async () => root?.render(view(true)));
+    expect(document.body.querySelector<HTMLButtonElement>('[aria-label="Exit plan"]')?.disabled).toBe(true);
+    await act(async () => root?.render(view(false, true)));
+    if (mobile) {
+      const controls = container!.querySelector<HTMLButtonElement>('[aria-label="More composer controls"]')!;
+      if (controls.getAttribute("aria-expanded") !== "true") await act(async () => controls.click());
+      await nextFrame();
+    }
+    expect(document.body.querySelector<HTMLButtonElement>('[aria-label="Exit plan"]')?.disabled).toBe(true);
+    await act(async () => root?.render(view(false, false, true)));
+    expect(document.body.querySelector<HTMLButtonElement>('[aria-label="Exit plan"]')?.disabled).toBe(true);
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("keeps secondary controls behind one disclosure button", async () => {

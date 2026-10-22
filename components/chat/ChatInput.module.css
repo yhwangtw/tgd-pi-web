@@ -512,6 +512,10 @@
   max-width: 420px;
 }
 
+.bottomBar:has(> [data-workflow-toolbar]) .bottomBarLeft {
+  min-width: min(160px, 100%);
+}
+
 .modelControl > button {
   width: 100%;
   max-width: none;
@@ -1005,6 +1009,11 @@
     grid-row: 1;
     justify-self: start;
     max-width: 100%;
+  }
+
+  .bottomBarStreaming > [data-workflow-toolbar] {
+    grid-column: 1 / -1;
+    grid-row: 3;
   }
 
   .bottomBarStreaming .sendModeSwitch button {

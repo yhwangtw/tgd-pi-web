@@ -296,29 +296,18 @@ const ACTIONS: (Omit<PaletteResult, "title" | "subtitle"> & { title: MsgKey; sub
 // ── Fuse-lite scoring: substring scoring, exact-prefix and word-boundary
 //    matches win ────────────────────────────────────────────────────────────
 
-interface Score {
-  value: number;
-  matched: boolean;
-}
-
-function score(haystack: string, query: string): Score {
-  if (!query) return { value: 0, matched: true };
-  const h = haystack.toLowerCase();
-  const q = query.toLowerCase().trim();
-  if (!q) return { value: 0, matched: true };
-  if (h === q) return { value: 1000, matched: true };
-  if (h.startsWith(q)) return { value: 500, matched: true };
-  // word-boundary match
-  const wbIdx = h.search(new RegExp(`(?:^|\\b|[/_-])${escapeRegex(q)}`));
-  if (wbIdx >= 0) return { value: 250 - wbIdx, matched: true };
-  if (h.includes(q)) return { value: 100 - h.indexOf(q), matched: true };
-  // fuzzy: every char of q appears in order
+function score(h: string, q: string, wordBoundary: RegExp): number {
+  if (h === q) return 1000;
+  if (h.startsWith(q)) return 500;
+  const wbIdx = h.search(wordBoundary);
+  if (wbIdx >= 0) return 250 - wbIdx;
+  const containsAt = h.indexOf(q);
+  if (containsAt >= 0) return 100 - containsAt;
   let i = 0;
   for (let j = 0; j < h.length && i < q.length; j++) {
     if (h[j] === q[i]) i++;
   }
-  if (i === q.length) return { value: 10, matched: true };
-  return { value: 0, matched: false };
+  return i === q.length ? 10 : 0;
 }
 
 function escapeRegex(s: string): string {
@@ -357,7 +346,7 @@ export function useCommandPalette({
   }, []);
 
   // ── Build result list ────────────────────────────────────────────────────
-  const results = useMemo<PaletteResult[]>(() => {
+  const catalog = useMemo(() => {
     const all: PaletteResult[] = [];
 
     // Sessions
@@ -405,31 +394,44 @@ export function useCommandPalette({
       keywords: `${action.keywords ?? ""} ${action.id.slice(7).replaceAll("-", " ")}`,
     })));
 
-    if (!query.trim()) {
-      // The unified search panel uses this list for its Commands scope. Keep
-      // actions ahead of large session catalogs so they are always available
-      // before a query has been entered.
-      return [
-        ...all.filter((result) => result.kind === "action"),
-        ...all.filter((result) => result.kind !== "action"),
-      ].slice(0, 50);
-    }
+    return all.map((result) => ({
+      result,
+      title: result.title.toLowerCase(),
+      subtitle: result.subtitle.toLowerCase(),
+      keywords: result.keywords?.toLowerCase() ?? "",
+    }));
+  }, [sessions, tags, activeTag, t]);
 
-    // Score and filter
-    const scored = all
-      .map((r) => {
-        const titleScore = score(r.title, query).value;
-        const subScore = score(r.subtitle, query).value;
-        const kwScore = r.keywords ? score(r.keywords, query).value : 0;
-        const best = Math.max(titleScore, subScore, kwScore);
-        return { r, best };
-      })
-      .filter(({ best }) => best > 0)
-      .sort((a, b) => b.best - a.best)
-      .slice(0, 50)
-      .map(({ r }) => r);
-    return scored;
-  }, [sessions, tags, query, activeTag, t]);
+  const results = useMemo<PaletteResult[]>(() => {
+    const normalizedQuery = query.toLowerCase().trim();
+    if (!normalizedQuery) {
+      // Keep commands available even when the session catalog is large.
+      return [
+        ...catalog.filter(({ result }) => result.kind === "action"),
+        ...catalog.filter(({ result }) => result.kind !== "action"),
+      ].slice(0, 50).map(({ result }) => result);
+    }
+    const wordBoundary = new RegExp(`(?:^|\\b|[/_-])${escapeRegex(normalizedQuery)}`);
+    // Retain only the best 50 while scanning. Stable insertion preserves the
+    // former catalog order for equal scores without sorting all matches.
+    const best: { result: PaletteResult; score: number }[] = [];
+    for (const item of catalog) {
+      const value = Math.max(score(item.title, normalizedQuery, wordBoundary),
+        score(item.subtitle, normalizedQuery, wordBoundary),
+        item.keywords ? score(item.keywords, normalizedQuery, wordBoundary) : 0);
+      if (value <= 0 || (best.length === 50 && value <= best[49].score)) continue;
+      let low = 0;
+      let high = best.length;
+      while (low < high) {
+        const mid = (low + high) >>> 1;
+        if (best[mid].score >= value) low = mid + 1;
+        else high = mid;
+      }
+      best.splice(low, 0, { result: item.result, score: value });
+      if (best.length > 50) best.pop();
+    }
+    return best.map(({ result }) => result);
+  }, [catalog, query]);
 
   const runAction = useCallback((r: PaletteResult) => {
     const cbs = cbRef.current;

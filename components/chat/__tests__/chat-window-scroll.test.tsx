@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Exercise the real ChatWindow scroll effects and hook with isolated session state.
 // jsdom has no layout engine; geometry models a growing tail below a 600px viewport.
-import { act, useRef, type ReactNode } from "react";
+import { act, memo, useRef, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChatWindow } from "@/components/chat/ChatWindow";
@@ -15,18 +15,35 @@ type SessionFixture = Pick<ReturnType<typeof useAgentSession>,
   "modelNames" | "modelList" | "modelThinkingLevels" | "modelThinkingLevelMaps" |
   "compactionQueue" | "queuedFollowUps" | "runProgress" | "bashRun" | "loading">;
 
-const fixture = vi.hoisted(() => ({ state: {} as SessionFixture }));
+const fixture = vi.hoisted(() => ({
+  state: {} as SessionFixture,
+  messageRenders: new Map<string, number>(),
+  getGenerationMetrics: vi.fn(() => undefined),
+  openQuote: null as ((entryId: string) => void) | null,
+  quote: null as { entryId: string; role: "user" | "assistant"; text: string } | null,
+}));
 vi.mock("@/hooks/useAgentSession", () => ({ useAgentSession: () => {
   const running = useRef(fixture.state.agentRunning); running.current = fixture.state.agentRunning;
   const refs = useTranscriptScroll(fixture.state.messages.length, fixture.state.agentRunning, running);
   const handler = useRef(null);
-  return { ...fixture.state, ...refs, handleAgentEventRef: handler, getGenerationMetrics: () => undefined };
+  return { ...fixture.state, ...refs, handleAgentEventRef: handler, getGenerationMetrics: fixture.getGenerationMetrics };
 } }));
 vi.mock("@/hooks/useAudio", () => ({ useAudio: () => ({ soundEnabled: false }) }));
-vi.mock("@/components/chat/ChatInput", () => ({ ChatInput: () => null }));
-vi.mock("@/components/chat/MessageView", () => ({ MessageView: () => <div>message</div> }));
+vi.mock("@/components/chat/ChatInput", () => ({ ChatInput: ({ quote, onOpenQuote }: { quote?: typeof fixture.quote; onOpenQuote?: (entryId: string) => void }) => {
+  fixture.openQuote = onOpenQuote ?? null;
+  fixture.quote = quote ?? null;
+  return null;
+} }));
+vi.mock("@/components/chat/MessageView", () => ({ MessageView: memo(function MockMessageView(props: {
+  entryId?: string;
+  message: { role: string };
+  onQuote?: (entryId: string, role: string, text: string) => void;
+}) {
+  if (props.entryId) fixture.messageRenders.set(props.entryId, (fixture.messageRenders.get(props.entryId) ?? 0) + 1);
+  return <button data-quote-entry={props.entryId} onClick={() => props.onQuote?.(props.entryId!, props.message.role, "quoted text")}>message</button>;
+}) }));
 vi.mock("@/components/chat/AssistantMessageView", () => ({ isProviderAuthError: () => false }));
-vi.mock("@/components/chat/ExtensionUIPanel", () => ({ ExtensionUIPanel: () => null, ExtensionWidgets: () => null, PendingQuestionNotice: () => null }));
+vi.mock("@/components/chat/ExtensionUIPanel", () => ({ ExtensionUIPanel: () => null, ExtensionWidgets: () => null, PendingQuestionNotice: () => null, WorkflowToolbar: () => null }));
 vi.mock("@/components/chat/UserQuestionCard", () => ({ UserQuestionCard: () => null }));
 vi.mock("@/components/chat/ChatMinimap", () => ({ ChatMinimap: () => null, useMessageRefs: () => useRef([]) }));
 vi.mock("@/components/chat/BashBlock", () => ({ BashBlock: () => <div>bash</div> }));
@@ -62,7 +79,7 @@ const render = async () => { await act(async () => root.render(<ChatWindow sessi
 const scroller = () => host.querySelector("[data-transcript-scroll]")!;
 
 beforeEach(() => {
-  localStorage.clear(); resetScrollFollowModeCache();
+  localStorage.clear(); resetScrollFollowModeCache(); fixture.messageRenders.clear(); fixture.quote = null; fixture.openQuote = null;
   markerTop = 600; contentHeight = 1800;
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   fixture.state = {
@@ -244,4 +261,116 @@ it("does not cancel a small upward-wheel pause just because the tail is near", a
   markerTop = 600;
   await act(async () => { scroller().scrollTop = 650; scroller().dispatchEvent(new Event("scroll")); });
   markerTop = 900; await resize(); expect(scrollIntoView).toHaveBeenCalled();
+});
+
+it("keeps historical message views memoized during token updates and scopes quotes to their entry", async () => {
+  fixture.state.messages = [{ role: "user", content: "Earlier question" }, answer("Earlier answer"), { role: "user", content: "Current question" }];
+  fixture.state.entryIds = ["earlier-user", "earlier-answer", "current-user"];
+  await render();
+  const before = new Map(fixture.messageRenders);
+  fixture.state.streamState = { isStreaming: true, streamingMessage: answer("The next streaming token") };
+  await render();
+  expect(fixture.messageRenders).toEqual(before);
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-quote-entry="earlier-answer"]')!.click());
+  expect(fixture.quote).toEqual({ entryId: "earlier-answer", role: "assistant", text: "quoted text" });
+});
+
+
+it("does not rebuild a thousand historical row elements for token-only frames", async () => {
+  fixture.state.messages = Array.from({ length: 1000 }, (_, i) => i % 2
+    ? answer(`Answer ${i}`) : { role: "user" as const, content: `Question ${i}`, timestamp: i });
+  fixture.state.entryIds = fixture.state.messages.map((_, i) => `entry-${i}`);
+  await render();
+  fixture.getGenerationMetrics.mockClear();
+  fixture.messageRenders.clear();
+  for (let i = 0; i < 10; i++) {
+    fixture.state.streamState = { isStreaming: true, streamingMessage: answer(`Partial ${i}`) };
+    await render();
+  }
+  expect(fixture.getGenerationMetrics).not.toHaveBeenCalled();
+  expect(fixture.messageRenders.size).toBe(0);
+});
+
+
+it("mounts the latest 200 messages then reveals an older quote without losing history", async () => {
+  fixture.state.messages = Array.from({ length: 1000 }, (_, i) => i % 2
+    ? answer(`Answer ${i}`) : { role: "user" as const, content: `Question ${i}`, timestamp: i });
+  fixture.state.entryIds = fixture.state.messages.map((_, i) => `entry-${i}`);
+  const animate = vi.fn();
+  Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: animate });
+  await render();
+  expect(host.querySelectorAll(".msg-item")).toHaveLength(200);
+  expect(host.querySelector('[data-entry-id="entry-0"]')).toBeNull();
+  expect(host.textContent).toContain("Load earlier messages (800)");
+  await act(async () => {
+    fixture.openQuote!("entry-0");
+  });
+  await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
+  expect(host.querySelectorAll(".msg-item")).toHaveLength(1000);
+  expect(host.querySelector('[data-entry-id="entry-0"]')).not.toBeNull();
+  expect(animate).toHaveBeenCalled();
+  // Explicit old-history navigation must remain paused after prepend settles.
+  // Its initial auto-scroll event may occur while anchor handling is suspended.
+  await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); });
+  scrollIntoView.mockClear(); markerTop = 900;
+  fixture.state.streamState = { isStreaming: true, streamingMessage: answer("Next token") };
+  await render();
+  expect(scrollIntoView).not.toHaveBeenCalled();
+});
+
+it("loads earlier history in 200-message batches and Home reveals the logical first message", async () => {
+  fixture.state.messages = Array.from({ length: 1000 }, (_, i) => ({ role: "user" as const, content: `Question ${i}`, timestamp: i }));
+  fixture.state.entryIds = fixture.state.messages.map((_, i) => `entry-${i}`);
+  await render();
+  const earlier = [...host.querySelectorAll("button")].find(button => button.textContent?.includes("Load earlier messages"))!;
+  await act(async () => earlier.click());
+  expect(host.querySelectorAll(".msg-item")).toHaveLength(400);
+  const first = host.querySelector<HTMLElement>('[data-entry-id="entry-600"]')!;
+  await act(async () => {
+    first.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+  });
+  await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
+  expect(host.querySelectorAll(".msg-item")).toHaveLength(1000);
+  expect(document.activeElement).toBe(host.querySelector('[data-entry-id="entry-0"]'));
+});
+
+
+it("searches unmounted messages and navigates only after the matching row commits", async () => {
+  fixture.state.messages = Array.from({ length: 500 }, (_, i) => ({ role: "user" as const, content: `Question ${i}`, timestamp: i }));
+  fixture.state.entryIds = fixture.state.messages.map((_, i) => `entry-${i}`);
+  vi.stubGlobal("CSS", {});
+  Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: vi.fn() });
+  await render();
+  await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true })));
+  const input = host.querySelector<HTMLInputElement>("input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Question 0");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(host.textContent).toContain("1/1");
+  expect(host.querySelector('[data-entry-id="entry-0"]')).toBeNull();
+  await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
+  expect(host.querySelector('[data-entry-id="entry-0"]')).not.toBeNull();
+});
+
+it("keeps old bookmarks and the unread boundary reachable before earlier messages mount", async () => {
+  fixture.state.messages = Array.from({ length: 500 }, (_, i) => ({ role: "user" as const, content: `Question ${i}`, timestamp: i }));
+  fixture.state.entryIds = fixture.state.messages.map((_, i) => `entry-${i}`);
+  localStorage.setItem("pi-bookmarks:history-navigation", JSON.stringify(["entry-20"]));
+  localStorage.setItem("pi-last-read:history-navigation", "entry-9");
+  Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: vi.fn() });
+  await act(async () => root.render(<ChatWindow session={{
+    id: "history-navigation", path: "", cwd: "/fixture", created: "", modified: "",
+    messageCount: 500, firstMessage: "Question 0",
+  }} newSessionCwd={null} />));
+  const bookmark = host.querySelector<HTMLButtonElement>('[aria-label="Jump to earlier bookmarks"]')!;
+  const unread = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "New since your last visit")!;
+  expect(bookmark).not.toBeNull();
+  expect(unread).toBeDefined();
+  await act(async () => unread.click());
+  await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
+  expect(host.querySelector('[data-entry-id="entry-10"]')).not.toBeNull();
+  expect(host.querySelector('[data-entry-id="entry-20"][data-bookmarked]')).not.toBeNull();
+  expect(host.querySelector('[role="separator"]')?.textContent).toBe("New since your last visit");
 });

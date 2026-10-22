@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-export interface AgentStreamRecord { id?: string; data: string; }
+/** type is server-only routing metadata; data remains the immutable wire payload. */
+export interface AgentStreamRecord { id?: string; data: string; type?: string; }
 export type ReplayStatus = "initial" | "replayed" | "reset";
 
 /** Per-runtime, bounded, immutable wire records. Expired cursors use a snapshot. */
@@ -21,13 +22,14 @@ export class AgentEventLog {
     const data = JSON.stringify(event);
     const bytes = Buffer.byteLength(data, "utf8");
     this.sequence += 1;
-    const record = { id: this.cursor, data, sequence: this.sequence, bytes };
+    const type = typeof event === "object" && event !== null && "type" in event && typeof event.type === "string" ? event.type : undefined;
+    const record = { id: this.cursor, data, ...(type ? { type } : {}), sequence: this.sequence, bytes };
     this.records.push(record);
     this.bytes += bytes;
     while (this.records.length > this.maxEvents || this.bytes > this.maxBytes) {
       this.bytes -= this.records.shift()!.bytes;
     }
-    return { id: record.id, data: record.data };
+    return { id: record.id, data: record.data, ...(record.type ? { type: record.type } : {}) };
   }
 
   replay(cursor: string | null): { status: ReplayStatus; records: AgentStreamRecord[] } {
@@ -43,7 +45,7 @@ export class AgentEventLog {
     }
     return {
       status: "replayed",
-      records: this.records.filter((record) => record.sequence > sequence).map(({ id, data }) => ({ id, data })),
+      records: this.records.filter((record) => record.sequence > sequence).map(({ id, data, type }) => ({ id, data, ...(type ? { type } : {}) })),
     };
   }
 }

@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
-import type { AssistantMessage } from "@/lib/types";
+import type { AssistantMessage, ToolResultMessage } from "@/lib/types";
 import { AssistantMessageView } from "../AssistantMessageView";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -53,6 +53,24 @@ describe("AssistantMessageView conversation chrome", () => {
     expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).not.toContain("t/s");
     await act(async () => root!.render(<AssistantMessageView message={{ ...baseMessage, content: [{ type: "toolCall", toolCallId: "tool", toolName: "bash", input: { command: "x".repeat(1000) } }] }} isStreaming showModelLabel={false} />));
     expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).toBe("Preparing tool");
+  });
+
+  it("looks up only the current message's tool results in a long transcript", async () => {
+    const results = new Map<string, ToolResultMessage>(Array.from({ length: 10_000 }, (_, i) => [
+      `old-${i}`, { role: "toolResult", toolCallId: `old-${i}`, content: [], timestamp: 9_000 },
+    ]));
+    results.set("current", { role: "toolResult", toolCallId: "current", content: [], timestamp: 5_000 });
+    const iterate = vi.spyOn(results, Symbol.iterator);
+    const get = vi.spyOn(results, "get");
+    await render({
+      ...baseMessage,
+      timestamp: 2_000,
+      content: [{ type: "toolCall", toolCallId: "current", toolName: "read", input: { path: "current.ts" } }],
+    }, { toolResults: results });
+    expect(iterate).not.toHaveBeenCalled();
+    expect(get).toHaveBeenCalledWith("current");
+    expect(get.mock.calls.every(([id]) => id === "current")).toBe(true);
+    expect(container!.textContent).toContain("3s");
   });
 
   it("shows measured response speed separately from aggregated turn usage", async () => {

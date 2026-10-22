@@ -1,10 +1,18 @@
 import { goalActions, planActions } from "./workflow-actions";
 import { randomUUID } from "node:crypto";
-import { defineTool, type ExtensionAPI, type ExtensionContext, type InlineExtension } from "@earendil-works/pi-coding-agent";
+import { defineTool, type ExtensionAPI, type ExtensionContext, type ExtensionCommandContext, type InlineExtension, type RegisteredCommand } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { isPlanToolSelection } from "./plan-mode";
 import { TOOL_PRESET_DEFAULT, TOOL_PRESET_PLAN } from "./tool-selection";
 import { emptyWorkflow, parseTokenBudget, readWorkflow, WORKFLOW_ENTRY } from "./workflow-state";
+
+type PlanToolsChange = (toolNames: string[], ctx: ExtensionCommandContext) => boolean;
+const planToolsChanges = new WeakMap<RegisteredCommand["handler"], PlanToolsChange>();
+
+/** Keep an explicit Web tool selection and the extension's pending Plan state in sync. */
+export function applyWorkflowToolSelection(handler: RegisteredCommand["handler"], toolNames: string[], ctx: ExtensionCommandContext): boolean {
+  return planToolsChanges.get(handler)?.(toolNames, ctx) ?? false;
+}
 
 /** Uses only the SDK's RPC-safe UI, session entries, and settled lifecycle. */
 export function createWorkflowExtension(): InlineExtension {
@@ -31,7 +39,7 @@ export function createWorkflowExtension(): InlineExtension {
       ctx.ui.setStatus("Goal", visibleGoal ? `${visibleGoal.status} · ${visibleGoal.tokens.toLocaleString()}${visibleGoal.tokenBudget ? ` / ${visibleGoal.tokenBudget.toLocaleString()}` : ""} tokens` : undefined);
       ctx.ui.setWidget("Goal", visibleGoal ? [visibleGoal.objective, ...(visibleGoal.reason ? [visibleGoal.reason] : []), "/goal · /goal pause · /goal resume · /goal runs <count>"] : undefined);
       ctx.ui.setStatus("Plan", plan ? `${plan.status} · ${plan.steps.filter(s => s.status === "completed").length}/${plan.steps.length}` : undefined);
-      ctx.ui.setWidget("Plan", plan ? [plan.title, ...plan.steps.map((s, i) => `${s.status === "completed" ? "✓" : s.status === "in_progress" ? "→" : "○"} ${i + 1}. ${s.text}`), "/plan · /plan execute · /plan cancel"] : undefined);
+      ctx.ui.setWidget("Plan", plan ? [plan.title, ...plan.steps.map((s, i) => `${s.status === "completed" ? "✓" : s.status === "in_progress" ? "→" : "○"} ${i + 1}. ${s.text}`), "/plan · /plan execute · /plan exit"] : undefined);
     };
     const save = (ctx: ExtensionContext) => {
       pi.appendEntry(WORKFLOW_ENTRY, structuredClone(state));
@@ -163,14 +171,16 @@ export function createWorkflowExtension(): InlineExtension {
       if (args === "new") { args = (await ctx.ui.input("Plan", "What should Pi plan?"))?.trim() ?? ""; if (!args) return; }
       if (args === "status") { render(ctx); return; }
       if (!ctx.isIdle() || ctx.hasPendingMessages()) throw new Error("Wait for the current response before changing the plan.");
-      if (args === "cancel") {
-        if (state.plan && isPlanToolSelection(pi.getActiveTools())) pi.setActiveTools(state.plan.previousTools);
+      if (args === "exit" || args === "cancel") {
+        const previousTools = state.plan?.previousTools ?? (isPlanToolSelection(pi.getActiveTools()) ? [...TOOL_PRESET_DEFAULT] : undefined);
+        if (previousTools) pi.setActiveTools(isPlanToolSelection(previousTools) ? [...TOOL_PRESET_DEFAULT] : previousTools);
         state.plan = null;
         save(ctx);
         return;
       }
       if (args === "execute") {
         if (!state.plan?.steps.length || state.plan.status !== "ready") throw new Error("Create and review a ready plan first.");
+        if (isPlanToolSelection(state.plan.previousTools)) state.plan.previousTools = [...TOOL_PRESET_DEFAULT];
         state.plan.status = "executing";
         pi.setActiveTools([...new Set([...state.plan.previousTools, "update_plan"])]);
         save(ctx);
@@ -206,7 +216,18 @@ export function createWorkflowExtension(): InlineExtension {
       try { await handler(args, ctx); } finally { commandBusy = false; continueGoal(ctx); }
     };
     pi.registerCommand("goal", { description: "Manage a persistent goal: start, pause, resume, status, budget, runs, clear", handler: command(goalCommand) });
-    pi.registerCommand("plan", { description: "Create, review, refine and execute a saved plan", handler: command(planCommand) });
+    const planHandler = command(planCommand);
+    planToolsChanges.set(planHandler, (toolNames, ctx) => {
+      if (isPlanToolSelection(toolNames) || (state.plan?.status !== "planning" && state.plan?.status !== "ready")) return false;
+      if (commandBusy) throw new Error("Finish the open Goal/Plan action first.");
+      if (!ctx.isIdle() || ctx.hasPendingMessages()) throw new Error("Wait for the current response before changing the plan.");
+      // Apply first: a rejected tool selection must keep the saved plan intact.
+      pi.setActiveTools(toolNames);
+      state.plan = null;
+      save(ctx);
+      return true;
+    });
+    pi.registerCommand("plan", { description: "Create, review, execute or exit a saved plan", handler: planHandler });
 
     pi.registerTool(defineTool({
       name: "update_plan", label: "Update plan",

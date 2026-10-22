@@ -46,7 +46,7 @@ interface ModelSelectorProps {
   className?: string;
 }
 
-export function ModelSelector({
+export const ModelSelector = React.memo(function ModelSelector({
   modelOptions,
   modelsByProvider,
   currentName,
@@ -216,33 +216,37 @@ export function ModelSelector({
     () => new Set(pinnedRefs.map(modelPreferenceKey)),
     [pinnedRefs],
   );
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  const matchesQuery = useCallback((option: ModelOption) => {
-    if (!normalizedQuery) return true;
-    return `${option.name} ${option.modelId} ${option.provider}`.toLocaleLowerCase().includes(normalizedQuery);
-  }, [normalizedQuery]);
-  const currentOption = model ? optionByKey.get(modelPreferenceKey(model)) : undefined;
-  const currentOptions = currentOption && matchesQuery(currentOption) ? [currentOption] : [];
-  const isCurrent = (option: ModelOption) => option.provider === model?.provider && option.modelId === model?.modelId;
-  const pinnedOptions = pinnedRefs
-    .map((ref) => optionByKey.get(modelPreferenceKey(ref)))
-    .filter((option): option is ModelOption => Boolean(option))
-    .filter((option) => matchesQuery(option) && !isCurrent(option));
-  const recentOptions = recentRefs
-    .filter((ref) => !pinnedKeys.has(modelPreferenceKey(ref)))
-    .map((ref) => optionByKey.get(modelPreferenceKey(ref)))
-    .filter((option): option is ModelOption => Boolean(option))
-    .filter((option) => matchesQuery(option) && !isCurrent(option));
-  const quickOptionKeys = new Set(
-    [...currentOptions, ...pinnedOptions, ...recentOptions].map(modelPreferenceKey),
-  );
-  const filteredGroups = modelsByProvider
-    .map((group) => ({
-      ...group,
-      options: group.options.filter((option) => matchesQuery(option) && !quickOptionKeys.has(modelPreferenceKey(option))),
-    }))
-    .filter((group) => group.options.length > 0);
+  const searchTextByKey = useMemo(() => new Map(modelOptions.map((option) => [
+    modelPreferenceKey(option), `${option.name} ${option.modelId} ${option.provider}`.toLocaleLowerCase(),
+  ])), [modelOptions]);
+  const currentModelKey = model ? modelPreferenceKey(model) : null;
+  const { currentOptions, pinnedOptions, recentOptions, filteredGroups } = useMemo(() => {
+    // Most composer renders happen while typing with this menu closed. Do not
+    // filter the catalog or create thousands of hidden option elements then.
+    if (!open || needsRecovery) return { currentOptions: [], pinnedOptions: [], recentOptions: [], filteredGroups: [] };
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    const matchesQuery = (option: ModelOption) => !normalizedQuery
+      || (searchTextByKey.get(modelPreferenceKey(option)) ?? "").includes(normalizedQuery);
+    const isCurrent = (option: ModelOption) => modelPreferenceKey(option) === currentModelKey;
+    const currentOption = currentModelKey ? optionByKey.get(currentModelKey) : undefined;
+    const currentOptions = currentOption && matchesQuery(currentOption) ? [currentOption] : [];
+    const pinnedOptions = pinnedRefs
+      .map((ref) => optionByKey.get(modelPreferenceKey(ref)))
+      .filter((option): option is ModelOption => Boolean(option))
+      .filter((option) => matchesQuery(option) && !isCurrent(option));
+    const recentOptions = recentRefs
+      .filter((ref) => !pinnedKeys.has(modelPreferenceKey(ref)))
+      .map((ref) => optionByKey.get(modelPreferenceKey(ref)))
+      .filter((option): option is ModelOption => Boolean(option))
+      .filter((option) => matchesQuery(option) && !isCurrent(option));
+    const quickOptionKeys = new Set([...currentOptions, ...pinnedOptions, ...recentOptions].map(modelPreferenceKey));
+    const filteredGroups = modelsByProvider
+      .map((group) => ({ ...group, options: group.options.filter((option) => matchesQuery(option) && !quickOptionKeys.has(modelPreferenceKey(option))) }))
+      .filter((group) => group.options.length > 0);
+    return { currentOptions, pinnedOptions, recentOptions, filteredGroups };
+  }, [open, needsRecovery, query, currentModelKey, optionByKey, pinnedRefs, recentRefs, pinnedKeys, modelsByProvider, searchTextByKey]);
   const hasResults = currentOptions.length > 0 || pinnedOptions.length > 0 || recentOptions.length > 0 || filteredGroups.length > 0;
+  const hasRejectedModels = useMemo(() => modelOptions.some((option) => option.available === false), [modelOptions]);
 
   const renderModel = (option: ModelOption) => {
     const identity = modelPreferenceKey(option);
@@ -295,13 +299,13 @@ export function ModelSelector({
 
   const statusLabel = t(status === "loading" ? "model.catalogLoading" : status === "error" ? "model.catalogError" : "model.catalogEmpty");
   const triggerLabel = currentName || model?.modelId || (needsRecovery ? statusLabel : t("model.choose"));
-  const refreshRejected = modelOptions.some((option) => option.available === false) && onRetry ? (
+  const refreshRejected = hasRejectedModels && onRetry ? (
     <button type="button" className={styles.catalogAction} onClick={() => { closeMenu(); onRetry(); }}>
       <RefreshCw size={UI_ICON_SIZE.compact} aria-hidden />{t("model.recheck")}
     </button>
   ) : null;
 
-  const pickerContent = (
+  const pickerContent = open && !needsRecovery ? (
     <div onKeyDown={(event) => {
       const target = event.target as HTMLElement;
       const choices = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("[data-model-choice]")];
@@ -355,7 +359,7 @@ export function ModelSelector({
           {!hasResults && <p className={styles.modelNoResults}>{t("model.noResults")}</p>}
           {refreshRejected}
     </div>
-  );
+  ) : null;
 
   return (
     <div ref={dropdownRef} className={`${styles.root} ${className ?? ""}`}>
@@ -444,7 +448,7 @@ export function ModelSelector({
       )}
     </div>
   );
-}
+});
 
 function formatContextWindow(value: number): string {
   if (value >= 1_000_000) return `${trimNumber(value / 1_000_000)}M ctx`;

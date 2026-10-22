@@ -12,6 +12,7 @@ vi.mock("@/lib/attention", () => ({ setIdleTitle: vi.fn(), setRunningTitle: vi.f
 vi.mock("../use-model-catalog", () => ({ useModelCatalog: () => ({ modelNames: {}, modelList: [], modelThinkingLevels: {}, modelThinkingLevelMaps: {}, newSessionModel: { provider: "fixture", modelId: "instant" }, setNewSessionModel: vi.fn(), catalogStatus: "ready", catalogDiagnostics: [], retryModelCatalog: vi.fn(), reportModelUnavailable: harness.rejectModel }) }));
 import { useAgentSession } from "../useAgentSession";
 import { setIdleTitle, setRunningTitle } from "@/lib/attention";
+import { encodeSessionData } from "@/lib/session-tree-wire";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 class FakeEventSource {
@@ -61,6 +62,19 @@ describe("session reconciliation and first-prompt ordering", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+  it("decodes the compact REST and SSE tree while preserving context and branch targets", async () => {
+    const stored = { ...data([user]), leafId: "e0", tree: [{ entry: { type: "message" as const, id: "e0", parentId: null, timestamp: "2026-10-22T00:00:00Z", message: user }, children: [] }] };
+    harness.fetch.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith("/api/sessions/") ? encodeSessionData(stored, "flat-v2") : {})));
+    await act(async () => root.render(<Harness selected={session} />));
+    expect(current.data?.tree[0].entry.id).toBe("e0");
+    const next = { ...stored, leafId: "e1", context: data([user, assistant]).context,
+      tree: [{ ...stored.tree[0], children: [{ entry: { type: "message" as const, id: "e1", parentId: "e0", timestamp: "2026-10-22T00:00:01Z", message: assistant }, children: [] }] }] };
+    await act(async () => current.handleAgentEventRef.current?.({ ...snapshot([user, assistant]), protocolVersion: 2, sessionData: encodeSessionData(next, "flat-v2") }));
+    expect(current.data?.tree[0].children[0].entry.id).toBe("e1");
+    expect(current.messages).toEqual([user, assistant]);
+    expect(current.data?.leafId).toBe("e1");
+  });
+
   it("renames the current tab without reconnecting, preserves running state and clears the title for New", async () => {
     await act(async () => root.render(<Harness selected={session} />));
     const calls = harness.fetch.mock.calls.length;
@@ -102,6 +116,50 @@ describe("session reconciliation and first-prompt ordering", () => {
     expect(harness.send).toHaveBeenCalledWith("one", { type: "set_model", provider: "fixture", modelId: "reasoning-only" });
     expect(current.thinkingLevel).toBe("low");
     expect(harness.send.mock.calls.some(([, command]) => command.type === "prompt")).toBe(false);
+  });
+
+  it("keeps Plan selected until the server accepts a mode change and retains it on rejection", async () => {
+    let accept!: () => void;
+    let mode = "plan";
+    harness.send.mockImplementation(async (_sid, command) => {
+      if (command.type === "get_tools") return { mode, tools: [], selectedNames: [] };
+      if (command.type === "set_tools") await new Promise<void>(resolve => { accept = () => { mode = "default"; resolve(); }; });
+      return null;
+    });
+    await act(async () => root.render(<Harness selected={session} />));
+    expect(current.toolPreset).toBe("plan");
+    let change!: Promise<void>;
+    await act(async () => { change = current.handleToolPresetChange("default"); });
+    expect(current.toolPreset).toBe("plan");
+    await act(async () => { accept(); await change; });
+    expect(current.toolPreset).toBe("default");
+    expect(harness.send.mock.calls.some(([, command]) => command.type === "prompt")).toBe(false);
+
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    harness.send.mockImplementation(async (_sid, command) => {
+      if (command.type === "get_tools") return { mode: "plan", tools: [], selectedNames: [] };
+      if (command.type === "set_tools") throw new Error("Wait for the current run");
+      return null;
+    });
+    await act(async () => root.render(<Harness key="reopened" selected={session} />));
+    await act(async () => { await current.handleToolPresetChange("full"); });
+    expect(current.toolPreset).toBe("plan");
+    expect(harness.toast).toHaveBeenCalledWith("Could not change tools. Please retry.", { type: "error" });
+    log.mockRestore();
+  });
+
+  it("ignores a late tool catalog from the session being left", async () => {
+    let resolveOld!: (value: unknown) => void;
+    harness.send.mockImplementation(async (sid, command) => {
+      if (command.type !== "get_tools") return null;
+      if (sid === "one") return new Promise(resolve => { resolveOld = resolve; });
+      return { mode: "full", tools: [], selectedNames: [] };
+    });
+    await act(async () => root.render(<Harness selected={session} />));
+    await act(async () => root.render(<Harness key="two" selected={{ ...session, id: "two" }} />));
+    expect(current.toolPreset).toBe("full");
+    await act(async () => resolveOld({ mode: "plan", tools: [], selectedNames: [] }));
+    expect(current.toolPreset).toBe("full");
   });
 
   it("marks the rejected response model, not a different current selection, without a duplicate toast", async () => {

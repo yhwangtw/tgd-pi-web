@@ -14,11 +14,12 @@ import { createReadTool, createBashTool, createEditTool, createWriteTool, create
   createAgentSessionServices, type AgentSessionServices, type ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { AgentEventLog, type AgentStreamRecord } from "./agent-event-log";
+import { encodeSessionData } from "./session-tree-wire";
 import { createPiModelRuntime } from "./pi-model-runtime";
 import { durableModels } from "./durable-models";
 import { createDurableMcpExtension } from "./durable-mcp";
 import { createDurableQuestionsExtension, durableQuestionSnapshot, respondDurableQuestion, cancelDurableQuestions, waitForDurableHostQuestion, type DurableQuestionDraft } from "./durable-questions";
-import { DurableWorkflowDoc, createDurableWorkflowExtension, handleDurableWorkflowCommand, readDurableWorkflow, durableWorkflowUIEvents, pauseDurableWorkflow, flushDurableWorkflowCommand } from "./durable-workflow";
+import { DurableWorkflowDoc, createDurableWorkflowExtension, handleDurableWorkflowCommand, readDurableWorkflow, durableWorkflowUIEvents, pauseDurableWorkflow, flushDurableWorkflowCommand, setDurableWorkflowTools } from "./durable-workflow";
 import { createDurableSubagentExtension, DurableSubagentDoc } from "./durable-subagents";
 import { DurableSessionMeta, durableContext, durableEntries, durableMessage, durableSessionData, durableSessionDirectory, durableSessionId,
   durableSessionIdentity, saveDurableProjection, writeDurableJson, type DurableSessionProjection } from "./durable-session-store";
@@ -347,15 +348,7 @@ export class DurableChat {
     await chat.initializeExtensions();
     if (host.migrationPending() && chat.extensionErrors.length) throw new Error(`Extension compatibility check failed: ${chat.extensionErrors[0].message}`);
     await chat.refreshUI();
-    chat.watcher.start(async events => {
-      if (events.some(event => ["snapshot", "entry_appended", "message_end", "agent_changed", "run_end", "compaction_end"].includes(event.type))) await chat.refresh();
-      else chat.live = await chat.readLive();
-      for (const event of events) await chat.forward(event);
-      if (events.some(event => ["message_end", "run_end", "tool_execution_end", "compaction_end"].includes(event.type))) {
-        try { await chat.extensionHost?.afterCommit(); } catch (error) { chat.extensionErrors.push({ type: "error", message: String(error) }); }
-      }
-      await chat.refreshUI();
-    });
+    chat.watcher.start(events => chat.receiveEvents(events));
     return chat;
   }
   isAlive(): boolean { return !this.host.closed && !this.projection?.deleted; }
@@ -445,7 +438,7 @@ export class DurableChat {
   async resume(): Promise<void> { await flushDurableWorkflowCommand(this.conversation, this.harness); this.harness.resume(); }
   private emit(event: Record<string, unknown>): void {
     const isUI = typeof event.type === "string" && event.type.startsWith("extension_ui_");
-    const record = isUI ? { data: JSON.stringify(event) } : this.eventLog.append(event);
+    const record = isUI ? { type: String(event.type), data: JSON.stringify(event) } : this.eventLog.append(event);
     if (isUI && event.method === "set_editor_text" && (this.listeners.size || this.eventListeners.size)) this.extensionUI.acknowledgeDelivery(String(event.id));
     for (const listener of this.listeners) listener(record);
     for (const listener of this.eventListeners) listener(event);
@@ -461,8 +454,8 @@ export class DurableChat {
     this.listeners.add(listener);
     // The complete committed snapshot also reconciles queues and dialogs after lost events.
     for (const record of replay.records) listener(record);
-    listener({ id: this.eventLog.cursor, data: JSON.stringify(this.streamSnapshot(replay.status)) });
-    for (const event of this.ui) listener({ data: JSON.stringify(event) });
+    listener({ id: this.eventLog.cursor, type: "session_snapshot", data: JSON.stringify(this.streamSnapshot(replay.status)) });
+    for (const event of this.ui) listener({ type: event.type, data: JSON.stringify(event) });
     this.clearDeliveredEditor();
     return () => { this.listeners.delete(listener); };
   }
@@ -475,7 +468,37 @@ export class DurableChat {
     this.projectionUpdates = next.catch(() => {});
     return next;
   }
+  private async receiveEvents(events: readonly AgentEvent[]): Promise<void> {
+    if (events.some(event => ["snapshot", "entry_appended", "message_end", "agent_changed", "run_end", "compaction_end"].includes(event.type))) await this.refresh();
+    else this.live = await this.readLive();
+    for (const event of events) await this.forward(event);
+    if (events.some(event => ["message_end", "run_end", "tool_execution_end", "compaction_end"].includes(event.type))) {
+      try { await this.extensionHost?.afterCommit(); } catch (error) { this.extensionErrors.push({ type: "error", message: String(error) }); }
+    }
+    // Token/usage-only commits cannot change questions or workflow documents.
+    // Explicit UI writes still refresh through their registered host callbacks.
+    if (!events.length || !events.every(event => event.type === "message_update" || event.type === "usage_changed")) await this.refreshUI();
+  }
   private readonly projectedContinuations = new Set<string>();
+  private historyState?: { hasEdits: boolean; prefix: string; head?: number; hasUser: boolean };
+  private persistedEntries?: EntryRecord[];
+  private persistedMetadata = "";
+  private reportCache?: { messages: DurableSessionProjection["context"]["messages"]; startedAt?: string; finishedAt?: string; report: AgentRun["report"] };
+  private persistProjection(): void {
+    if (this.host.ephemeral) return;
+    const { entries, info, agent, deleted, agentRun } = this.projection;
+    const metadata = JSON.stringify({ info, agent, deleted, agentRun });
+    if (this.persistedEntries === entries && this.persistedMetadata === metadata) return;
+    saveDurableProjection(this.host.directory, this.conversation.id, this.projection);
+    this.persistedEntries = entries;
+    this.persistedMetadata = metadata;
+  }
+  private projectionReport(messages: DurableSessionProjection["context"]["messages"], startedAt?: string, finishedAt?: string): AgentRun["report"] {
+    if (!this.reportCache || this.reportCache.messages !== messages || this.reportCache.startedAt !== startedAt || this.reportCache.finishedAt !== finishedAt) {
+      this.reportCache = { messages, startedAt, finishedAt, report: buildAgentRunReport(messages, startedAt, finishedAt) };
+    }
+    return this.reportCache.report;
+  }
   private async refreshProjection(): Promise<void> {
     // History is immutable and append-only. Read only newly committed entries
     // after attachment; partial token commits never rescan the entire history.
@@ -484,7 +507,8 @@ export class DurableChat {
     const newest = previous.at(-1)?.id;
     let cursor: Parameters<Conversation["entries"]>[2];
     do { const page = await this.conversation.entries(newest === undefined ? {} : { minEntryId: newest }, 250, cursor, context); additions.push(...page.items.filter(entry => newest === undefined || entry.id > newest)); cursor = page.next; } while (cursor !== undefined);
-    const entries = [...previous, ...additions.reverse()];
+    let entries = additions.length ? [...previous, ...additions.reverse()] : previous;
+    let continuationChanged = false;
     // Upstream appends automatic continuation inputs as ordinary user entries.
     // Match the saved generation receipt and immediate successor before hiding
     // them, so user-written text with the same content remains a user message.
@@ -497,6 +521,8 @@ export class DurableChat {
       const index = entries.findIndex(entry => entry.id === answerEntryId);
       const next = index >= 0 ? entries[index + 1] : undefined;
       if (next?.kind !== "pi.user" || next.model?.length !== 1 || next.model[0].content !== continuation.text) continue;
+      if (entries === previous) entries = [...previous];
+      continuationChanged = true;
       entries[index + 1] = { ...next, kind: "pi-web.extension-message", data: { customType: "pi-web-goal-continuation", content: continuation.text, display: false, details: null } };
       this.projectedContinuations.add(id);
     }
@@ -506,17 +532,43 @@ export class DurableChat {
     this.queuedFollowUps = await this.readQueue();
     this.compaction = await this.readCompactionState();
     const created = meta?.created || new Date(0).toISOString();
-    const messages = durableEntries(entries, created).flatMap(entry => entry.type === "message" && (entry.message.role === "user" || entry.message.role === "assistant") ? [{ message: entry.message, entryId: entry.id }] : []);
-    const extract = (message: { content?: unknown } | undefined) => typeof message?.content === "string" ? message.content : Array.isArray(message?.content)
-      ? message.content.filter(block => block.type === "text").map(block => block.text).join("\n") : "";
-    const last = messages.at(-1);
-    const modified = last && "timestamp" in last.message ? new Date(last.message.timestamp ?? Date.parse(created)).toISOString() : created;
-    this.projection = { version: 1, deleted: meta?.deleted ?? false, entries, agent, context: durableContext(entries, agent),
-      info: { id: this.sessionId, path: this.sessionFile, cwd: this.cwd, created, modified, name: meta?.name || undefined,
+    const changed = !this.projection || this.projection.entries !== entries || this.projection.info.created !== created;
+    const appended = entries.slice(previous.length);
+    const appendOnly = !!this.projection && !!this.historyState && !this.historyState.hasEdits && !continuationChanged
+      && created === this.projection.info.created && appended.length > 0
+      && appended.every(entry => entry.head === undefined && !entry.edits?.length && entry.kind !== LEGACY_CONTEXT
+        && (this.historyState!.head === undefined || entry.id >= this.historyState!.head));
+    let summary: Pick<DurableSessionProjection["info"], "modified" | "messageCount" | "firstMessage" | "lastMessage" | "lastMessageId">;
+    if (changed) {
+      const messages = durableEntries(appendOnly ? appended : entries, created, appendOnly ? this.historyState!.prefix : undefined)
+        .flatMap(entry => entry.type === "message" && (entry.message.role === "user" || entry.message.role === "assistant") ? [{ message: entry.message, entryId: entry.id }] : []);
+      const extract = (message: { content?: unknown } | undefined) => typeof message?.content === "string" ? message.content : Array.isArray(message?.content)
+        ? message.content.filter(block => block.type === "text").map(block => block.text).join("\n") : "";
+      const last = messages.at(-1);
+      const firstUser = messages.find(({ message }) => message.role === "user");
+      const modified = last && "timestamp" in last.message ? new Date(last.message.timestamp ?? Date.parse(created)).toISOString() : appendOnly ? this.projection.info.modified : created;
+      summary = { modified, messageCount: (appendOnly ? this.projection.info.messageCount : 0) + messages.length,
+        firstMessage: appendOnly && this.historyState!.hasUser ? this.projection.info.firstMessage : extract(firstUser?.message) || "(no messages)",
+        lastMessage: last ? extract(last.message) : appendOnly ? this.projection.info.lastMessage : "",
+        lastMessageId: last?.entryId ?? (appendOnly ? this.projection.info.lastMessageId : undefined) };
+      if (appendOnly) this.historyState!.hasUser ||= !!firstUser;
+      else this.historyState = { hasUser: !!firstUser, prefix: legacyArchive(entries) ? "durable:" : "", hasEdits: entries.some(entry => !!entry.edits?.length), head: entries.findLast(entry => entry.head !== undefined)?.head };
+    } else summary = this.projection.info;
+    const previousContext = this.projection?.context;
+    let sessionContext: DurableSessionProjection["context"];
+    if (changed || !previousContext) {
+      if (appendOnly && previousContext) {
+        const extra = durableContext(appended, agent);
+        sessionContext = { ...extra, messages: [...previousContext.messages, ...extra.messages],
+          entryIds: [...previousContext.entryIds, ...extra.entryIds.map(id => `${this.historyState!.prefix}${id}`)] };
+      } else sessionContext = durableContext(entries, agent);
+    } else sessionContext = previousContext.thinkingLevel === (agent.thinkingLevel ?? "off") && JSON.stringify(previousContext.model) === JSON.stringify(agent.model ?? null) ? previousContext
+      : { ...previousContext, thinkingLevel: agent.thinkingLevel ?? "off", model: agent.model ?? null };
+    this.projection = { version: 1, deleted: meta?.deleted ?? false, entries, agent, context: sessionContext,
+      info: { ...summary, id: this.sessionId, path: this.sessionFile, cwd: this.cwd, created, name: meta?.name || undefined,
         sourceSessionId: meta?.sourceSessionId || undefined,
-        parentSessionId: meta?.parentSessionId ? resolveMigratedSessionId(meta.parentSessionId) : undefined, messageCount: messages.length,
-        firstMessage: extract(messages.find(({ message }) => message.role === "user")?.message) || "(no messages)",
-        lastMessage: extract(last?.message), lastMessageId: last?.entryId, ephemeral: this.host.ephemeral, engine: "durable" } };
+        parentSessionId: meta?.parentSessionId ? resolveMigratedSessionId(meta.parentSessionId) : undefined,
+        ephemeral: this.host.ephemeral, engine: "durable" } };
     const owned = await this.harness.snapshot(DurableSubagentDoc, this.conversation.id, context);
     if (owned?.ownerTaskId) this.projection.agentRun = {
       id: this.sessionId, engine: "durable", durableConversation: true, sessionId: this.sessionId, trigger: "subagent",
@@ -524,9 +576,9 @@ export class DurableChat {
       parentRunId: durableSessionId(this.host.group, owned.parentConversationId), status: owned.status as AgentRun["status"], createdAt: created,
       ...(owned.startedAt ? { startedAt: new Date(owned.startedAt).toISOString() } : {}), ...(owned.finishedAt ? { finishedAt: new Date(owned.finishedAt).toISOString() } : {}),
       error: owned.error || undefined, progress: { turns: owned.turns, costUsd: owned.modelCost },
-      report: buildAgentRunReport(this.projection.context.messages, owned.startedAt ? new Date(owned.startedAt).toISOString() : undefined),
+      report: this.projectionReport(this.projection.context.messages, owned.startedAt ? new Date(owned.startedAt).toISOString() : undefined, owned.finishedAt ? new Date(owned.finishedAt).toISOString() : undefined),
     };
-    if (!this.host.ephemeral) saveDurableProjection(this.host.directory, this.conversation.id, this.projection);
+    this.persistProjection();
   }
   async refreshUI(event?: WebExtensionUIEvent): Promise<void> {
     if (!this.isAlive()) return;
@@ -541,7 +593,7 @@ export class DurableChat {
       const status = questions.length ? "waiting_for_input" : "running";
       if (this.projection.agentRun.status !== status) {
         this.projection.agentRun.status = status;
-        if (!this.host.ephemeral) saveDurableProjection(this.host.directory, this.conversation.id, this.projection);
+        this.persistProjection();
       }
     }
     if (signature(next) !== signature(this.ui)) { this.ui = next; for (const item of next) this.emit(item as unknown as Record<string, unknown>); }
@@ -586,8 +638,8 @@ export class DurableChat {
   }
   private streamSnapshot(replayStatus = "initial") {
     const tools = Object.values(this.live?.tools ?? {});
-    return { type: "session_snapshot", protocolVersion: 1, sessionId: this.sessionId, cursor: this.eventLog.cursor, replayStatus,
-      state: this.getState(), sessionData: this.getSessionData(), streamingMessage: this.live?.generation?.message ? durableMessage(this.live.generation.message) : null,
+    return { type: "session_snapshot", protocolVersion: 2, sessionId: this.sessionId, cursor: this.eventLog.cursor, replayStatus,
+      state: this.getState(), sessionData: encodeSessionData(this.getSessionData(), "flat-v2"), streamingMessage: this.live?.generation?.message ? durableMessage(this.live.generation.message) : null,
       phase: tools.length ? { kind: "running_tools", tools: tools.map(tool => ({ id: tool.callId, name: tool.name })) } : null,
       bashRun: this.bashRun, lastRunError: this.lastError };
   }
@@ -760,7 +812,9 @@ export class DurableChat {
         const names = namesForToolSelection(mode, command.toolNames as string[] | undefined);
         const tools = (await this.conversation.agent(context)).extensions.flatMap(extension => extension.tools ?? []);
         if (names?.some(name => !tools.some(tool => tool.name === name))) throw new Error("Unknown tool in selection");
-        await this.conversation.configure({ tools: names ? tools.filter(tool => names.includes(tool.name)) : null }, context); await this.refresh(); return { mode, selectedNames: names ?? [] };
+        await setDurableWorkflowTools(this.conversation, this.harness, names, context);
+        await this.refresh(); await this.refreshUI();
+        return { mode, selectedNames: names ?? [] };
       }
       case "set_project_trust": this.host.services?.settingsManager.setProjectTrusted(command.trusted === true); return { trusted: command.trusted === true };
       case "compact": return this.compact(command);
