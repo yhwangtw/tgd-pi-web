@@ -5,6 +5,7 @@ import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMe
 import {
   ArrowRight,
   History,
+  LogOut,
   Ghost,
   FileText,
   Paperclip,
@@ -35,6 +36,7 @@ import { ToolPresetSelector } from "./ToolPresetSelector";
 import type { ToolCatalogEntry, ToolSelectionMode } from "@/lib/tool-selection";
 import { ScrollFollowSelector } from "./ScrollFollowSelector";
 import { useChatInputControls } from "@/hooks/useChatInputControls";
+import { useWorkflowCommand } from "@/hooks/use-workflow-command";
 import styles from "./ChatInput.module.css";
 import { useI18n } from "@/lib/i18n";
 import { extractComposerMentions, removeComposerMention, type ComposerMention } from "@/lib/composer-context";
@@ -83,6 +85,9 @@ interface Props {
   availableTools?: ToolCatalogEntry[];
   customToolNames?: string[];
   onToolPresetChange?: (preset: ToolSelectionMode, customNames?: string[]) => void;
+  onExitPlan?: () => Promise<boolean>;
+  workflowControls?: ReactNode;
+  workflowPending?: boolean;
   thinkingLevel?: ThinkingLevelOption;
   onThinkingLevelChange?: (level: ThinkingLevelOption) => void;
   availableThinkingLevels?: string[] | null;
@@ -211,6 +216,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   quote,
   onClearQuote,
   onOpenQuote,
+  onExitPlan,
+  workflowControls,
+  workflowPending = false,
   wide = false,
 }: Props, ref) {
   const { t } = useI18n();
@@ -241,6 +249,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [slashFilter, setSlashFilter] = useState("");
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const exitPlan = useWorkflowCommand(persistKey ?? undefined, async () => onExitPlan ? onExitPlan() : false);
   const [expanded, setExpanded] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
@@ -1179,6 +1188,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
           <span className={styles.keyboardHint}>{t("input.keyboardHint")}</span>
 
+          {workflowControls}
+
           {!isStreaming && (
             <button
               ref={mobileToolsButtonRef}
@@ -1256,6 +1267,20 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 onToolPresetChange={onToolPresetChange}
               />
             </div>
+            {toolPreset === "plan" && onExitPlan && (
+              <div className={styles.mobileLabeledControl}>
+                <button type="button" className={styles.expandButton}
+                  aria-label={t("workflow.exitPlan")} title={t("workflow.exitPlan")}
+                  disabled={exitPlan.pending || workflowPending || isStreaming || !!isCompacting}
+                  onClick={async () => {
+                    try { await exitPlan.run("/plan exit"); }
+                    catch (error) { showToast(error instanceof Error ? error.message : String(error), { type: "error" }); }
+                  }}>
+                  <LogOut size={UI_ICON_SIZE.control} aria-hidden />
+                  <span className={styles.mobileControlValue}>{t("workflow.exitPlan")}</span>
+                </button>
+              </div>
+            )}
             <div className={`${styles.mobileLabeledControl} ${styles.scrollModeControl}`}>
               <span className={styles.mobileControlLabel}>{t("input.scrollMode")}</span>
               <ScrollFollowSelector iconOnly={!isMobileViewport} />

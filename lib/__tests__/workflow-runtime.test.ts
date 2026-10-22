@@ -5,6 +5,9 @@ import { createAgentSession, DefaultResourceLoader, initTheme, ModelRuntime, Ses
 import { createWorkflowExtension } from "../workflow-extension";
 import { createPlanModeExtension } from "../plan-mode";
 import { createStructuredOutputExtension } from "../structured-output-extension";
+import { AgentSessionWrapper } from "../rpc-manager";
+import type { AgentSessionLike } from "../pi-types";
+import { TOOL_PRESET_DEFAULT, TOOL_PRESET_PLAN } from "../tool-selection";
 import { WORKFLOW_ENTRY, type WorkflowState } from "../workflow-state";
 import { createAskUserTool, WebExtensionUIBridge, toEnumerableExtensionUIContext } from "../web-extension-ui";
 import { bindWebExtensions } from "../pi-runtime";
@@ -52,6 +55,32 @@ describe("Goal and Plan on the real Pi SDK (offline faux model)", () => {
       expect(r.bridge.snapshot().filter((e) => e.type === "extension_ui_request"
         && ((e as { statusKey?: string }).statusKey === "Goal" || (e as { widgetKey?: string }).widgetKey === "Goal"))).toEqual([]);
     } finally { await r.session.abort(); r.session.dispose(); }
+  });
+
+  it("clears a reviewed plan through the actual set_tools RPC and never restores it on reopen", async () => {
+    const r = await runtime();
+    const wrapper = new AgentSessionWrapper(r.session as unknown as AgentSessionLike);
+    try {
+      r.faux.setResponses([
+        fauxAssistantMessage(fauxToolCall("update_plan", { title: "Review", steps: [{ text: "Inspect", status: "pending" }] })),
+        fauxAssistantMessage("Ready."),
+      ]);
+      await r.session.prompt("/plan Inspect fixture");
+      await vi.waitFor(() => expect(r.state()?.plan?.status).toBe("ready"));
+      await r.session.waitForIdle();
+      expect(r.state()?.plan?.status).toBe("ready");
+      await wrapper.send({ type: "set_tools", mode: "default" });
+      expect(r.state()?.plan).toBeNull();
+      expect(r.session.getActiveToolNames().sort()).toEqual([...TOOL_PRESET_DEFAULT].sort());
+      await r.session.extensionRunner!.emit({ type: "session_start", reason: "resume" });
+      expect(r.session.getActiveToolNames()).toContain("write");
+      expect(r.faux.state.callCount).toBe(2);
+      await wrapper.send({ type: "set_tools", mode: "plan" });
+      expect(r.session.getActiveToolNames().sort()).toEqual([...TOOL_PRESET_PLAN].sort());
+      await r.session.prompt("/plan exit");
+      expect(r.session.getActiveToolNames().sort()).toEqual([...TOOL_PRESET_DEFAULT].sort());
+      expect(r.errors).toEqual([]);
+    } finally { await r.session.abort(); wrapper.destroy(); }
   });
 
   it("plans without writes and requires a user command to restore tools for execution", async () => {

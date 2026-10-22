@@ -3,7 +3,9 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ExtensionUIPanel, PendingQuestionNotice, ExtensionWidgets } from "../ExtensionUIPanel";
+import { ExtensionUIPanel, PendingQuestionNotice, ExtensionWidgets, WorkflowToolbar } from "../ExtensionUIPanel";
+import { useWorkflowVisibility } from "@/hooks/use-workflow-visibility";
+import { useWorkflowCommand } from "@/hooks/use-workflow-command";
 import type { ExtensionUIState } from "@/hooks/use-extension-ui";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -95,28 +97,244 @@ describe("ExtensionUIPanel", () => {
     expect(run).toHaveBeenCalledWith("/plan execute");
   });
 
-  it("hides and reopens cards without commands, survives remount, and scopes hiding to session and title", async () => {
+  const workflowState: ExtensionUIState = {
+    dialogs: [], statuses: { Goal: "active · 1 tokens", Plan: "ready · 0/2" },
+    widgets: {
+      Goal: { placement: "aboveEditor", lines: ["Private goal title", "A private detail"] },
+      Plan: { placement: "aboveEditor", lines: ["Private plan title", "1. Review", "2. Deliver"] },
+    },
+  };
+
+  function WorkflowHarness({
+    state = workflowState, sessionId = "workflow-a", run = vi.fn().mockResolvedValue(true), onRespond = vi.fn().mockResolvedValue(undefined),
+    below = false, workflowBusy = false,
+  }: {
+    state?: ExtensionUIState;
+    sessionId?: string;
+    run?: (command: string) => Promise<boolean>;
+    onRespond?: (response: unknown) => Promise<void>;
+    below?: boolean;
+    workflowBusy?: boolean;
+  }) {
+    const workflowVisibility = useWorkflowVisibility(sessionId);
+    const command = useWorkflowCommand(sessionId, run);
+    return <>
+      <div data-testid="workflow-toolbar"><WorkflowToolbar state={state} workflowVisibility={workflowVisibility} /></div>
+      <ExtensionUIPanel state={state} sessionId={sessionId} workflowVisibility={workflowVisibility} workflowBusy={workflowBusy} workflowPending={command.pending} onRespond={onRespond} onWorkflowCommand={command.run} />
+      {below && <ExtensionWidgets state={state} placement="belowEditor" workflowVisibility={workflowVisibility} workflowBusy={workflowBusy} workflowPending={command.pending} onWorkflowCommand={command.run} />}
+    </>;
+  }
+
+  function workflowButton(label: string) {
+    const scope = label.startsWith("Hide ")
+      ? container!.querySelector(`[data-testid="workflow-${label.slice(5).toLowerCase()}"]`)
+      : container;
+    const button = scope?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    expect(button, label).toBeTruthy();
+    return button!;
+  }
+
+  async function nextFrame() {
+    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+  }
+
+  it("removes the complete workflow panel when hidden and reopens it from named toolbar icons without commands", async () => {
     await render({ dialogs: [], statuses: {}, widgets: {} });
     const run = vi.fn().mockResolvedValue(true);
-    const state: ExtensionUIState = { dialogs: [], statuses: { Goal: "active · 1 tokens" }, widgets: { Goal: { placement: "aboveEditor", lines: ["Ship goal"] } } };
-    const view = (sessionId: string, next = state) => <ExtensionUIPanel state={next} sessionId={sessionId} onRespond={vi.fn()} onWorkflowCommand={run} />;
-    await act(async () => root?.render(view("a")));
-    await act(async () => container!.querySelector<HTMLButtonElement>('[aria-label="Hide Goal"]')!.click());
+    await act(async () => root?.render(<WorkflowHarness run={run} />));
+    await act(async () => workflowButton("Hide Goal").click());
+    await act(async () => workflowButton("Hide Plan").click());
+    expect(container!.querySelector('[data-testid="extension-status"]')).toBeNull();
     expect(container!.querySelector('[data-testid="workflow-goal"]')).toBeNull();
-    expect(container!.textContent).toContain("Show Goal");
+    expect(container!.querySelector('[data-testid="workflow-plan"]')).toBeNull();
+    const toolbar = container!.querySelector('[data-testid="workflow-toolbar"]')!;
+    const goal = workflowButton("Show Goal");
+    const plan = workflowButton("Show Plan");
+    expect(toolbar.contains(goal)).toBe(true);
+    expect(toolbar.contains(plan)).toBe(true);
+    expect(goal.getAttribute("aria-expanded")).toBe("false");
+    expect(plan.getAttribute("aria-expanded")).toBe("false");
+    expect(goal.textContent).toBe("");
+    expect(plan.textContent).toBe("");
+    expect(JSON.parse(localStorage.getItem("pi-workflow-hidden:workflow-a")!)).toEqual({ Goal: true, Plan: true });
+    expect(localStorage.getItem("pi-workflow-hidden:workflow-a")).not.toMatch(/Private|title|detail/);
     expect(run).not.toHaveBeenCalled();
-    expect(state.statuses.Goal).toBe("active · 1 tokens");
-    expect(localStorage.getItem("pi-workflow-hidden:a")).not.toContain("Ship goal");
-    await act(async () => { root!.unmount(); root = createRoot(container!); root.render(view("a")); });
-    expect(container!.textContent).toContain("Show Goal");
-    await act(async () => root?.render(view("b")));
+    await act(async () => goal.click());
     expect(container!.querySelector('[data-testid="workflow-goal"]')).not.toBeNull();
-    await act(async () => root?.render(view("a", { ...state, widgets: { Goal: { placement: "aboveEditor", lines: ["Another goal"] } } })));
-    expect(container!.textContent).toContain("Another goal");
-    await act(async () => root?.render(view("a")));
-    await act(async () => container!.querySelector<HTMLButtonElement>("button")!.click());
+    expect(container!.querySelector('[data-testid="workflow-plan"]')).toBeNull();
+    expect(workflowState.statuses.Goal).toBe("active · 1 tokens");
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("keeps cards hidden through title changes, status updates, reconnect and remount, scoped to their session", async () => {
+    await render({ dialogs: [], statuses: {}, widgets: {} });
+    const run = vi.fn().mockResolvedValue(true);
+    await act(async () => root?.render(<WorkflowHarness run={run} />));
+    await act(async () => workflowButton("Hide Goal").click());
+    const changed: ExtensionUIState = {
+      ...workflowState, statuses: { ...workflowState.statuses, Goal: "paused · 300 tokens" },
+      widgets: { ...workflowState.widgets, Goal: { placement: "aboveEditor", lines: ["A completely different goal", "Reconnected state"] } },
+    };
+    await act(async () => root?.render(<WorkflowHarness state={changed} run={run} />));
+    expect(container!.querySelector('[data-testid="workflow-goal"]')).toBeNull();
+    await act(async () => root?.render(<WorkflowHarness state={{ dialogs: [], statuses: {}, widgets: {} }} run={run} />));
+    await act(async () => root?.render(<WorkflowHarness state={changed} run={run} />));
+    expect(container!.querySelector('[data-testid="workflow-goal"]')).toBeNull();
+    await act(async () => { root!.unmount(); root = createRoot(container!); root.render(<WorkflowHarness state={changed} run={run} />); });
+    expect(container!.querySelector('[data-testid="workflow-goal"]')).toBeNull();
+    expect(workflowButton("Show Goal").getAttribute("aria-expanded")).toBe("false");
+    await act(async () => root?.render(<WorkflowHarness sessionId="workflow-b" run={run} />));
+    expect(container!.querySelector('[data-testid="workflow-goal"]')).not.toBeNull();
+    await act(async () => workflowButton("Hide Plan").click());
+    await act(async () => root?.render(<WorkflowHarness run={run} />));
+    expect(container!.querySelector('[data-testid="workflow-goal"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="workflow-plan"]')).not.toBeNull();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("migrates legacy title hashes to boolean visibility without saving any task text", async () => {
+    localStorage.setItem("pi-workflow-hidden:workflow-a", JSON.stringify({ Goal: "old-title-hash", Plan: "another-hash" }));
+    await render({ dialogs: [], statuses: {}, widgets: {} });
+    await act(async () => root?.render(<WorkflowHarness />));
+    expect(container!.querySelector('[data-testid="extension-status"]')).toBeNull();
+    expect(workflowButton("Show Goal").getAttribute("aria-expanded")).toBe("false");
+    expect(workflowButton("Show Plan").getAttribute("aria-expanded")).toBe("false");
+    expect(JSON.parse(localStorage.getItem("pi-workflow-hidden:workflow-a")!)).toEqual({ Goal: true, Plan: true });
+  });
+
+  it.each(["Goal", "Plan"] as const)("returns keyboard focus from hidden %s to its toolbar and then back to the card", async key => {
+    await render({ dialogs: [], statuses: {}, widgets: {} });
+    const run = vi.fn().mockResolvedValue(true);
+    await act(async () => root?.render(<WorkflowHarness run={run} />));
+    const hide = workflowButton(`Hide ${key}`);
+    hide.focus();
+    await act(async () => hide.click());
+    await nextFrame();
+    const show = workflowButton(`Show ${key}`);
+    expect(document.activeElement).toBe(show);
+    const controlledId = show.getAttribute("aria-controls");
+    expect(controlledId).toBeTruthy();
+    await act(async () => show.click());
+    await nextFrame();
+    const reopened = workflowButton(`Hide ${key}`);
+    expect(document.activeElement).toBe(reopened);
+    expect(document.getElementById(controlledId!)).not.toBeNull();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("keeps composer focus during pointer hide and reopen instead of treating it as keyboard navigation", async () => {
+    await render({ dialogs: [], statuses: {}, widgets: {} });
+    const run = vi.fn().mockResolvedValue(true);
+    await act(async () => root?.render(<WorkflowHarness run={run} />));
+    const composer = document.createElement("textarea");
+    container!.appendChild(composer);
+    composer.focus();
+    const pointerActivate = async (button: HTMLButtonElement) => {
+      const down = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
+      Object.defineProperty(down, "isPrimary", { value: true });
+      await act(async () => button.dispatchEvent(down));
+      expect(down.defaultPrevented).toBe(true);
+      await act(async () => button.click());
+      await nextFrame();
+      expect(document.activeElement).toBe(composer);
+    };
+    await pointerActivate(workflowButton("Hide Goal"));
+    await pointerActivate(workflowButton("Show Goal"));
     expect(container!.querySelector('[data-testid="workflow-goal"]')).not.toBeNull();
     expect(run).not.toHaveBeenCalled();
+    composer.remove();
+  });
+
+  it("preserves generic statuses, widgets and unanswered questions when both workflow cards are hidden", async () => {
+    await render({ dialogs: [], statuses: {}, widgets: {} });
+    const run = vi.fn().mockResolvedValue(true);
+    const onRespond = vi.fn().mockResolvedValue(undefined);
+    const state: ExtensionUIState = {
+      ...workflowState,
+      dialogs: [{ type: "extension_ui_request", id: "still-waiting", method: "confirm", title: "Choose a release target", message: "Awaiting an explicit choice" }],
+      statuses: { ...workflowState.statuses, build: "Waiting for review" },
+      widgets: { ...workflowState.widgets, checks: { placement: "aboveEditor", lines: ["2 checks remaining"] } },
+    };
+    await act(async () => root?.render(<WorkflowHarness state={state} run={run} onRespond={onRespond} />));
+    await act(async () => workflowButton("Hide Goal").click());
+    await act(async () => workflowButton("Hide Plan").click());
+    const panel = container!.querySelector('[data-testid="extension-status"]');
+    expect(panel?.textContent).toContain("Waiting for review");
+    expect(panel?.textContent).toContain("2 checks remaining");
+    expect(panel?.textContent).not.toContain("Private");
+    expect(container!.querySelector('[data-testid="inline-user-question"]')?.textContent).toContain("Choose a release target");
+    expect(onRespond).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("uses the same visibility controller for widgets below the editor without leaving empty outer chrome", async () => {
+    await render({ dialogs: [], statuses: {}, widgets: {} });
+    const state: ExtensionUIState = { dialogs: [], statuses: { Goal: "active" }, widgets: { Goal: { placement: "belowEditor", lines: ["Below editor goal"] } } };
+    await act(async () => root?.render(<WorkflowHarness state={state} below />));
+    await act(async () => workflowButton("Hide Goal").click());
+    expect(container!.querySelector('[data-testid="workflow-goal"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="extension-status"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="workflow-toolbar"]')!.nextElementSibling).toBeNull();
+    await act(async () => workflowButton("Show Goal").click());
+    expect(container!.querySelector('[data-testid="workflow-goal"]')).not.toBeNull();
+  });
+
+  it("keeps commands disabled after hiding and reopening a plan with a review still pending", async () => {
+    await render({ dialogs: [], statuses: {}, widgets: {} });
+    let complete: (result: boolean) => void = () => {};
+    const run = vi.fn().mockImplementationOnce(() => new Promise<boolean>(resolve => { complete = resolve; })).mockResolvedValue(true);
+    await act(async () => root?.render(<WorkflowHarness run={run} />));
+    const planAction = (label: string) => [...container!.querySelectorAll<HTMLButtonElement>('[data-testid="workflow-plan"] button')].find(button => button.textContent === label)!;
+    await act(async () => planAction("Review plan").click());
+    expect(run).toHaveBeenCalledExactlyOnceWith("/plan");
+    expect(planAction("Review plan").disabled).toBe(true);
+    expect(workflowButton("Hide Plan").disabled).toBe(false);
+    await act(async () => workflowButton("Hide Plan").click());
+    expect(container!.querySelector('[data-testid="workflow-plan"]')).toBeNull();
+    await act(async () => workflowButton("Show Plan").click());
+    expect(planAction("Review plan").disabled).toBe(true);
+    expect(planAction("Execute plan").disabled).toBe(true);
+    expect(planAction("Exit plan").disabled).toBe(true);
+    await act(async () => { planAction("Review plan").click(); planAction("Exit plan").click(); });
+    expect(run).toHaveBeenCalledOnce();
+    await act(async () => complete(true));
+    expect(planAction("Review plan").disabled).toBe(false);
+    expect(planAction("Exit plan").disabled).toBe(false);
+  });
+
+  it("disables plan execution and exit while the workflow runtime is busy, while allowing review", async () => {
+    await render({ dialogs: [], statuses: {}, widgets: {} });
+    const run = vi.fn().mockResolvedValue(true);
+    await act(async () => root?.render(<WorkflowHarness run={run} workflowBusy />));
+    const plan = container!.querySelector('[data-testid="workflow-plan"]')!;
+    const action = (label: string) => [...plan.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === label)!;
+    expect(action("Exit plan").disabled).toBe(true);
+    expect(action("Execute plan").disabled).toBe(true);
+    expect(action("Review plan").disabled).toBe(false);
+    await act(async () => { action("Exit plan").click(); action("Execute plan").click(); });
+    expect(run).not.toHaveBeenCalled();
+    await act(async () => root?.render(<WorkflowHarness run={run} />));
+    expect(action("Exit plan").disabled).toBe(false);
+    expect(action("Execute plan").disabled).toBe(false);
+  });
+
+  it("exits a plan explicitly, disables pending actions and prevents rapid duplicate commands", async () => {
+    await render({ dialogs: [], statuses: {}, widgets: {} });
+    let complete: (result: boolean) => void = () => {};
+    const run = vi.fn().mockImplementationOnce(() => new Promise<boolean>(resolve => { complete = resolve; })).mockResolvedValue(true);
+    await act(async () => root?.render(<WorkflowHarness run={run} />));
+    const plan = container!.querySelector('[data-testid="workflow-plan"]')!;
+    const exit = [...plan.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Exit plan")!;
+    expect(exit).toBeDefined();
+    await act(async () => { exit.click(); exit.click(); });
+    expect(run).toHaveBeenCalledExactlyOnceWith("/plan exit");
+    expect(exit.disabled).toBe(true);
+    expect([...plan.querySelectorAll<HTMLButtonElement>("button")].filter(button => /Review plan|Execute plan/.test(button.textContent ?? "")).every(button => button.disabled)).toBe(true);
+    await act(async () => complete(false));
+    expect(exit.disabled).toBe(false);
+    await act(async () => exit.click());
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run).toHaveBeenLastCalledWith("/plan exit");
   });
 
   it("clears terminal workflow cards and statuses even from an old replay", async () => {

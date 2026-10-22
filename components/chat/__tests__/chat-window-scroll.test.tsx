@@ -43,7 +43,7 @@ vi.mock("@/components/chat/MessageView", () => ({ MessageView: memo(function Moc
   return <button data-quote-entry={props.entryId} onClick={() => props.onQuote?.(props.entryId!, props.message.role, "quoted text")}>message</button>;
 }) }));
 vi.mock("@/components/chat/AssistantMessageView", () => ({ isProviderAuthError: () => false }));
-vi.mock("@/components/chat/ExtensionUIPanel", () => ({ ExtensionUIPanel: () => null, ExtensionWidgets: () => null, PendingQuestionNotice: () => null }));
+vi.mock("@/components/chat/ExtensionUIPanel", () => ({ ExtensionUIPanel: () => null, ExtensionWidgets: () => null, PendingQuestionNotice: () => null, WorkflowToolbar: () => null }));
 vi.mock("@/components/chat/UserQuestionCard", () => ({ UserQuestionCard: () => null }));
 vi.mock("@/components/chat/ChatMinimap", () => ({ ChatMinimap: () => null, useMessageRefs: () => useRef([]) }));
 vi.mock("@/components/chat/BashBlock", () => ({ BashBlock: () => <div>bash</div> }));

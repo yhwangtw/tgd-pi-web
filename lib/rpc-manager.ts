@@ -15,6 +15,8 @@ import { CompactionController } from "./compaction-controller";
 import { normalizeQueuedFollowUps, type QueuedFollowUp } from "./queued-follow-ups";
 import type { SessionEntry } from "./types";
 import { createSnapshot } from "./git-snapshot";
+import { applyWorkflowToolSelection } from "./workflow-extension";
+import { isPlanToolSelection } from "./plan-mode";
 import { readWorkflow, WORKFLOW_ENTRY } from "./workflow-state";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 import { bindWebExtensions, createTrackedAgentServices, emitWebBeforeFork, type ExtensionProviderTracker } from "./pi-runtime";
@@ -867,7 +869,7 @@ export class AgentSessionWrapper {
         const handler = runner?.getCommand(command.command);
         if (!runner || !handler) throw new Error("Workflow extension is unavailable");
         const args = typeof command.args === "string" ? command.args : "";
-        if (this.cwd && !["pause", "status", "clear", "cancel"].includes(args.trim()) && !args.startsWith("budget ") && !args.startsWith("runs ")) {
+        if (this.cwd && !["pause", "status", "clear", "cancel", "exit"].includes(args.trim()) && !args.startsWith("budget ") && !args.startsWith("runs ")) {
           await createSnapshot(this.cwd, this.inner.sessionId, `Before /${command.command}`).catch(() => {});
         }
         await handler.handler(args, runner.createCommandContext());
@@ -1091,7 +1093,13 @@ export class AgentSessionWrapper {
             ? [...new Set(requestedNames ?? [])]
             : withAskUserTool(requestedNames ?? []);
         }
-        this.inner.setActiveToolsByName(toolNames);
+        let applied = false;
+        if (mode !== "plan" && !isPlanToolSelection(toolNames)) {
+          const runner = this.inner.extensionRunner;
+          const handler = runner?.getCommand("plan");
+          if (runner && handler) applied = applyWorkflowToolSelection(handler.handler, toolNames, runner.createCommandContext());
+        }
+        if (!applied) this.inner.setActiveToolsByName(toolNames);
         this.onActiveToolsChanged?.(mode, mode === "inherit" ? undefined : toolNames);
         return { mode, selectedNames: mode === "inherit" ? [] : toolNames };
       }

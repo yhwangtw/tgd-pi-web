@@ -258,6 +258,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const loadTools = useCallback(async (sid: string) => {
     try {
       const result = await sendAgentCommand<ToolSelectionState | ToolCatalogEntry[]>(sid, { type: "get_tools" });
+      if (sessionIdRef.current !== sid) return;
       if (Array.isArray(result)) {
         const { getPresetFromTools } = await import("@/components/modals/ToolPanel");
         const inferred = getPresetFromTools(result);
@@ -1213,15 +1214,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const handleToolPresetChange = useCallback(async (preset: ToolSelectionMode, selectedNames: string[] = []) => {
     const toolNames = namesForToolSelection(preset, selectedNames);
-    setToolPresetState(preset);
-    if (preset === "custom") setCustomToolNames(selectedNames);
     const sid = sessionIdRef.current;
-    if (!sid) return;
+    if (!sid) {
+      setToolPresetState(preset);
+      setCustomToolNames(preset === "custom" ? selectedNames : []);
+      return;
+    }
     try {
       await sendAgentCommand(sid, { type: "set_tools", mode: preset, toolNames: toolNames ?? [] });
-      await loadTools(sid);
+      if (sessionIdRef.current === sid) await loadTools(sid);
     } catch (e) {
       console.error("Failed to set tools:", e);
+      if (sessionIdRef.current === sid) showToast(translate("workflow.toolsFailed"), { type: "error" });
     }
   }, [loadTools, setToolPresetState]);
 

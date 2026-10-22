@@ -32,6 +32,8 @@ const MESSAGES = {
   "workflow.manage": { en: "Manage goal", zh: "管理目標" },
   "workflow.review": { en: "Review plan", zh: "檢視計畫" },
   "workflow.execute": { en: "Execute plan", zh: "執行計畫" },
+  "workflow.exitPlan": { en: "Exit plan", zh: "退出計畫模式" },
+  "workflow.toolsFailed": { en: "Could not change tools. Please retry.", zh: "工具模式未能變更，請重試。" },
   "workflow.hideGoal": { en: "Hide Goal", zh: "隱藏目標" },
   "workflow.hidePlan": { en: "Hide Plan", zh: "隱藏計畫" },
   "workflow.showGoal": { en: "Show Goal", zh: "顯示目標" },

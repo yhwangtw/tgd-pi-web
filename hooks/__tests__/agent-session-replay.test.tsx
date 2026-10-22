@@ -118,6 +118,50 @@ describe("session reconciliation and first-prompt ordering", () => {
     expect(harness.send.mock.calls.some(([, command]) => command.type === "prompt")).toBe(false);
   });
 
+  it("keeps Plan selected until the server accepts a mode change and retains it on rejection", async () => {
+    let accept!: () => void;
+    let mode = "plan";
+    harness.send.mockImplementation(async (_sid, command) => {
+      if (command.type === "get_tools") return { mode, tools: [], selectedNames: [] };
+      if (command.type === "set_tools") await new Promise<void>(resolve => { accept = () => { mode = "default"; resolve(); }; });
+      return null;
+    });
+    await act(async () => root.render(<Harness selected={session} />));
+    expect(current.toolPreset).toBe("plan");
+    let change!: Promise<void>;
+    await act(async () => { change = current.handleToolPresetChange("default"); });
+    expect(current.toolPreset).toBe("plan");
+    await act(async () => { accept(); await change; });
+    expect(current.toolPreset).toBe("default");
+    expect(harness.send.mock.calls.some(([, command]) => command.type === "prompt")).toBe(false);
+
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    harness.send.mockImplementation(async (_sid, command) => {
+      if (command.type === "get_tools") return { mode: "plan", tools: [], selectedNames: [] };
+      if (command.type === "set_tools") throw new Error("Wait for the current run");
+      return null;
+    });
+    await act(async () => root.render(<Harness key="reopened" selected={session} />));
+    await act(async () => { await current.handleToolPresetChange("full"); });
+    expect(current.toolPreset).toBe("plan");
+    expect(harness.toast).toHaveBeenCalledWith("Could not change tools. Please retry.", { type: "error" });
+    log.mockRestore();
+  });
+
+  it("ignores a late tool catalog from the session being left", async () => {
+    let resolveOld!: (value: unknown) => void;
+    harness.send.mockImplementation(async (sid, command) => {
+      if (command.type !== "get_tools") return null;
+      if (sid === "one") return new Promise(resolve => { resolveOld = resolve; });
+      return { mode: "full", tools: [], selectedNames: [] };
+    });
+    await act(async () => root.render(<Harness selected={session} />));
+    await act(async () => root.render(<Harness key="two" selected={{ ...session, id: "two" }} />));
+    expect(current.toolPreset).toBe("full");
+    await act(async () => resolveOld({ mode: "plan", tools: [], selectedNames: [] }));
+    expect(current.toolPreset).toBe("full");
+  });
+
   it("marks the rejected response model, not a different current selection, without a duplicate toast", async () => {
     await act(async () => root.render(<Harness selected={session} />));
     const rejected = { ...assistant, provider: "opencodex", model: "spark", stopReason: "error", errorMessage: "The spark model is not supported when using Codex with a ChatGPT account" };

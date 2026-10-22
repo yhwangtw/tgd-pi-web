@@ -44,6 +44,15 @@ is explicitly resumed (see [recovery semantics](DURABLE.md#storage-and-recovery)
 ordinary Markdown summaries; `structured_output` is optional. Explicit `/plan`
 remains read-only until execution is requested.
 
+Goal/Plan cards can be hidden completely and reopened from the composer toolbar.
+Visibility is remembered per session, independently of changing titles or replayed
+events, and never changes the task state. `/plan exit` (also `/plan cancel`)
+clears the saved plan and restores its previous tools without starting a run.
+Leaving the Plan tool preset also clears a planning/ready plan atomically with
+the tool change; busy or queued work must settle first. Switching tools alone
+keeps an executing plan's progress. A preset-only Plan with no saved prior tools
+exits to the default tools; an explicitly saved empty selection remains empty.
+
 Subagents default to no artificial time/turn/cost cap (`0`). Saved user budgets
 remain authoritative. The model can allocate smaller per-task `limits` and narrow
 `tools`; it cannot raise configured caps or enable a tool absent from its parent.

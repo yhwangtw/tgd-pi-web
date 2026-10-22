@@ -19,7 +19,7 @@ import { createPiModelRuntime } from "./pi-model-runtime";
 import { durableModels } from "./durable-models";
 import { createDurableMcpExtension } from "./durable-mcp";
 import { createDurableQuestionsExtension, durableQuestionSnapshot, respondDurableQuestion, cancelDurableQuestions, waitForDurableHostQuestion, type DurableQuestionDraft } from "./durable-questions";
-import { DurableWorkflowDoc, createDurableWorkflowExtension, handleDurableWorkflowCommand, readDurableWorkflow, durableWorkflowUIEvents, pauseDurableWorkflow, flushDurableWorkflowCommand } from "./durable-workflow";
+import { DurableWorkflowDoc, createDurableWorkflowExtension, handleDurableWorkflowCommand, readDurableWorkflow, durableWorkflowUIEvents, pauseDurableWorkflow, flushDurableWorkflowCommand, setDurableWorkflowTools } from "./durable-workflow";
 import { createDurableSubagentExtension, DurableSubagentDoc } from "./durable-subagents";
 import { DurableSessionMeta, durableContext, durableEntries, durableMessage, durableSessionData, durableSessionDirectory, durableSessionId,
   durableSessionIdentity, saveDurableProjection, writeDurableJson, type DurableSessionProjection } from "./durable-session-store";
@@ -812,7 +812,9 @@ export class DurableChat {
         const names = namesForToolSelection(mode, command.toolNames as string[] | undefined);
         const tools = (await this.conversation.agent(context)).extensions.flatMap(extension => extension.tools ?? []);
         if (names?.some(name => !tools.some(tool => tool.name === name))) throw new Error("Unknown tool in selection");
-        await this.conversation.configure({ tools: names ? tools.filter(tool => names.includes(tool.name)) : null }, context); await this.refresh(); return { mode, selectedNames: names ?? [] };
+        await setDurableWorkflowTools(this.conversation, this.harness, names, context);
+        await this.refresh(); await this.refreshUI();
+        return { mode, selectedNames: names ?? [] };
       }
       case "set_project_trust": this.host.services?.settingsManager.setProjectTrusted(command.trusted === true); return { trusted: command.trusted === true };
       case "compact": return this.compact(command);

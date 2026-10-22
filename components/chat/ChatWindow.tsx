@@ -25,7 +25,9 @@ import { markSessionRead } from "@/lib/session-read-state";
 import { motionScrollBehavior, prefersReducedMotion } from "@/lib/motion";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle, type MessageQuote } from "./ChatInput";
-import { ExtensionUIPanel, ExtensionWidgets, PendingQuestionNotice } from "./ExtensionUIPanel";
+import { ExtensionUIPanel, ExtensionWidgets, PendingQuestionNotice, WorkflowToolbar } from "./ExtensionUIPanel";
+import { useWorkflowVisibility } from "@/hooks/use-workflow-visibility";
+import { useWorkflowCommand } from "@/hooks/use-workflow-command";
 import { UserQuestionCard, type UserQuestionCardHandle } from "./UserQuestionCard";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { BashBlock } from "./BashBlock";
@@ -180,6 +182,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const scrollFollowMode = useScrollFollowMode();
   const questionCardRef = useRef<UserQuestionCardHandle>(null);
   const pendingQuestion = extensionUIState.dialogs[0];
+  const workflowVisibility = useWorkflowVisibility(session?.id);
+  const workflowCommand = useWorkflowCommand(session?.id, handleSend);
 
   // ── tGD pipeline: detect which phases have run in this session ──
   const [pipelineHidden, setPipelineHidden] = useState(false);
@@ -1077,6 +1081,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       availableTools={availableTools}
       customToolNames={customToolNames}
       onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
+      onExitPlan={session ? () => workflowCommand.run("/plan exit") : undefined}
+      workflowPending={workflowCommand.pending}
+      workflowControls={<WorkflowToolbar state={extensionUIState} workflowVisibility={workflowVisibility} />}
       thinkingLevel={thinkingLevel}
       onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
       availableThinkingLevels={availableThinkingLevels}
@@ -1612,7 +1619,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               state={extensionUIState}
               sessionId={session?.id}
               onRespond={handleExtensionUIResponse}
-              onWorkflowCommand={handleSend}
+              onWorkflowCommand={workflowCommand.run}
+              workflowPending={workflowCommand.pending}
+              workflowVisibility={workflowVisibility}
+              workflowBusy={agentRunning || isCompacting}
               wide={wideChat}
               questionInTranscript
             />
@@ -1622,7 +1632,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             <div className={styles.composerMount}>
               {chatInputElement}
             </div>
-            <ExtensionWidgets state={extensionUIState} placement="belowEditor" wide={wideChat} />
+            <ExtensionWidgets key={session?.id ?? "unsaved"} state={extensionUIState} placement="belowEditor" wide={wideChat} workflowVisibility={workflowVisibility} onWorkflowCommand={workflowCommand.run} workflowPending={workflowCommand.pending} workflowBusy={agentRunning || isCompacting} />
           </>
         )}
       </div>
