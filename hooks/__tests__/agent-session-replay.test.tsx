@@ -12,6 +12,7 @@ vi.mock("@/lib/attention", () => ({ setIdleTitle: vi.fn(), setRunningTitle: vi.f
 vi.mock("../use-model-catalog", () => ({ useModelCatalog: () => ({ modelNames: {}, modelList: [], modelThinkingLevels: {}, modelThinkingLevelMaps: {}, newSessionModel: { provider: "fixture", modelId: "instant" }, setNewSessionModel: vi.fn(), catalogStatus: "ready", catalogDiagnostics: [], retryModelCatalog: vi.fn(), reportModelUnavailable: harness.rejectModel }) }));
 import { useAgentSession } from "../useAgentSession";
 import { setIdleTitle, setRunningTitle } from "@/lib/attention";
+import { encodeSessionData } from "@/lib/session-tree-wire";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 class FakeEventSource {
@@ -60,6 +61,19 @@ describe("session reconciliation and first-prompt ordering", () => {
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it("decodes the flat REST and SSE tree while preserving context and branch targets", async () => {
+    const stored = { ...data([user]), leafId: "e0", tree: [{ entry: { type: "message" as const, id: "e0", parentId: null, timestamp: "2026-10-22T00:00:00Z", message: user }, children: [] }] };
+    harness.fetch.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith("/api/sessions/") ? encodeSessionData(stored) : {})));
+    await act(async () => root.render(<Harness selected={session} />));
+    expect(current.data?.tree[0].entry.id).toBe("e0");
+    const next = { ...stored, leafId: "e1", context: data([user, assistant]).context,
+      tree: [{ ...stored.tree[0], children: [{ entry: { type: "message" as const, id: "e1", parentId: "e0", timestamp: "2026-10-22T00:00:01Z", message: assistant }, children: [] }] }] };
+    await act(async () => current.handleAgentEventRef.current?.({ ...snapshot([user, assistant]), protocolVersion: 2, sessionData: encodeSessionData(next) }));
+    expect(current.data?.tree[0].children[0].entry.id).toBe("e1");
+    expect(current.messages).toEqual([user, assistant]);
+    expect(current.data?.leafId).toBe("e1");
+  });
 
   it("renames the current tab without reconnecting, preserves running state and clears the title for New", async () => {
     await act(async () => root.render(<Harness selected={session} />));

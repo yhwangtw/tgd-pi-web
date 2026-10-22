@@ -159,14 +159,17 @@ export function AssistantMessageView({
   const toolCallDurations = useMemo<Map<string, number>>(() => {
     const map = new Map<string, number>();
     if (!toolResults || !message.timestamp) return map;
-    for (const [callId, result] of toolResults) {
-      if (result.timestamp && message.timestamp) {
+    // Look up only this bubble's calls instead of scanning the whole session.
+    for (const block of blocks) {
+      if (block.type !== "toolCall") continue;
+      const result = toolResults.get(block.toolCallId);
+      if (result?.timestamp) {
         const secs = Math.round((result.timestamp - message.timestamp) / 1000);
-        if (secs > 0) map.set(callId, secs);
+        if (secs > 0) map.set(block.toolCallId, secs);
       }
     }
     return map;
-  }, [toolResults, message.timestamp]);
+  }, [blocks, toolResults, message.timestamp]);
 
   const textContent = blocks
     .filter((b): b is TextContent => b.type === "text")
@@ -241,6 +244,7 @@ export function AssistantMessageView({
 
   useEffect(() => {
     if (!isStreaming) {
+      if (blockStartTimesRef.current.size === 0) return;
       // Finalise any un-finished thinking block durations on stream end
       const now = Date.now();
       setStreamingDurations((prev: Map<number, number>) => {

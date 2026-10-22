@@ -9,6 +9,7 @@ import {
   type ModelRegistry,
 } from "@earendil-works/pi-coding-agent";
 import { buildSessionContext, buildTree, cacheSessionPath, getLeafId } from "./session-reader";
+import { encodeSessionData } from "./session-tree-wire";
 import { AgentEventLog, type AgentStreamRecord, type ReplayStatus } from "./agent-event-log";
 import { CompactionController } from "./compaction-controller";
 import { normalizeQueuedFollowUps, type QueuedFollowUp } from "./queued-follow-ups";
@@ -626,10 +627,10 @@ export class AgentSessionWrapper {
     try {
       const replay = this.eventLog.replay(cursor);
       for (const record of replay.records) listener(record);
-      listener({ id: this.eventLog.cursor, data: JSON.stringify(this.getStreamSnapshot(replay.status)) });
+      listener({ id: this.eventLog.cursor, type: "session_snapshot", data: JSON.stringify(this.getStreamSnapshot(replay.status)) });
       // The bridge owns reconnect policy for dialogs and one-shot editor text.
       // Do not retain/replay UI commands in the agent event log.
-      for (const event of this.webExtensionUI?.snapshot() ?? []) listener({ data: JSON.stringify(event) });
+      for (const event of this.webExtensionUI?.snapshot() ?? []) listener({ type: event.type, data: JSON.stringify(event) });
     } catch (error) {
       this.streamListeners.delete(listener);
       throw error;
@@ -683,12 +684,12 @@ export class AgentSessionWrapper {
     const entries = (this.inner.sessionManager?.getEntries?.() ?? []) as unknown as SessionEntry[];
     const leafId = this.inner.sessionManager?.getLeafId ? this.inner.sessionManager.getLeafId() : getLeafId(entries);
     return {
-      type: "session_snapshot", protocolVersion: 1, sessionId: this.sessionId,
+      type: "session_snapshot", protocolVersion: 2, sessionId: this.sessionId,
       cursor: this.eventLog.cursor, replayStatus, state: this.getLiveState(),
-      sessionData: {
+      sessionData: encodeSessionData({
         sessionId: this.sessionId, filePath: this.sessionFile, leafId,
         tree: buildTree(entries), context: buildSessionContext(entries, leafId),
-      },
+      }),
       streamingMessage: this.streamingMessage,
       phase: this.activeTools.size ? { kind: "running_tools", tools: [...this.activeTools.values()] } : null,
       bashRun: this.streamBash,
@@ -751,7 +752,7 @@ export class AgentSessionWrapper {
       this.streamBash = null;
     }
     const record: AgentStreamRecord = event.type.startsWith("extension_ui_")
-      ? { data: JSON.stringify(event) }
+      ? { type: event.type, data: JSON.stringify(event) }
       : this.eventLog.append(event);
     if (event.type === "agent_end") this.lastAgentEndCursor = record.id ?? null;
     for (const listener of this.listeners) listener(event);

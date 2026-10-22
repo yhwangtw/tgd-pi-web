@@ -14,6 +14,7 @@ import { createReadTool, createBashTool, createEditTool, createWriteTool, create
   createAgentSessionServices, type AgentSessionServices, type ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { AgentEventLog, type AgentStreamRecord } from "./agent-event-log";
+import { encodeSessionData } from "./session-tree-wire";
 import { createPiModelRuntime } from "./pi-model-runtime";
 import { durableModels } from "./durable-models";
 import { createDurableMcpExtension } from "./durable-mcp";
@@ -445,7 +446,7 @@ export class DurableChat {
   async resume(): Promise<void> { await flushDurableWorkflowCommand(this.conversation, this.harness); this.harness.resume(); }
   private emit(event: Record<string, unknown>): void {
     const isUI = typeof event.type === "string" && event.type.startsWith("extension_ui_");
-    const record = isUI ? { data: JSON.stringify(event) } : this.eventLog.append(event);
+    const record = isUI ? { type: String(event.type), data: JSON.stringify(event) } : this.eventLog.append(event);
     if (isUI && event.method === "set_editor_text" && (this.listeners.size || this.eventListeners.size)) this.extensionUI.acknowledgeDelivery(String(event.id));
     for (const listener of this.listeners) listener(record);
     for (const listener of this.eventListeners) listener(event);
@@ -461,8 +462,8 @@ export class DurableChat {
     this.listeners.add(listener);
     // The complete committed snapshot also reconciles queues and dialogs after lost events.
     for (const record of replay.records) listener(record);
-    listener({ id: this.eventLog.cursor, data: JSON.stringify(this.streamSnapshot(replay.status)) });
-    for (const event of this.ui) listener({ data: JSON.stringify(event) });
+    listener({ id: this.eventLog.cursor, type: "session_snapshot", data: JSON.stringify(this.streamSnapshot(replay.status)) });
+    for (const event of this.ui) listener({ type: event.type, data: JSON.stringify(event) });
     this.clearDeliveredEditor();
     return () => { this.listeners.delete(listener); };
   }
@@ -586,8 +587,8 @@ export class DurableChat {
   }
   private streamSnapshot(replayStatus = "initial") {
     const tools = Object.values(this.live?.tools ?? {});
-    return { type: "session_snapshot", protocolVersion: 1, sessionId: this.sessionId, cursor: this.eventLog.cursor, replayStatus,
-      state: this.getState(), sessionData: this.getSessionData(), streamingMessage: this.live?.generation?.message ? durableMessage(this.live.generation.message) : null,
+    return { type: "session_snapshot", protocolVersion: 2, sessionId: this.sessionId, cursor: this.eventLog.cursor, replayStatus,
+      state: this.getState(), sessionData: encodeSessionData(this.getSessionData()), streamingMessage: this.live?.generation?.message ? durableMessage(this.live.generation.message) : null,
       phase: tools.length ? { kind: "running_tools", tools: tools.map(tool => ({ id: tool.callId, name: tool.name })) } : null,
       bashRun: this.bashRun, lastRunError: this.lastError };
   }

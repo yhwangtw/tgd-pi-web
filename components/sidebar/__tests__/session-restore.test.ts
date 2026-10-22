@@ -27,6 +27,6 @@ describe("resolveSessionForRestore", () => {
     });
 
     await expect(resolveSessionForRestore("session-id", [], fetcher)).resolves.toEqual(restoredSession);
-    expect(fetcher).toHaveBeenCalledWith("/api/sessions/session-id");
+    expect(fetcher).toHaveBeenCalledWith("/api/sessions/session-id", { headers: { "X-Pi-Session-Tree": "flat-v1" } });
   });
 });

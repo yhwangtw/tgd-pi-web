@@ -6,6 +6,9 @@ import { createModels, fauxProvider, fauxAssistantMessage, fauxToolCall } from "
 import type { HarnessOptions } from "@earendil-works/pi-durable";
 import { createDurableChat, openDurableChat, type DurableChat, type DurableChatOptions } from "../durable-chat";
 import { durableContext } from "../durable-session-store";
+import { decodeSessionData } from "../session-tree-wire";
+import { buildTree } from "../session-reader";
+import type { SessionEntry } from "../types";
 
 const roots: string[] = [];
 const chats: DurableChat[] = [];
@@ -19,6 +22,23 @@ async function open(options: DurableChatOptions) { const chat = await createDura
 afterEach(async () => { for (const chat of chats.splice(0)) await chat.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
 describe("Durable chat host", () => {
+  it("serializes a deep reconnect snapshot without resuming or truncating its history", async () => {
+    const { options, faux } = fixture(); const chat = await open(options);
+    const entries = Array.from({ length: 10_000 }, (_, i): SessionEntry => ({ type: "message", id: String(i), parentId: i ? String(i - 1) : null,
+      timestamp: new Date(i).toISOString(), message: { role: "user", content: `Turn ${i}`, timestamp: i } }));
+    const original = chat.getSessionData();
+    vi.spyOn(chat, "getSessionData").mockReturnValue({ ...original, tree: buildTree(entries), leafId: "9999" });
+    const records: Record<string, unknown>[] = [];
+    const stop = chat.onStreamEvent(record => records.push(JSON.parse(record.data)), "expired:1"); stop();
+    const snapshot = records.find(record => record.type === "session_snapshot")!;
+    expect(snapshot.protocolVersion).toBe(2);
+    const restored = decodeSessionData(snapshot.sessionData as ReturnType<typeof chat.getSessionData>);
+    expect(restored.leafId).toBe("9999");
+    let node = restored.tree[0]; let count = 1;
+    while (node.children.length) { node = node.children[0]; count++; }
+    expect(count).toBe(10_000);
+    expect(faux.state.callCount).toBe(0);
+  });
   it("uses one persisted receipt for repeated prompts and projects a reconnect snapshot", async () => {
     const { options, faux } = fixture(); faux.setResponses([fauxAssistantMessage("One saved answer")]);
     const chat = await open(options);

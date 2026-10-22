@@ -371,6 +371,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const messageQuote = messageQuoteState && messageQuoteState.sessionId === session?.id
     ? messageQuoteState.quote
     : null;
+  // Stable across token updates so historical MessageView memoization can skip rendering.
+  const quoteMessage = useCallback((entryId: string, role: "user" | "assistant", text: string) => {
+    setMessageQuoteState({ sessionId: session?.id, quote: { entryId, role, text } });
+  }, [session?.id]);
   const openQuotedMessage = useCallback((entryId: string) => {
     const target = document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(entryId)}"]`);
     target?.scrollIntoView({ block: "center", behavior: motionScrollBehavior() });
@@ -530,6 +534,33 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       }
     }
     return map;
+  }, [messages]);
+
+  // Historical outcome/recovery text does not change for every streaming token.
+  const { lastUserIdx, recoveredAuthIndices } = useMemo(() => {
+    let lastUserIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user" && getCompactionSummary(messages[i]) === null) { lastUserIdx = i; break; }
+    }
+    const recoveredAuthIndices = new Set<number>();
+    const laterSuccessfulProviders = new Set<string>();
+    let hasLaterAssistantSuccess = false;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role !== "assistant") continue;
+      const assistant = messages[i] as import("@/lib/types").AssistantMessage;
+      const provider = assistant.provider ?? "";
+      if (assistant.stopReason === "error" && isProviderAuthError(assistant.errorMessage)) {
+        if (provider ? laterSuccessfulProviders.has(provider) : hasLaterAssistantSuccess) {
+          recoveredAuthIndices.add(i);
+        }
+        continue;
+      }
+      if (assistant.stopReason !== "error" && messageText(assistant).trim()) {
+        hasLaterAssistantSuccess = true;
+        if (provider) laterSuccessfulProviders.add(provider);
+      }
+    }
+    return { lastUserIdx, recoveredAuthIndices };
   }, [messages]);
 
   const historicalAssistantModelKey = useMemo<string | null>(() => {
@@ -1239,39 +1270,14 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           >
 
             {(() => {
-              let lastUserIdx = -1;
-              for (let i = messages.length - 1; i >= 0; i--) {
-                if (messages[i].role === "user" && getCompactionSummary(messages[i]) === null) { lastUserIdx = i; break; }
-              }
-              const recoveredAuthIndices = new Set<number>();
-              const laterSuccessfulProviders = new Set<string>();
-              let hasLaterAssistantSuccess = false;
-              for (let i = messages.length - 1; i >= 0; i--) {
-                if (messages[i].role !== "assistant") continue;
-                const assistant = messages[i] as import("@/lib/types").AssistantMessage;
-                const provider = assistant.provider ?? "";
-                if (assistant.stopReason === "error" && isProviderAuthError(assistant.errorMessage)) {
-                  if (provider ? laterSuccessfulProviders.has(provider) : hasLaterAssistantSuccess) {
-                    recoveredAuthIndices.add(i);
-                  }
-                  continue;
-                }
-                if (assistant.stopReason !== "error" && messageText(assistant).trim()) {
-                  hasLaterAssistantSuccess = true;
-                  if (provider) laterSuccessfulProviders.add(provider);
-                }
-              }
               let refIdx = 0;
               let seenUserMessage = false;
               let previousAssistantModelKey: string | null = null;
+              let previousEntryId: string | undefined;
               return messages.map((msg, idx) => {
                 const compactionSummary = getCompactionSummary(msg);
-                let prevAssistantEntryId: string | undefined;
-                if (msg.role === "user" && compactionSummary === null) {
-                  for (let j = idx - 1; j >= 0; j--) {
-                    if (entryIds[j]) { prevAssistantEntryId = entryIds[j]; break; }
-                  }
-                }
+                const prevAssistantEntryId = msg.role === "user" && compactionSummary === null ? previousEntryId : undefined;
+                if (entryIds[idx]) previousEntryId = entryIds[idx];
                 const isVisible = conversationLayout.displayIndexSet.has(idx);
                 if (msg.role === "assistant" && !isVisible) return null;
                 const startsNewTurn = msg.role === "user" && compactionSummary === null && seenUserMessage;
@@ -1344,12 +1350,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     usageOverride={conversationLayout.usageByFinalAssistant.get(idx)}
                     showUsage={conversationLayout.finalAssistantIndices.has(idx)}
                     showActions={conversationLayout.finalAssistantIndices.has(idx)}
-                    onQuote={entryIds[idx] && (msg.role === "user" || msg.role === "assistant")
-                      ? (text) => {
-                          const nextQuote: MessageQuote = { entryId: entryIds[idx]!, role: msg.role, text };
-                          setMessageQuoteState({ sessionId: session?.id, quote: nextQuote });
-                        }
-                      : undefined}
+                    onQuote={entryIds[idx] && (msg.role === "user" || msg.role === "assistant") ? quoteMessage : undefined}
                     isBookmarked={isBookmarked}
                     onToggleBookmark={canBookmark ? toggleBookmark : undefined}
                   />

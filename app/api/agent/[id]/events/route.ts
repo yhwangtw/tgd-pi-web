@@ -5,6 +5,7 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { encodeAgentStreamRecord, type AgentStreamRecord } from "@/lib/agent-event-log";
 import { getDurableChat, openDurableChat } from "@/lib/durable-chat";
 import { isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
+import { decodeSessionData } from "@/lib/session-tree-wire";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,9 @@ export async function GET(
 ) {
   const { id: requestedId } = await params;
   const id = await waitForSessionMigration(requestedId);
-  const cursor = req.headers.get("last-event-id") || new URL(req.url).searchParams.get("cursor");
+  const url = new URL(req.url);
+  const cursor = req.headers.get("last-event-id") || url.searchParams.get("cursor");
+  const flatTree = url.searchParams.get("tree") === "flat-v1";
   const durable = isDurableSessionId(id);
   const resumed = !durable && cursor ? getResumableRpcSession(id, cursor) : undefined;
   // withSession/recovery must finish before exposing any replacement target.
@@ -65,8 +68,19 @@ export async function GET(
       }
 
       const unsubscribe = active.onStreamEvent((record) => {
-        encode(record);
-        const type = JSON.parse(record.data).type;
+        // Retained frames already carry their type: avoid parsing full message
+        // bodies and transcript snapshots again for transport cleanup.
+        const type = record.type ?? JSON.parse(record.data).type;
+        if (!flatTree && type === "session_snapshot") {
+          // Tabs loaded before the upgrade retain their v1 contract until reload.
+          // New clients receive the flat, immutable frame without any reparsing.
+          const snapshot = JSON.parse(record.data);
+          if (snapshot.sessionData?.tree?.format === "flat-v1") {
+            snapshot.sessionData = decodeSessionData(snapshot.sessionData);
+            snapshot.protocolVersion = 1;
+            encode({ ...record, data: JSON.stringify(snapshot) });
+          } else encode(record);
+        } else encode(record);
         if (type === "session_restart" || type === "session_closed" || type === "session_replaced") queueMicrotask(() => cleanup());
       }, moved ? null : cursor);
 

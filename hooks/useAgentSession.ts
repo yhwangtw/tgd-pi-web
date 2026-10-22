@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useReducer } from "react";
+import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
 import type { AgentMessage } from "@/lib/types";
 import { browserMetricsStorage, GenerationMetricsTracker } from "@/lib/generation-metrics";
 import { normalizeToolCalls } from "@/lib/normalize";
+import { decodeSessionData, type FlatSessionTree } from "@/lib/session-tree-wire";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { parseWorkflowCommand } from "@/lib/workflow-state";
 import { showToast } from "@/hooks/useToast";
@@ -174,7 +175,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   modelListRef.current = modelList;
   autoProviderFallbackRef.current = autoProviderFallback;
 
-  const sessionStats = computeSessionStats(messages);
+  const sessionStats = useMemo(() => computeSessionStats(messages), [messages]);
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
     const requestId = ++sessionLoadRequestRef.current;
@@ -183,7 +184,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const url = includeState
         ? `/api/sessions/${encodeURIComponent(sid)}?includeState`
         : `/api/sessions/${encodeURIComponent(sid)}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { headers: { "X-Pi-Session-Tree": "flat-v1" } });
       if (res.status === 404) {
         if (showLoading && shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
           setData(null);
@@ -194,12 +195,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         return null;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as SessionData & { agentState?: AgentStateEnvelope };
+      const wire = await res.json() as Omit<SessionData, "tree"> & { tree: SessionData["tree"] | FlatSessionTree; agentState?: AgentStateEnvelope };
       if (!shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
         // Callers also reconcile running/thinking state from this return
         // value. Do not let an obsolete fetch resurrect a completed run.
         return null;
       }
+      const d = decodeSessionData(wire);
       setData(d);
       const info = (d as { info?: { name?: string } }).info;
       if (info?.name) sessionNameRef.current = info.name;
@@ -299,8 +301,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (streamFlushTimerRef.current !== null) clearTimeout(streamFlushTimerRef.current);
       streamFlushTimerRef.current = null;
       const state = event.state as LiveAgentState | undefined;
-      const restored = event.sessionData as SessionData | undefined;
-      if (restored?.context && Array.isArray(restored.context.messages)) {
+      const wire = event.sessionData as (Omit<SessionData, "tree"> & { tree: SessionData["tree"] | FlatSessionTree }) | undefined;
+      if (wire?.context && Array.isArray(wire.context.messages)) {
+        const restored = decodeSessionData(wire);
         setData(restored);
         setActiveLeafId(restored.leafId);
         setMessages(pendingPromptMessageRef.current ? [...restored.context.messages, pendingPromptMessageRef.current] : restored.context.messages);
@@ -562,19 +565,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           break;
         }
         if (msg) {
-          const normalized = normalizeToolCalls(msg as AgentMessage);
           if (event.type === "message_start") {
-            dispatch({ type: "update", message: normalized });
+            dispatch({ type: "update", message: normalizeToolCalls(msg as AgentMessage) });
           } else {
             // Throttle streaming updates: every chunk re-parses the whole
             // message's markdown (O(length) per token). Batch to ~12
             // frames/sec — the last chunk in each window wins.
-            pendingStreamMsgRef.current = normalized;
+            pendingStreamMsgRef.current = msg as AgentMessage;
             if (streamFlushTimerRef.current == null) {
               streamFlushTimerRef.current = setTimeout(() => {
                 streamFlushTimerRef.current = null;
                 if (pendingStreamMsgRef.current) {
-                  dispatch({ type: "update", message: pendingStreamMsgRef.current });
+                  dispatch({ type: "update", message: normalizeToolCalls(pendingStreamMsgRef.current as AgentMessage) });
                   pendingStreamMsgRef.current = null;
                 }
               }, 80);

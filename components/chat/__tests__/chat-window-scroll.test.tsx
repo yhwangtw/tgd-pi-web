@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Exercise the real ChatWindow scroll effects and hook with isolated session state.
 // jsdom has no layout engine; geometry models a growing tail below a 600px viewport.
-import { act, useRef, type ReactNode } from "react";
+import { act, memo, useRef, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChatWindow } from "@/components/chat/ChatWindow";
@@ -15,7 +15,11 @@ type SessionFixture = Pick<ReturnType<typeof useAgentSession>,
   "modelNames" | "modelList" | "modelThinkingLevels" | "modelThinkingLevelMaps" |
   "compactionQueue" | "queuedFollowUps" | "runProgress" | "bashRun" | "loading">;
 
-const fixture = vi.hoisted(() => ({ state: {} as SessionFixture }));
+const fixture = vi.hoisted(() => ({
+  state: {} as SessionFixture,
+  messageRenders: new Map<string, number>(),
+  quote: null as { entryId: string; role: "user" | "assistant"; text: string } | null,
+}));
 vi.mock("@/hooks/useAgentSession", () => ({ useAgentSession: () => {
   const running = useRef(fixture.state.agentRunning); running.current = fixture.state.agentRunning;
   const refs = useTranscriptScroll(fixture.state.messages.length, fixture.state.agentRunning, running);
@@ -23,8 +27,18 @@ vi.mock("@/hooks/useAgentSession", () => ({ useAgentSession: () => {
   return { ...fixture.state, ...refs, handleAgentEventRef: handler, getGenerationMetrics: () => undefined };
 } }));
 vi.mock("@/hooks/useAudio", () => ({ useAudio: () => ({ soundEnabled: false }) }));
-vi.mock("@/components/chat/ChatInput", () => ({ ChatInput: () => null }));
-vi.mock("@/components/chat/MessageView", () => ({ MessageView: () => <div>message</div> }));
+vi.mock("@/components/chat/ChatInput", () => ({ ChatInput: ({ quote }: { quote?: typeof fixture.quote }) => {
+  fixture.quote = quote ?? null;
+  return null;
+} }));
+vi.mock("@/components/chat/MessageView", () => ({ MessageView: memo(function MockMessageView(props: {
+  entryId?: string;
+  message: { role: string };
+  onQuote?: (entryId: string, role: string, text: string) => void;
+}) {
+  if (props.entryId) fixture.messageRenders.set(props.entryId, (fixture.messageRenders.get(props.entryId) ?? 0) + 1);
+  return <button data-quote-entry={props.entryId} onClick={() => props.onQuote?.(props.entryId!, props.message.role, "quoted text")}>message</button>;
+}) }));
 vi.mock("@/components/chat/AssistantMessageView", () => ({ isProviderAuthError: () => false }));
 vi.mock("@/components/chat/ExtensionUIPanel", () => ({ ExtensionUIPanel: () => null, ExtensionWidgets: () => null, PendingQuestionNotice: () => null }));
 vi.mock("@/components/chat/UserQuestionCard", () => ({ UserQuestionCard: () => null }));
@@ -62,7 +76,7 @@ const render = async () => { await act(async () => root.render(<ChatWindow sessi
 const scroller = () => host.querySelector("[data-transcript-scroll]")!;
 
 beforeEach(() => {
-  localStorage.clear(); resetScrollFollowModeCache();
+  localStorage.clear(); resetScrollFollowModeCache(); fixture.messageRenders.clear(); fixture.quote = null;
   markerTop = 600; contentHeight = 1800;
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   fixture.state = {
@@ -244,4 +258,16 @@ it("does not cancel a small upward-wheel pause just because the tail is near", a
   markerTop = 600;
   await act(async () => { scroller().scrollTop = 650; scroller().dispatchEvent(new Event("scroll")); });
   markerTop = 900; await resize(); expect(scrollIntoView).toHaveBeenCalled();
+});
+
+it("keeps historical message views memoized during token updates and scopes quotes to their entry", async () => {
+  fixture.state.messages = [{ role: "user", content: "Earlier question" }, answer("Earlier answer"), { role: "user", content: "Current question" }];
+  fixture.state.entryIds = ["earlier-user", "earlier-answer", "current-user"];
+  await render();
+  const before = new Map(fixture.messageRenders);
+  fixture.state.streamState = { isStreaming: true, streamingMessage: answer("The next streaming token") };
+  await render();
+  expect(fixture.messageRenders).toEqual(before);
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-quote-entry="earlier-answer"]')!.click());
+  expect(fixture.quote).toEqual({ entryId: "earlier-answer", role: "assistant", text: "quoted text" });
 });

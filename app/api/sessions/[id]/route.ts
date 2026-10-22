@@ -1,5 +1,6 @@
 import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
+import { encodeSessionData } from "@/lib/session-tree-wire";
 import { readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
 import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
@@ -23,12 +24,14 @@ export async function GET(
 ) {
   const { id: requestedId } = await params;
   const id = await waitForSessionMigration(requestedId);
+  const flatTree = req.headers.get("x-pi-session-tree") === "flat-v1";
   try {
     if (isDurableSessionId(id)) {
       const live = getDurableChat(id);
       const projection = live?.isAlive() ? live.getProjection() : readDurableProjection(id);
       if (!projection || projection.deleted) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-      return NextResponse.json({ ...durableSessionData(projection),
+      const data = durableSessionData(projection);
+      return NextResponse.json({ ...(flatTree ? encodeSessionData(data) : data),
         ...(new URL(req.url).searchParams.has("includeState") ? { agentState: live?.isAlive() ? { running: true, state: live.getState() } : { running: false } } : {}),
       });
     }
@@ -99,7 +102,7 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({
+    const data = {
       sessionId: id,
       filePath: responseFilePath,
       info,
@@ -108,7 +111,8 @@ export async function GET(
       context,
       ...(compactionSettings ? { compactionSettings } : {}),
       ...(agentState !== undefined ? { agentState } : {}),
-    });
+    };
+    return NextResponse.json(flatTree ? encodeSessionData(data) : data);
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

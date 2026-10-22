@@ -536,6 +536,15 @@ restart. Extension one-shot editor text never enters the replay log. Prompt and
 bash paths both await readiness. Closed/idle-disposed streams are recreated;
 stale fetches must not overwrite a newer snapshot or resurrect a finished run.
 
+Session detail requests from current clients advertise `X-Pi-Session-Tree: flat-v1`;
+SSE connections use `tree=flat-v1`. Their `sessionData.tree` is a flat indexed
+`{ format, roots, nodes }` payload (snapshot protocol version 2), so JSON depth
+does not grow with conversation length. `session-tree-wire.ts` reconstructs the
+existing tree iteratively at the client boundary. Old open tabs retain the
+nested version-1 format until reloaded; its historical depth limit still applies.
+Do not serialize a nested internal tree on a version-2 transport path. Labels,
+root order, branch order and parent IDs must round-trip unchanged.
+
 ### Two kinds of branching — don't confuse them
 - **Fork**: new independent `.jsonl` file; shown as a child via
   `parentSession` header (display metadata only — safe to rewrite files).

@@ -1,7 +1,7 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { useState, useCallback, useRef, useEffect, useLayoutEffect, lazy, Suspense } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowLeft,
@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 import { SessionSidebar } from "../sidebar/SessionSidebar";
 import { ChatWindow } from "../chat/ChatWindow";
-import { ContextInspector } from "../chat/ContextInspector";
 import { FileViewer } from "./FileViewer";
 import { FilesPanel } from "./FilesPanel";
 import { SearchPanel } from "./SearchPanel";
@@ -37,7 +36,6 @@ import type { DiffAnnotation } from "./DiffView";
 import { DesignInspector } from "./DesignInspector";
 import { IconRail, type PanelView } from "./IconRail";
 import { MobileNavigation } from "./MobileNavigation";
-import { ShortcutsDialog } from "./ShortcutsDialog";
 import { TabBar, fileTabId, filePanelId } from "./TabBar";
 import { BranchNavigator, hasSessionBranches } from "../chat/BranchNavigator";
 import { useTheme } from "@/hooks/useTheme";
@@ -78,6 +76,8 @@ const ExtensionsConfig = lazy(() => import("../modals/ExtensionsConfig").then((m
 const PromptsConfig = lazy(() => import("../modals/PromptsConfig").then((m) => ({ default: m.PromptsConfig })));
 const AnalyticsModal = lazy(() => import("../modals/AnalyticsModal").then((m) => ({ default: m.AnalyticsModal })));
 const SessionImportDialog = lazy(() => import("../modals/SessionImportDialog").then((m) => ({ default: m.SessionImportDialog })));
+const ShortcutsDialog = lazy(() => import("./ShortcutsDialog").then((m) => ({ default: m.ShortcutsDialog })));
+const ContextInspector = lazy(() => import("../chat/ContextInspector").then((m) => ({ default: m.ContextInspector })));
 
 // Home dir for expanding ~/ file links; fetched once, shared across clicks.
 let homeDirPromise: Promise<string | null> | null = null;
@@ -454,7 +454,7 @@ export function AppShell() {
       return;
     }
     try {
-      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
+      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { headers: { "X-Pi-Session-Tree": "flat-v1" } });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json() as { info?: SessionInfo | null };
       if (!payload.info) throw new Error("Session not found");
@@ -470,7 +470,7 @@ export function AppShell() {
       const known = allSessions.find((session) => session.id === sessionId);
       if (known) return known;
       try {
-        const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
+        const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { headers: { "X-Pi-Session-Tree": "flat-v1" } });
         if (!response.ok) return null;
         const payload = await response.json() as { info?: SessionInfo | null };
         return payload.info ?? null;
@@ -799,7 +799,7 @@ export function AppShell() {
   );
 
   const tabTitle = useTabTitle();
-  const sessionHasBranches = hasSessionBranches(state.branchTree);
+  const sessionHasBranches = useMemo(() => hasSessionBranches(state.branchTree), [state.branchTree]);
   const systemPromptUnavailable = state.systemPrompt === null;
   const systemPanelStyle = state.topPanelPos && typeof window !== "undefined"
     ? (() => {
@@ -1221,7 +1221,9 @@ export function AppShell() {
                 </button>
               </header>
               <div className={s.systemPromptContent}>
-                <ContextInspector sessionId={state.selectedSession?.id ?? null} fallbackPrompt={state.systemPrompt} />
+                <Suspense fallback={<span role="status">{t("common.loading")}</span>}>
+                  <ContextInspector sessionId={state.selectedSession?.id ?? null} fallbackPrompt={state.systemPrompt} />
+                </Suspense>
               </div>
             </div>
           </section>,
@@ -1508,7 +1510,7 @@ export function AppShell() {
       /></Suspense>
     )}
     {appearanceOpen && <Suspense fallback={null}><AppearancePanel returnFocus={appearanceReturnFocus.current} onClose={closeAppearance} /></Suspense>}
-    {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+    {shortcutsOpen && <Suspense fallback={null}><ShortcutsDialog onClose={() => setShortcutsOpen(false)} /></Suspense>}
     <DesignInspector active={designModeOpen && showChat} onClose={() => setDesignModeOpen(false)} onCapture={handleDesignCapture} />
     {/* Toast notifications — mount once at app root */}
     <ToastContainer />

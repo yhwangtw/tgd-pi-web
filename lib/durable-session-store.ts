@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { defineDoc, type AgentState, type EntryRecord } from "@earendil-works/pi-durable";
@@ -41,38 +41,84 @@ export function writeDurableJson(path: string, value: unknown): void {
   writeFileSync(temporary, JSON.stringify(value), { mode: 0o600 });
   renameSync(temporary, path);
 }
+interface DurableIndexEntry {
+  mtimeMs: number;
+  ctimeMs: number;
+  size: number;
+  ino: number;
+  value?: { info: SessionInfo; agentRun?: AgentRun };
+}
+declare global {
+  var __piDurableSessionIndex: Map<string, DurableIndexEntry> | undefined;
+}
+function durableIndex(): Map<string, DurableIndexEntry> {
+  return globalThis.__piDurableSessionIndex ??= new Map();
+}
 export function saveDurableProjection(directory: string, conversation: number, projection: DurableSessionProjection): void {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
-  writeDurableJson(join(directory, `${conversation}.json`), projection);
+  const path = join(directory, `${conversation}.json`);
+  writeDurableJson(path, projection);
+  durableIndex().delete(path);
+}
+function readProjectionFile(path: string, id: string): DurableSessionProjection | undefined {
+  try {
+    const projection = JSON.parse(readFileSync(path, "utf8")) as DurableSessionProjection;
+    return projection.version === 1 && projection.info.id === id && !projection.deleted ? projection : undefined;
+  } catch { return undefined; }
+}
+function visibleProjection(info: SessionInfo): boolean {
+  return !info.sourceSessionId || resolveMigratedSessionId(info.sourceSessionId) === info.id;
 }
 /** Read-only derived index. Opening the sidebar never resumes paid work. */
 export function readDurableProjection(id: string): DurableSessionProjection | undefined {
   const identity = durableSessionIdentity(id);
   if (!identity) return undefined;
-  try {
-    const projection = JSON.parse(readFileSync(join(durableSessionDirectory(identity.group), `${identity.conversation}.json`), "utf8")) as DurableSessionProjection;
-    return projection.version === 1 && projection.info.id === id && !projection.deleted
-      && (!projection.info.sourceSessionId || resolveMigratedSessionId(projection.info.sourceSessionId) === id) ? projection : undefined;
-  } catch { return undefined; }
+  const projection = readProjectionFile(join(durableSessionDirectory(identity.group), `${identity.conversation}.json`), id);
+  return projection && visibleProjection(projection.info) ? projection : undefined;
 }
-export function listDurableSessions(): SessionInfo[] {
-  const sessions: SessionInfo[] = [];
+function listDurableIndex(): NonNullable<DurableIndexEntry["value"]>[] {
+  const sessions: NonNullable<DurableIndexEntry["value"]>[] = [];
+  const directory = durableSessionsDirectory();
+  const cache = durableIndex();
+  const seen = new Set<string>();
   try {
-    for (const group of readdirSync(durableSessionsDirectory())) {
+    for (const group of readdirSync(directory)) {
       if (!durableSessionIdentity(durableSessionId(group, 1))) continue;
       try {
         for (const file of readdirSync(durableSessionDirectory(group))) {
           if (!/^[1-9][0-9]*\.json$/.test(file)) continue;
-          const projection = readDurableProjection(durableSessionId(group, Number(file.slice(0, -5))));
-          if (projection && (!projection.info.sourceSessionId || resolveMigratedSessionId(projection.info.sourceSessionId) === projection.info.id)) sessions.push(projection.info);
+          const id = durableSessionId(group, Number(file.slice(0, -5)));
+          if (!durableSessionIdentity(id)) continue;
+          const path = join(directory, group, file);
+          try {
+            const metadata = statSync(path);
+            seen.add(path);
+            let indexed = cache.get(path);
+            if (!indexed || indexed.mtimeMs !== metadata.mtimeMs || indexed.ctimeMs !== metadata.ctimeMs
+              || indexed.size !== metadata.size || indexed.ino !== metadata.ino) {
+              const projection = readProjectionFile(path, id);
+              indexed = { mtimeMs: metadata.mtimeMs, ctimeMs: metadata.ctimeMs, size: metadata.size, ino: metadata.ino,
+                value: projection ? { info: projection.info, agentRun: projection.agentRun } : undefined };
+              // Retain sidebar/run metadata only; never pin complete transcripts in memory.
+              cache.set(path, indexed);
+            }
+            // A migration can be published without rewriting this projection.
+            if (indexed.value && visibleProjection(indexed.value.info)) sessions.push(indexed.value);
+          } catch { /* A concurrently removed or inaccessible projection is omitted. */ }
         }
       } catch { /* A concurrently removed or inaccessible store is omitted. */ }
     }
   } catch { /* First Durable session has not been created. */ }
+  for (const path of cache.keys()) {
+    if (dirname(dirname(path)) === directory && !seen.has(path)) cache.delete(path);
+  }
   return sessions;
 }
+export function listDurableSessions(): SessionInfo[] {
+  return listDurableIndex().map(({ info }) => ({ ...info }));
+}
 export function listDurableChildRuns(): AgentRun[] {
-  return listDurableSessions().flatMap(info => { const run = readDurableProjection(info.id)?.agentRun; return run ? [run] : []; });
+  return listDurableIndex().flatMap(({ agentRun }) => agentRun ? [structuredClone(agentRun)] : []);
 }
 
 export function durableMessage(message: NonNullable<EntryRecord["model"]>[number]): AgentMessage | undefined {

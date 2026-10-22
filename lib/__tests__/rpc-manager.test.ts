@@ -3,6 +3,24 @@ import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { AgentSessionWrapper } from "../rpc-manager";
 import type { AgentSessionLike } from "../pi-types";
 import { WebExtensionUIBridge } from "../web-extension-ui";
+import { decodeSessionData } from "../session-tree-wire";
+import type { SessionEntry } from "../types";
+
+it("serializes and replays a 10,000-entry standard session snapshot", () => {
+  const entries = Array.from({ length: 10_000 }, (_, i): SessionEntry => ({ type: "message", id: String(i), parentId: i ? String(i - 1) : null,
+    timestamp: new Date(i).toISOString(), message: { role: "user", content: `Turn ${i}`, timestamp: i } }));
+  const inner = { sessionId: "long-snapshot", sessionFile: "", dispose: vi.fn(), sessionManager: { getEntries: () => entries, getLeafId: () => "9999" } } as unknown as AgentSessionLike;
+  const wrapper = new AgentSessionWrapper(inner);
+  try {
+    const records: string[] = [];
+    const stop = wrapper.onStreamEvent(record => records.push(record.data), "expired:1"); stop();
+    const snapshot = JSON.parse(records[0]);
+    expect(snapshot.protocolVersion).toBe(2);
+    const restored = decodeSessionData(snapshot.sessionData);
+    expect(restored.context.entryIds).toHaveLength(10_000);
+    expect(restored.leafId).toBe("9999");
+  } finally { wrapper.destroy(); }
+});
 
 describe("Pi 0.86 session state", () => {
   it("reads the effective prompt from the session getter", async () => {
