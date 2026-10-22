@@ -1,6 +1,7 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { withFixtureMessages } from "./session-response-fixture";
 
 const SESSION = "aaaa1111-2222-3333-4444-555566667777";
 const model = { provider: "scroll-fixture", id: "offline" };
@@ -53,9 +54,8 @@ const test = base.extend<{ output: OutputFixture }>({
     });
     await page.route(new RegExp(`/api/sessions/${SESSION}(?:\\?|$)`), async (route) => {
       const response = await route.fetch();
-      const data = await response.json();
+      const data = withFixtureMessages(await response.json(), messages, messages.map((_, i) => `scroll-${i}`));
       await route.fulfill({ response, json: { ...data,
-        context: { ...data.context, messages, entryIds: messages.map((_, i) => `scroll-${i}`) },
         agentState: { running, state: { isStreaming: running, model } },
       } });
     });

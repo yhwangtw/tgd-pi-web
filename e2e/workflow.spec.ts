@@ -8,6 +8,7 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
   await page.addInitScript(() => localStorage.setItem("pi-locale", "en"));
   const commands: Record<string, unknown>[] = [];
   const forbidden: string[] = [];
+  // running means the runtime exists; isStreaming alone tracks response work.
   const state = { isStreaming: true, model: { provider: "fixture", id: "offline" } };
   let holdPlanExecution = false;
   const releasePlanExecution: { current: (() => void) | null } = { current: null };
@@ -15,7 +16,7 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (request.method() === "GET") {
-      if (path === `/api/agent/${SESSION}`) return route.fulfill({ json: { running: state.isStreaming, state } });
+      if (path === `/api/agent/${SESSION}`) return route.fulfill({ json: { running: true, state } });
       return route.continue();
     }
     if (path === "/api/worktrees") return route.fulfill({ json: { worktrees: [] } });
@@ -33,7 +34,7 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
   });
   await page.route(new RegExp(`/api/sessions/${SESSION}(?:\\?|$)`), async route => {
     const response = await route.fetch(); const data = await response.json();
-    await route.fulfill({ response, json: { ...data, agentState: { running: state.isStreaming, state } } });
+    await route.fulfill({ response, json: { ...data, agentState: { running: true, state } } });
   });
   await page.route(new RegExp(`/api/agent/${SESSION}/events(?:\\?|$)`), route => route.fulfill({
     contentType: "text/event-stream", body: "retry: 60000\n" + [
@@ -80,7 +81,8 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
   expect(commands.filter(command => command.type === "workflow_command" && command.command === "plan")).toEqual([]);
 
   // Reconnect to an idle runtime before executing the ready plan. The fixture
-  // changes both GET state and its SSE snapshot, rather than forcing the UI.
+  // changes both GET state and its SSE snapshot; the idle runtime still exists
+  // so the client reconnects to extension widgets after reloading.
   state.isStreaming = false;
   await page.reload();
   await expect(goal).toBeVisible(); await expect(plan).toBeVisible();
