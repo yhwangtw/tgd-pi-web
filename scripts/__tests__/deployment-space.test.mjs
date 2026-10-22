@@ -12,7 +12,7 @@ it('fails before installation when the candidate filesystem lacks headroom', asy
   const statfs = vi.fn(async path => free(path === plan.stageRoot ? 900 * MiB : 8 * 1024 ** 3));
   await expect(assertDeploymentSpace(plan, 'build', { statfs, tempDir })).rejects.toMatchObject({
     code: 'PIWEB_INSUFFICIENT_SPACE', phase: 'build', path: plan.stageRoot,
-    availableBytes: 900 * MiB, requiredBytes: 3 * 1024 ** 3,
+    availableBytes: 900 * MiB, requiredBytes: 6 * 1024 ** 3,
   });
 });
 it('checks prepared-artifact storage and progress/temp storage on their own filesystems', async () => {
@@ -43,4 +43,13 @@ it('rejects invalid budgets and fails closed when space cannot be read', async (
   }
   await expect(assertDeploymentSpace(plan, 'build', { tempDir, statfs: async () => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); } })).rejects.toThrow('denied');
   await expect(assertDeploymentSpace(plan, 'build', { tempDir, statfs: async () => ({ bavail: NaN, bsize: 4096 }) })).rejects.toThrow('Cannot determine');
+});
+
+it('rejects the previously unsafe 3 GiB headroom before starting a fresh build', async () => {
+  const statfs = async () => free(3.5 * 1024 ** 3);
+  await expect(assertDeploymentSpace(plan, 'build', { statfs, tempDir })).rejects.toMatchObject({
+    code: 'PIWEB_INSUFFICIENT_SPACE', requiredBytes: 6 * 1024 ** 3,
+  });
+  // Validated cached artifacts still use the smaller prepare budget.
+  await expect(assertDeploymentSpace(plan, 'prepare', { statfs, tempDir })).resolves.toHaveLength(3);
 });

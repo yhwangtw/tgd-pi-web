@@ -216,11 +216,16 @@ jobs:
       - name: Initial JavaScript budget
         run: npm run audit:js-budget
 
-  e2e:
+  e2e-shards:
     needs: scope
     if: needs.scope.outputs.profile != 'docs' && needs.scope.outputs.reuse != 'true'
-    name: E2E
+    name: E2E shard (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -246,18 +251,37 @@ jobs:
       - name: Install Playwright chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run E2E suite
-        run: npm run test:e2e
+      # Each runner has its own server/session store. Keep one worker inside
+      # each shard: tests in the same file may share mutable fixture state.
+      - name: Run E2E shard
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/4
         env:
           CI: true
 
-      - name: Upload report on failure
-        if: failure()
+      - name: Upload browser report and timings
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 7
+
+  # Release policy requires this unique, stable check name. A failed, cancelled
+  # or skipped selected shard must never count as successful E2E evidence.
+  e2e:
+    name: E2E
+    needs: [scope, e2e-shards]
+    if: ${{ always() && needs.scope.outputs.profile != 'docs' && needs.scope.outputs.reuse != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every selected shard
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          SHARDS_RESULT: ${{ needs.e2e-shards.result }}
+        run: |
+          test "$SCOPE_RESULT" = success
+          test "$SHARDS_RESULT" = success
 
   audit:
     needs: scope

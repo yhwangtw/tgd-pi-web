@@ -25,6 +25,19 @@ that evidence again; a newer failed/pending attempt cannot reuse an older green
 result. Docs-only CI is not runtime release evidence; explicitly releasing such
 a commit requires a manual full CI run. Jev is not a prerequisite.
 
+E2E runs in four independent GitHub runners. Each shard owns its fixture server
+and session store and runs one worker; files are not split into concurrent tests.
+The stable `E2E` check passes only when every selected shard succeeds. Each shard
+uploads an HTML report and JSON timings even on failure, with screenshots and
+first-retry traces for diagnosis. Parallelization reduces elapsed time, while
+repeating setup/build on four runners increases runner usage.
+
+During a fix, run the affected specs first in an isolated checkout, for example
+`npm run test:e2e -- e2e/viewer.spec.ts`. Use the full CI run to validate the final
+source, rather than using repeated full suites as the debugging loop. Inspect
+failed test output before rerunning; cancellation and skips are not passing
+release evidence. GitHub timing/report data can guide further balancing.
+
 Run from any checkout of this repository, including one with local changes:
 
 ```bash

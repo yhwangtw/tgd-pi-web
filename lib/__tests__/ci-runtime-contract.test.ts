@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -22,11 +23,33 @@ describe("runtime and installation CI contract", () => {
     expect(smoke).toContain("run: node scripts/ci-install-smoke.mjs");
   });
   it("tests the PR head explicitly so release can compare its tree and cancels only superseded PR runs", () => {
-    for (const id of ["lint", "runtime-tests", "installation-smoke", "build", "e2e", "audit"]) {
+    for (const id of ["lint", "runtime-tests", "installation-smoke", "build", "e2e-shards", "audit"]) {
       expect(job(id)).toContain("ref: ${{ github.event.pull_request.head.sha || github.sha }}");
     }
     expect(workflow).toContain("group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}");
     expect(workflow).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
+  });
+  it("requires all isolated E2E shards and rejects failed, cancelled or skipped selections", () => {
+    const shards = job("e2e-shards");
+    expect(shards).toContain("shard: [1, 2, 3, 4]");
+    expect(shards).toContain("fail-fast: false");
+    expect(shards).toContain("--shard=${{ matrix.shard }}/4");
+    expect(shards).not.toContain("continue-on-error: true");
+    const aggregate = job("e2e");
+    expect(aggregate).toContain("needs: [scope, e2e-shards]");
+    expect(aggregate).toContain("always()");
+    expect(aggregate).toContain("SCOPE_RESULT: ${{ needs.scope.result }}");
+    expect(aggregate).toContain("SHARDS_RESULT: ${{ needs.e2e-shards.result }}");
+    const script = aggregate.match(/        run: \|\n((?:          .*\n)*)/)?.[1];
+    expect(script).toBeTruthy();
+    for (const scope of ["success", "failure", "cancelled", "skipped", ""]) {
+      for (const shards of ["success", "failure", "cancelled", "skipped", ""]) {
+        const result = spawnSync("bash", ["-e", "-c", script!], {
+          env: { ...process.env, SCOPE_RESULT: scope, SHARDS_RESULT: shards },
+        });
+        expect(result.status === 0, `scope=${scope}, shards=${shards}`).toBe(scope === "success" && shards === "success");
+      }
+    }
   });
   it("keeps the four main release jobs, runs E2E on PRs, and makes Test fail closed", () => {
     for (const name of ["Lint & Typecheck", "Test", "Build", "E2E", "Security Audit"]) {

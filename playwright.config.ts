@@ -30,10 +30,18 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   // Surface recurring failures early; successful runs still execute every test.
   maxFailures: process.env.CI ? 5 : 0,
-  workers: 1, // specs share one server + one session store
-  reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
+  // CI shards use separate runners/stores. Within a shard, keep whole files
+  // serial so tests that share fixture state are not split across workers.
+  fullyParallel: false,
+  workers: 1,
+  reporter: process.env.CI
+    ? [["github"], ["list"], ["html", { open: "never" }],
+       ["json", { outputFile: "playwright-report/results.json" }]]
+    : [["list"]],
   use: {
     baseURL: `http://localhost:${E2E_PORT}`,
+    trace: "on-first-retry",
+    screenshot: "only-on-failure",
     // Local containers with preinstalled browsers can point this at the
     // binary (e.g. /opt/pw-browsers/chromium); CI uses the managed download.
     launchOptions: {

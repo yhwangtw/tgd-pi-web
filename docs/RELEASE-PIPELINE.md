@@ -97,11 +97,11 @@ build. Imported build helpers should be part of the pinned candidate source or
 listed as absolute build-command arguments so their bytes are also checked.
 
 Space is checked before publication, before dependency installation, and again
-after building before starting the candidate. Defaults require 3 GiB free on
+after building before starting the candidate. Defaults require 6 GiB free on
 the candidate filesystem and 2 GiB on the filesystem where live replacement
 artifacts are prepared, plus at least 64 MiB on progress-record and temporary
 filesystems. These are headroom estimates, not reservations against other apps.
-Operators can set `minimumFreeBytes: { "build": 3221225472,
+Operators can set `minimumFreeBytes: { "build": 6442450944,
 "prepare": 2147483648 }` in the plan to match their adapter's measured peak use.
 For example, an adapter that clones dependencies on the same APFS volume needs
 less preparation space than one that copies them. Adapters preparing files on
