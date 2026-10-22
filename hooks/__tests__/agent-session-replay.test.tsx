@@ -62,14 +62,14 @@ describe("session reconciliation and first-prompt ordering", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
-  it("decodes the flat REST and SSE tree while preserving context and branch targets", async () => {
+  it("decodes the compact REST and SSE tree while preserving context and branch targets", async () => {
     const stored = { ...data([user]), leafId: "e0", tree: [{ entry: { type: "message" as const, id: "e0", parentId: null, timestamp: "2026-10-22T00:00:00Z", message: user }, children: [] }] };
-    harness.fetch.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith("/api/sessions/") ? encodeSessionData(stored) : {})));
+    harness.fetch.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith("/api/sessions/") ? encodeSessionData(stored, "flat-v2") : {})));
     await act(async () => root.render(<Harness selected={session} />));
     expect(current.data?.tree[0].entry.id).toBe("e0");
     const next = { ...stored, leafId: "e1", context: data([user, assistant]).context,
       tree: [{ ...stored.tree[0], children: [{ entry: { type: "message" as const, id: "e1", parentId: "e0", timestamp: "2026-10-22T00:00:01Z", message: assistant }, children: [] }] }] };
-    await act(async () => current.handleAgentEventRef.current?.({ ...snapshot([user, assistant]), protocolVersion: 2, sessionData: encodeSessionData(next) }));
+    await act(async () => current.handleAgentEventRef.current?.({ ...snapshot([user, assistant]), protocolVersion: 2, sessionData: encodeSessionData(next, "flat-v2") }));
     expect(current.data?.tree[0].children[0].entry.id).toBe("e1");
     expect(current.messages).toEqual([user, assistant]);
     expect(current.data?.leafId).toBe("e1");

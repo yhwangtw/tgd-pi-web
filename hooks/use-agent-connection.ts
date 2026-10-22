@@ -80,7 +80,7 @@ export function useAgentEvents(
     current?.close();
     readyRef.current = false;
     setConnectionState(cursorRef.current ? "reconnecting" : "connecting");
-    const url = `/api/agent/${encodeURIComponent(sid)}/events?${cursorRef.current ? `cursor=${encodeURIComponent(cursorRef.current)}&` : ""}tree=flat-v1`;
+    const url = `/api/agent/${encodeURIComponent(sid)}/events?${cursorRef.current ? `cursor=${encodeURIComponent(cursorRef.current)}&` : ""}tree=flat-v2`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
     const pending = new Promise<boolean>((resolve) => {

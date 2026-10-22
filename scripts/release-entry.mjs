@@ -48,13 +48,15 @@ export function nextTag(tags, now = new Date()) {
 export function prepareCheckout(remote, target, { parent = tmpdir() } = {}) {
   requireSha(target);
   const directory = realpathSync(mkdtempSync(join(parent, 'pi-release-preflight-')));
-  const cleanup = () => rmSync(directory, { recursive: true, force: true });
+  const cleanup = () => rmSync(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   const git = args => command('git', args, directory);
   try {
     git(['init', '--quiet', '--template=']);
     git(['config', 'core.hooksPath', '/dev/null']);
     git(['remote', 'add', 'origin', remote]);
-    git(['fetch', '--no-tags', 'origin', 'refs/heads/main:refs/remotes/origin/main']);
+    // This checkout is removed immediately after preflight. Detached automatic
+    // maintenance could still write its object database while cleanup removes it.
+    git(['-c', 'maintenance.auto=false', '-c', 'gc.auto=0', 'fetch', '--no-tags', 'origin', 'refs/heads/main:refs/remotes/origin/main']);
     if (git(['rev-parse', 'origin/main']) !== target) throw new Error('Remote main changed during preparation; retry preflight');
     git(['checkout', '--quiet', '--detach', target]);
     return { directory, cleanup };

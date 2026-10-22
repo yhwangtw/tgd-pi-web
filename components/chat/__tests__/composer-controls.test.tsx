@@ -64,6 +64,25 @@ describe("composer controls", () => {
     await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
   }
 
+  it("does not format or create hidden model rows while the composer is being edited", async () => {
+    const costRead = vi.fn(() => ({ input: 1, output: 2 }));
+    const options = Array.from({ length: 200 }, (_, i) => ({
+      provider: "fixture", modelId: `model-${i}`, name: `Model ${i}`,
+      get cost() { return costRead(); },
+    }));
+    const groups = [{ provider: "fixture", options }];
+    const change = vi.fn();
+    await render(<ModelSelector modelOptions={options} modelsByProvider={groups} currentName="Model 0" isStreaming={false} onModelChange={change} />);
+    for (let i = 0; i < 5; i++) {
+      await act(async () => root!.render(<ModelSelector modelOptions={options} modelsByProvider={groups} currentName="Model 0" isStreaming={false} onModelChange={change} className={`draft-${i}`} />));
+    }
+    expect(costRead).not.toHaveBeenCalled();
+    expect(document.querySelectorAll("[data-model-choice]")).toHaveLength(0);
+    await act(async () => container!.querySelector<HTMLButtonElement>('[data-testid="model-selector-trigger"]')!.click());
+    expect(costRead).toHaveBeenCalled();
+    expect(document.querySelectorAll("[data-model-choice]")).toHaveLength(200);
+  });
+
   it("offers Max only when the model supports it, including sparse level maps", async () => {
     const change = vi.fn();
     await render(<ThinkingSelector thinkingLevel="high" availableThinkingLevels={["high", "max"]} thinkingLevelMap={{ off: null, minimal: null, low: null, medium: null, high: "high", xhigh: null, max: "max" }} isStreaming={false} onThinkingLevelChange={change} />);

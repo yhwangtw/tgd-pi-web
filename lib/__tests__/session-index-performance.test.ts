@@ -1,17 +1,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listAllSessions } from "../session-reader";
 import { durableSessionDirectory, durableSessionId, listDurableChildRuns, listDurableSessions, readDurableProjection, saveDurableProjection, type DurableSessionProjection } from "../durable-session-store";
 import { publishSessionMigration } from "../session-migrations";
 
-const activity = vi.hoisted(() => ({ root: "", active: 0, peak: 0, legacyReads: 0, legacyStats: 0, projectionReads: 0 }));
+const activity = vi.hoisted(() => ({ root: "", active: 0, peak: 0, legacyReads: 0, legacyStats: 0, projectionReads: 0, indexReads: 0, failIndexWrite: false, replacementProjection: "" }));
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return { ...actual, readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
-    if (String(args[0]).startsWith(`${activity.root}/durable-sessions/`)) activity.projectionReads++;
+    if (String(args[0]).startsWith(`${activity.root}/durable-sessions/`)) {
+      if (/\/[1-9][0-9]*\.json$/.test(String(args[0]))) activity.projectionReads++;
+      if (String(args[0]).endsWith(".index.json")) activity.indexReads++;
+    }
     return actual.readFileSync(...args);
+  }, writeFileSync: (...args: Parameters<typeof actual.writeFileSync>) => {
+    if (activity.failIndexWrite && String(args[0]).includes(".index.json.")) throw new Error("Synthetic index write failure");
+    return actual.writeFileSync(...args);
+  }, renameSync: (...args: Parameters<typeof actual.renameSync>) => {
+    const result = actual.renameSync(...args);
+    if (activity.replacementProjection && /\/[1-9][0-9]*\.json$/.test(String(args[1]))) {
+      const replacement = `${String(args[1])}.concurrent.tmp`;
+      actual.writeFileSync(replacement, activity.replacementProjection);
+      activity.replacementProjection = "";
+      actual.renameSync(replacement, args[1]);
+    }
+    return result;
   } };
 });
 vi.mock("fs/promises", async (importOriginal) => {
@@ -64,7 +79,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "pi-index-perf-"));
   previous = process.env.PI_CODING_AGENT_DIR;
   process.env.PI_CODING_AGENT_DIR = root;
-  Object.assign(activity, { root, active: 0, peak: 0, legacyReads: 0, legacyStats: 0, projectionReads: 0 });
+  Object.assign(activity, { root, active: 0, peak: 0, legacyReads: 0, legacyStats: 0, projectionReads: 0, indexReads: 0, failIndexWrite: false, replacementProjection: "" });
   globalThis.__piSessionInfoCache = undefined;
   globalThis.__piSessionPathCache = undefined;
   globalThis.__piSessionListings = undefined;
@@ -80,19 +95,21 @@ describe("Durable listing metadata cache", () => {
   it("avoids reading unchanged full projections for sidebar and child-run lists without retaining transcripts", () => {
     const saved = projection();
     saveDurableProjection(durableSessionDirectory(group), 1, saved);
+    globalThis.__piDurableSessionIndex = undefined; // A restarted process uses the small disk index.
     expect(listDurableSessions()).toHaveLength(1);
-    expect(activity.projectionReads).toBe(1);
+    expect(activity.projectionReads).toBe(0);
+    expect(activity.indexReads).toBe(1);
     listDurableSessions()[0].name = "caller mutation";
     const runs = listDurableChildRuns();
     runs[0].report!.summary = "caller mutation";
     expect(listDurableSessions()[0].name).toBeUndefined();
     expect(listDurableChildRuns()[0].report!.summary).toBe("fixture");
-    expect(activity.projectionReads).toBe(1);
+    expect(activity.projectionReads).toBe(0);
     expect([...globalThis.__piDurableSessionIndex!.values()][0].value).not.toHaveProperty("entries");
     const first = readDurableProjection(saved.info.id)!;
     first.entries.splice(0);
     expect(readDurableProjection(saved.info.id)?.entries).toHaveLength(1);
-    expect(activity.projectionReads).toBe(3);
+    expect(activity.projectionReads).toBe(2);
   });
 
   it("refreshes renamed, externally replaced, malformed and deleted projections", () => {
@@ -128,7 +145,52 @@ describe("Durable listing metadata cache", () => {
     expect(listDurableSessions().map(info => info.id)).toEqual([saved.info.id]);
     publishSessionMigration({ ...receipt, sessionId: durableSessionId(group, 2) });
     expect(listDurableSessions()).toEqual([]);
+    expect(activity.projectionReads).toBe(0);
+  });
+
+  it("falls back without mutating legacy stores when the sidecar is absent, stale or corrupt", () => {
+    const saved = projection();
+    const directory = durableSessionDirectory(group);
+    mkdirSync(directory, { recursive: true });
+    const path = join(directory, "1.json");
+    const sidecar = join(directory, "1.index.json");
+    writeFileSync(path, JSON.stringify(saved));
+    expect(listDurableSessions()).toHaveLength(1);
     expect(activity.projectionReads).toBe(1);
+    expect(existsSync(sidecar)).toBe(false);
+    saveDurableProjection(directory, 1, saved);
+    globalThis.__piDurableSessionIndex = undefined;
+    writeFileSync(sidecar, "{invalid");
+    expect(listDurableSessions()).toHaveLength(1);
+    expect(activity.projectionReads).toBe(2);
+    saveDurableProjection(directory, 1, saved);
+    writeFileSync(path, JSON.stringify({ ...saved, info: { ...saved.info, name: "Authoritative external edit" } }));
+    utimesSync(path, new Date(), new Date(Date.now() + 5000));
+    globalThis.__piDurableSessionIndex = undefined;
+    expect(listDurableSessions()[0].name).toBe("Authoritative external edit");
+    expect(activity.projectionReads).toBe(3);
+  });
+
+  it("does not associate a concurrent writer's source fingerprint with stale metadata", () => {
+    const saved = projection();
+    const directory = durableSessionDirectory(group);
+    activity.replacementProjection = JSON.stringify({ ...saved, info: { ...saved.info, name: "Concurrent replacement" } });
+    saveDurableProjection(directory, 1, saved);
+    expect(listDurableSessions()[0].name).toBe("Concurrent replacement");
+    expect(activity.projectionReads).toBe(1);
+    expect(existsSync(join(directory, "1.index.json"))).toBe(false);
+  });
+
+  it("keeps the primary projection authoritative when the optional sidecar cannot be written", () => {
+    const saved = projection();
+    const directory = durableSessionDirectory(group);
+    saveDurableProjection(directory, 1, saved);
+    activity.failIndexWrite = true;
+    expect(() => saveDurableProjection(directory, 1, { ...saved, info: { ...saved.info, name: "Committed despite index failure" } })).not.toThrow();
+    globalThis.__piDurableSessionIndex = undefined;
+    expect(listDurableSessions()[0].name).toBe("Committed despite index failure");
+    expect(activity.projectionReads).toBe(1);
+    expect(readDurableProjection(saved.info.id)?.info.name).toBe("Committed despite index failure");
   });
 });
 

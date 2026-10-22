@@ -28,8 +28,6 @@ import { FilesPanel } from "./FilesPanel";
 import { SearchPanel } from "./SearchPanel";
 import { ChangesPanel } from "./ChangesPanel";
 import { TgdArtifactsPanel } from "./TgdArtifactsPanel";
-import { AgentDashboardPanel } from "./AgentDashboardPanel";
-import { SchedulePanel } from "./SchedulePanel";
 import { AttentionPanel } from "./AttentionPanel";
 import { DiffPanel } from "./DiffPanel";
 import type { DiffAnnotation } from "./DiffView";
@@ -79,6 +77,10 @@ const SessionImportDialog = lazy(() => import("../modals/SessionImportDialog").t
 const ShortcutsDialog = lazy(() => import("./ShortcutsDialog").then((m) => ({ default: m.ShortcutsDialog })));
 const ContextInspector = lazy(() => import("../chat/ContextInspector").then((m) => ({ default: m.ContextInspector })));
 
+const AgentDashboardPanel = lazy(() => import("./AgentDashboardPanel").then((m) => ({ default: m.AgentDashboardPanel })));
+
+const SchedulePanel = lazy(() => import("./SchedulePanel").then((m) => ({ default: m.SchedulePanel })));
+
 // Home dir for expanding ~/ file links; fetched once, shared across clicks.
 let homeDirPromise: Promise<string | null> | null = null;
 function fetchHomeDir(): Promise<string | null> {
@@ -100,6 +102,7 @@ export function AppShell() {
   const { fileTabs, activeFileTabId, splitFileTabId, rightPanelOpen, setRightPanelOpen, setActiveFileTabId, handleOpenFile: openFileTab, handleUpdateViewState, handleConsumeNavigation, handleCloseFileTab, handleCloseOthers, handleCloseAll, handleReorderTabs, handleTogglePin, handleOpenSplit } = useFileTabs();
 
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
+  const handleOpenModels = useCallback(() => setModelsConfigOpen(true), []);
   const [hydrated, setHydrated] = useState(false);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
@@ -454,7 +457,7 @@ export function AppShell() {
       return;
     }
     try {
-      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { headers: { "X-Pi-Session-Tree": "flat-v1" } });
+      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { headers: { "X-Pi-Session-Tree": "flat-v2" } });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json() as { info?: SessionInfo | null };
       if (!payload.info) throw new Error("Session not found");
@@ -470,7 +473,7 @@ export function AppShell() {
       const known = allSessions.find((session) => session.id === sessionId);
       if (known) return known;
       try {
-        const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { headers: { "X-Pi-Session-Tree": "flat-v1" } });
+        const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { headers: { "X-Pi-Session-Tree": "flat-v2" } });
         if (!response.ok) return null;
         const payload = await response.json() as { info?: SessionInfo | null };
         return payload.info ?? null;
@@ -748,16 +751,20 @@ export function AppShell() {
           }}
         />
       ) : panelView === "agents" ? (
+        <Suspense fallback={<span role="status">{t("common.loading")}</span>}>
         <AgentDashboardPanel
           defaultCwd={panelCwd}
           onOpenSession={handleOpenScheduledSession}
           onCompareSessions={handleCompareSessions}
         />
+        </Suspense>
       ) : panelView === "schedule" ? (
+        <Suspense fallback={<span role="status">{t("common.loading")}</span>}>
         <SchedulePanel
           defaultCwd={panelCwd}
           onOpenSession={handleOpenScheduledSession}
         />
+        </Suspense>
       ) : panelView === "files" ? (
         <FilesPanel
           cwd={panelCwd}
@@ -829,7 +836,7 @@ export function AppShell() {
         sidebarOpen={sidebarOpen}
         onSelectView={handleRailView}
         onOpenAnalytics={() => setAnalyticsOpen(true)}
-        onOpenModels={() => setModelsConfigOpen(true)}
+        onOpenModels={handleOpenModels}
         onOpenSkills={() => setSkillsConfigOpen(true)}
         skillsDisabled={!panelCwd}
         onOpenExtensions={() => setExtensionsConfigOpen(true)}
@@ -844,7 +851,7 @@ export function AppShell() {
         onShowChat={handleShowMobileChat}
         onSelectView={handleRailView}
         onOpenAnalytics={() => setAnalyticsOpen(true)}
-        onOpenModels={() => setModelsConfigOpen(true)}
+        onOpenModels={handleOpenModels}
         onOpenSkills={() => setSkillsConfigOpen(true)}
         skillsDisabled={!panelCwd}
         onOpenExtensions={() => setExtensionsConfigOpen(true)}
@@ -1251,7 +1258,7 @@ export function AppShell() {
                     onSessionStatsChange={actions.setSessionStats}
                     onContextUsageChange={actions.setContextUsage}
                     onSessionNamed={actions.bumpRefreshKey}
-                    onOpenModels={() => setModelsConfigOpen(true)}
+                    onOpenModels={handleOpenModels}
                     isParallel
                     paneLabel={state.selectedSession ? getSessionDisplayTitle(state.selectedSession) : undefined}
                   />
@@ -1269,7 +1276,7 @@ export function AppShell() {
                     onSessionCreated={actions.handleSessionCreated}
                     onSessionForked={actions.handleSessionForked}
                     onSessionNamed={actions.bumpRefreshKey}
-                    onOpenModels={() => setModelsConfigOpen(true)}
+                    onOpenModels={handleOpenModels}
                     isParallel
                     paneLabel={getSessionDisplayTitle(session)}
                     onClosePane={state.parallelActiveId === session.id || state.parallelSessions.length > 1
@@ -1295,7 +1302,7 @@ export function AppShell() {
               onSessionStatsChange={actions.setSessionStats}
               onContextUsageChange={actions.setContextUsage}
               onSessionNamed={actions.bumpRefreshKey}
-              onOpenModels={() => setModelsConfigOpen(true)}
+              onOpenModels={handleOpenModels}
             />
           ) : centerView === "project" ? (
               <div className={s.placeholderContainer}>

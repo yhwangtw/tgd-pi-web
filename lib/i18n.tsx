@@ -1614,6 +1614,8 @@ const MESSAGES = {
   "chat.bookmarkAction": { en: "Bookmark", zh: "書籤" },
   "chat.removeBookmarkAction": { en: "Remove", zh: "移除書籤" },
   "chat.bookmarked": { en: "Bookmarked", zh: "已加入書籤" },
+  "chat.loadEarlier": { en: "Load earlier messages ({count})", zh: "載入較早訊息（{count}）" },
+  "chat.earlierBookmarks": { en: "Jump to earlier bookmarks", zh: "跳至較早的書籤" },
   "chat.showFull": { en: "Show full message", zh: "展開完整訊息" },
   "chat.lines": { en: "lines", zh: "行" },
   "chat.collapseMsg": { en: "Collapse message", zh: "收合訊息" },

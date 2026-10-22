@@ -56,21 +56,88 @@ passed. Targeted lint has zero errors and two pre-existing export-navigation
 warnings. Initial JavaScript is 1,790.5 KiB raw / 534.0 KiB gzip for `/`, and
 1,794.1 / 535.8 KiB for `/login`, within the unchanged 1,800 / 550 KiB budgets.
 
-## Remaining scaling costs
+## Follow-up performance implementation
 
-- Cold Durable listing still synchronously parses each full projection once.
-  A separately persisted compact index would remove that cost.
-- Details and reconnect snapshots still transfer the whole history. Pagination
-  and incremental snapshots are a future improvement; the flat format fixes
-  depth, not total payload size or memory.
-- Transcript DOM is not virtualized. Many messages or extreme branch fan-out
-  still cost layout/render work. Any virtualization must preserve scroll anchors,
-  search, bookmarks and minimap geometry; do not use `content-visibility` here.
-- Durable committed-event refresh still rebuilds context and writes the complete
-  projection. Token-only event batches do not rebuild the full projection, but
-  awaited live/UI reads can delay event delivery under heavy load. No production
-  stall was reproduced, so this audit does not claim a persistence/queue fix.
-- Existing tabs use the old nested transport until reloaded. New clients accept
-  both formats, while old clients keep their existing behavior and depth limit.
+The follow-up starts at local commit `6f733a66` and addresses the remaining
+measured hot paths without changing production or removing history/features.
 
-No browser end-to-end throughput or native device performance claim is made.
+- **Cold Durable lists:** normal projection saves atomically publish a compact
+  `.index.json` sidecar. Readers validate mtime/ctime/size/inode against the
+  authoritative projection; stale/missing/corrupt indexes fall back safely.
+  A concurrent writer cannot pair newer file identity with older metadata.
+- **Durable refresh:** unchanged histories reuse conversions, context and run
+  reports, and identical projections are not written again. Ordinary appended
+  entries use an incremental conversion; edits, compaction, imported context and
+  continuation rewrites retain the full projector. Token/usage-only batches skip
+  unchanged question/workflow UI snapshots while retaining official LiveDoc reads.
+- **Transport:** negotiated `flat-v2` references context messages from tree nodes
+  only after exact entry-ID and structural matching. Different normalized/tool,
+  usage, provider or edited messages stay inline. Native and `flat-v1` clients
+  receive compatible responses. Every label, branch and message remains available.
+- **Transcript:** initially mounts the latest 200 visible messages and the entire
+  active turn. Earlier history loads in batches of 200. Full-history find,
+  quotes, bookmarks, unread targets and Home reveal their target before scrolling.
+  Real row anchors preserve prepend position; range memory accompanies scroll
+  memory. Explicit navigation pauses smart follow even during prepend handling.
+- **Rendering/search:** committed history elements and ref arrays remain stable
+  during token frames. Find builds text/tool indexes while open, independent of
+  each query. Markdown parsing reuses unchanged text. Closed model pickers build
+  no option rows; model grouping uses a Map; command search indexes metadata and
+  retains a stable top 50 without sorting the whole catalog.
+- **Files/Git:** simultaneous root discovery, Git status and versioned preview
+  reads share pending work. Completed content is not cached. Access checks,
+  five-second root freshness, immediate selected-root updates, path identity and
+  symlink checks remain. Directory stats are asynchronous with 16 workers; text
+  prefix reads no longer block the event loop. File-watch bursts produce at most
+  one media/React refresh per 100 ms, including continuous writes.
+- **Startup:** agent and schedule panels join the existing lazy dialogs and
+  inspector; their code downloads when opened.
+- **Release cleanup:** a temporary preflight fetch previously launched detached
+  Git maintenance, which could race checkout deletion and mask the actual error.
+  This one command disables auto maintenance/gc, and temporary cleanup has three
+  bounded retries (at most 300 ms). Caller/production Git settings are untouched.
+
+### Follow-up evidence
+
+Synthetic isolated measurements on local Node 22; not production browser latency.
+Timings vary with host load. Operation-count regressions are in the test suite.
+
+| Operation | Before follow-up | After follow-up |
+| --- | ---: | ---: |
+| Cold list: 80 Durable projections × 400 entries, 33.8 MiB | 28.01 ms / 80 full reads | 1.78 ms / 0 full reads, 52.3 KiB of indexes |
+| Repeated unchanged Durable state refresh, 5 calls | full re-projection and writes | 0 history conversions / 0 context rebuilds / 0 writes |
+| History conversion across 40 entries then 1 ordinary append | 81 entry inputs | 41 entry inputs |
+| 10,000-message detail/snapshot JSON | 7,721,281 bytes | 4,722,391 bytes (-38.84%) |
+| 20,000-message detail/snapshot JSON | 15,531,281 bytes | 9,522,391 bytes (-38.69%) |
+| Initial transcript rows, 10,000-message fixture | 10,000 | 200 (except a larger active turn or restored full range) |
+| 1,000-message history, 10 token-only frames | historical element traversal each frame | 0 historical row rebuilds |
+| 24 concurrent cold allowed-root requests | repeated scans | 1 session scan / 2 distinct-cwd tGD checks |
+| 20 concurrent same-repo Git requests | 80 subprocesses | 2 subprocesses |
+| 20 concurrent versioned text reads / 12 HTML previews | duplicate work | 1 text read / 1 HTML bundle |
+| Model grouping: 10,000 models / 1,000 providers | 5,004,000 comparisons / 38.113 ms | 10,000 Map lookups / 0.657 ms |
+| 10,000-session command catalog, 5 warm queries | 28.424 ms | 10.335 ms |
+| 100 file-watch events in a burst | one update per event | 1 update after 100 ms |
+| Temporary Git fetch maintenance writers, 100 trials | 100 detached jobs | 0 jobs / 0 cleanup failures / 0 leftover checkouts |
+
+Final follow-up validation: **260 suites / 1,872 tests passed**, including real
+Git fixtures, isolated Durable stores, REST/SSE round trips and React DOM tests.
+TypeScript and the production build passed. Initial JavaScript is now
+**1,750.1 KiB raw / 525.5 KiB gzip** for `/`, and **1,753.6 / 527.3 KiB** for
+`/login`, within the unchanged 1,800 / 550 KiB budgets. Modified-source lint has
+zero errors; the two existing AppShell export-navigation warnings remain.
+
+### Boundaries
+
+- No production deployment or browser/native-device benchmark was performed.
+  DOM scroll tests use explicit synthetic geometry; they do not prove real-device
+  frame rate or layout performance.
+- Existing Durable projections without sidecars still use the safe cold fallback
+  until their next normal save; listing does not mutate stored conversations.
+- Detail/reconnect transfers still contain complete logical history, now without
+  duplicate equivalent messages. This is not server history pagination.
+- Progressive DOM mounting bounds initial work, not memory or DOM after the user
+  intentionally expands everything. The minimap reflects mounted history; earlier
+  bookmark/unread controls and full-history search reveal older targets.
+- Necessary durable commits still persist the full projection. Avoiding those
+  writes would require a storage-format change; official durable work is preserved.
+- Old non-negotiating tabs retain the old nested JSON depth limit until reloaded.

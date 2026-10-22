@@ -36,17 +36,48 @@ export function durableSessionDirectory(group: string): string {
   if (!durableSessionIdentity(durableSessionId(group, 1))) throw new Error("Invalid Durable store ID");
   return join(durableSessionsDirectory(), group);
 }
-export function writeDurableJson(path: string, value: unknown): void {
+export function writeDurableJson(path: string, value: unknown): number | undefined {
   const temporary = `${path}.${randomUUID()}.tmp`;
   writeFileSync(temporary, JSON.stringify(value), { mode: 0o600 });
+  let inode: number | undefined;
+  try { inode = statSync(temporary).ino; } catch { /* Optional index identity only. */ }
   renameSync(temporary, path);
+  return inode;
 }
-interface DurableIndexEntry {
+interface DurableFingerprint {
   mtimeMs: number;
   ctimeMs: number;
   size: number;
   ino: number;
+}
+interface DurableIndexEntry extends DurableFingerprint {
   value?: { info: SessionInfo; agentRun?: AgentRun };
+}
+interface DurableDiskIndex {
+  version: 1;
+  sessionId: string;
+  source: DurableFingerprint;
+  value: DurableIndexEntry["value"] | null;
+}
+const fingerprint = (path: string): DurableFingerprint => {
+  const { mtimeMs, ctimeMs, size, ino } = statSync(path);
+  return { mtimeMs, ctimeMs, size, ino };
+};
+function sameFingerprint(a: DurableFingerprint, b: DurableFingerprint): boolean {
+  return a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs && a.size === b.size && a.ino === b.ino;
+}
+const indexPath = (path: string) => path.replace(/\.json$/, ".index.json");
+function projectionIndex(projection: DurableSessionProjection): DurableIndexEntry["value"] {
+  return projection.version === 1 && !projection.deleted
+    ? { info: { ...projection.info }, ...(projection.agentRun ? { agentRun: structuredClone(projection.agentRun) } : {}) } : undefined;
+}
+function readDiskIndex(path: string, id: string, metadata: DurableFingerprint): DurableIndexEntry["value"] | null {
+  try {
+    const saved = JSON.parse(readFileSync(indexPath(path), "utf8")) as DurableDiskIndex;
+    if (saved.version !== 1 || saved.sessionId !== id || !saved.source || !sameFingerprint(saved.source, metadata)) return null;
+    if (saved.value === null) return undefined;
+    return saved.value?.info?.id === id ? saved.value : null;
+  } catch { return null; }
 }
 declare global {
   var __piDurableSessionIndex: Map<string, DurableIndexEntry> | undefined;
@@ -57,8 +88,19 @@ function durableIndex(): Map<string, DurableIndexEntry> {
 export function saveDurableProjection(directory: string, conversation: number, projection: DurableSessionProjection): void {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const path = join(directory, `${conversation}.json`);
-  writeDurableJson(path, projection);
+  const writtenInode = writeDurableJson(path, projection);
+  // The projection remains authoritative. A crash or failed optional index write
+  // leaves a stale fingerprint and readers fall back to the complete projection.
   durableIndex().delete(path);
+  try {
+    const source = fingerprint(path);
+    // Another writer may have installed its projection after our rename. Never
+    // pair its fingerprint with our older sidebar metadata.
+    if (writtenInode === undefined || source.ino !== writtenInode) return;
+    const value = projectionIndex(projection);
+    writeDurableJson(indexPath(path), { version: 1, sessionId: projection.info.id, source, value: value ?? null } satisfies DurableDiskIndex);
+    durableIndex().set(path, { ...source, value });
+  } catch { /* Optional derived metadata must never fail a durable save. */ }
 }
 function readProjectionFile(path: string, id: string): DurableSessionProjection | undefined {
   try {
@@ -91,14 +133,16 @@ function listDurableIndex(): NonNullable<DurableIndexEntry["value"]>[] {
           if (!durableSessionIdentity(id)) continue;
           const path = join(directory, group, file);
           try {
-            const metadata = statSync(path);
+            const metadata = fingerprint(path);
             seen.add(path);
             let indexed = cache.get(path);
-            if (!indexed || indexed.mtimeMs !== metadata.mtimeMs || indexed.ctimeMs !== metadata.ctimeMs
-              || indexed.size !== metadata.size || indexed.ino !== metadata.ino) {
-              const projection = readProjectionFile(path, id);
-              indexed = { mtimeMs: metadata.mtimeMs, ctimeMs: metadata.ctimeMs, size: metadata.size, ino: metadata.ino,
-                value: projection ? { info: projection.info, agentRun: projection.agentRun } : undefined };
+            if (!indexed || !sameFingerprint(indexed, metadata)) {
+              let value = readDiskIndex(path, id, metadata);
+              if (value === null) {
+                const projection = readProjectionFile(path, id);
+                value = projection ? projectionIndex(projection) : undefined;
+              }
+              indexed = { ...metadata, value };
               // Retain sidebar/run metadata only; never pin complete transcripts in memory.
               cache.set(path, indexed);
             }

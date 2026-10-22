@@ -14,6 +14,14 @@ normal TypeScript/lint scope so offline installations do not need Playwright.
 Transcript rows use normal layout because scroll restoration, disclosures and
 the minimap measure their geometry. Do not add `content-visibility` to these rows:
 display locking conflicts with descendant measurement and changes scroll anchors.
+Long transcripts initially mount the latest 200 visible messages (or the whole
+current turn when larger). The earlier-history button adds 200 at a time; find,
+quotes, bookmarks, unread navigation and Home reveal older targets before moving
+focus. Full data stays available for search and branching. Range memory accompanies
+scroll memory; prepend compensation uses a committed row's real position, never
+estimated-height placeholders. `isPrependingRef` suppresses stream following while
+anchoring, and explicit history navigation pauses smart follow before scrolling.
+This is progressive mounting, not a permanent 200-row cap after manual expansion.
 Minimap geometry is cached between layout changes; scrolling only updates its
 viewport indicator, with observer work coalesced into animation frames. Scroll
 before visibility assertions for offscreen controls. UI text uses the Unicode
@@ -536,12 +544,15 @@ restart. Extension one-shot editor text never enters the replay log. Prompt and
 bash paths both await readiness. Closed/idle-disposed streams are recreated;
 stale fetches must not overwrite a newer snapshot or resurrect a finished run.
 
-Session detail requests from current clients advertise `X-Pi-Session-Tree: flat-v1`;
-SSE connections use `tree=flat-v1`. Their `sessionData.tree` is a flat indexed
+Session detail requests from current clients advertise `X-Pi-Session-Tree: flat-v2`;
+SSE connections use `tree=flat-v2`. Their `sessionData.tree` is a flat indexed
 `{ format, roots, nodes }` payload (snapshot protocol version 2), so JSON depth
 does not grow with conversation length. `session-tree-wire.ts` reconstructs the
-existing tree iteratively at the client boundary. Old open tabs retain the
-nested version-1 format until reloaded; its historical depth limit still applies.
+existing tree iteratively at the client boundary. The v2 tree references context
+messages only when entry IDs and complete message structures agree; transformed,
+compacted or edited messages remain inline. No history is truncated. Older clients
+negotiating `flat-v1` receive the original flat payload; tabs without negotiation
+retain the nested version-1 format until reloaded; its historical depth limit still applies.
 Do not serialize a nested internal tree on a version-2 transport path. Labels,
 root order, branch order and parent IDs must round-trip unchanged.
 

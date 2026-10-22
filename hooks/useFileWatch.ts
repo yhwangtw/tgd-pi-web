@@ -24,6 +24,8 @@ export function useFileWatch(filePath: string): {
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
+    let active = true;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     setWatching(false);
     setRefreshTrigger(0);
 
@@ -37,22 +39,30 @@ export function useFileWatch(filePath: string): {
     esRef.current = es;
 
     es.addEventListener("connected", () => {
-      setWatching(true);
+      if (active) setWatching(true);
     });
 
     es.addEventListener("change", () => {
-      setRefreshTrigger((n) => n + 1);
+      if (!active || refreshTimer !== null) return;
+      // Editors often emit several fs events per write. Coalesce before React
+      // state/media URLs change, with a bounded delay even during steady writes.
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        if (active) setRefreshTrigger((n) => n + 1);
+      }, 100);
     });
 
     es.addEventListener("error", () => {
-      setWatching(false);
+      if (active) setWatching(false);
     });
 
     es.onerror = () => {
-      setWatching(false);
+      if (active) setWatching(false);
     };
 
     return () => {
+      active = false;
+      if (refreshTimer !== null) clearTimeout(refreshTimer);
       es.close();
       esRef.current = null;
     };

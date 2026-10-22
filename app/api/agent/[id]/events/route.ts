@@ -5,7 +5,7 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { encodeAgentStreamRecord, type AgentStreamRecord } from "@/lib/agent-event-log";
 import { getDurableChat, openDurableChat } from "@/lib/durable-chat";
 import { isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
-import { decodeSessionData } from "@/lib/session-tree-wire";
+import { decodeSessionData, encodeSessionData } from "@/lib/session-tree-wire";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,8 @@ export async function GET(
   const id = await waitForSessionMigration(requestedId);
   const url = new URL(req.url);
   const cursor = req.headers.get("last-event-id") || url.searchParams.get("cursor");
-  const flatTree = url.searchParams.get("tree") === "flat-v1";
+  const requestedTree = url.searchParams.get("tree");
+  const wireFormat = requestedTree === "flat-v1" || requestedTree === "flat-v2" ? requestedTree : undefined;
   const durable = isDurableSessionId(id);
   const resumed = !durable && cursor ? getResumableRpcSession(id, cursor) : undefined;
   // withSession/recovery must finish before exposing any replacement target.
@@ -71,13 +72,15 @@ export async function GET(
         // Retained frames already carry their type: avoid parsing full message
         // bodies and transcript snapshots again for transport cleanup.
         const type = record.type ?? JSON.parse(record.data).type;
-        if (!flatTree && type === "session_snapshot") {
-          // Tabs loaded before the upgrade retain their v1 contract until reload.
-          // New clients receive the flat, immutable frame without any reparsing.
+        if (wireFormat !== "flat-v2" && type === "session_snapshot") {
+          // Existing tabs retain their original contract. Modern clients receive
+          // the immutable compact frame without parsing or another encoding pass.
           const snapshot = JSON.parse(record.data);
-          if (snapshot.sessionData?.tree?.format === "flat-v1") {
-            snapshot.sessionData = decodeSessionData(snapshot.sessionData);
-            snapshot.protocolVersion = 1;
+          const format = snapshot.sessionData?.tree?.format;
+          if ((format === "flat-v1" || format === "flat-v2") && format !== wireFormat) {
+            const data = decodeSessionData(snapshot.sessionData);
+            snapshot.sessionData = wireFormat ? encodeSessionData(data, wireFormat) : data;
+            if (!wireFormat) snapshot.protocolVersion = 1;
             encode({ ...record, data: JSON.stringify(snapshot) });
           } else encode(record);
         } else encode(record);

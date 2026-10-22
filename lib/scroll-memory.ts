@@ -12,6 +12,33 @@ const positions = new Map<string, number>();
 const STORAGE_KEY = "pi-transcript-positions";
 const MAX_POSITIONS = 200;
 
+export type TranscriptHistoryKey = string | number;
+const historyStarts = new Map<string, TranscriptHistoryKey>();
+const HISTORY_STORAGE_KEY = "pi-transcript-history-starts";
+
+/** First mounted logical row. Stored separately to keep old pixel records valid. */
+export function saveTranscriptHistoryStart(key: string | null | undefined, firstKey: TranscriptHistoryKey): void {
+  if (!key) return;
+  historyStarts.set(key, firstKey);
+  if (historyStarts.size > MAX_POSITIONS) historyStarts.delete(historyStarts.keys().next().value!);
+  try { sessionStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([...historyStarts])); } catch { /* Optional tab-local persistence. */ }
+}
+
+export function loadTranscriptHistoryStart(key: string | null | undefined): TranscriptHistoryKey | undefined {
+  if (!key) return undefined;
+  if (!historyStarts.has(key)) {
+    try {
+      const stored: unknown = JSON.parse(sessionStorage.getItem(HISTORY_STORAGE_KEY) ?? "[]");
+      if (Array.isArray(stored)) for (const item of stored.slice(-MAX_POSITIONS)) {
+        if (Array.isArray(item) && typeof item[0] === "string"
+          && (typeof item[1] === "string" || (typeof item[1] === "number" && Number.isFinite(item[1])))
+          && !historyStarts.has(item[0])) historyStarts.set(item[0], item[1]);
+      }
+    } catch { /* Optional tab-local persistence. */ }
+  }
+  return historyStarts.get(key);
+}
+
 export function saveScrollPosition(key: string | null | undefined, scrollTop: number, distToBottom: number): void {
   if (!key) return;
   // Near-bottom readers get the sentinel so new content still opens at the
@@ -38,5 +65,6 @@ export function loadScrollPosition(key: string | null | undefined): number | und
 /** Test hook. */
 export function clearScrollPositions(): void {
   positions.clear();
-  try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* unavailable */ }
+  historyStarts.clear();
+  try { sessionStorage.removeItem(STORAGE_KEY); sessionStorage.removeItem(HISTORY_STORAGE_KEY); } catch { /* unavailable */ }
 }

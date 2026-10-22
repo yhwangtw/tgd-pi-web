@@ -1,4 +1,5 @@
 import { openSync, readSync, closeSync } from "fs";
+import { open } from "node:fs/promises";
 
 /**
  * Trim a buffer so it doesn't end mid-UTF-8-sequence. A byte-count cut can
@@ -34,4 +35,19 @@ export function readTextPrefixSync(filePath: string, maxBytes: number): string {
   } finally {
     closeSync(fd);
   }
+}
+
+/** Nonblocking equivalent for HTTP previews; memory remains bounded by maxBytes. */
+export async function readTextPrefix(filePath: string, maxBytes: number): Promise<string> {
+  const handle = await open(filePath, "r");
+  try {
+    const buffer = Buffer.alloc(maxBytes);
+    let length = 0;
+    while (length < maxBytes) {
+      const { bytesRead } = await handle.read(buffer, length, maxBytes - length, length);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    return trimToUtf8Boundary(buffer.subarray(0, length)).toString("utf-8");
+  } finally { await handle.close(); }
 }

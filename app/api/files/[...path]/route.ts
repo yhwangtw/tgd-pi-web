@@ -26,7 +26,8 @@ import { streamFile, wrapDocxPreviewHtml } from "@/lib/file-stream";
 import { previewContentSecurityPolicy } from "@/lib/preview-policy";
 import { FileOperationError } from "@/lib/versioned-file";
 import { FileSaveConflict, readEditableFile, saveEditableFile } from "@/lib/file-editor";
-import { readTextPrefixSync } from "@/lib/text-prefix";
+import { readTextPrefix } from "@/lib/text-prefix";
+import { coalesceFileRead } from "@/lib/file-read-coalescing";
 import { validateEntryName } from "@/lib/file-name";
 import { textPreviewLimit } from "@/lib/preview-limits";
 
@@ -65,10 +66,10 @@ async function handleRead(
     // Partial preview instead of a refusal: first 256KB (on a UTF-8 char
     // boundary) + truncated flag. The viewer shows a banner with a download
     // link and disables editing (saving a prefix would destroy the file).
-    const content = readTextPrefixSync(filePath, limit);
+    const content = await coalesceFileRead(`text-prefix:${limit}`, filePath, stat, allowedRoots, () => readTextPrefix(filePath, limit));
     return NextResponse.json({ content, language, size: stat.size, truncated: Buffer.byteLength(content) < stat.size, previewBytes: limit });
   }
-  const snapshot = await readEditableFile(filePath, allowedRoots);
+  const snapshot = await coalesceFileRead("text", filePath, stat, allowedRoots, () => readEditableFile(filePath, allowedRoots));
   return NextResponse.json({ ...snapshot, language });
 }
 
@@ -88,7 +89,7 @@ function handleMeta(filePath: string, stat: fs.Stats): Response {
   });
 }
 
-async function handlePreview(filePath: string, stat: fs.Stats): Promise<Response> {
+async function handlePreview(filePath: string, stat: fs.Stats, allowedRoots: Set<string>): Promise<Response> {
   if (!stat.isFile()) {
     return NextResponse.json({ error: "Not a file" }, { status: 400 });
   }
@@ -99,15 +100,14 @@ async function handlePreview(filePath: string, stat: fs.Stats): Promise<Response
     return NextResponse.json({ error: "DOCX too large for preview (>10MB)" }, { status: 413 });
   }
 
-  const mammoth = await import("mammoth");
-  const result = await mammoth.convertToHtml(
-    { path: filePath },
-    {
-      externalFileAccess: false,
-      convertImage: mammoth.images.dataUri,
-    }
-  );
-  const html = wrapDocxPreviewHtml(result.value, path.basename(filePath));
+  const html = await coalesceFileRead("docx", filePath, stat, allowedRoots, async () => {
+    const mammoth = await import("mammoth");
+    const result = await mammoth.convertToHtml(
+      { path: filePath },
+      { externalFileAccess: false, convertImage: mammoth.images.dataUri },
+    );
+    return wrapDocxPreviewHtml(result.value, path.basename(filePath));
+  });
   return new Response(html, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
@@ -167,37 +167,30 @@ function handleWatch(filePath: string, stat: fs.Stats): Response {
   });
 }
 
-function handleList(filePath: string, stat: fs.Stats): Response {
-  if (!stat.isDirectory()) {
-    return NextResponse.json({ error: "Not a directory" }, { status: 400 });
-  }
-
-  const names = fs.readdirSync(filePath);
-  const entries = names
-    .filter((name) => !IGNORED_NAMES.has(name) && !IGNORED_SUFFIXES.some((s) => name.endsWith(s)))
-    .filter((name) => !isFileMutationLockPath(path.join(filePath, name), getAgentDir()))
-    .map((name) => {
-      const full = path.join(filePath, name);
+async function handleList(filePath: string, stat: fs.Stats): Promise<Response> {
+  if (!stat.isDirectory()) return NextResponse.json({ error: "Not a directory" }, { status: 400 });
+  const names = (await fs.promises.readdir(filePath))
+    .filter(name => !IGNORED_NAMES.has(name) && !IGNORED_SUFFIXES.some(suffix => name.endsWith(suffix)))
+    .filter(name => !isFileMutationLockPath(path.join(filePath, name), getAgentDir()));
+  type ListedEntry = { name: string; isDir: boolean; size: number; modified: string };
+  const entries: Array<ListedEntry | null> = Array(names.length);
+  let next = 0;
+  // Bound open filesystem work and keep large folders off the event loop.
+  await Promise.all(Array.from({ length: Math.min(16, names.length) }, async () => {
+    while (next < names.length) {
+      const index = next++;
+      const name = names[index];
       try {
-        const s = fs.statSync(full);
-        return {
-          name,
-          isDir: s.isDirectory(),
-          size: s.isFile() ? s.size : 0,
-          modified: s.mtime.toISOString(),
-        };
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean)
-    .sort((a, b) => {
-      // Dirs first, then files, both alphabetically
-      if (a!.isDir !== b!.isDir) return a!.isDir ? -1 : 1;
-      return a!.name.localeCompare(b!.name);
-    });
-
-  return NextResponse.json({ entries, path: filePath });
+        const child = await fs.promises.stat(path.join(filePath, name));
+        entries[index] = { name, isDir: child.isDirectory(), size: child.isFile() ? child.size : 0, modified: child.mtime.toISOString() };
+      } catch { entries[index] = null; }
+    }
+  }));
+  const sorted = entries.filter((entry): entry is ListedEntry => entry !== null).sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  return NextResponse.json({ entries: sorted, path: filePath });
 }
 
 export async function GET(
@@ -216,7 +209,7 @@ export async function GET(
 
     let stat: fs.Stats;
     try {
-      stat = fs.statSync(filePath);
+      stat = await fs.promises.stat(filePath);
     } catch {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -249,19 +242,19 @@ export async function GET(
       case "meta":
         return handleMeta(filePath, stat);
       case "preview":
-        return await handlePreview(filePath, stat);
+        return await handlePreview(filePath, stat, allowedRoots);
       case "html-preview": {
         if (!stat.isFile() || !["html", "htm"].includes(getExt(filePath))) {
           return NextResponse.json({ error: "HTML preview requires an HTML file" }, { status: 400 });
         }
         const { buildHtmlPreview } = await import("@/lib/html-preview");
-        return NextResponse.json(await buildHtmlPreview(filePath, allowedRoots), { headers: { "Cache-Control": "private, no-store" } });
+        return NextResponse.json(await coalesceFileRead("html", filePath, stat, allowedRoots, () => buildHtmlPreview(filePath, allowedRoots)), { headers: { "Cache-Control": "private, no-store" } });
       }
       case "watch":
         return handleWatch(filePath, stat);
       case "list":
       default:
-        return handleList(filePath, stat);
+        return await handleList(filePath, stat);
     }
   } catch (error) {
     if (error instanceof FileOperationError) return NextResponse.json({ error: error.message }, { status: error.status });

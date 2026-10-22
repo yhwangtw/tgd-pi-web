@@ -24,16 +24,17 @@ export async function GET(
 ) {
   const { id: requestedId } = await params;
   const id = await waitForSessionMigration(requestedId);
-  const flatTree = req.headers.get("x-pi-session-tree") === "flat-v1";
+  const requestedTree = req.headers.get("x-pi-session-tree");
+  const wireFormat = requestedTree === "flat-v1" || requestedTree === "flat-v2" ? requestedTree : undefined;
   try {
     if (isDurableSessionId(id)) {
       const live = getDurableChat(id);
       const projection = live?.isAlive() ? live.getProjection() : readDurableProjection(id);
       if (!projection || projection.deleted) return NextResponse.json({ error: "Session not found" }, { status: 404 });
       const data = durableSessionData(projection);
-      return NextResponse.json({ ...(flatTree ? encodeSessionData(data) : data),
+      return NextResponse.json({ ...(wireFormat ? encodeSessionData(data, wireFormat) : data),
         ...(new URL(req.url).searchParams.has("includeState") ? { agentState: live?.isAlive() ? { running: true, state: live.getState() } : { running: false } } : {}),
-      });
+      }, { headers: { Vary: "X-Pi-Session-Tree" } });
     }
     const live = getRpcSession(id);
     let filePath = await resolveSessionPath(id);
@@ -112,7 +113,7 @@ export async function GET(
       ...(compactionSettings ? { compactionSettings } : {}),
       ...(agentState !== undefined ? { agentState } : {}),
     };
-    return NextResponse.json(flatTree ? encodeSessionData(data) : data);
+    return NextResponse.json(wireFormat ? encodeSessionData(data, wireFormat) : data, { headers: { Vary: "X-Pi-Session-Tree" } });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

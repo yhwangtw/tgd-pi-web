@@ -343,6 +343,8 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
 // Hook to create a stable array of refs for messages
 export function useMessageRefs(count: number): RefObject<(HTMLDivElement | null)[]> {
   const refs = useRef<(HTMLDivElement | null)[]>([]);
-  refs.current = Array(count).fill(null).map((_, i) => refs.current[i] ?? null);
+  // Token renders keep both the ref and its array stable; only resize on commits.
+  if (refs.current.length > count) refs.current.length = count;
+  while (refs.current.length < count) refs.current.push(null);
   return refs;
 }

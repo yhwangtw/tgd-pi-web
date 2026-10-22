@@ -4,7 +4,8 @@ const harness = vi.hoisted(() => ({ subscribe: vi.fn(), unsubscribe: vi.fn(), ge
 vi.mock("@/lib/rpc-manager", () => ({ getRpcSession: harness.get, getResumableRpcSession: harness.resume, startRpcSession: harness.start }));
 vi.mock("@/lib/session-reader", () => ({ resolveSessionPath: harness.resolve }));
 import { GET } from "../../app/api/agent/[id]/events/route";
-import { encodeSessionData } from "../session-tree-wire";
+import { decodeSessionData, encodeSessionData } from "../session-tree-wire";
+import type { SessionTreeNode } from "../types";
 
 describe("agent events HTTP replay transport", () => {
   beforeEach(() => {
@@ -44,7 +45,7 @@ describe("agent events HTTP replay transport", () => {
       listener({ id: "epoch:4", type: "session_snapshot", data: snapshotData });
       return harness.unsubscribe;
     });
-    const response = await GET(new Request("http://localhost/api/agent/one/events?tree=flat-v1"), { params: Promise.resolve({ id: "one" }) });
+    const response = await GET(new Request("http://localhost/api/agent/one/events?tree=flat-v2"), { params: Promise.resolve({ id: "one" }) });
     expect(parse.mock.calls.some(([data]) => data === snapshotData)).toBe(false);
     deliver!({ type: "session_closed", data: closedData });
     await Promise.resolve();
@@ -79,6 +80,26 @@ describe("agent events HTTP replay transport", () => {
     expect(snapshot.protocolVersion).toBe(1);
     expect(snapshot.sessionData.tree[0].entry.id).toBe("one");
     await reader.cancel();
+  });
+
+  it.each([undefined, "flat-v1", "flat-v2"])("negotiates compact snapshots for %s clients without changing replay fields", async format => {
+    const message = { role: "user" as const, content: "One full message", timestamp: 1 };
+    const tree: SessionTreeNode[] = [{ entry: { type: "message", id: "one", parentId: null, timestamp: "now", message }, children: [], label: "Branch" }];
+    const original = { sessionId: "one", leafId: "one", tree, context: { entryIds: ["one"], messages: [{ ...message }] } };
+    const data = encodeSessionData(original, "flat-v2");
+    const snapshot = { type: "session_snapshot", protocolVersion: 2, replayStatus: "reset", cursor: "epoch:4", sessionData: data,
+      state: { isStreaming: true }, streamingMessage: message, phase: { kind: "thinking" }, lastRunError: null };
+    harness.subscribe.mockImplementation(listener => {
+      listener({ id: "epoch:4", type: "session_snapshot", data: JSON.stringify(snapshot) }); return harness.unsubscribe;
+    });
+    const response = await GET(new Request(`http://localhost/api/agent/one/events${format ? `?tree=${format}` : ""}`), { params: Promise.resolve({ id: "one" }) });
+    const reader = response.body!.getReader(); await reader.read();
+    const frame = new TextDecoder().decode((await reader.read()).value);
+    expect(frame).toContain("id: epoch:4\n");
+    const restored = JSON.parse(frame.split("data: ")[1]);
+    expect(restored).toEqual({ ...snapshot, protocolVersion: format ? 2 : 1, sessionData: format === "flat-v2" ? data : format ? encodeSessionData(original) : original });
+    expect(decodeSessionData(restored.sessionData)).toEqual(original);
+    await reader.cancel(); expect(harness.unsubscribe).toHaveBeenCalledOnce();
   });
 
   it("recovers a lost replacement event and POST response from the old cursor without reopening its old file", async () => {

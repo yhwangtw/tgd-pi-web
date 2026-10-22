@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useLayoutEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ChatMinimap } from "../ChatMinimap";
+import { ChatMinimap, useMessageRefs } from "../ChatMinimap";
 import styles from "../ChatMinimap.module.css";
 import type { UserMessage } from "@/lib/types";
 
@@ -120,4 +120,25 @@ it("jumps to the preview nearest a pointer in overlapping hit areas while preser
   expect(rows[900].scrollIntoView).not.toHaveBeenCalled();
   await act(async () => buttons[900].click());
   expect(rows[900].scrollIntoView).toHaveBeenCalledOnce();
+});
+
+
+it("keeps the message-ref array stable across token renders and resizes only on commits", async () => {
+  let observed: ReturnType<typeof useMessageRefs>;
+  function Probe({ count }: { count: number }) {
+    const refs = useMessageRefs(count);
+    useLayoutEffect(() => { observed = refs; });
+    return null;
+  }
+  await act(async () => root.render(<Probe count={10_000} />));
+  const first = observed!.current;
+  first[100] = rows[0];
+  for (let i = 0; i < 5; i++) await act(async () => root.render(<Probe count={10_000} />));
+  expect(observed!.current).toBe(first);
+  await act(async () => root.render(<Probe count={10_001} />));
+  expect(observed!.current).toBe(first);
+  expect(first[100]).toBe(rows[0]);
+  expect(first[10_000]).toBeNull();
+  await act(async () => root.render(<Probe count={50} />));
+  expect(first).toHaveLength(50);
 });

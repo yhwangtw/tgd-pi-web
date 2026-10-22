@@ -689,7 +689,7 @@ export class AgentSessionWrapper {
       sessionData: encodeSessionData({
         sessionId: this.sessionId, filePath: this.sessionFile, leafId,
         tree: buildTree(entries), context: buildSessionContext(entries, leafId),
-      }),
+      }, "flat-v2"),
       streamingMessage: this.streamingMessage,
       phase: this.activeTools.size ? { kind: "running_tools", tools: [...this.activeTools.values()] } : null,
       bashRun: this.streamBash,

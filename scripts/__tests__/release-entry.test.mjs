@@ -10,7 +10,7 @@ import { main, nextTag, parseArgs, pendingTag, prepareCheckout } from '../releas
 const roots = [];
 const now = new Date('2026-09-26T01:00:00Z');
 function temp() { const path = mkdtempSync(join(tmpdir(), 'pi-release-entry-test-')); roots.push(path); return path; }
-afterEach(() => roots.splice(0).forEach(path => rmSync(path, { recursive: true, force: true })));
+afterEach(() => { vi.unstubAllEnvs(); roots.splice(0).forEach(path => rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 })); });
 function repository() {
   const root = temp();
   const git = args => command('git', args, root);
@@ -47,6 +47,18 @@ describe('automatic release preparation', () => {
     const repo = repository(), parent = temp();
     expect(() => prepareCheckout(repo.root, 'a'.repeat(40), { parent })).toThrow('main changed');
     expect(readdirSync(parent)).toEqual([]);
+    expect(repo.git(['rev-parse', 'HEAD'])).toBe(repo.sha);
+  });
+  it.each([false, true])('leaves no detached maintenance writer before checkout cleanup (main moved: %s)', moved => {
+    const repo = repository(), parent = temp(), trace = join(parent, 'git-trace.jsonl');
+    vi.stubEnv('GIT_TRACE2_EVENT', trace);
+    if (moved) expect(() => prepareCheckout(repo.root, 'a'.repeat(40), { parent })).toThrow('main changed');
+    else { const prepared = prepareCheckout(repo.root, repo.sha, { parent }); prepared.cleanup(); }
+    const events = readFileSync(trace, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    expect(events.some(event => event.event === 'start' && event.argv.includes('fetch'))).toBe(true);
+    const childCommands = events.filter(event => event.event === 'child_start').map(event => event.argv);
+    expect(childCommands.some(args => args.includes('maintenance') || args.includes('gc'))).toBe(false);
+    expect(readdirSync(parent)).toEqual(['git-trace.jsonl']);
     expect(repo.git(['rev-parse', 'HEAD'])).toBe(repo.sha);
   });
   it('preflights and dispatches only in the prepared checkout, cleaning it on errors', async () => {

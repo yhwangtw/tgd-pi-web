@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "r
 import type { AgentMessage } from "@/lib/types";
 import { browserMetricsStorage, GenerationMetricsTracker } from "@/lib/generation-metrics";
 import { normalizeToolCalls } from "@/lib/normalize";
-import { decodeSessionData, type FlatSessionTree } from "@/lib/session-tree-wire";
+import { decodeSessionData, type SessionTreeWire } from "@/lib/session-tree-wire";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { parseWorkflowCommand } from "@/lib/workflow-state";
 import { showToast } from "@/hooks/useToast";
@@ -184,7 +184,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const url = includeState
         ? `/api/sessions/${encodeURIComponent(sid)}?includeState`
         : `/api/sessions/${encodeURIComponent(sid)}`;
-      const res = await fetch(url, { headers: { "X-Pi-Session-Tree": "flat-v1" } });
+      const res = await fetch(url, { headers: { "X-Pi-Session-Tree": "flat-v2" } });
       if (res.status === 404) {
         if (showLoading && shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
           setData(null);
@@ -195,7 +195,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         return null;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const wire = await res.json() as Omit<SessionData, "tree"> & { tree: SessionData["tree"] | FlatSessionTree; agentState?: AgentStateEnvelope };
+      const wire = await res.json() as Omit<SessionData, "tree"> & { tree: SessionData["tree"] | SessionTreeWire; agentState?: AgentStateEnvelope };
       if (!shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
         // Callers also reconcile running/thinking state from this return
         // value. Do not let an obsolete fetch resurrect a completed run.
@@ -301,7 +301,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (streamFlushTimerRef.current !== null) clearTimeout(streamFlushTimerRef.current);
       streamFlushTimerRef.current = null;
       const state = event.state as LiveAgentState | undefined;
-      const wire = event.sessionData as (Omit<SessionData, "tree"> & { tree: SessionData["tree"] | FlatSessionTree }) | undefined;
+      const wire = event.sessionData as (Omit<SessionData, "tree"> & { tree: SessionData["tree"] | SessionTreeWire }) | undefined;
       if (wire?.context && Array.isArray(wire.context.messages)) {
         const restored = decodeSessionData(wire);
         setData(restored);
@@ -1333,10 +1333,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onBranchDataChange(data?.tree ?? [], activeLeafId, handleLeafChange);
   }, [data?.tree, activeLeafId, handleLeafChange, onBranchDataChange]);
 
+  const getGenerationMetrics = useCallback((message: AgentMessage) =>
+    generationMetrics.get(sessionIdRef.current, message), [generationMetrics]);
+
   return {
     // State
     data, loading, error, runtimeFailure, activeLeafId, messages, entryIds, streamState,
-    getGenerationMetrics: (message: AgentMessage) => generationMetrics.get(sessionIdRef.current, message),
+    getGenerationMetrics,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, durableNewSession, setDurableNewSession, contextUsage, systemPrompt, forkingEntryId,

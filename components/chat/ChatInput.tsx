@@ -1161,7 +1161,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             )}
             {/* Model selector — visible always, disabled during streaming */}
             <ModelSelector
-              onOpen={() => closeMobileTools()}
+              onOpen={closeMobileTools}
               modelOptions={modelOptions}
               modelsByProvider={modelsByProvider}
               currentName={currentName}

@@ -1,4 +1,6 @@
 import path from "path";
+import { homedir } from "node:os";
+import { readdir } from "node:fs/promises";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { listAllSessions } from "@/lib/session-reader";
 import { isFileMutationLockPath } from "./file-mutation-lock";
@@ -20,14 +22,21 @@ const DOCX_PREVIEW_MAX_BYTES = 10 * 1024 * 1024;
 // enough that newly-created cwds appear promptly; stored on globalThis so it
 // survives Next.js hot-reload.
 declare global {
-  var __piAllowedRootsCache: { roots: Set<string>; expiresAt: number } | undefined;
+  var __piAllowedRootsCache: { roots: Set<string>; expiresAt: number; scope: string } | undefined;
+  var __piAllowedRootsPending: { scope: string; promise: Promise<Set<string>> } | undefined;
   var __piSelectedWorkspaceRoots: Set<string> | undefined;
+  var __piSelectedWorkspaceScope: string | undefined;
 }
 
 /** Explicit workspace selection precedes Pi's first persisted session. */
 export function registerSelectedWorkspace(cwd: string): void {
+  const scope = allowedRootsScope();
+  if (globalThis.__piSelectedWorkspaceScope !== scope) {
+    globalThis.__piSelectedWorkspaceRoots = new Set();
+    globalThis.__piSelectedWorkspaceScope = scope;
+  }
   (globalThis.__piSelectedWorkspaceRoots ??= new Set()).add(cwd);
-  globalThis.__piAllowedRootsCache = undefined;
+  // Selections are merged on every request, including an in-flight index build.
 }
 
 const ALLOWED_ROOTS_TTL_MS = 5_000;
@@ -48,38 +57,51 @@ export function filePathFromSegments(segments: string[]): string {
   return "/" + joined.replace(/^\/+/, "");
 }
 
+function allowedRootsScope(): string {
+  return JSON.stringify([getAgentDir(), homedir(), process.env.TGD_DIR ?? ""]);
+}
+
+async function loadAllowedRoots(home: string): Promise<Set<string>> {
+  const sessions = await listAllSessions();
+  const roots = new Set(sessions.flatMap(session => session.cwd ? [session.cwd] : []));
+  const { resolveTgdDir } = await import("./tgd-artifacts");
+  // Most sessions share a workspace. Resolve sibling artifacts once per cwd.
+  for (const cwd of [...roots]) {
+    const tgd = resolveTgdDir(cwd);
+    if (tgd) roots.add(tgd);
+  }
+  try {
+    for (const name of await readdir(home)) {
+      if (/^pi-cwd-\d{8}$/.test(name)) roots.add(path.join(home, name));
+    }
+  } catch { /* Ignore an unreadable home directory. */ }
+  return roots;
+}
+
 export async function getAllowedRoots(): Promise<Set<string>> {
   const now = Date.now();
+  const scope = allowedRootsScope();
   const cached = globalThis.__piAllowedRootsCache;
-  if (cached && cached.expiresAt > now) return cached.roots;
-
-  const sessions = await listAllSessions();
-  const roots = new Set<string>(globalThis.__piSelectedWorkspaceRoots);
-  const { resolveTgdDir } = await import("./tgd-artifacts");
-  for (const s of sessions) {
-    if (s.cwd) {
-      roots.add(s.cwd);
-      // tGD artifacts live in a sibling `<project>-tGD/` dir — allow it too so
-      // the file viewer can open PRD/SPEC/etc. opened from the tGD panel.
-      const tgd = resolveTgdDir(s.cwd);
-      if (tgd) roots.add(tgd);
+  let roots: Set<string>;
+  if (cached?.scope === scope && cached.expiresAt > now) roots = cached.roots;
+  else {
+    let pending = globalThis.__piAllowedRootsPending;
+    if (pending?.scope !== scope) {
+      pending = { scope, promise: loadAllowedRoots(homedir()) };
+      globalThis.__piAllowedRootsPending = pending;
     }
-  }
-  // Also allow ~/pi-cwd-* directories created by the default-cwd endpoint
-  const home = (await import("os")).homedir();
-  const { readdirSync } = await import("fs");
-  try {
-    for (const name of readdirSync(home)) {
-      if (/^pi-cwd-\d{8}$/.test(name)) {
-        roots.add(path.join(home, name));
+    try {
+      roots = await pending.promise;
+      if (globalThis.__piAllowedRootsPending === pending && allowedRootsScope() === scope) {
+        globalThis.__piAllowedRootsCache = { roots, expiresAt: now + ALLOWED_ROOTS_TTL_MS, scope };
       }
+    } finally {
+      if (globalThis.__piAllowedRootsPending === pending) globalThis.__piAllowedRootsPending = undefined;
     }
-  } catch {
-    // ignore if home is unreadable
   }
-
-  globalThis.__piAllowedRootsCache = { roots, expiresAt: now + ALLOWED_ROOTS_TTL_MS };
-  return roots;
+  // Callers cannot mutate cached permissions. Explicit selections stay fresh
+  // without forcing another scan, and never cross agent-directory boundaries.
+  return new Set([...roots, ...(globalThis.__piSelectedWorkspaceScope === scope ? globalThis.__piSelectedWorkspaceRoots ?? [] : [])]);
 }
 
 export function isPathAllowed(target: string, allowedRoots: Set<string>): boolean {

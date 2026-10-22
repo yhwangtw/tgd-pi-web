@@ -21,16 +21,22 @@ vi.mock("@/lib/durable-session-store", async importOriginal => ({
 import { GET } from "@/app/api/sessions/[id]/route";
 
 describe("long conversation detail responses", () => {
-  it.each(["legacy", "durable"])("returns all 10,000 %s messages and a readable tree without HTTP 500", async engine => {
+  it.each([
+    ["legacy", "flat-v1"], ["legacy", "flat-v2"], ["durable", "flat-v1"], ["durable", "flat-v2"],
+  ])("returns all 10,000 %s messages with %s without HTTP 500", async (engine, format) => {
     const id = engine === "legacy" ? "legacy" : "dw_00000000-0000-0000-0000-000000000000_1";
     const messages = Array.from({ length: 10_000 }, (_, i) => ({ role: "user" as const, content: `Synthetic turn ${i}`, timestamp: i + 1 }));
     fixture.entries = messages.map((message, i): SessionEntry => ({ type: "message", id: String(i + 1), parentId: i ? String(i) : null, timestamp: new Date(i + 1).toISOString(), message }));
     const entries: EntryRecord[] = messages.map((message, i) => ({ id: (i + 1) as EntryId, conversationId: 1 as ConversationId, kind: "pi.user", model: [message] }));
     fixture.projection = { version: 1, deleted: false, entries, agent: {}, context: durableContext(entries, {}),
       info: { id, path: "/fixture", cwd: "/fixture", created: "2026-10-22T00:00:00Z", modified: "2026-10-22T00:00:00Z", messageCount: messages.length, firstMessage: "Synthetic turn 0" } } satisfies DurableSessionProjection;
-    const response = await GET(new Request("http://localhost/?includeState", { headers: { "X-Pi-Session-Tree": "flat-v1" } }), { params: Promise.resolve({ id }) });
+    const response = await GET(new Request("http://localhost/?includeState", { headers: { "X-Pi-Session-Tree": format } }), { params: Promise.resolve({ id }) });
     expect(response.status).toBe(200);
-    const body = decodeSessionData(await response.json());
+    expect(response.headers.get("vary")).toBe("X-Pi-Session-Tree");
+    const wire = await response.json();
+    expect(wire.tree.format).toBe(format);
+    if (format === "flat-v2") expect(wire.tree.nodes.some((node: object) => "contextMessage" in node)).toBe(true);
+    const body = decodeSessionData(wire);
     expect(body.context.messages).toHaveLength(10_000);
     expect(body.context.messages.at(-1).content).toBe("Synthetic turn 9999");
     let count = 0; let leaf: string | undefined;

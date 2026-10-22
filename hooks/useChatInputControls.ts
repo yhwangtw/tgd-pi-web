@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+
 import type { ToolSelectionMode } from "@/lib/tool-selection";
 import type { ModelCatalogEntry } from "@/lib/model-catalog-types";
 
@@ -51,7 +53,7 @@ export function useChatInputControls(
   const { model, modelNames, modelList } = options;
 
   // Build model options: prefer modelList (has provider info), fallback to modelNames
-  const modelOptions: ModelOption[] = (() => {
+  const modelOptions = useMemo<ModelOption[]>(() => {
     if (modelList && modelList.length > 0) {
       return modelList.map((m) => ({
         provider: m.provider,
@@ -68,19 +70,28 @@ export function useChatInputControls(
       modelId,
       name,
     }));
-  })();
+  }, [modelList, modelNames, model?.provider]);
 
   // Group options by provider, preserving insertion order
-  const modelsByProvider: ModelsByProviderGroup[] = [];
-  for (const opt of modelOptions) {
-    const group = modelsByProvider.find((g) => g.provider === opt.provider);
-    if (group) group.options.push(opt);
-    else modelsByProvider.push({ provider: opt.provider, options: [opt] });
-  }
+  const modelsByProvider = useMemo(() => {
+    const groups = new Map<string, ModelsByProviderGroup>();
+    for (const option of modelOptions) {
+      let group = groups.get(option.provider);
+      if (!group) {
+        group = { provider: option.provider, options: [] };
+        groups.set(option.provider, group);
+      }
+      group.options.push(option);
+    }
+    return [...groups.values()];
+  }, [modelOptions]);
 
-  const currentName = model
-    ? (modelOptions.find((o) => o.modelId === model.modelId && o.provider === model.provider)?.name ?? model.modelId)
-    : modelOptions.length > 0 ? modelOptions[0].name : null;
+  const selectedModelId = model?.modelId;
+  const selectedProvider = model?.provider;
+  const currentName = useMemo(() => selectedModelId !== undefined
+    ? (modelOptions.find((o) => o.modelId === selectedModelId && o.provider === selectedProvider)?.name ?? selectedModelId)
+    : modelOptions.length > 0 ? modelOptions[0].name : null,
+  [selectedModelId, selectedProvider, modelOptions]);
 
   return { modelOptions, modelsByProvider, currentName };
 }

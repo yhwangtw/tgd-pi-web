@@ -350,8 +350,9 @@ function MarkdownRenderer({
             return <img {...props} src={src} alt={alt ?? ""} loading="lazy" decoding="async" referrerPolicy="no-referrer" />;
           },
   }), [sourceFilePath]);
-  return (
-    <MarkdownContext.Provider value={{ isStreaming, sourceFilePath }}><div className={["markdown-body", className].filter(Boolean).join(" ")}>
+  // Keep the parsed Markdown element stable when only stream/context metadata
+  // changes. Context consumers (code blocks/links) still receive those updates.
+  const renderedMarkdown = useMemo(() => (
       <ReactMarkdown
         urlTransform={(url, key) => key === "href" && parseMarkdownFileLink(url) ? url : defaultUrlTransform(url)}
         remarkPlugins={remarkPlugins}
@@ -360,6 +361,11 @@ function MarkdownRenderer({
       >
         {markdown}
       </ReactMarkdown>
+  ), [markdown, remarkPlugins, rehypePlugins, components]);
+  const context = useMemo(() => ({ isStreaming, sourceFilePath }), [isStreaming, sourceFilePath]);
+  return (
+    <MarkdownContext.Provider value={context}><div className={["markdown-body", className].filter(Boolean).join(" ")}>
+      {renderedMarkdown}
     </div></MarkdownContext.Provider>
   );
 }
