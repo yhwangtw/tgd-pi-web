@@ -9,11 +9,13 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
   const commands: Record<string, unknown>[] = [];
   const forbidden: string[] = [];
   const state = { isStreaming: true, model: { provider: "fixture", id: "offline" } };
+  let holdPlanExecution = false;
+  const releasePlanExecution: { current: (() => void) | null } = { current: null };
   await page.route("**/api/**", async route => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (request.method() === "GET") {
-      if (path === `/api/agent/${SESSION}`) return route.fulfill({ json: { running: true, state } });
+      if (path === `/api/agent/${SESSION}`) return route.fulfill({ json: { running: state.isStreaming, state } });
       return route.continue();
     }
     if (path === "/api/worktrees") return route.fulfill({ json: { worktrees: [] } });
@@ -21,6 +23,9 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
     const command = request.postDataJSON();
     if (path === `/api/agent/${SESSION}` && ["workflow_command", "get_tools"].includes(command.type)) {
       commands.push(command);
+      if (holdPlanExecution && command.type === "workflow_command" && command.command === "plan" && command.args === "execute") {
+        await new Promise<void>(resolve => { releasePlanExecution.current = resolve; });
+      }
       return route.fulfill({ json: { success: true, data: command.type === "get_tools" ? [] : null } });
     }
     forbidden.push(path);
@@ -28,7 +33,7 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
   });
   await page.route(new RegExp(`/api/sessions/${SESSION}(?:\\?|$)`), async route => {
     const response = await route.fetch(); const data = await response.json();
-    await route.fulfill({ response, json: { ...data, agentState: { running: true, state } } });
+    await route.fulfill({ response, json: { ...data, agentState: { running: state.isStreaming, state } } });
   });
   await page.route(new RegExp(`/api/agent/${SESSION}/events(?:\\?|$)`), route => route.fulfill({
     contentType: "text/event-stream", body: "retry: 60000\n" + [
@@ -50,6 +55,7 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
   await goal.getByRole("button", { name: "Hide Goal", exact: true }).tap();
   await plan.getByRole("button", { name: "Hide Plan", exact: true }).tap();
   await expect(goal).toBeHidden(); await expect(plan).toBeHidden();
+  await expect(page.getByTestId("extension-status")).toHaveCount(0);
   await expect(input).toHaveValue("Keep this draft");
   expect(await input.evaluate(element => element === document.activeElement)).toBe(true);
   await page.reload();
@@ -64,13 +70,40 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
   await expect(reopenGoal).toBeFocused();
   await reopenGoal.press("Enter");
   await expect(hideGoal).toBeFocused();
+  const execute = plan.getByRole("button", { name: "Execute plan", exact: true });
+  const exit = plan.getByRole("button", { name: "Exit plan", exact: true });
+  await expect(execute).toBeDisabled();
+  await expect(exit).toBeDisabled();
+  // The running fixture must refuse execution even if a second activation is
+  // delivered before a user sees the disabled state.
+  await execute.evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+  expect(commands.filter(command => command.type === "workflow_command" && command.command === "plan")).toEqual([]);
+
+  // Reconnect to an idle runtime before executing the ready plan. The fixture
+  // changes both GET state and its SSE snapshot, rather than forcing the UI.
+  state.isStreaming = false;
+  await page.reload();
+  await expect(goal).toBeVisible(); await expect(plan).toBeVisible();
+  await expect(execute).toBeEnabled();
+  await expect(exit).toBeEnabled();
+  await expect(input).toHaveValue("Keep this draft");
   await plan.locator("summary").click();
   await expect(plan).toContainText("Verify the fix");
   await expect(plan.getByRole("button", { name: "Execute plan" })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
   await page.screenshot({ path: test.info().outputPath(`workflow-${width}.png`) });
-  await plan.getByRole("button", { name: "Execute plan" }).click();
-  await expect.poll(() => commands.filter(c => c.type === "workflow_command").at(-1)).toEqual({ type: "workflow_command", command: "plan", args: "execute" });
+  holdPlanExecution = true;
+  try {
+    await execute.click();
+    await expect(execute).toBeDisabled();
+    await expect(exit).toBeDisabled();
+    await execute.evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+    await expect.poll(() => commands.filter(command => command.type === "workflow_command" && command.command === "plan"))
+      .toEqual([{ type: "workflow_command", command: "plan", args: "execute" }]);
+  } finally {
+    releasePlanExecution.current?.();
+  }
+  await expect(execute).toBeEnabled();
   await page.reload();
   await expect(goal).toContainText("Fix the message experience");
   await expect(input).toHaveValue("Keep this draft");

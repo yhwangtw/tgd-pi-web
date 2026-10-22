@@ -17,16 +17,20 @@ interface Props {
   entries?: readonly string[];
   sessionKey?: string;
   currentTurnStartIndex?: number;
+  /** Sample real rows for logical-index tests; geometry tests mount the complete range. */
+  renderedIndices?: readonly number[];
 }
 let current: ReturnType<typeof useTranscriptHistory>;
-function Harness({ entries = keys, sessionKey = "large", currentTurnStartIndex }: Props) {
+function Harness({ entries = keys, sessionKey = "large", currentTurnStartIndex, renderedIndices }: Props) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const history = useTranscriptHistory({ visibleKeys: entries, sessionKey, currentTurnStartIndex, scrollContainerRef, messageRefs });
   useLayoutEffect(() => { current = history; });
+  const mounted = renderedIndices
+    ? renderedIndices.filter(index => index >= history.startIndex).map(index => ({ key: entries[index], index }))
+    : entries.slice(history.startIndex).map((key, offset) => ({ key, index: history.startIndex + offset }));
   return <div data-scroller="true" ref={scrollContainerRef}>
-    {entries.slice(history.startIndex).map((key, offset) => {
-      const index = history.startIndex + offset;
+    {mounted.map(({ key, index }) => {
       return <div data-index={index} key={key} ref={element => { messageRefs.current[index] = element; }}>{key}</div>;
     })}
   </div>;
@@ -129,11 +133,20 @@ describe("progressive transcript history", () => {
   });
 
   it("reveals old logical search/bookmark indices without changing their identity", async () => {
-    await render();
+    // Exercise all 10k logical keys without turning an index test into a 9,760-node
+    // React/jsdom prepend benchmark. Paging and anchoring above use complete rows.
+    await render({ renderedIndices: [0, 39, 40, 41, 9799, 9800, 9999] });
+    expect(current.startIndex).toBe(9800);
+    expect(rows()).toHaveLength(2);
+    const retainedTail = row(9999);
     await act(async () => { expect(current.reveal(40)).toBe(true); });
     expect(current.startIndex).toBe(40);
+    expect(row(39)).toBeNull();
     expect(row(40).textContent).toBe("entry-40");
+    expect(row(41).textContent).toBe("entry-41");
+    expect(row(9999)).toBe(retainedTail);
     expect(row(9999).textContent).toBe("entry-9999");
+    expect(rows()).toHaveLength(5);
     await settlePrepend();
     await act(async () => {
       expect(current.reveal(9999)).toBe(false);
@@ -141,6 +154,11 @@ describe("progressive transcript history", () => {
       expect(current.reveal(-1)).toBe(true);
     });
     expect(current.startIndex).toBe(0);
+    expect(row(0).textContent).toBe("entry-0");
+    expect(row(39).textContent).toBe("entry-39");
+    expect(row(9999)).toBe(retainedTail);
+    expect(row(9999).textContent).toBe("entry-9999");
+    expect(rows()).toHaveLength(7);
     expect(current.hasPrevious).toBe(false);
     await settlePrepend();
     expect(current.loadPrevious()).toBe(false);
