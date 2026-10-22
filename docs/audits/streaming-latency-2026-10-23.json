@@ -1055,6 +1055,692 @@
           "timing": "Optional local stage diagnostic; missing on the old baseline. Client and server clocks must not be subtracted."
         }
       }
+    ],
+    "afterSecurity": [
+      {
+        "kind": "pi-web-offline-browser-benchmark",
+        "browser": "156.0.8078.4",
+        "engine": "durable",
+        "profile": "short",
+        "runs": 5,
+        "fixtureHash": "5950d2344c6ecb9fa42fa9cdaeefed6d3dd6d34fbec21472c68a96c74bbe8ab5",
+        "sessionSetupMs": 47.77,
+        "viewReadyMs": 196.53,
+        "samples": [
+          {
+            "sample": 1,
+            "phase": "first-precreated",
+            "runId": "sample-001",
+            "eventBytes": 4842,
+            "deltaFrames": 0,
+            "fullUpdates": 0,
+            "timing": {
+              "timingId": "c6eae15c-f28d-4566-9eed-1298b43606b6",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 10.92,
+                "first_content": 108.53,
+                "completed": 108.82
+              },
+              "requestSentMs": 8.100000023841858,
+              "firstEventMs": 41.5,
+              "firstContentMs": 122.69999998807907,
+              "completedMs": 123,
+              "firstCommitMs": 128.30000001192093,
+              "displayLagMs": 5.600000023841858
+            },
+            "firstDomMs": 133.3,
+            "firstSentenceMs": 133.3,
+            "completeDomMs": 133.3,
+            "outputCharacters": 925,
+            "outputHash": "a2e58db3eb763a5bc78a09fd3a6a19543d6dd9fbfc8b22d5e15c2a6940584160"
+          },
+          {
+            "sample": 2,
+            "phase": "warm",
+            "runId": "sample-002",
+            "eventBytes": 6225,
+            "deltaFrames": 0,
+            "fullUpdates": 0,
+            "timing": {
+              "timingId": "1da1bd8e-4d12-435f-8cc9-02cd371a3773",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 5.72,
+                "first_content": 103.39,
+                "completed": 103.55
+              },
+              "requestSentMs": 4.199999988079071,
+              "firstEventMs": 16.19999998807907,
+              "firstContentMs": 115,
+              "completedMs": 115.19999998807907,
+              "firstCommitMs": 119.30000001192093,
+              "displayLagMs": 4.300000011920929
+            },
+            "firstDomMs": 123.8,
+            "firstSentenceMs": 123.8,
+            "completeDomMs": 123.8,
+            "outputCharacters": 925,
+            "outputHash": "8589e47acf1ebd59c1d2ca5cf1bf673357dd067193fc069182ab53f5fd49b5c5"
+          },
+          {
+            "sample": 3,
+            "phase": "warm",
+            "runId": "sample-003",
+            "eventBytes": 7609,
+            "deltaFrames": 0,
+            "fullUpdates": 0,
+            "timing": {
+              "timingId": "a7e13ebb-1318-444c-85b5-ba07596b7146",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 4.58,
+                "first_content": 102.94,
+                "completed": 103.09
+              },
+              "requestSentMs": 3.799999952316284,
+              "firstEventMs": 16.399999976158142,
+              "firstContentMs": 113.19999998807907,
+              "completedMs": 113.29999995231628,
+              "firstCommitMs": 117.39999997615814,
+              "displayLagMs": 4.199999988079071
+            },
+            "firstDomMs": 121.8,
+            "firstSentenceMs": 121.8,
+            "completeDomMs": 121.8,
+            "outputCharacters": 925,
+            "outputHash": "f286293a305cc5b028a9f24b996e76cd06b5f3dc797ee42cc72b63d7d2dd7741"
+          },
+          {
+            "sample": 4,
+            "phase": "warm",
+            "runId": "sample-004",
+            "eventBytes": 8993,
+            "deltaFrames": 0,
+            "fullUpdates": 0,
+            "timing": {
+              "timingId": "d5c9f8e0-cf3b-40d1-928b-710f3546226d",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 4.97,
+                "first_content": 104.34,
+                "completed": 104.48
+              },
+              "requestSentMs": 3.699999988079071,
+              "firstEventMs": 15.599999964237213,
+              "firstContentMs": 115.09999996423721,
+              "completedMs": 115.29999995231628,
+              "firstCommitMs": 119.5,
+              "displayLagMs": 4.400000035762787
+            },
+            "firstDomMs": 123.9,
+            "firstSentenceMs": 123.9,
+            "completeDomMs": 123.9,
+            "outputCharacters": 925,
+            "outputHash": "1b622b3bc6762dcd4faa1149675e0a0264ca53afd3b0715787ed2aaf0d2736b1"
+          },
+          {
+            "sample": 5,
+            "phase": "warm",
+            "runId": "sample-005",
+            "eventBytes": 10374,
+            "deltaFrames": 0,
+            "fullUpdates": 0,
+            "timing": {
+              "timingId": "324a4390-af3a-48a2-8574-8b112b0cfa29",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 5,
+                "first_content": 103.06,
+                "completed": 103.19
+              },
+              "requestSentMs": 4.600000023841858,
+              "firstEventMs": 15.5,
+              "firstContentMs": 113.69999998807907,
+              "completedMs": 113.80000001192093,
+              "firstCommitMs": 118.30000001192093,
+              "displayLagMs": 4.600000023841858
+            },
+            "firstDomMs": 122.4,
+            "firstSentenceMs": 122.4,
+            "completeDomMs": 122.4,
+            "outputCharacters": 925,
+            "outputHash": "09e412cd8cd642614e36a35616fadd9aa00119c032a042b02cbac78e05f2bcb9"
+          }
+        ],
+        "warmMedian": {
+          "firstDomMs": 123.1,
+          "firstSentenceMs": 123.1,
+          "completeDomMs": 123.1
+        },
+        "definitions": {
+          "scope": "Real Chromium, offline deterministic provider; no claims about production/model/TUI speed.",
+          "firstDomMs": "Send click capture to the first emitted text chunk in the assistant DOM (its unique run marker fits in that chunk), observed by MutationObserver. Not physical display paint.",
+          "firstSentenceMs": "Send click to the complete first sentence in DOM. It spans two synthetic chunks, so it measures progress delivery after the eager first chunk.",
+          "completeDomMs": "Send click to final marker in DOM; authoritative message also validated exactly. Runtime settlement can happen later.",
+          "sessionSetupMs": "Node clock API creation of a fresh session/runtime. Measured separately from browser click/DOM; not a cold-process comparison.",
+          "warm": "Later prompts in the same precreated session, with growing synthetic history. First prompt is excluded from warm median.",
+          "timing": "Optional local stage diagnostic; missing on the old baseline. Client and server clocks must not be subtracted."
+        }
+      },
+      {
+        "kind": "pi-web-offline-browser-benchmark",
+        "browser": "156.0.8078.4",
+        "engine": "durable",
+        "profile": "long",
+        "runs": 5,
+        "fixtureHash": "5950d2344c6ecb9fa42fa9cdaeefed6d3dd6d34fbec21472c68a96c74bbe8ab5",
+        "sessionSetupMs": 22.24,
+        "viewReadyMs": 222.74,
+        "samples": [
+          {
+            "sample": 1,
+            "phase": "first-precreated",
+            "runId": "sample-001",
+            "eventBytes": 36177,
+            "deltaFrames": 8,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "6b1f4573-ef73-4d97-b5a1-932b7f3c9660",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 5.66,
+                "first_content": 105.9,
+                "completed": 1126.65
+              },
+              "requestSentMs": 8.100000023841858,
+              "firstEventMs": 34.10000002384186,
+              "firstContentMs": 119.10000002384186,
+              "firstCommitMs": 123.5,
+              "displayLagMs": 4.399999976158142,
+              "completedMs": 1143.5
+            },
+            "firstDomMs": 125,
+            "firstSentenceMs": 125,
+            "completeDomMs": 1171.3,
+            "outputCharacters": 10516,
+            "outputHash": "e9966b566e65af7fc1349fe034a7ca378e40ad46284d5e786ed858d50717da7f"
+          },
+          {
+            "sample": 2,
+            "phase": "warm",
+            "runId": "sample-002",
+            "eventBytes": 47309,
+            "deltaFrames": 8,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "7e2d609e-51d6-4f07-bce2-0efd6de56c29",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 5.15,
+                "first_content": 106.49,
+                "completed": 1122.72
+              },
+              "requestSentMs": 4.300000011920929,
+              "firstEventMs": 16,
+              "firstContentMs": 116.69999998807907,
+              "firstCommitMs": 119.09999996423721,
+              "displayLagMs": 2.399999976158142,
+              "completedMs": 1136.3999999761581
+            },
+            "firstDomMs": 120.6,
+            "firstSentenceMs": 120.6,
+            "completeDomMs": 1163,
+            "outputCharacters": 10516,
+            "outputHash": "5e005606b31f3697226a3ca951ae1f3ce711a00cca877672218bd77d651ff1b0"
+          },
+          {
+            "sample": 3,
+            "phase": "warm",
+            "runId": "sample-003",
+            "eventBytes": 58461,
+            "deltaFrames": 8,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "9f6c839e-8b5c-44dc-97ea-f751398946d5",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 4.23,
+                "first_content": 104.63,
+                "completed": 1117.95
+              },
+              "requestSentMs": 3.900000035762787,
+              "firstEventMs": 17.80000001192093,
+              "firstContentMs": 113.5,
+              "firstCommitMs": 116.40000003576279,
+              "displayLagMs": 2.900000035762787,
+              "completedMs": 1130
+            },
+            "firstDomMs": 117.2,
+            "firstSentenceMs": 117.2,
+            "completeDomMs": 1153,
+            "outputCharacters": 10516,
+            "outputHash": "e1405380c31df74572b7e97645ae9215907085ce3f4e4b750b42f3515a391dd8"
+          },
+          {
+            "sample": 4,
+            "phase": "warm",
+            "runId": "sample-004",
+            "eventBytes": 69561,
+            "deltaFrames": 8,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "4183fe02-23c2-4420-8ba5-b4cc25eb0ad5",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 7.75,
+                "first_content": 109.52,
+                "completed": 1125.07
+              },
+              "requestSentMs": 3.600000023841858,
+              "firstEventMs": 17,
+              "firstContentMs": 118.5,
+              "firstCommitMs": 120.80000001192093,
+              "displayLagMs": 2.300000011920929,
+              "completedMs": 1135.6000000238419
+            },
+            "firstDomMs": 122.1,
+            "firstSentenceMs": 122.1,
+            "completeDomMs": 1153,
+            "outputCharacters": 10516,
+            "outputHash": "0e3b38a8e69a28e90b4cdd8f22f3652af6a829986a0b85f39eaa03a63e3bed3c"
+          },
+          {
+            "sample": 5,
+            "phase": "warm",
+            "runId": "sample-005",
+            "eventBytes": 80741,
+            "deltaFrames": 8,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "4048954f-8df9-49ab-b57f-d0b4ff6e9f98",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 4.84,
+                "first_content": 105.95,
+                "completed": 1123.62
+              },
+              "requestSentMs": 4.300000011920929,
+              "firstEventMs": 17.900000035762787,
+              "firstContentMs": 115.30000001192093,
+              "firstCommitMs": 117.70000004768372,
+              "displayLagMs": 2.400000035762787,
+              "completedMs": 1136.800000011921
+            },
+            "firstDomMs": 118.5,
+            "firstSentenceMs": 118.5,
+            "completeDomMs": 1163,
+            "outputCharacters": 10516,
+            "outputHash": "871afb0ec4775d4935157a4146f2a9a8f66a6b81f168407788e08345c07e6407"
+          }
+        ],
+        "warmMedian": {
+          "firstDomMs": 119.55,
+          "firstSentenceMs": 119.55,
+          "completeDomMs": 1158
+        },
+        "definitions": {
+          "scope": "Real Chromium, offline deterministic provider; no claims about production/model/TUI speed.",
+          "firstDomMs": "Send click capture to the first emitted text chunk in the assistant DOM (its unique run marker fits in that chunk), observed by MutationObserver. Not physical display paint.",
+          "firstSentenceMs": "Send click to the complete first sentence in DOM. It spans two synthetic chunks, so it measures progress delivery after the eager first chunk.",
+          "completeDomMs": "Send click to final marker in DOM; authoritative message also validated exactly. Runtime settlement can happen later.",
+          "sessionSetupMs": "Node clock API creation of a fresh session/runtime. Measured separately from browser click/DOM; not a cold-process comparison.",
+          "warm": "Later prompts in the same precreated session, with growing synthetic history. First prompt is excluded from warm median.",
+          "timing": "Optional local stage diagnostic; missing on the old baseline. Client and server clocks must not be subtracted."
+        }
+      },
+      {
+        "kind": "pi-web-offline-browser-benchmark",
+        "browser": "156.0.8078.4",
+        "engine": "legacy",
+        "profile": "short",
+        "runs": 5,
+        "fixtureHash": "5950d2344c6ecb9fa42fa9cdaeefed6d3dd6d34fbec21472c68a96c74bbe8ab5",
+        "sessionSetupMs": 521.06,
+        "viewReadyMs": 306.62,
+        "samples": [
+          {
+            "sample": 1,
+            "phase": "first-precreated",
+            "runId": "sample-001",
+            "eventBytes": 33401,
+            "deltaFrames": 40,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "99ebda56-d701-4e6b-9286-caae53c52f45",
+              "status": "completed",
+              "server": {
+                "accepted": 0.02,
+                "provider_request": 76.78,
+                "first_content": 76.95,
+                "completed": 173.46
+              },
+              "requestSentMs": 10.099999964237213,
+              "firstEventMs": 95.59999996423721,
+              "firstContentMs": 98,
+              "firstCommitMs": 100,
+              "displayLagMs": 2,
+              "completedMs": 193
+            },
+            "firstDomMs": 101.9,
+            "firstSentenceMs": 117.9,
+            "completeDomMs": 201.3,
+            "outputCharacters": 925,
+            "outputHash": "a2e58db3eb763a5bc78a09fd3a6a19543d6dd9fbfc8b22d5e15c2a6940584160"
+          },
+          {
+            "sample": 2,
+            "phase": "warm",
+            "runId": "sample-002",
+            "eventBytes": 31936,
+            "deltaFrames": 40,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "7055bdd3-e8f2-4f8a-928a-fcbfc7b86572",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 30.02,
+                "first_content": 30.14,
+                "completed": 119.74
+              },
+              "requestSentMs": 3.099999964237213,
+              "firstEventMs": 38.5,
+              "firstContentMs": 40.19999998807907,
+              "firstCommitMs": 41,
+              "displayLagMs": 0.800000011920929,
+              "completedMs": 128.5
+            },
+            "firstDomMs": 41.4,
+            "firstSentenceMs": 59.1,
+            "completeDomMs": 135.5,
+            "outputCharacters": 925,
+            "outputHash": "8589e47acf1ebd59c1d2ca5cf1bf673357dd067193fc069182ab53f5fd49b5c5"
+          },
+          {
+            "sample": 3,
+            "phase": "warm",
+            "runId": "sample-003",
+            "eventBytes": 33729,
+            "deltaFrames": 40,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "9a988478-e51d-462d-9a58-87d8ac9a2925",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 30.88,
+                "first_content": 30.96,
+                "completed": 128.55
+              },
+              "requestSentMs": 3.400000035762787,
+              "firstEventMs": 39.40000003576279,
+              "firstContentMs": 41.10000002384186,
+              "firstCommitMs": 41.60000002384186,
+              "displayLagMs": 0.5,
+              "completedMs": 137.4000000357628
+            },
+            "firstDomMs": 42,
+            "firstSentenceMs": 59,
+            "completeDomMs": 144.1,
+            "outputCharacters": 925,
+            "outputHash": "f286293a305cc5b028a9f24b996e76cd06b5f3dc797ee42cc72b63d7d2dd7741"
+          },
+          {
+            "sample": 4,
+            "phase": "warm",
+            "runId": "sample-004",
+            "eventBytes": 35497,
+            "deltaFrames": 40,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "8ec9608a-ac90-4688-a5d2-4645a1d6bca2",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 30.06,
+                "first_content": 30.13,
+                "completed": 124.64
+              },
+              "requestSentMs": 3.300000011920929,
+              "firstEventMs": 38.30000001192093,
+              "firstContentMs": 40,
+              "firstCommitMs": 40.59999996423721,
+              "displayLagMs": 0.5999999642372131,
+              "completedMs": 133.80000001192093
+            },
+            "firstDomMs": 41.2,
+            "firstSentenceMs": 58.4,
+            "completeDomMs": 140.3,
+            "outputCharacters": 925,
+            "outputHash": "1b622b3bc6762dcd4faa1149675e0a0264ca53afd3b0715787ed2aaf0d2736b1"
+          },
+          {
+            "sample": 5,
+            "phase": "warm",
+            "runId": "sample-005",
+            "eventBytes": 37238,
+            "deltaFrames": 40,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "5553637a-2e1e-438c-9b57-b8ab989d6368",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 31.87,
+                "first_content": 31.95,
+                "completed": 122.2
+              },
+              "requestSentMs": 3.599999964237213,
+              "firstEventMs": 40.69999998807907,
+              "firstContentMs": 42.5,
+              "firstCommitMs": 43.30000001192093,
+              "displayLagMs": 0.800000011920929,
+              "completedMs": 131.69999998807907
+            },
+            "firstDomMs": 43.6,
+            "firstSentenceMs": 61.6,
+            "completeDomMs": 138.4,
+            "outputCharacters": 925,
+            "outputHash": "09e412cd8cd642614e36a35616fadd9aa00119c032a042b02cbac78e05f2bcb9"
+          }
+        ],
+        "warmMedian": {
+          "firstDomMs": 41.7,
+          "firstSentenceMs": 59.05,
+          "completeDomMs": 139.35
+        },
+        "definitions": {
+          "scope": "Real Chromium, offline deterministic provider; no claims about production/model/TUI speed.",
+          "firstDomMs": "Send click capture to the first emitted text chunk in the assistant DOM (its unique run marker fits in that chunk), observed by MutationObserver. Not physical display paint.",
+          "firstSentenceMs": "Send click to the complete first sentence in DOM. It spans two synthetic chunks, so it measures progress delivery after the eager first chunk.",
+          "completeDomMs": "Send click to final marker in DOM; authoritative message also validated exactly. Runtime settlement can happen later.",
+          "sessionSetupMs": "Node clock API creation of a fresh session/runtime. Measured separately from browser click/DOM; not a cold-process comparison.",
+          "warm": "Later prompts in the same precreated session, with growing synthetic history. First prompt is excluded from warm median.",
+          "timing": "Optional local stage diagnostic; missing on the old baseline. Client and server clocks must not be subtracted."
+        }
+      },
+      {
+        "kind": "pi-web-offline-browser-benchmark",
+        "browser": "156.0.8078.4",
+        "engine": "legacy",
+        "profile": "long",
+        "runs": 5,
+        "fixtureHash": "5950d2344c6ecb9fa42fa9cdaeefed6d3dd6d34fbec21472c68a96c74bbe8ab5",
+        "sessionSetupMs": 20.81,
+        "viewReadyMs": 190.76,
+        "samples": [
+          {
+            "sample": 1,
+            "phase": "first-precreated",
+            "runId": "sample-001",
+            "eventBytes": 212708,
+            "deltaFrames": 440,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "9ba5c22c-692a-4e8a-89af-4c6051163a82",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 62.59,
+                "first_content": 62.69,
+                "completed": 1143.17
+              },
+              "requestSentMs": 8.099999964237213,
+              "firstEventMs": 76.5,
+              "firstContentMs": 79,
+              "firstCommitMs": 81.79999995231628,
+              "displayLagMs": 2.799999952316284,
+              "completedMs": 1158.699999988079
+            },
+            "firstDomMs": 82.7,
+            "firstSentenceMs": 97,
+            "completeDomMs": 1177,
+            "outputCharacters": 10516,
+            "outputHash": "e9966b566e65af7fc1349fe034a7ca378e40ad46284d5e786ed858d50717da7f"
+          },
+          {
+            "sample": 2,
+            "phase": "warm",
+            "runId": "sample-002",
+            "eventBytes": 221093,
+            "deltaFrames": 440,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "0de6b8b6-3b71-4753-ba0f-a99d141431d5",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 29.9,
+                "first_content": 29.96,
+                "completed": 1122.27
+              },
+              "requestSentMs": 3.300000011920929,
+              "firstEventMs": 38.5,
+              "firstContentMs": 40.59999996423721,
+              "firstCommitMs": 41.59999996423721,
+              "displayLagMs": 1,
+              "completedMs": 1132.0999999642372
+            },
+            "firstDomMs": 42.2,
+            "firstSentenceMs": 59.2,
+            "completeDomMs": 1146.3,
+            "outputCharacters": 10516,
+            "outputHash": "5e005606b31f3697226a3ca951ae1f3ce711a00cca877672218bd77d651ff1b0"
+          },
+          {
+            "sample": 3,
+            "phase": "warm",
+            "runId": "sample-003",
+            "eventBytes": 232964,
+            "deltaFrames": 440,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "5e3819eb-219b-404d-ad24-d057ad476e2d",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 40.35,
+                "first_content": 40.43,
+                "completed": 1099.85
+              },
+              "requestSentMs": 4.300000011920929,
+              "firstEventMs": 50.40000003576279,
+              "firstContentMs": 52.40000003576279,
+              "firstCommitMs": 53.10000002384186,
+              "displayLagMs": 0.699999988079071,
+              "completedMs": 1111.2000000476837
+            },
+            "firstDomMs": 53.5,
+            "firstSentenceMs": 70.5,
+            "completeDomMs": 1127.8,
+            "outputCharacters": 10516,
+            "outputHash": "e1405380c31df74572b7e97645ae9215907085ce3f4e4b750b42f3515a391dd8"
+          },
+          {
+            "sample": 4,
+            "phase": "warm",
+            "runId": "sample-004",
+            "eventBytes": 244580,
+            "deltaFrames": 440,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "dc663e31-a323-467e-ac7c-ab72257ca20a",
+              "status": "completed",
+              "server": {
+                "accepted": 0,
+                "provider_request": 32.02,
+                "first_content": 32.12,
+                "completed": 1112.77
+              },
+              "requestSentMs": 4.099999964237213,
+              "firstEventMs": 41.80000001192093,
+              "firstContentMs": 43.89999997615814,
+              "firstCommitMs": 44.69999998807907,
+              "displayLagMs": 0.800000011920929,
+              "completedMs": 1123.8999999761581
+            },
+            "firstDomMs": 45.4,
+            "firstSentenceMs": 63.4,
+            "completeDomMs": 1138.8,
+            "outputCharacters": 10516,
+            "outputHash": "0e3b38a8e69a28e90b4cdd8f22f3652af6a829986a0b85f39eaa03a63e3bed3c"
+          },
+          {
+            "sample": 5,
+            "phase": "warm",
+            "runId": "sample-005",
+            "eventBytes": 256105,
+            "deltaFrames": 440,
+            "fullUpdates": 1,
+            "timing": {
+              "timingId": "104e4796-40ad-4e42-9b27-927a47f10eef",
+              "status": "completed",
+              "server": {
+                "accepted": 0.01,
+                "provider_request": 33.3,
+                "first_content": 33.38,
+                "completed": 1111.92
+              },
+              "requestSentMs": 4.300000011920929,
+              "firstEventMs": 42.5,
+              "firstContentMs": 44.80000001192093,
+              "firstCommitMs": 45.69999998807907,
+              "displayLagMs": 0.8999999761581421,
+              "completedMs": 1122.199999988079
+            },
+            "firstDomMs": 46.3,
+            "firstSentenceMs": 62.8,
+            "completeDomMs": 1137.7,
+            "outputCharacters": 10516,
+            "outputHash": "871afb0ec4775d4935157a4146f2a9a8f66a6b81f168407788e08345c07e6407"
+          }
+        ],
+        "warmMedian": {
+          "firstDomMs": 45.85,
+          "firstSentenceMs": 63.1,
+          "completeDomMs": 1138.25
+        },
+        "definitions": {
+          "scope": "Real Chromium, offline deterministic provider; no claims about production/model/TUI speed.",
+          "firstDomMs": "Send click capture to the first emitted text chunk in the assistant DOM (its unique run marker fits in that chunk), observed by MutationObserver. Not physical display paint.",
+          "firstSentenceMs": "Send click to the complete first sentence in DOM. It spans two synthetic chunks, so it measures progress delivery after the eager first chunk.",
+          "completeDomMs": "Send click to final marker in DOM; authoritative message also validated exactly. Runtime settlement can happen later.",
+          "sessionSetupMs": "Node clock API creation of a fresh session/runtime. Measured separately from browser click/DOM; not a cold-process comparison.",
+          "warm": "Later prompts in the same precreated session, with growing synthetic history. First prompt is excluded from warm median.",
+          "timing": "Optional local stage diagnostic; missing on the old baseline. Client and server clocks must not be subtracted."
+        }
+      }
     ]
   },
   "cli": {
@@ -1356,5 +2042,11 @@
     "fullBytes": 128726556,
     "deltaBytes": 577108,
     "reductionPercent": 99.55167914225873
+  },
+  "performanceCommit": "02b02f6ab415a538ba024b0b4c76a5b0d692d36b",
+  "frameworkVersions": {
+    "baseline": "16.3.8",
+    "performanceComparison": "16.3.8",
+    "securityFollowup": "16.4.2"
   }
 }

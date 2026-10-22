@@ -1,6 +1,6 @@
 # Streaming delivery audit — 2026-10-23
 
-Compared release source `0f8a31ba` with `codex/streaming-latency`, using the same
+Compared release source `0f8a31ba` with performance commit `02b02f6`, using the same
 installed dependencies and shared offline fixture implementation. The original
 971 baseline source files were unchanged; only the benchmark harness was added.
 Production and global Pi were not used for this audit.
@@ -87,3 +87,34 @@ first content means text. Client/server clocks are independent.
 Raw synthetic samples, definitions, fixture hashes, CLI outputs and wire totals:
 [streaming-latency-2026-10-23.json](./streaming-latency-2026-10-23.json).
 Reproduction commands are in [Development](../DEVELOPMENT.md#streaming-latency-and-incremental-transport).
+
+## Framework security follow-up
+
+CI subsequently found newly indexed Next.js advisories in the unchanged 16.3.8
+baseline. The dependency range now starts at the upstream 16.4.1 security fix;
+the lockfile resolves Next.js, its analyzer and lint config to stable 16.4.2.
+Production dependency audit passes. The original performance comparison above
+used 16.3.8 on both sides and remains an isolated streaming-change measurement.
+
+The updated lint preset emits React Compiler memo-preservation diagnostics. This
+project does not enable React Compiler; those diagnostics remain visible as
+warnings, while runtime hook rules and security checks retain their settings.
+Existing callbacks keep reading live refs without changing their dependencies.
+
+Upstream fixes: [image optimization advisory](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw),
+[Server Actions advisory](https://github.com/vercel/next.js/security/advisories/GHSA-p3m5-59mp-jv5r),
+[16.4.2 release](https://github.com/vercel/next.js/releases/tag/v16.4.2).
+
+Final Next.js 16.4.2 verification passed: 2,028 unit tests, 31 browser
+regressions, four benchmark cases, production dependency audit and build. Lint
+has zero errors and 12 warnings (nine compiler diagnostics plus three pre-existing
+navigation warnings). The `/` bundle remains within budget at 531.4 KB gzip.
+
+| Final 16.4.2 engine / profile | First chunk | First sentence | Final marker |
+| --- | ---: | ---: | ---: |
+| durable / short | 123.10 | 123.10 | 123.10 |
+| durable / long | 119.55 | 119.55 | 1158.00 |
+| legacy / short | 41.70 | 59.05 | 139.35 |
+| legacy / long | 45.85 | 63.10 | 1138.25 |
+
+These final-build samples are retained under `browser.afterSecurity` in the raw report.
