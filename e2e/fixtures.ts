@@ -40,12 +40,15 @@ export function createFixtures(root: string): { cwd: string } {
   writeFileSync(path.join(cwd, "table.csv"), "name,status,count\nAlpha,active,2\nBeta,paused,10\n");
   writeFileSync(path.join(cwd, "sample.bin"), Buffer.from([0x50, 0x69, 0x00, 0x57, 0x65, 0x62]));
   mkdirSync(path.join(cwd, ".pi", "extensions"), { recursive: true });
-  // A deterministic, in-memory provider drives the real Pi agent loop for
+  // A deterministic, offline provider drives the real Pi agent loop for
   // reconnect tests. It never performs HTTP, reads credentials, or calls a
   // paid model. Keep this separate from the existing interactive UI fixture.
   writeFileSync(path.join(cwd, ".pi", "extensions", "reconnect-fixture.js"), String.raw`
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import path from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+
+const subagentArrivalRoot = ${JSON.stringify(path.join(root, "subagent-arrivals"))};
 
 export default function reconnectFixture(pi) {
   if (process.env.PIWEB_ENVIRONMENT !== "fixture") throw new Error("Reconnect provider is fixture-only");
@@ -82,7 +85,7 @@ export default function reconnectFixture(pi) {
       const text = typeof user?.content === "string" ? user.content : (user?.content ?? []).map(part => part.text ?? "").join("");
       const delegated = text.startsWith("<delegated_role ") && text.includes("<delegated_task>")
         ? text.split("<delegated_task>")[1].split("</delegated_task>")[0].trim() : null;
-      const fixtureText = delegated ?? text;
+      const fixtureText = delegated ?? (text.startsWith("Task: ") ? text.slice(6).split("\n\n---\n**Output:**\n", 1)[0] : text);
       const match = /^E2E_RECONNECT:(complete|delayed|error|question|outside|subagents):([a-z0-9-]{1,80})$/.exec(fixtureText);
       const message = { role: "assistant", api: model.api, provider, model: model.id,
         content: [], stopReason: "stop", timestamp: Date.now(),
@@ -96,15 +99,46 @@ export default function reconnectFixture(pi) {
             const result = context.messages.at(-1);
             if (result?.role === "toolResult" && result.toolName === "subagent") {
               const partial = token.startsWith("partial-");
-              if (result.isError !== partial) throw new Error("Subagent error contract was not persisted");
+              if (result.isError !== partial) throw new Error("Upstream workflow error contract was not persisted");
+              if (partial) {
+                // Upstream returns an error and call trace, with empty details,
+                // when the package-owned parallel script throws for a child.
+                const output = (result.content ?? []).map(part => part.text ?? "").join("");
+                if (!output.includes("Workflow failed:")
+                  || !output.includes("task-2 (scout) failed: Fixture reconnect failure child-b-" + token)
+                  || !/^- run task-1: completed \([^)]+\)$/m.test(output)
+                  || !output.includes("- run task-2: failed (")) {
+                  throw new Error("Upstream partial failure and completed sibling were not executed");
+                }
+              } else {
+                const details = result.details;
+                if (details?.mode !== "workflow" || details.results?.length !== 2) throw new Error("Upstream workflow result contract was not persisted");
+                for (const [index, label] of ["a", "b"].entries()) {
+                  const childToken = "child-" + label + "-" + token;
+                  const child = details.results.find(row => row.workflowKey === "task-" + (index + 1));
+                  if (!child || child.agent !== "scout" || !child.runId || child.task.split("\n\n---\n**Output:**\n", 1)[0] !== "E2E_RECONNECT:delayed:" + childToken) {
+                    throw new Error("Upstream workflow child identity was not persisted");
+                  }
+                  const output = child.finalOutput ?? JSON.stringify(child.messages ?? []);
+                  if (child.exitCode !== 0 || !output.includes("Fixture completed " + childToken + ".") || !output.includes("Fixture parallel sibling observed " + childToken + ".")) {
+                    throw new Error("Upstream workflow child outcome was not executed");
+                  }
+                }
+                const summary = details.workflowChildren;
+                if (summary?.inventoryComplete !== true || summary.workflowState !== "completed" || summary.children.length !== 2) {
+                  throw new Error("Upstream workflow child inventory was not persisted");
+                }
+              }
               message.content = [{ type: "text", text: "Fixture delegation verified " + token + "." }];
               stream.push({ type: "start", partial: message });
               stream.push({ type: "done", reason: "stop", message });
             } else {
-              const toolCall = { type: "toolCall", id: "fixture-subagents-" + token, name: "subagent", arguments: { tasks: [
-                { agent: "scout", task: "E2E_RECONNECT:delayed:child-a-" + token },
-                { agent: "scout", task: "E2E_RECONNECT:" + (token.startsWith("partial-") ? "error" : "delayed") + ":child-b-" + token },
-              ] } };
+              const toolCall = { type: "toolCall", id: "fixture-subagents-" + token, name: "subagent", arguments: {
+                workflow: "parallel", args: { tasks: [
+                  { agent: "scout", task: "E2E_RECONNECT:delayed:child-a-" + token, model: provider + "/deterministic" },
+                  { agent: "scout", task: "E2E_RECONNECT:" + (token.startsWith("partial-") ? "error" : "delayed") + ":child-b-" + token, model: provider + "/deterministic" },
+                ] }, async: false, options: { context: "fresh", mission: false, chatProgress: "off" },
+              } };
               message.content = [toolCall]; message.stopReason = "toolUse";
               stream.push({ type: "start", partial: message });
               stream.push({ type: "toolcall_start", contentIndex: 0, partial: message });
@@ -150,8 +184,27 @@ export default function reconnectFixture(pi) {
             }
             return;
           }
+          const parallelChild = /^child-([ab])-((?:success|partial)-audit-[a-z0-9-]+)$/.exec(token);
+          if (parallelChild) {
+            // Real child providers rendezvous across processes. A serial runner
+            // times out instead of receiving manufactured concurrency evidence.
+            const [, label, group] = parallelChild;
+            const arrivals = path.join(subagentArrivalRoot, group);
+            mkdirSync(arrivals, { recursive: true });
+            writeFileSync(path.join(arrivals, label), token);
+            const sibling = path.join(arrivals, label === "a" ? "b" : "a");
+            const deadline = Date.now() + 10_000;
+            while (!existsSync(sibling)) {
+              if (options?.signal?.aborted) throw new Error("Fixture run aborted");
+              if (Date.now() >= deadline) throw new Error("Parallel sibling did not start " + token);
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            // Give the actual running child lifecycle time to reach the browser
+            // before the deliberately failing child reports its provider error.
+            if (mode === "error") await new Promise(resolve => setTimeout(resolve, 500));
+          }
           if (mode === "error") throw new Error("Fixture reconnect failure " + token);
-          message.content = [{ type: "text", text: "Fixture progress " + token + ". " }];
+          message.content = [{ type: "text", text: "Fixture progress " + token + ". " + (parallelChild ? "Fixture parallel sibling observed " + token + ". " : "") }];
           stream.push({ type: "start", partial: message });
           stream.push({ type: "text_start", contentIndex: 0, partial: message });
           stream.push({ type: "text_delta", contentIndex: 0, delta: message.content[0].text, partial: message });

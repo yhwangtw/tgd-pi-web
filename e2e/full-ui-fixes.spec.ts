@@ -1,4 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { Details } from "pi-subagents/shared-types";
+import { writeFileSync } from "node:fs";
+type WorkflowSnapshot = NonNullable<Details["workflowChildren"]>;
+type SubagentObserverWindow = Window & { upstreamSubagentObserver?: { source: EventSource; snapshots: WorkflowSnapshot[]; events: unknown[] } };
 const PROVIDER = "e2e-reconnect-fixture";
 const MAIN = "/?session=aaaa1111-2222-3333-4444-555566667777";
 test.beforeEach(async ({ context, baseURL }) => {
@@ -122,25 +126,89 @@ for (const width of [390, 1440]) test(`Original unread and mobile control sizes 
   await page.screenshot({ path: info.outputPath(`original-${width}.png`) });
 });
 
-for (const partial of [false, true]) test(`Pi subagent ${partial ? "partial failure" : "parallel success"} reaches the transcript and work log`, async ({ page }) => {
+for (const partial of [false, true]) test(`Pi subagent ${partial ? "partial failure" : "parallel success"} reaches the transcript and work log`, async ({ page }, info) => {
   const id = await create(page, "legacy", ["subagent"]);
+  const token = `${partial ? "partial" : "success"}-audit-${id}`;
   await page.goto(`/?session=${id}`);
-  const input = page.locator("textarea").last();
-  await input.fill(`E2E_RECONNECT:subagents:${partial ? "partial" : "success"}-audit`);
-  await page.getByRole("button", { name: "Send", exact: true }).click();
-  await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture delegation verified ${partial ? "partial" : "success"}-audit.` })).toBeVisible({ timeout: 30_000 });
-  const response = await page.request.get(`/api/sessions/${id}/context`);
-  const data = await response.json();
-  const result = data.context.messages.find((message: { role: string; toolName?: string }) => message.role === "toolResult" && message.toolName === "subagent");
-  expect(result.isError).toBe(partial);
-  expect(result.details.runs.map((run: { status: string }) => run.status).sort()).toEqual(partial ? ["completed", "failed"] : ["completed", "completed"]);
-  if (partial) await expect(page.getByRole("region", { name: "Work log", exact: true }).getByRole("button", { name: /Needs attention/ })).toBeVisible();
-  expect(await page.locator("body").textContent()).not.toContain("[object Object]");
-  if (!partial) {
-    const runs = await (await page.request.get("/api/agent-runs")).json();
-    const children = runs.runs.filter((run: { id: string }) => result.details.runs.some((child: { runId: string }) => child.runId === run.id));
-    expect(children).toHaveLength(2);
-    expect(Math.max(...children.map((run: { startedAt: string }) => Date.parse(run.startedAt)))).toBeLessThan(Math.min(...children.map((run: { completedAt: string; finishedAt: string }) => Date.parse(run.completedAt ?? run.finishedAt))));
+  // Observe the real upstream foreground lifecycle; these children do not
+  // belong to the dashboard's background-only async snapshot.
+  await page.evaluate(sessionId => new Promise<void>((resolve, reject) => {
+    const source = new EventSource(`/api/agent/${sessionId}/events`);
+    const observer = { source, snapshots: [] as WorkflowSnapshot[], events: [] as unknown[] };
+    (window as SubagentObserverWindow).upstreamSubagentObserver = observer;
+    const timer = setTimeout(() => { source.close(); reject(new Error("Subagent event observer did not connect")); }, 10_000);
+    source.onopen = () => { clearTimeout(timer); resolve(); };
+    source.onerror = () => { clearTimeout(timer); source.close(); reject(new Error("Subagent event observer disconnected")); };
+    let previous = "";
+    source.onmessage = event => {
+      const frame = JSON.parse(event.data);
+      if (frame.type.startsWith("tool_") && observer.events.length < 128) observer.events.push(frame);
+      if (frame.type !== "tool_execution_update" || frame.toolName !== "subagent") return;
+      const summary = frame.partialResult?.details?.workflowChildren as WorkflowSnapshot | undefined;
+      if (!summary) return;
+      const signature = JSON.stringify([summary.workflowState, summary.children.map(child => [child.childId, child.runId, child.state])]);
+      if (signature !== previous && observer.snapshots.length < 128) observer.snapshots.push(summary);
+      previous = signature;
+    };
+  }), id);
+  let result: { isError: boolean; details: Partial<Details>; content: Array<{ type: string; text?: string }> } | undefined;
+  try {
+    const input = page.locator("textarea").last();
+    await input.fill(`E2E_RECONNECT:subagents:${token}`);
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture delegation verified ${token}.` })).toBeVisible({ timeout: 30_000 });
+    const response = await page.request.get(`/api/sessions/${id}/context`);
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+    result = data.context.messages.find((message: { role: string; toolName?: string }) => message.role === "toolResult" && message.toolName === "subagent");
+    expect(result).toBeDefined();
+    expect(result!.isError).toBe(partial);
+    const snapshots = await page.evaluate(() => (window as SubagentObserverWindow).upstreamSubagentObserver?.snapshots ?? []);
+    // Agent metadata belongs to running launches; upstream omits it once a
+    // child settles. Bind final results/call trace to these actual run ids.
+    const overlap = snapshots.find(snapshot => snapshot.children.length === 2 && ["task-1", "task-2"].every(childId => snapshot.children.some(child => child.childId === childId && child.agent === "scout" && !!child.runId && child.state === "running")));
+    expect(overlap, "Both actual upstream child runs must be observed running together").toBeDefined();
+    const runningChildren = [...overlap!.children].sort((a, b) => a.childId.localeCompare(b.childId));
+    expect(new Set(runningChildren.map(child => child.runId)).size).toBe(2);
+    if (partial) {
+      const output = result!.content.map(part => part.text ?? "").join("");
+      expect(output).toContain("Workflow failed:");
+      expect(output).toContain(`task-2 (scout) failed: Fixture reconnect failure child-b-${token}`);
+      expect(output).toContain(`- run task-1: completed (${runningChildren[0].runId})`);
+      expect(output).toContain(`- run task-2: failed (${runningChildren[1].runId})`);
+      expect(result!.details.results).toBeUndefined();
+    } else {
+      const details = result!.details as Details;
+      expect(details.mode).toBe("workflow");
+      expect(details.results).toHaveLength(2);
+      const children = [...details.results].sort((a, b) => a.workflowKey!.localeCompare(b.workflowKey!));
+      expect(children.map(child => child.workflowKey)).toEqual(["task-1", "task-2"]);
+      for (const [index, child] of children.entries()) {
+        const childToken = `child-${index === 0 ? "a" : "b"}-${token}`;
+        expect(child.agent).toBe("scout");
+        expect(child.runId).toBe(runningChildren[index].runId);
+        expect(child.task.split("\n\n---\n**Output:**\n", 1)[0]).toBe(`E2E_RECONNECT:delayed:${childToken}`);
+        expect(child.exitCode).toBe(0);
+        const output = child.finalOutput ?? JSON.stringify(child.messages ?? []);
+        expect(output).toContain(`Fixture parallel sibling observed ${childToken}.`);
+        expect(output).toContain(`Fixture completed ${childToken}.`);
+      }
+      const summary = details.workflowChildren!;
+      expect(summary.inventoryComplete).toBe(true);
+      expect(summary.workflowState).toBe("completed");
+      expect([...summary.children].sort((a, b) => a.childId.localeCompare(b.childId)).map(child => ({ childId: child.childId, runId: child.runId, state: child.state }))).toEqual(children.map(child => ({ childId: child.workflowKey, runId: child.runId, state: "completed" })));
+    }
+    await expect(page.getByRole("region", { name: "Work log", exact: true }).getByRole("button", { name: partial ? /Needs attention/ : /Completed/ })).toBeVisible();
+    expect(await page.locator("body").textContent()).not.toContain("[object Object]");
+  } finally {
+    const observed = await page.evaluate(() => {
+      const observer = (window as SubagentObserverWindow).upstreamSubagentObserver;
+      observer?.source.close();
+      return { snapshots: observer?.snapshots ?? [], events: observer?.events ?? [] };
+    });
+    const evidencePath = info.outputPath("upstream-evidence.json");
+    writeFileSync(evidencePath, JSON.stringify({ sessionId: id, token, ...observed, result }, null, 2));
+    await info.attach("upstream-subagent-workflow-evidence", { path: evidencePath, contentType: "application/json" });
   }
 });
 
