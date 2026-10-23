@@ -346,7 +346,8 @@
 
 /* ── Session list ── */
 .sessionList {
-  --session-row-height: max(68px, calc(68px * var(--font-scale)));
+  /* Leave room for the tag remove target as well as both text lines. */
+  --session-row-height: max(80px, calc(80px * var(--font-scale)));
   --session-group-height: 42px;
   position: relative;
   overflow-y: auto;

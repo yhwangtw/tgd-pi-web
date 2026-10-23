@@ -152,6 +152,9 @@ for (const width of [390, 1440]) {
     await page.route(url => url.pathname === `/api/sessions/${sid}`, async route => {
       const response = await route.fetch(); const data = await response.json(); context = data.context;
       data.tree = [node("root", "root", [node("branch-left", "Left branch"), node("branch-right", "Right branch")])];
+      // The synthetic tree owns this fixture. A runtime opened by an earlier
+      // test must not replace it with the real session's SSE snapshot.
+      data.agentState = { running: false };
       data.leafId = "branch-left"; await route.fulfill({ response, json: data });
     });
     await page.route(url => url.pathname === `/api/sessions/${sid}/context`, route => route.fulfill({ json: { context } }));

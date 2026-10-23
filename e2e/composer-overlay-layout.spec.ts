@@ -89,7 +89,7 @@ async function expectBottomSheet(page: Page, dialog: Locator) {
 }
 
 for (const style of ["original", "trae"] as const) {
-  test(`${style}: icon controls stay compact, named, and keyboard operable`, async ({ page }) => {
+  test(`${style}: collapsed icon controls expand into labeled, bounded keyboard controls`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
     await openFixture(page, style, 1100, 850);
     const controls = page.getByRole("button", { name: "More composer controls", exact: true });
@@ -102,7 +102,15 @@ for (const style of ["original", "trae"] as const) {
     await controls.click();
     const panel = page.getByRole("region", { name: "Composer controls", exact: true });
     await expectContained(page, panel);
-    expect((await panel.boundingBox())!.height).toBeLessThan(65);
+    // Expanded controls intentionally expose their labels. At this desktop
+    // width they may wrap into three compact rows; the idle trigger stays icon-only.
+    expect((await panel.boundingBox())!.height).toBeLessThanOrEqual(160);
+    for (const label of ["Composer", "Reasoning", "Tools", "Response scroll", "Auto compact", "Context", "Sound"]) {
+      await expect(panel.getByText(label, { exact: true })).toBeVisible();
+    }
+    const groupRows = await panel.locator('[class*="mobileLabeledControl"]').evaluateAll(elements =>
+      elements.filter(element => element.getClientRects().length > 0).map(element => Math.round(element.getBoundingClientRect().y)));
+    expect(new Set(groupRows).size).toBeLessThanOrEqual(3);
     for (const name of ["Change reasoning level", "Change tool preset"]) {
       const button = panel.getByRole("button", { name, exact: true });
       await expect(button).toHaveText("");

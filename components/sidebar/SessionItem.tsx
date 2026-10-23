@@ -282,7 +282,7 @@ export function SessionItem({
                     title={`#${tag}`}
                     style={{ background: tagStyle.bg, color: tagStyle.fg, borderColor: tagStyle.border }}
                   >
-                    #{tag}
+                    <span className={styles.tagLabel}>#{tag}</span>
                     {onRemoveTag && (
                       <button
                         type="button"

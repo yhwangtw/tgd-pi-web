@@ -476,7 +476,7 @@ test.describe("responsive shell", () => {
     await expectNoPageOverflow(page);
   });
 
-  test("AC-RWD-11: mobile session actions use a balanced two-column grid", async ({ page }) => {
+  test("AC-RWD-11: five mobile session actions fit a two-column grid", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     await openSession(page);
     const activation = await page.request.post(`/api/agent/${MAIN_ID}`, {
@@ -490,14 +490,16 @@ test.describe("responsive shell", () => {
     const panel = page.locator("[class*='chatActionsMobileOpen']");
     const exportAction = panel.getByRole("button", { name: "Choose export format" });
     const analyticsAction = panel.getByRole("button", { name: "Token usage and cost report" });
+    const branchesAction = panel.getByRole("button", { name: "Branches", exact: true });
     const filesAction = panel.getByRole("button", { name: "Show file panel" });
     const systemAction = panel.getByRole("button", { name: "System", exact: true });
     await expect(panel).toBeVisible();
 
-    const [panelBox, exportBox, analyticsBox, filesBox, systemBox] = await Promise.all([
+    const [panelBox, exportBox, analyticsBox, branchesBox, filesBox, systemBox] = await Promise.all([
       panel.boundingBox(),
       exportAction.boundingBox(),
       analyticsAction.boundingBox(),
+      branchesAction.boundingBox(),
       filesAction.boundingBox(),
       systemAction.boundingBox(),
     ]);
@@ -507,10 +509,19 @@ test.describe("responsive shell", () => {
     expect(filesBox).not.toBeNull();
     expect(systemBox).not.toBeNull();
     expect(panelBox!.width).toBeLessThanOrEqual(320);
-    expect(panelBox!.height).toBeLessThanOrEqual(120);
+    // Branches is now available on mobile: five 44px actions occupy three rows.
+    expect(branchesBox).not.toBeNull();
+    expect(panelBox!.height).toBeLessThanOrEqual(180);
     expect(Math.abs(exportBox!.y - analyticsBox!.y)).toBeLessThanOrEqual(1);
-    expect(Math.abs(filesBox!.y - systemBox!.y)).toBeLessThanOrEqual(1);
-    expect(filesBox!.y).toBeGreaterThan(exportBox!.y);
+    expect(Math.abs(branchesBox!.y - filesBox!.y)).toBeLessThanOrEqual(1);
+    expect(branchesBox!.y).toBeGreaterThanOrEqual(exportBox!.y + exportBox!.height);
+    expect(systemBox!.y).toBeGreaterThanOrEqual(filesBox!.y + filesBox!.height);
+    for (const box of [exportBox!, analyticsBox!, branchesBox!, filesBox!, systemBox!]) {
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.x).toBeGreaterThanOrEqual(panelBox!.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(panelBox!.x + panelBox!.width);
+      expect(box.y + box.height).toBeLessThanOrEqual(panelBox!.y + panelBox!.height);
+    }
 
     await exportAction.click();
     const exportMenu = page.getByRole("menu");
