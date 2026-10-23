@@ -44,10 +44,20 @@
 .primaryButton,
 .secondaryButton,
 .cardActions button {
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   font: inherit;
   cursor: pointer;
+  overflow-wrap: anywhere;
+  line-height: var(--leading-snug);
+}
+.container button:focus-visible,
+.container summary:focus-visible,
+.container select:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
 }
 .newButton {
   min-height: var(--control-md);
@@ -60,10 +70,10 @@
   border-color: var(--color-accent-border-subtle);
   color: var(--accent-text);
   font-size: var(--type-ui-size);
-  white-space: nowrap;
+  white-space: normal;
 }
-.newButton:hover { background: var(--color-accent-bg-strong); }
-.newButton:disabled { opacity: 0.45; cursor: default; }
+.newButton:hover:not(:disabled) { background: var(--color-accent-bg-strong); }
+.newButton:disabled { opacity: 0.45; cursor: not-allowed; }
 .compareButton {
   min-height: var(--control-md);
   padding: 0 var(--space-2);
@@ -75,7 +85,9 @@
   font-size: var(--type-ui-size);
   cursor: pointer;
   flex-shrink: 0;
-  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 .compareButton:hover:not(:disabled) { background: var(--color-accent-bg); }
 .compareButton:disabled { opacity: .4; cursor: not-allowed; }
@@ -116,11 +128,12 @@
 }
 .concurrencyControl { position: relative; }
 .summary > button { cursor: pointer; }
-.summary > button:hover,
-.summary .summaryActive { background: var(--bg-hover); border-color: var(--border); color: var(--text-muted); }
+.summary > button:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border); color: var(--text-muted); }
+.summary .summaryActive,
+.summary .summaryActive:hover:not(:disabled) { background: var(--color-accent-bg); border-color: var(--color-accent-border); color: var(--accent-text); }
 .summary > button strong { color: var(--text); font-size: var(--text-sm); }
 .summary > button > span,
-.concurrencyControl > span { overflow: hidden; text-overflow: ellipsis; font-size: var(--type-label-size); white-space: nowrap; }
+.concurrencyControl > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: var(--type-label-size); white-space: nowrap; }
 .concurrencyControl > span { order: 2; }
 .concurrencyControl select {
   min-width: 58px;
@@ -136,7 +149,7 @@
   font-weight: var(--weight-semibold);
   cursor: pointer;
 }
-.concurrencyControl select:hover,
+.concurrencyControl select:hover:not(:disabled),
 .concurrencyControl select:focus-visible {
   border-color: var(--color-accent-border-focus);
   background: var(--bg-hover);
@@ -156,7 +169,7 @@
   background: var(--bg-elev-1);
   color: var(--text-dim);
 }
-.filterBar:focus-within { border-color: var(--color-accent-border-focus); }
+.filterBar:focus-within { border-color: var(--color-accent-border-focus); outline: 2px solid var(--accent-text); outline-offset: 2px; }
 .filterBar input {
   min-width: 0;
   flex: 1;
@@ -219,16 +232,25 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   background: var(--bg-elev-1);
+  box-shadow: var(--color-shadow-control);
+  transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
 }
+.card:hover {
+  border-color: var(--border-strong);
+}
+.card[data-status="running"]::before,
+.card[data-status="completed"]::before,
 .card[data-status="failed"]::before,
 .card[data-status="interrupted"]::before,
 .card[data-status="waiting_for_input"]::before {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 3px;
+  width: 1px;
   background: var(--color-error);
   content: "";
 }
+.card[data-status="running"]::before { background: var(--accent); }
+.card[data-status="completed"]::before { background: var(--color-success); }
 .card[data-status="waiting_for_input"]::before { background: var(--color-warning-text-strong); }
 .cardWaiting {
   border-color: var(--color-warning-border-strong);
@@ -302,6 +324,7 @@
 .runReport { margin-top: 7px; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
 .reportToggle { width: 100%; min-height: 32px; padding: var(--space-1) var(--space-2); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); border: 0; background: var(--bg-hover); color: var(--text-muted); font: inherit; font-size: var(--type-label-size); cursor: pointer; }
 .reportToggle span:last-child { min-width: 0; overflow-wrap: anywhere; white-space: normal; color: var(--text-dim); }
+.container .reportToggle:focus-visible { outline-offset: -2px; }
 .reportBody { padding: var(--space-2); display: grid; gap: var(--space-2); color: var(--text-muted); font-size: var(--type-body-size); line-height: var(--type-body-leading); overflow-wrap: anywhere; }
 .reportBody p { margin: 0; white-space: pre-wrap; }
 .reportBody strong { color: var(--text); }
@@ -318,7 +341,7 @@
   font-size: var(--type-label-size);
 }
 .cardActions button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
-.cardActions button:disabled { opacity: 0.45; cursor: default; }
+.cardActions button:disabled { opacity: 0.45; cursor: not-allowed; }
 .dangerTextButton { margin-left: auto; color: var(--color-error-text) !important; }
 .cardActions .repairButton {
   border-color: var(--accent);
@@ -395,19 +418,24 @@
 .field textarea:focus,
 .field select:focus { border-color: var(--color-accent-border-focus); box-shadow: 0 0 0 2px var(--color-accent-bg); }
 .monoInput { font-family: var(--font-mono) !important; font-size: var(--type-ui-size); }
-.twoColumns { display: grid; grid-template-columns: 1.35fr 1fr; gap: var(--space-2); }
-.segmented { display: grid; grid-template-columns: repeat(3, 1fr); padding: var(--space-optical); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); }
+.twoColumns { display: grid; min-width: 0; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: var(--space-2); }
+.segmented { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: var(--space-optical); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); }
 .segment,
 .segmentActive {
+  min-width: 0;
   min-height: var(--control-md);
+  padding: var(--space-1);
   border: 0;
   border-radius: var(--radius-control-compact);
   background: transparent;
   color: var(--text-dim);
   font: inherit;
   font-size: var(--type-label-size);
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
+.segment:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 .segmentActive { background: var(--color-accent-bg-strong); color: var(--accent-text); }
 .warning { color: var(--color-warning-text-strong); line-height: var(--leading-ui); }
 .fieldError { color: var(--color-error-text); font-size: var(--type-label-size); line-height: var(--leading-ui); }
@@ -425,6 +453,7 @@
   margin: 14px -12px -12px;
   padding: var(--space-2) var(--space-3);
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
   border-top: 1px solid var(--border);
@@ -435,7 +464,9 @@
 .primaryButton { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .primaryButton:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
 .secondaryButton { background: var(--bg-elev-1); color: var(--text-muted); }
-.primaryButton:disabled { opacity: 0.45; cursor: default; }
+.secondaryButton:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-hover); color: var(--text); }
+.primaryButton:disabled,
+.secondaryButton:disabled { opacity: 0.45; cursor: not-allowed; }
 .formError,
 .listError { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--color-error-border); border-radius: var(--radius-control); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--type-label-size); overflow-wrap: anywhere; }
 .listError button { min-height: var(--control-compact); padding: 0 var(--space-2); border: 1px solid var(--color-error-border); border-radius: var(--radius-control-compact); background: var(--bg-elev-1); color: inherit; cursor: pointer; }
@@ -476,11 +507,20 @@
   border-radius: var(--radius-card);
   background: var(--trae-surface);
 }
+:global(html[data-ui-style="trae"]) .summary > .summaryActive {
+  background: var(--color-accent-bg);
+  border-color: var(--color-accent-border);
+  color: var(--accent-text);
+}
 
 @container (max-width: 480px) {
   .header { gap: var(--space-2); font-size: var(--type-ui-size); }
   .daemonIndicator span { display: none; }
   .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container (max-width: 380px) {
+  .twoColumns { grid-template-columns: 1fr; gap: 0; }
 }
 :global(html[data-ui-style="trae"]) .filterBar {
   height: 40px;

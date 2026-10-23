@@ -320,6 +320,11 @@
   --color-shadow-input: 0 1px 2px rgba(20,30,24,0.07), 0 10px 28px -14px rgba(20,30,24,0.24);
   --color-shadow-card: 0 4px 18px color-mix(in srgb, var(--text) 7%, transparent);
   --color-shadow-raised: 0 12px 40px color-mix(in srgb, var(--text) 16%, transparent);
+  --surface-highlight: inset 0 1px 0 color-mix(in srgb, var(--text) 3%, transparent);
+  --color-shadow-control: 0 1px 2px rgba(0,0,0,0.05);
+  --color-shadow-control-hover: 0 3px 8px -2px rgba(0,0,0,0.12);
+  --color-shadow-accent: 0 1px 3px rgba(0,0,0,0.16);
+  --color-focus-ring: 0 0 0 1px var(--color-accent-border-focus);
   --color-image-overlay: rgba(0,0,0,0.84);
   --color-image-overlay-control: rgba(255,255,255,0.12);
   --color-on-image: rgba(255,255,255,0.9);

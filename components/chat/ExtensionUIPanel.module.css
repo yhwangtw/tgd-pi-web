@@ -150,13 +150,13 @@
   cursor: pointer;
 }
 
-.closeButton:hover { background: var(--bg-hover); color: var(--text); }
+.closeButton:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 .closeButton:focus-visible,
 .choice:focus-visible,
 .primaryButton:focus-visible,
 .secondaryButton:focus-visible,
 .cancelButton:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 
@@ -188,16 +188,28 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--bg-elev-1);
+  box-shadow: var(--color-shadow-control);
   color: var(--text);
   cursor: pointer;
   text-align: left;
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
 }
 
-.choice:hover { border-color: var(--color-accent-border); background: var(--bg-hover); }
+.choice:hover:not(:disabled) {
+  border-color: var(--color-accent-border);
+  background: var(--bg-hover);
+  box-shadow: var(--color-shadow-control-hover);
+}
 .choiceSelected {
   border-color: var(--color-accent-border-focus);
   background: var(--color-accent-bg);
+  box-shadow: inset 1px 0 0 var(--accent), var(--color-shadow-control);
 }
+.choiceSelected:hover:not(:disabled) { background: var(--color-accent-bg); }
+.choice:disabled { cursor: not-allowed; }
 .choiceMark {
   display: inline-flex;
   width: 19px;
@@ -208,7 +220,7 @@
   color: var(--text-dim);
 }
 .choiceSelected .choiceMark { color: var(--accent); }
-.choiceCopy { display: flex; min-width: 0; flex-direction: column; gap: var(--space-optical); }
+.choiceCopy { display: flex; min-width: 0; flex-direction: column; gap: var(--space-optical); overflow-wrap: anywhere; }
 .choiceLabel { font-size: var(--text-md); font-weight: var(--weight-semibold); line-height: var(--leading-ui); }
 .choiceDescription { color: var(--text-muted); font-size: var(--text-xs); line-height: var(--leading-snug); }
 
@@ -279,7 +291,7 @@
 .deferButton:hover,
 .questionNotice button:hover { color: var(--text); background: var(--bg-hover); }
 .deferButton:focus-visible,
-.questionNotice button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.questionNotice button:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
 
 .questionNotice {
   display: flex;
@@ -330,6 +342,7 @@
 .actions {
   flex: 0 0 auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
@@ -343,11 +356,15 @@
 .primaryButton,
 .secondaryButton,
 .cancelButton {
+  min-width: 0;
+  max-width: 100%;
   min-height: var(--control-default);
-  padding: 0 var(--space-3);
+  padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-control);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
@@ -359,20 +376,39 @@
   gap: var(--space-2);
 }
 .secondaryButton:first-child { margin-right: auto; }
-.primaryButton { border: 1px solid var(--color-accent-border); background: var(--accent); color: var(--accent-fg); }
-.secondaryButton { border: 1px solid var(--border); background: transparent; color: var(--text-muted); }
+.primaryButton {
+  border: 1px solid var(--color-accent-border);
+  background: var(--accent);
+  color: var(--accent-fg);
+  box-shadow: var(--surface-highlight), var(--color-shadow-accent);
+  transition: background var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
+}
+.secondaryButton {
+  border: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  color: var(--text-muted);
+  box-shadow: var(--color-shadow-control);
+  transition: border-color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+}
 .cancelButton {
   margin-right: auto;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-muted);
 }
-.primaryButton:hover:not(:disabled),
-.secondaryButton:hover:not(:disabled) { filter: brightness(1.05); }
+.primaryButton:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: var(--surface-highlight), var(--color-shadow-control-hover);
+}
+.secondaryButton:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+  color: var(--text);
+}
 .cancelButton:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 .primaryButton:disabled,
 .secondaryButton:disabled,
-.cancelButton:disabled { cursor: default; opacity: 0.5; }
+.cancelButton:disabled { cursor: not-allowed; opacity: 0.5; }
 
 .error {
   margin: 8px 14px 0;
@@ -401,16 +437,19 @@
 .statusKey,
 .widgetKey { color: var(--text-dim); }
 .widget { align-items: flex-start; padding: var(--space-2) var(--space-2); }
-.widgetText { white-space: pre-wrap; line-height: var(--leading-ui); }
+.widgetText { min-width: 0; white-space: pre-wrap; line-height: var(--leading-ui); overflow-wrap: anywhere; }
 
 .workflow { display: flex; flex: 1 1 240px; flex-direction: column; max-width: 100%; }
 .workflow details { width: 100%; min-width: 0; }
-.workflow summary { cursor: pointer; overflow-wrap: anywhere; }
+.workflow summary { cursor: pointer; line-height: var(--leading-ui); overflow-wrap: anywhere; }
+.workflow summary:focus-visible,
+.extraStatuses summary:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
 .workflowSteps { max-height: 140px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding-top: var(--space-2); }
 .workflowActions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.workflowActions button { min-height: 32px; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text); background: var(--bg-elev-1); cursor: pointer; }
-.workflowActions button:disabled { opacity: .5; cursor: default; }
-.workflowActions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.workflowActions button { min-width: 0; max-width: 100%; min-height: var(--control-sm); padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text-muted); background: var(--bg-elev-1); font: inherit; font-size: var(--text-xs); line-height: var(--leading-snug); overflow-wrap: anywhere; cursor: pointer; }
+.workflowActions button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-hover); color: var(--text); }
+.workflowActions button:disabled { opacity: .5; cursor: not-allowed; }
+.workflowActions button:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
 .widgets:has(.workflow) { flex-wrap: wrap; overflow: visible; }
 .widgets .workflow { flex: 1 1 240px; }
 
@@ -558,7 +597,7 @@
 .workflowToolbar { display: inline-flex; flex: 0 0 auto; align-items: center; gap: var(--space-1); }
 .workflowToggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius-control); cursor: pointer; }
 .workflowToggle[aria-expanded="true"] { color: var(--accent-text); border-color: var(--color-accent-border); background: var(--color-accent-bg); }
-.workflowHide:focus-visible, .workflowToggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.workflowHide:focus-visible, .workflowToggle:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
 @media (max-width: 700px), (pointer: coarse) { .workflowHide, .workflowToggle { width: 44px; height: 44px; } }
 .widget > summary { cursor: pointer; }
 @media (max-width: 700px), (pointer: coarse) { .workflowActions button, .questionNotice button { min-height: 44px; } .widget > summary, .extraStatuses summary { min-height: 44px; display: flex; align-items: center; } }

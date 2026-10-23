@@ -322,22 +322,26 @@
   background: var(--bg-elev-1);
   border-radius: var(--radius-composer);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-  box-shadow: var(--color-shadow-input);
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  box-shadow: var(--surface-highlight), var(--color-shadow-input);
+  transition:
+    border-color var(--motion-normal) var(--ease-standard),
+    background var(--motion-normal) var(--ease-standard),
+    box-shadow var(--motion-normal) var(--ease-standard);
 }
 
 .inputWrapperNormal {
   composes: inputWrapper;
   border: 1px solid var(--border);
 }
-.inputWrapperNormal:focus-within {
+.inputWrapperNormal:has(.textarea:focus) {
   border-color: var(--color-accent-border-focus);
-  box-shadow: var(--color-shadow-input);
+  box-shadow: var(--surface-highlight), var(--color-shadow-input), var(--color-focus-ring);
 }
 
 .inputWrapperStreaming {
   composes: inputWrapper;
   border: 1px solid var(--color-warning-border-strong);
+  box-shadow: var(--surface-highlight), var(--color-shadow-input);
 }
 
 .inputRow {
@@ -377,7 +381,7 @@
 
 .textarea::placeholder {
   color: var(--text-muted);
-  opacity: 0.92;
+  opacity: 1;
 }
 
 .textareaExpanded {
@@ -413,7 +417,12 @@
   composes: steerButton;
   background: var(--color-warning-bg-strong);
   color: var(--color-warning-text-strong);
+  box-shadow: var(--color-shadow-control);
   cursor: pointer;
+}
+.steerButtonActive:hover {
+  border-color: var(--color-warning-text-strong);
+  filter: brightness(1.04);
 }
 
 .steerButtonDisabled {
@@ -441,7 +450,12 @@
   composes: followUpButton;
   background: var(--color-accent-bg-strong);
   color: var(--accent-text);
+  box-shadow: var(--color-shadow-control);
   cursor: pointer;
+}
+.followUpButtonActive:hover {
+  border-color: var(--color-accent-border-focus);
+  filter: brightness(1.04);
 }
 
 .followUpButtonDisabled {
@@ -473,7 +487,16 @@
   background: var(--accent);
   color: var(--accent-fg);
   cursor: pointer;
-  box-shadow: 0 1px 3px var(--color-accent-glow);
+  box-shadow: var(--surface-highlight), var(--color-shadow-accent);
+}
+.sendButtonActive:hover {
+  background: var(--accent-hover);
+  box-shadow: var(--surface-highlight), var(--color-shadow-control-hover);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sendButtonActive:active {
+    transform: scale(0.97);
+  }
 }
 
 .sendButtonDisabled {
@@ -568,12 +591,16 @@
   composes: sendModeButton;
   color: var(--accent-text);
   background: var(--color-accent-bg-strong);
+  box-shadow: var(--color-shadow-control);
+  font-weight: var(--weight-semibold);
 }
 
 .sendModeActiveSteer {
   composes: sendModeButton;
   color: var(--accent-text);
   background: var(--color-accent-bg-strong);
+  box-shadow: var(--color-shadow-control);
+  font-weight: var(--weight-semibold);
 }
 
 .bottomBarRight {
@@ -622,6 +649,10 @@
     gap: var(--space-1);
     padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-control);
+    background: transparent;
+  }
+
+  .bottomBarRightMobileOpen .mobileLabeledControl:focus-within {
     background: var(--bg-panel);
   }
 
@@ -1352,13 +1383,13 @@
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   border-radius: var(--radius-composer);
   background: var(--bg-elev-1);
-  box-shadow: var(--color-shadow-input);
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  box-shadow: var(--surface-highlight), var(--color-shadow-input);
+  transition: border-color var(--motion-normal) var(--ease-standard), box-shadow var(--motion-normal) var(--ease-standard);
 }
 
-:global(html[data-ui-style="trae"]) .innerWrapper:not(.innerWrapperExpanded):focus-within {
+:global(html[data-ui-style="trae"]) .innerWrapper:not(.innerWrapperExpanded):has(.textarea:focus) {
   border-color: var(--color-accent-border-focus);
-  box-shadow: var(--color-shadow-input);
+  box-shadow: var(--surface-highlight), var(--color-shadow-input), var(--color-focus-ring);
 }
 
 :global(html[data-ui-style="trae"]) .inputWrapper {
@@ -1370,7 +1401,7 @@
   box-shadow: none;
 }
 
-:global(html[data-ui-style="trae"]) .inputWrapperNormal:focus-within {
+:global(html[data-ui-style="trae"]) .inputWrapperNormal:has(.textarea:focus) {
   border-color: transparent;
   box-shadow: none;
 }
@@ -1424,7 +1455,8 @@
 :global(html[data-ui-style="trae"]) .sendModeActiveSteer {
   color: var(--accent-text);
   background: var(--color-accent-bg-strong);
-  box-shadow: none;
+  box-shadow: var(--color-shadow-control);
+  font-weight: var(--weight-semibold);
 }
 
 :global(html[data-ui-style="trae"]) .bottomBarLeft button,

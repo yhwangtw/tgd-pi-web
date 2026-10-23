@@ -1364,7 +1364,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 <button
                   key={phase.cmd}
                   onClick={() => runPhase(phase.cmd)}
-                  className={styles.phaseButton}
+                  className={`${styles.phaseButton} ${["/tgd-map", "/tgd-plan", "/tgd-develop"].includes(phase.cmd) ? styles.phaseButtonPrimary : ""}`}
                   title={`${phase.cmd} — ${t(phase.descKey)}`}
                 >
                   <span className={styles.phaseIcon} aria-hidden>{phase.icon}</span>

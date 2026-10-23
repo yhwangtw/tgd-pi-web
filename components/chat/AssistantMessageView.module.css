@@ -368,10 +368,15 @@
 .thinkingContainer {
   min-width: 0;
   max-width: 100%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   overflow: hidden;
   font-size: var(--text-md);
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.thinkingContainer:hover {
+  border-color: var(--border);
 }
 
 .thinkingButton {
@@ -386,6 +391,11 @@
   cursor: pointer;
   font-size: var(--text-sm);
   text-align: left;
+  transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+}
+.thinkingButton:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .thinkingDuration {
@@ -441,17 +451,19 @@
 .toolCallContainerError {
   border: 1px solid var(--border);
   background: var(--bg-panel);
-  box-shadow: inset 2px 0 var(--color-error);
+  box-shadow: inset 3px 0 0 var(--color-error);
 }
 
 .toolCallContainerSuccess {
   border: 1px solid var(--color-success-border);
   background: var(--color-success-bg);
+  box-shadow: inset 3px 0 0 var(--color-success);
 }
 
 .toolCallContainerRunning {
   border: 1px solid var(--color-accent-border-focus);
   background: var(--color-accent-bg-subtle);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .toolCallButton {
