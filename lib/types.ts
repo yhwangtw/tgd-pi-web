@@ -184,6 +184,8 @@ export interface SessionTreeNode {
 }
 
 export interface SessionInfo {
+  /** undefined means an older index; null means the latest assistant did not fail. */
+  lastAssistantError?: { message: string; at?: string } | null;
   /** Original JSONL identity, retained for bookmarks and read markers. */
   sourceSessionId?: string;
   engine?: "legacy" | "durable";

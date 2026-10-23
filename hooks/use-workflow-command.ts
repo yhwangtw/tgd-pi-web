@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 /** Keep a single command in flight even when its card is hidden and remounted. */
 export function useWorkflowCommand(scope: string | undefined, send: (message: string) => Promise<boolean>) {
   const active = useRef(new Map<string | undefined, object>());
   const [pendingRequests, setPendingRequests] = useState<ReadonlyMap<string | undefined, object>>(() => new Map());
-  const run = async (message: string) => {
+  const run = useCallback(async (message: string) => {
     if (active.current.has(scope)) return false;
     const request = {};
     active.current.set(scope, request);
@@ -18,6 +18,6 @@ export function useWorkflowCommand(scope: string | undefined, send: (message: st
         setPendingRequests(new Map(active.current));
       }
     }
-  };
+  }, [scope, send]);
   return { run, pending: pendingRequests.has(scope) };
 }

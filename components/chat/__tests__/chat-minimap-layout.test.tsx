@@ -142,3 +142,69 @@ it("keeps the message-ref array stable across token renders and resizes only on 
   await act(async () => root.render(<Probe count={50} />));
   expect(first).toHaveLength(50);
 });
+
+it("refreshes the streaming preview even when the growing text does not resize its row", async () => {
+  const streaming = (text: string) => ({ role: "assistant" as const, content: [{ type: "text" as const, text }] });
+  const content = scroll.firstElementChild!;
+  const row = document.createElement("div"); content.append(row);
+  row.getBoundingClientRect = () => rect(1000 * 120, 120);
+  messageRefs.current.push(row);
+  await act(async () => root.render(<ChatMinimap messages={messages} streamingMessage={streaming("Partial")} scrollContainer={scrollContainer} messageRefs={messageRefs} />));
+  await flush();
+  const button = host.querySelectorAll<HTMLButtonElement>("button")[1000];
+  await act(async () => button.focus());
+  rowReads.mockClear();
+  await act(async () => root.render(<ChatMinimap messages={messages} streamingMessage={streaming("Partial grows without resize")} scrollContainer={scrollContainer} messageRefs={messageRefs} />));
+  expect(host.querySelector(`.${styles.tooltip}`)?.textContent).toBe("Partial grows without resize");
+  expect(host.querySelectorAll("button")[1000].getAttribute("aria-label")).toContain("Partial grows without resize");
+  expect(rowReads).not.toHaveBeenCalled();
+});
+
+async function pointer(target: Element, type: string, id: number, clientY: number, isPrimary = true) {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientY });
+  Object.defineProperties(event, { pointerId: { value: id }, pointerType: { value: "touch" }, isPrimary: { value: isPrimary } });
+  await act(async () => target.dispatchEvent(event));
+}
+
+it.each(["pointercancel", "lostpointercapture", "blur", "pointerup"])("ends a captured touch drag on %s and accepts the next gesture", async ending => {
+  await render(); await flush();
+  const map = host.querySelector<HTMLDivElement>(`.${styles.container}`)!;
+  map.getBoundingClientRect = () => rect(0, 600);
+  const captures = new Set<number>();
+  map.setPointerCapture = vi.fn(id => captures.add(id));
+  map.hasPointerCapture = id => captures.has(id);
+  map.releasePointerCapture = vi.fn(id => captures.delete(id));
+  await pointer(map, "pointerdown", 1, 100);
+  const initial = scroll.scrollTop;
+  await pointer(map, "pointerdown", 2, 500, false);
+  await pointer(map, "pointermove", 2, 550, false);
+  expect(scroll.scrollTop).toBe(initial);
+  await pointer(map, "pointermove", 1, 300);
+  expect(scroll.scrollTop).toBeGreaterThan(initial);
+  if (ending === "blur") await act(async () => window.dispatchEvent(new Event("blur")));
+  else await pointer(map, ending, 1, 999);
+  expect(captures.size).toBe(0);
+  const stopped = scroll.scrollTop;
+  await pointer(map, "pointermove", 1, 500);
+  expect(scroll.scrollTop).toBe(stopped);
+  await pointer(map, "pointerdown", 3, 200);
+  await pointer(map, "pointermove", 3, 400);
+  expect(scroll.scrollTop).not.toBe(stopped);
+  await pointer(map, "pointerup", 3, 400);
+});
+
+it("keeps node keyboard targets and releases pointer capture on unmount", async () => {
+  await render(); await flush();
+  rows.forEach(row => { row.scrollIntoView = vi.fn(); });
+  const buttons = host.querySelectorAll<HTMLButtonElement>("button");
+  await act(async () => { buttons[10].focus(); buttons[10].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
+  expect(document.activeElement).toBe(buttons[11]);
+  await act(async () => buttons[11].click());
+  expect(rows[11].scrollIntoView).toHaveBeenCalledOnce();
+  const map = host.querySelector<HTMLDivElement>(`.${styles.container}`)!;
+  map.getBoundingClientRect = () => rect(0, 600);
+  map.setPointerCapture = vi.fn(); map.hasPointerCapture = () => true; map.releasePointerCapture = vi.fn();
+  await pointer(map, "pointerdown", 7, 200);
+  await act(async () => root.render(null));
+  expect(map.releasePointerCapture).toHaveBeenCalledWith(7);
+});

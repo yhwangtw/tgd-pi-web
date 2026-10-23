@@ -129,7 +129,7 @@
 }
 
 .triggerOpen .chevron {
-  color: var(--accent);
+  color: var(--accent-text);
   transform: rotate(180deg);
 }
 
@@ -382,7 +382,7 @@
 }
 
 .mobileModelPin:hover,
-.mobileModelPinActive { background: var(--bg-hover); color: var(--accent); }
+.mobileModelPinActive { background: var(--bg-hover); color: var(--accent-text); }
 
 .modelNoResults {
   margin: 0;

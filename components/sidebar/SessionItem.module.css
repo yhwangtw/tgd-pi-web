@@ -229,7 +229,14 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 1;
+  flex-shrink: 0;
+}
+
+.tagLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tagOverflow {
@@ -260,6 +267,7 @@
 }
 
 .tagChipRemove {
+  flex-shrink: 0;
   background: none;
   border: none;
   color: inherit;

@@ -3,12 +3,11 @@ import { test, expect, type Page } from "@playwright/test";
 const MAIN = "/?session=aaaa1111-2222-3333-4444-555566667777";
 const FAILED = "/?session=eeee1111-2222-3333-4444-555566667777";
 
-const scroller = (page: Page) => page.locator("div.flex-1.overflow-y-auto").first();
+const scroller = (page: Page) => page.locator("[data-transcript-scroll]").first();
 
 async function openMain(page: Page) {
   await page.goto(MAIN);
-  // Sidebar session name — transcript text can be content-visibility-skipped
-  // when offscreen, which Playwright reports as "hidden".
+  // Wait for the fixture session and its collapsed history to hydrate.
   await expect(page.getByText("專案架構分析").first()).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("button", { name: /Show full message/ }).first()).toBeAttached({ timeout: 10_000 });
 }
@@ -63,23 +62,24 @@ test.describe("chat transcript", () => {
   });
 
   test("⌥↑ / ⌥↓ walk between user turns", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await openMain(page);
     const el = scroller(page);
     await el.evaluate((node) => { node.scrollTop = node.scrollHeight; });
-    await page.waitForTimeout(300);
+    await expect.poll(() => el.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop)).toBeLessThanOrEqual(1);
     const atBottom = await el.evaluate((node) => node.scrollTop);
 
     await page.keyboard.press("Alt+ArrowUp");
-    await page.waitForTimeout(700);
+    await expect.poll(() => el.evaluate(node => node.scrollTop)).toBeLessThan(atBottom);
     const up1 = await el.evaluate((node) => node.scrollTop);
     await page.keyboard.press("Alt+ArrowUp");
-    await page.waitForTimeout(700);
+    await expect.poll(() => el.evaluate(node => node.scrollTop)).toBeLessThan(up1);
     const up2 = await el.evaluate((node) => node.scrollTop);
     expect(up1).toBeLessThan(atBottom);
     expect(up2).toBeLessThan(up1);
 
     await page.keyboard.press("Alt+ArrowDown");
-    await page.waitForTimeout(700);
+    await expect.poll(() => el.evaluate(node => node.scrollTop)).toBeGreaterThan(up2);
     const down = await el.evaluate((node) => node.scrollTop);
     expect(down).toBeGreaterThan(up2);
   });
@@ -93,11 +93,10 @@ test.describe("chat transcript", () => {
     const findInput = page.getByPlaceholder("Find in conversation…");
     await expect(findInput).toBeVisible();
     await findInput.fill("第 7 段詳細說明");
-    await page.waitForTimeout(200);
+    await expect(findInput.locator("xpath=following-sibling::span[1]")).toHaveText(/[1-9]\d*\/[1-9]\d*/);
     await page.keyboard.press("Enter");
     // Attached, not visible: the expanded message is taller than the viewport
-    // and its collapse control can sit below the fold (content-visibility
-    // reports offscreen content as hidden).
+    // and its collapse control can sit below the fold.
     await expect(page.getByRole("button", { name: /Collapse message/ }).first()).toBeAttached({ timeout: 5_000 });
   });
 
@@ -106,13 +105,14 @@ test.describe("chat transcript", () => {
     await expect(page.getByText(/429 rate_limit_error/)).toBeAttached({ timeout: 20_000 });
     const retry = page.getByRole("button", { name: "Retry last run" });
     await expect(retry).toBeVisible();
-    // Clicking must not crash the app (offline CI has no model — the send
-    // itself may fail with a toast, which is fine).
+    // Keep the retry deterministic and observe its completed error handling.
+    await page.route("**/api/agent/eeee1111-2222-3333-4444-555566667777", async route => {
+      if (route.request().method() === "POST" && route.request().postDataJSON()?.type === "prompt") {
+        await route.fulfill({ status: 503, json: { error: "Fixture retry rejected" } });
+      } else await route.continue();
+    });
     await retry.click();
-    await page.waitForTimeout(1_500);
-    // The app must stay alive whether the resend reached a model (local) or
-    // failed instantly for lack of provider config (CI) — the composer
-    // textarea exists in both states, though its placeholder differs.
+    await expect(page.getByText(/Fixture retry rejected/)).toBeVisible();
     await expect(page.locator("textarea").first()).toBeVisible();
   });
 
@@ -175,24 +175,31 @@ test.describe("chat transcript", () => {
   });
 
   test("response scroll mode exposes all three persisted states via the palette", async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.removeItem("pi-scroll-follow-mode");
-      localStorage.removeItem("pi-follow-stream");
-    });
+    // Each test has fresh browser storage; later navigations must retain choices.
     await openMain(page);
-    for (const [query, expected] of [
-      ["response scroll always", "always"],
-      ["response scroll preserve", "preserve"],
-      ["response scroll smart", "smart"],
+    for (const [label, expected] of [
+      ["Always Follow", "always"],
+      ["Preserve Position", "preserve"],
+      ["Smart Follow", "smart"],
     ] as const) {
       await page.keyboard.press("Control+k");
-      await page.waitForTimeout(300);
-      await page.keyboard.type(query);
-      await page.waitForTimeout(300);
-      await page.keyboard.press("Enter");
-      await page.waitForTimeout(400);
-      const stored = await page.evaluate(() => localStorage.getItem("pi-scroll-follow-mode"));
-      expect(stored).toBe(expected);
+      const input = page.getByPlaceholder("Search sessions, files, content, or commands…");
+      await expect(input).toBeVisible();
+      await input.fill("response scroll");
+      const actions = page.locator("[data-unified-results]").getByRole("button", { name: /^Response Scroll: / });
+      await expect(actions).toHaveCount(3);
+      const action = actions.filter({ has: page.getByText(`Response Scroll: ${label}`, { exact: true }) });
+      await expect(action).toHaveCount(1);
+      await action.click();
+      await expect.poll(() => page.evaluate(() => localStorage.getItem("pi-scroll-follow-mode"))).toBe(expected);
+
+      // Reopen the document and verify the UI reads the stored choice.
+      await openMain(page);
+      const controls = page.getByRole("button", { name: "More composer controls", exact: true });
+      await controls.click();
+      const panel = page.getByRole("region", { name: "Composer controls", exact: true });
+      await expect(panel.getByRole("radio", { name: new RegExp(`^${label}$`, "i") })).toBeChecked();
+      await controls.click();
     }
   });
 });

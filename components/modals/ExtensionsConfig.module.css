@@ -28,7 +28,7 @@
 
 .viewTab { background: transparent; color: var(--text-muted); }
 .viewTab:hover { color: var(--text); }
-.viewTabActive { background: var(--bg-elev-1); color: var(--text); box-shadow: var(--color-shadow-sm); }
+.viewTabActive { background: var(--bg-elev-1); color: var(--text); box-shadow: var(--color-shadow-card); }
 
 .sessionCode {
   font-size: var(--text-xs);
@@ -124,7 +124,7 @@
   border-radius: var(--radius-pill);
   border: 1px solid currentColor;
 }
-.diagBadgeError { color: var(--color-error); }
+.diagBadgeError { color: var(--color-error-text); }
 .diagBadgeWarning { color: var(--color-warning-text-strong); }
 
 .section { margin-bottom: 18px; }
@@ -262,7 +262,7 @@
 }
 .supportBadge[data-support="supported"],
 .statusOk {
-  color: var(--color-success);
+  color: var(--color-success-text);
   border-color: var(--color-success-border);
   background: var(--color-success-bg);
 }

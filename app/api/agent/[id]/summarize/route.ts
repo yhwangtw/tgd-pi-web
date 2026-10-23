@@ -1,3 +1,4 @@
+import { readSessionCwd } from "@/lib/session-reader";
 import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
 import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
@@ -25,8 +26,7 @@ export async function POST(
       if (!filePath) {
         return NextResponse.json({ error: "Session not found" }, { status: 404 });
       }
-      const { SessionManager } = await import("@earendil-works/pi-coding-agent");
-      const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
+      const cwd = readSessionCwd(filePath) ?? process.cwd();
       const result = await startRpcSession(id, filePath, cwd);
       session = result.session;
     }
@@ -78,22 +78,24 @@ export async function POST(
     // streamFn is async and returns AssistantMessageEventStream (has .result())
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
+    const signal = AbortSignal.any([controller.signal, req.signal]);
 
-    let eventStream: Awaited<ReturnType<typeof streamFn>>;
+    let result: Awaited<ReturnType<Awaited<ReturnType<typeof streamFn>>["result"]>>;
     try {
-      eventStream = await streamFn(fullModel, {
+      signal.throwIfAborted();
+      const eventStream = await streamFn(fullModel, {
         systemPrompt: "You are a title generator. Output only a short title. No quotes, no explanations.",
         messages: [{
           role: "user",
           content: titlePrompt,
           timestamp: Date.now(),
         }],
-      }, { maxTokens: 30 });
+      }, { maxTokens: 30, signal });
+      result = await eventStream.result();
+      signal.throwIfAborted();
     } finally {
       clearTimeout(timeout);
     }
-
-    const result = await eventStream.result();
 
     const rawTitle = (result.content || [])
       .filter((c: { type: string; text?: string }) => c.type === "text")
@@ -112,6 +114,7 @@ export async function POST(
 
     return NextResponse.json({ name: rawTitle });
   } catch (error) {
+    if (req.signal.aborted) return NextResponse.json({ error: "Title generation cancelled" }, { status: 499 });
     if (error instanceof Error && error.name === "AbortError") {
       return NextResponse.json({ error: "Title generation timed out" }, { status: 504 });
     }

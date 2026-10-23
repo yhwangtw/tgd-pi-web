@@ -127,9 +127,13 @@ for (const style of ["original", "trae"]) {
       data.sessions = data.sessions.filter((session: { id: string }) => [SID, "bbbb1111-2222-3333-4444-555566667777"].includes(session.id));
       await route.fulfill({ json: data });
     });
+    // Include a tag intentionally: its remove control is taller than a plain
+    // excerpt and must fit at every supported font scale.
+    await page.route("**/api/sessions/tags", route => route.fulfill({ json: { tags: { [SID]: ["layout-check"] } } }));
     await page.setViewportSize({ width: 1440, height: 900 });
     await openSession(page);
     const row = page.locator(`[data-session-row="${SID}"]`);
+    await expect(row.getByRole("button", { name: "Remove #layout-check", exact: true })).toBeVisible();
     const workspace = row.locator('[class*="workspaceMeta"]');
     await expect(workspace).toContainText("demo-project");
     await expect(workspace).toHaveAttribute("title", /main/);
@@ -139,13 +143,22 @@ for (const style of ["original", "trae"]) {
     await expect(outputPreview).not.toContainText(">");
     for (const size of ["default", "xlarge"]) {
       await page.evaluate(size => document.documentElement.dataset.fontSize = size, size);
-      await expect.poll(async () => {
-        const rows = page.locator('[data-session-row]');
-        return rows.evaluateAll(elements => elements.every(element => {
-          const content = element.querySelector('[class*="previewRow"]')!;
-          return content.getBoundingClientRect().bottom <= element.getBoundingClientRect().bottom + 1;
-        }));
-      }).toBe(true);
+      await expect(page.locator('[data-session-row]')).toHaveCount(2);
+      await expect.poll(async () => page.locator('[data-session-row]').evaluateAll(elements => elements.flatMap(element => {
+        const content = element.querySelector('[class*="previewRow"]')!;
+        const row = element.getBoundingClientRect();
+        const preview = content.getBoundingClientRect();
+        return preview.bottom <= row.bottom + 1 ? [] : [{
+          id: element.getAttribute("data-session-row"),
+          rowHeight: row.height, previewHeight: preview.height, overflow: preview.bottom - row.bottom,
+          tags: [...element.querySelectorAll('[class*="tagChip"]')].map(chip => chip.textContent),
+        }];
+      })), { message: `${style} ${size}: context lines must fit inside their conversation rows` }).toEqual([]);
+      const tag = row.locator('[class*="tagChip"]').filter({ has: page.getByRole("button", { name: "Remove #layout-check", exact: true }) });
+      const tagBox = (await tag.boundingBox())!;
+      const removeBox = (await tag.getByRole("button", { name: "Remove #layout-check", exact: true }).boundingBox())!;
+      expect(removeBox.x).toBeGreaterThanOrEqual(tagBox.x);
+      expect(removeBox.x + removeBox.width).toBeLessThanOrEqual(tagBox.x + tagBox.width);
       const identityBox = (await workspace.boundingBox())!;
       const excerptBox = (await row.locator('[class*="previewRow"]').boundingBox())!;
       expect(identityBox.y).toBeGreaterThanOrEqual(excerptBox.y - 1);

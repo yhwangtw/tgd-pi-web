@@ -1,7 +1,7 @@
 .root { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--bg-panel); }
 .toolbar { min-height: 38px; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3); border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: var(--text-xs); background: var(--bg); }
 .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
-.live { color: var(--color-success); }
+.live { color: var(--color-success-text); }
 .static { color: var(--text-dim); }
 .watchDot {
   width: 6px;

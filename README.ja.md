@@ -259,7 +259,7 @@ API リビジョン、入力制限、保存後の再読み込み失敗の警告�
 Playwright は意図的に `package.json` へ保存していません。必要時に一時インストールします。
 
 ```bash
-npm i -D --no-save @playwright/test
+npm i -D --no-save --package-lock=false @playwright/test@1.64.0
 npm run test:e2e
 ```
 

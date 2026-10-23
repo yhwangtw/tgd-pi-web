@@ -21,7 +21,7 @@ export function readSessionMigration(id: string): SessionMigration | undefined {
   } catch { /* No published migration. The original remains authoritative. */ }
 }
 /** Keep aliases even after deletion, so old bookmarks never resurrect backups. */
-export function resolveMigratedSessionId(id: string): string { return readSessionMigration(id)?.sessionId ?? id; }
+export function resolveMigratedSessionId(id: string): string { return /^dw_[a-f0-9-]{36}_[1-9][0-9]*$/i.test(id) ? id : readSessionMigration(id)?.sessionId ?? id; }
 export function publishSessionMigration(receipt: SessionMigration): void {
   mkdirSync(migrationDirectory(), { recursive: true, mode: 0o700 });
   const temporary = `${path(receipt.sourceId)}.${randomUUID()}.tmp`;

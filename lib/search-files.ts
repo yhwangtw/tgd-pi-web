@@ -3,8 +3,9 @@ import { lstat, open, opendir, realpath } from "fs/promises";
 import path from "path";
 import ignore, { type Ignore } from "ignore";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { isFileMutationLockPath } from "./file-mutation-lock";
+import { createFileMutationPathGuard, isFileMutationLockPath } from "./file-mutation-lock";
 import { IGNORED_NAMES, isPathAllowed } from "./file-security";
+import { confinedFile } from "./versioned-file";
 import { normalizeFileSearchOptions, type FileSearchOptions } from "./file-search-options";
 
 export interface SearchFile {
@@ -35,19 +36,29 @@ export async function resolveSearchRoot(cwd: string, allowed: Set<string>): Prom
 }
 
 /** Bounded descriptor read; never follow a file symlink or open a device/FIFO. */
-export async function readSearchFile(file: string, maxBytes = 1024 * 1024): Promise<Buffer | null> {
+export async function readSearchFile(file: string, maxBytes = 1024 * 1024, options: { root?: string; prefix?: boolean } = {}): Promise<Buffer | null> {
+  const source = file;
+  const rel = options.root ? path.relative(options.root, file) : "";
+  if (options.root) file = await confinedFile(options.root, rel);
   if (isFileMutationLockPath(file, getAgentDir())) return null;
   if (!(await lstat(file)).isFile()) return null;
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const stat = await handle.stat();
-    if (!stat.isFile() || stat.size > maxBytes) return null;
-    const buffer = Buffer.alloc(Math.min(stat.size + 1, maxBytes + 1));
+    if (!stat.isFile() || (!options.prefix && stat.size > maxBytes)) return null;
+    const buffer = Buffer.alloc(Math.min(stat.size + 1, options.prefix ? maxBytes : maxBytes + 1));
     let length = 0;
     while (length < buffer.length) {
       const { bytesRead } = await handle.read(buffer, length, buffer.length - length, length);
       if (!bytesRead) break;
       length += bytesRead;
+    }
+    const after = await handle.stat();
+    if (stat.ino !== after.ino || stat.size !== after.size || stat.mtimeMs !== after.mtimeMs || stat.ctimeMs !== after.ctimeMs) return null;
+    if (options.root) {
+      if (await confinedFile(options.root, rel) !== file) return null;
+      const current = await lstat(source);
+      if (current.ino !== after.ino || current.dev !== after.dev || current.isSymbolicLink()) return null;
     }
     return length > maxBytes ? null : buffer.subarray(0, length);
   } finally { await handle.close(); }
@@ -96,6 +107,7 @@ function isIgnored(full: string, isDir: boolean, layers: IgnoreLayer[]): boolean
  */
 export async function walkSearchFiles(root: string, options: SearchWalkOptions = {}): Promise<{ entries: SearchFile[]; truncated: boolean }> {
   if (isFileMutationLockPath(root, getAgentDir())) return { entries: [], truncated: false };
+  const reserved = createFileMutationPathGuard(getAgentDir());
   const opts = normalizeFileSearchOptions(options);
   options.signal?.throwIfAborted();
   const deadline = Date.now() + (options.maxMs ?? 5000);
@@ -117,7 +129,7 @@ export async function walkSearchFiles(root: string, options: SearchWalkOptions =
       if (++inspected > maxEntries || Date.now() >= deadline) { truncated = true; break; }
       if (IGNORED_NAMES.has(entry.name) || (!entry.isDirectory() && !entry.isFile())) continue;
       const full = path.join(current.dir, entry.name);
-      if (isFileMutationLockPath(full, getAgentDir())) continue;
+      if (reserved(full)) continue;
       const isDir = entry.isDirectory();
       const container = isDir && WORKTREE_CONTAINERS.has(entry.name);
       const nested = isDir && await hasGit(full);

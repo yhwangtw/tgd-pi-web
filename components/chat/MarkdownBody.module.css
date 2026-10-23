@@ -139,7 +139,7 @@
 .focusCodeLine { display: grid; grid-template-columns: 58px minmax(0, 1fr); min-height: 1.65em; }
 .focusCodeLineActive { background: var(--color-accent-bg); }
 .focusLineNumber { padding: 0 var(--space-3) 0 var(--space-1); border: 0; background: transparent; color: var(--text-dim); cursor: pointer; font: inherit; text-align: right; user-select: none; }
-.focusLineNumber:hover { color: var(--accent); }
+.focusLineNumber:hover { color: var(--accent-text); }
 .focusCodeLine code { padding-right: var(--space-4); font: inherit; white-space: pre; }
 .focusCodeWrap .focusCodeLine code { white-space: pre-wrap; overflow-wrap: anywhere; }
 
@@ -229,5 +229,18 @@
   :global(html[data-ui-style="trae"]) .previewBtn {
     min-width: var(--control-touch);
     min-height: var(--control-touch);
+  }
+}
+
+/* Compact desktop geometry must not shrink phone or coarse-pointer targets. */
+@media (max-width: 700px), (pointer: coarse) {
+  .copyBtn,
+  .focusBtn,
+  .previewBtn,
+  :global(html[data-ui-style="trae"]) .copyBtn,
+  :global(html[data-ui-style="trae"]) .focusBtn,
+  :global(html[data-ui-style="trae"]) .previewBtn {
+    min-height: var(--control-touch);
+    min-width: var(--control-touch);
   }
 }

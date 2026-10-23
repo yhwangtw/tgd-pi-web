@@ -106,62 +106,7 @@ jobs:
           PR_CI_URL: ${{ steps.gate.outputs.pr_ci_url }}
           PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
         run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 "${VERSION}^" 2>/dev/null || echo "")
-
-          if [ -n "$PREV_TAG" ]; then
-            COMMITS=$(git log --pretty=format:"%s|||%h" "$PREV_TAG".."$VERSION")
-          else
-            COMMITS=$(git log --pretty=format:"%s|||%h" -30 "$VERSION")
-          fi
-
-          FEATS=""; FIXES=""; DOCS=""; REFACTORS=""; CHORES=""; OTHERS=""
-
-          while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            MSG="${line%%|||*}"
-            HASH="${line##*|||}"
-            DISPLAY_MSG="$MSG"
-
-            case "$MSG" in
-              feat*:*|feat*) FEATS="${FEATS}- ${DISPLAY_MSG#*: } (\`$HASH\`)\n" ;;
-              fix*:*|fix*)   FIXES="${FIXES}- ${DISPLAY_MSG#*: } (\`$HASH\`)\n" ;;
-              docs*:*|docs*) DOCS="${DOCS}- ${DISPLAY_MSG#*: } (\`$HASH\`)\n" ;;
-              refactor*:*)   REFACTORS="${REFACTORS}- ${DISPLAY_MSG#*: } (\`$HASH\`)\n" ;;
-              chore*:*|ci*:*) CHORES="${CHORES}- ${DISPLAY_MSG#*: } (\`$HASH\`)\n" ;;
-              *)             OTHERS="${OTHERS}- ${DISPLAY_MSG} (\`$HASH\`)\n" ;;
-            esac
-          done <<< "$COMMITS"
-
-          build_section() {
-            local title="$1" content="$2"
-            if [ -n "$content" ]; then
-              echo "### $title"
-              echo -e "$content"
-            fi
-          }
-
-          {
-            echo "## tGD-pi-web $VERSION"
-            echo ""
-            echo "Source: \`$VERIFIED_SHA\` · CI: [$CI_SHA]($CI_URL)"
-            if [ -n "$PR_CI_URL" ]; then
-              echo "PR checks: [#$PR_NUMBER]($PR_CI_URL) (matching source tree)"
-            fi
-            echo ""
-            echo "This is a source release, not a deployment or an npm package."
-            echo ""
-            build_section "✨ Features" "$FEATS"
-            build_section "🐛 Bug Fixes" "$FIXES"
-            build_section "📝 Documentation" "$DOCS"
-            build_section "♻️ Refactoring" "$REFACTORS"
-            build_section "🔧 Chores" "$CHORES"
-            build_section "📦 Other Changes" "$OTHERS"
-
-            if [ -n "$PREV_TAG" ]; then
-              echo "---"
-              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${VERSION}"
-            fi
-          } > /tmp/release-notes.md
+          node scripts/release-notes.mjs
 
       - name: Create GitHub Release
         env:

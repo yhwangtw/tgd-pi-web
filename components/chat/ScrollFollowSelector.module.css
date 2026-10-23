@@ -39,8 +39,8 @@
 
 .optionActive {
   background: var(--bg-selected);
-  color: var(--accent);
-  box-shadow: var(--color-shadow-control);
+  color: var(--accent-text);
+  box-shadow: var(--color-shadow-card);
 }
 
 .option > svg { flex-shrink: 0; }

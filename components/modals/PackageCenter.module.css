@@ -23,7 +23,7 @@
 .previewHeading { display: flex; min-width: 0; align-items: baseline; gap: var(--space-2); }
 .previewHeading code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .confirmation strong { color: var(--text); font-size: var(--text-sm); }
-.confirmation code { overflow: hidden; color: var(--accent); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.confirmation code { overflow: hidden; color: var(--accent-text); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
 .confirmation span { color: var(--text-muted); font-size: var(--text-xs); }
 .previewDetails { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-row); background: var(--bg-panel); }
 .previewPackage { display: flex; min-width: 0; align-items: baseline; gap: var(--space-2); }
@@ -33,7 +33,7 @@
 .previewFacts span, .permissionChip { padding: var(--space-optical) var(--space-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-pill); background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-2xs); line-height: var(--leading-ui); }
 .permissionReview { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: var(--space-2); align-items: start; }
 .permissionLabel { color: var(--text-dim); line-height: var(--leading-ui); }
-.permissionChip[data-level="declared"] { border-color: var(--color-accent-border); background: var(--color-accent-bg); color: var(--accent); }
+.permissionChip[data-level="declared"] { border-color: var(--color-accent-border); background: var(--color-accent-bg); color: var(--accent-text); }
 .permissionChip[data-level="potential"], .permissionChip[data-level="warning"] { border-color: var(--color-warning-border); background: var(--color-warning-bg); color: var(--color-warning-text); }
 .permissionChip[data-level="new"] { border-color: var(--color-error-border); background: var(--color-error-bg); color: var(--color-error-text); }
 .scriptWarning { display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-2); border-left: 3px solid var(--color-warning-border); border-radius: var(--radius-row); background: var(--color-warning-bg); }

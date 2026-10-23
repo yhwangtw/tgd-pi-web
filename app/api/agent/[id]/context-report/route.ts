@@ -1,6 +1,6 @@
+import { readSessionCwd } from "@/lib/session-reader";
 import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { getRpcSession, startRpcSession, type AgentSessionWrapper } from "@/lib/rpc-manager";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { buildContextReport } from "@/lib/context-report";
@@ -14,7 +14,7 @@ async function ensureSession(id: string): Promise<AgentSessionWrapper | null> {
   if (existing?.isAlive()) return existing;
   const filePath = await resolveSessionPath(id);
   if (!filePath) return null;
-  const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
+  const cwd = readSessionCwd(filePath) ?? process.cwd();
   const { session } = await startRpcSession(id, filePath, cwd);
   return session;
 }

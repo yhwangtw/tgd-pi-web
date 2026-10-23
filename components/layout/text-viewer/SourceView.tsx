@@ -5,7 +5,7 @@ import { vs, vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { useTheme } from "@/hooks/useTheme";
 import { motionScrollBehavior } from "@/lib/motion";
 
-import { useEffect, memo } from "react";
+import { useEffect, useRef, memo } from "react";
 
 interface Props {
   content: string;
@@ -20,17 +20,19 @@ interface Props {
 // and the parent re-renders on every toolbar keystroke.
 export const SourceView = memo(function SourceView({ content, language, wrapLines, activeLine, diagnosticLines = {} }: Props) {
   const { isDark } = useTheme();
+  const paneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (activeLine == null) return;
     // After the highlighter re-renders with the marked line, center it.
     const t = setTimeout(() => {
-      document.querySelector("[data-active-line]")?.scrollIntoView({ block: "center", behavior: motionScrollBehavior() });
+      paneRef.current?.querySelector("[data-active-line]")?.scrollIntoView({ block: "center", behavior: motionScrollBehavior() });
     }, 50);
     return () => clearTimeout(t);
   }, [activeLine, content]);
 
   return (
+    <div ref={paneRef} style={{ minHeight: "100%" }}>
     <SyntaxHighlighter
       language={language === "text" ? "plaintext" : language}
       style={isDark ? vscDarkPlus : vs}
@@ -50,6 +52,7 @@ export const SourceView = memo(function SourceView({ content, language, wrapLine
     >
       {content}
     </SyntaxHighlighter>
+    </div>
   );
 });
 

@@ -1,3 +1,4 @@
+import { resolveMigratedSessionId } from "@/lib/session-migrations";
 import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
 import { encodeSessionData } from "@/lib/session-tree-wire";
@@ -10,7 +11,7 @@ import {
   buildSessionContext,
   buildTree,
   getLeafId,
-  listAllSessions,
+  readSessionHeader,
   readSessionFile,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
@@ -65,8 +66,8 @@ export async function GET(
 
     let modified = header?.timestamp ?? new Date().toISOString();
     try { modified = statSync(responseFilePath).mtime.toISOString(); } catch { /* use header timestamp */ }
-    const allSessions = await listAllSessions();
-    const parentSessionId = allSessions.find((s) => s.id === id)?.parentSessionId;
+    const parentHeader = header.parentSession ? readSessionHeader(header.parentSession) : null;
+    const parentSessionId = parentHeader ? resolveMigratedSessionId(parentHeader.id) : undefined;
     const info = header ? {
       path: responseFilePath,
       id: header.id,
@@ -169,12 +170,7 @@ export async function DELETE(
     }
 
     // Read header before deleting to get parentSession path
-    const firstLine = readFileSync(filePath, "utf8").split("\n")[0];
-    let parentSessionPath: string | undefined;
-    try {
-      const header = JSON.parse(firstLine) as { type?: string; parentSession?: string };
-      if (header.type === "session") parentSessionPath = header.parentSession;
-    } catch { /* ignore */ }
+    const parentSessionPath = readSessionHeader(filePath)?.parentSession;
 
     // Re-attach all direct children to this session's parent (cascade re-parent)
     // Scan sibling files in the same directory
@@ -184,10 +180,10 @@ export async function DELETE(
       for (const file of files) {
         const childPath = join(dir, file);
         try {
-          const content = readFileSync(childPath, "utf8");
-          const lines = content.split("\n");
-          const header = JSON.parse(lines[0]) as { type?: string; parentSession?: string };
-          if (header.type === "session" && header.parentSession === filePath) {
+          const header = readSessionHeader(childPath);
+          if (header?.parentSession === filePath) {
+            const content = readFileSync(childPath, "utf8");
+            const lines = content.split("\n");
             // Rewrite header with new parentSession
             header.parentSession = parentSessionPath;
             lines[0] = JSON.stringify(header);

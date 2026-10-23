@@ -1,3 +1,4 @@
+import { trimToUtf8Boundary } from "./text-prefix";
 import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -202,8 +203,7 @@ function finalAssistantText(messages: AgentMessage[] | undefined): string {
 
 function clipOutput(value: string): string {
   if (Buffer.byteLength(value, "utf8") <= MAX_OUTPUT_BYTES) return value;
-  let clipped = value.slice(0, MAX_OUTPUT_BYTES);
-  while (Buffer.byteLength(clipped, "utf8") > MAX_OUTPUT_BYTES) clipped = clipped.slice(0, -1);
+  const clipped = trimToUtf8Boundary(Buffer.from(value, "utf8").subarray(0, MAX_OUTPUT_BYTES)).toString("utf8");
   return `${clipped}\n\n[Output truncated to ${MAX_OUTPUT_BYTES / 1024} KB.]`;
 }
 

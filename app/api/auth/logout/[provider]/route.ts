@@ -1,3 +1,4 @@
+import { invalidateDurableSessionsForAuthChange } from "@/lib/durable-chat";
 import { invalidateRpcSessionsForAuthChange } from "@/lib/rpc-manager";
 import { createPiModelRuntime } from "@/lib/pi-model-runtime";
 
@@ -15,5 +16,6 @@ export async function POST(
   }
   await runtime.logout(provider);
   invalidateRpcSessionsForAuthChange();
+    await invalidateDurableSessionsForAuthChange();
   return Response.json({ ok: true });
 }

@@ -1,3 +1,4 @@
+import { readSessionCwd } from "@/lib/session-reader";
 import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
 import { getRpcSession, startRpcSession, type AgentSessionWrapper } from "@/lib/rpc-manager";
@@ -21,8 +22,7 @@ async function ensureSession(id: string): Promise<AgentSessionWrapper | null> {
   const { resolveSessionPath } = await import("@/lib/session-reader");
   const filePath = await resolveSessionPath(id);
   if (!filePath) return null;
-  const { SessionManager } = await import("@earendil-works/pi-coding-agent");
-  const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
+  const cwd = readSessionCwd(filePath) ?? process.cwd();
   const { session } = await startRpcSession(id, filePath, cwd);
   return session;
 }

@@ -178,8 +178,23 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [models, setModels] = useState<ModelOption[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(false);
+  const catalogCwd = draft?.cwd.trim() ?? "";
+  const catalog = useRequestResource<{ modelList?: ModelOption[] }>(
+    catalogCwd.startsWith("/") ? `run-form-models:${catalogCwd}` : null,
+    signal => fetchJson("/api/models", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cwd: catalogCwd }),
+    }, signal),
+    { debounceMs: 350, staleTimeMs: 60_000, retries: 0 },
+  );
+  const models = catalog.data?.modelList ?? [];
+  const modelsLoading = catalogCwd.startsWith("/") && !catalog.data && !catalog.error;
+  const projects = useRequestResource<{ repos?: { path: string; name: string }[] }>(
+    draft ? "run-form-projects" : null,
+    signal => fetchJson("/api/projects/discover", {}, signal),
+    { staleTimeMs: 60_000, retries: 0 },
+  );
+  const projectPaths = [...new Set([defaultCwd, ...(projects.data?.repos ?? []).map(repo => repo.path)].filter((path): path is string => Boolean(path)))];
   const [validationAttempted, setValidationAttempted] = useState(false);
   const schedules = useRequestResource<SchedulesResponse>(
     "schedules",
@@ -210,33 +225,6 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
     }, 4_000);
     return () => window.clearInterval(interval);
   }, [refreshSchedules]);
-
-  useEffect(() => {
-    if (!draft?.cwd.startsWith("/")) {
-      setModels([]);
-      return;
-    }
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      setModelsLoading(true);
-      fetch("/api/models", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd: draft.cwd }),
-        signal: controller.signal,
-      })
-        .then((response) => responseJson<{ modelList?: ModelOption[] }>(response))
-        .then((catalog) => setModels(catalog.modelList ?? []))
-        .catch((catalogError) => {
-          if ((catalogError as Error).name !== "AbortError") setModels([]);
-        })
-        .finally(() => setModelsLoading(false));
-    }, 500);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [draft?.cwd]);
 
   const latestRuns = useMemo(() => {
     const result = new Map<string, ScheduleRun>();
@@ -408,7 +396,8 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
           </label>
           <label className={s.field}>
             <span>{t("schedule.project")}</span>
-            <input required aria-invalid={validationAttempted && !draft.cwd.trim()} value={draft.cwd} onChange={(event) => setDraft({ ...draft, cwd: event.target.value })} placeholder={t("schedule.projectPlaceholder")} className={s.monoInput} />
+            <input required aria-invalid={validationAttempted && !draft.cwd.trim()} value={draft.cwd} list={`${formId}-projects`} onChange={(event) => setDraft({ ...draft, cwd: event.target.value, model: "" })} placeholder={t("schedule.projectPlaceholder")} className={s.monoInput} />
+            <datalist id={`${formId}-projects`}>{projectPaths.map(path => <option key={path} value={path} />)}</datalist>
             {validationAttempted && !draft.cwd.trim() && <small className={s.fieldError}>{t("common.required")}</small>}
           </label>
           <label className={s.field}>
@@ -481,11 +470,12 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
               </label>
               <label className={s.field}>
                 <span>{t("schedule.model")}</span>
-                <select value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })}>
+                <select aria-busy={modelsLoading} value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })}>
                   <option value="">{modelsLoading ? t("schedule.modelsLoading") : t("schedule.projectDefault")}</option>
                   {draft.model && !models.some((model) => modelValue(model.provider, model.id) === draft.model) && <option value={draft.model}>{draft.model}</option>}
                   {models.map((model) => <option key={`${model.provider}:${model.id}`} value={modelValue(model.provider, model.id)}>{model.name} · {model.provider}</option>)}
                 </select>
+                {catalog.error && <small className={s.fieldError} role="status">{t("model.catalogError")} <button type="button" onClick={() => void catalog.refresh()}>{t("common.retry")}</button></small>}
               </label>
               <label className={s.field}>
                 <span>{t("schedule.thinking")}</span>
@@ -540,7 +530,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
           </div>
         )}
         {schedules.loading ? (
-          <div className={s.empty}>{t("search.searching")}</div>
+          <div className={s.empty}>{t("common.loading")}</div>
         ) : data.schedules.length === 0 ? (
           <div className={s.empty}>
             <Clock3 size={28} aria-hidden />

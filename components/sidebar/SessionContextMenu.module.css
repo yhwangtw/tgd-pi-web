@@ -113,6 +113,9 @@
   color: var(--text-dim);
 }
 
+.tagForm:focus-within { outline: 2px solid var(--color-accent-border-focus); outline-offset: -2px; }
+.tagListRemove:focus-visible { opacity: 1; }
+
 /* Current tags with per-tag remove */
 .tagList {
   display: flex;

@@ -374,3 +374,29 @@ it("keeps old bookmarks and the unread boundary reachable before earlier message
   expect(host.querySelector('[data-entry-id="entry-20"][data-bookmarked]')).not.toBeNull();
   expect(host.querySelector('[role="separator"]')?.textContent).toBe("New since your last visit");
 });
+
+
+it("reveals an unmounted assistant bookmark selected from the mobile turn sheet", async () => {
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+  fixture.state.messages = Array.from({ length: 500 }, (_, i) => ({ role: "user" as const, content: `Question ${i}`, timestamp: i }));
+  fixture.state.messages[20] = answer("Earlier bookmarked answer");
+  fixture.state.entryIds = fixture.state.messages.map((_, i) => `entry-${i}`);
+  fixture.state.streamState = { isStreaming: false, streamingMessage: null };
+  fixture.state.agentRunning = false;
+  localStorage.setItem("pi-bookmarks:mobile-history", JSON.stringify(["entry-20"]));
+  await act(async () => root.render(<ChatWindow session={{
+    id: "mobile-history", path: "", cwd: "/fixture", created: "", modified: "",
+    messageCount: 500, firstMessage: "Question 0",
+  }} newSessionCwd={null} />));
+  expect(host.querySelector('[data-entry-id="entry-20"]')).toBeNull();
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Turns"]')!.click());
+  const dialog = document.querySelector('[role="dialog"]')!;
+  const filter = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.includes("Bookmarks"))!;
+  await act(async () => filter.click());
+  const bookmark = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.includes("Earlier bookmarked answer"))!;
+  scrollIntoView.mockClear();
+  await act(async () => bookmark.click());
+  await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+  expect(host.querySelector('[data-entry-id="entry-20"]')).not.toBeNull();
+  expect(scrollIntoView.mock.instances.some(element => (element as HTMLElement).dataset.entryId === "entry-20")).toBe(true);
+});

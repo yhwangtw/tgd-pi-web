@@ -33,6 +33,7 @@ function runSetupFixture(
     nodeVersion?: string;
     runningCheckout?: boolean;
     legacyRunningCheckout?: boolean;
+    cwdLookupFails?: boolean;
   } = {},
 ) {
   const sandbox = mkdtempSync(join(tmpdir(), "tgd-pi-web-setup-"));
@@ -76,11 +77,23 @@ function runSetupFixture(
   }
 
   // The guard fixture must not inspect unrelated developer/CI Next processes.
-  // Legacy coverage emits only our disposable timer PID; cwd is still verified
-  // by the real platform process reader, not trusted from this fake ps output.
+  // Legacy coverage emits only our disposable timer PID. On macOS, isolate
+  // lsof as well: host-wide process inspection can transiently fail when the
+  // full suite runs concurrently. The real guard still checks the live PID,
+  // canonical fixture path and command arguments. Linux uses the child /proc
+  // cwd directly. Production runtime-guard remains unchanged.
   const fakePs = join(fakeBin, "ps");
   writeFileSync(fakePs, `#!/usr/bin/env bash\n${options.legacyRunningCheckout ? `echo '${runningFixture!.pid} next-server (fixture)'` : "exit 0"}\n`);
   chmodSync(fakePs, 0o755);
+  const fakeLsof = join(fakeBin, "lsof");
+  writeFileSync(fakeLsof, `#!/usr/bin/env bash
+if [ "$*" != "-a -p $FAKE_PROCESS_PID -d cwd -Fn" ] || [ -z "$FAKE_PROCESS_PID" ]; then
+  echo "Unexpected fixture process query" >&2
+  exit 1
+fi
+${options.cwdLookupFails ? "exit 1" : `printf 'p%s\\nn%s\\n' "$FAKE_PROCESS_PID" "$FAKE_PROCESS_CWD"`}
+`);
+  chmodSync(fakeLsof, 0o755);
 
   if (options.gitCheckout) {
     mkdirSync(join(project, ".git"));
@@ -170,6 +183,8 @@ exit ${options.tscExit ?? 0}
       ...process.env,
       FAKE_GIT_LOG: gitLog,
       FAKE_NPM_LOG: npmLog,
+      FAKE_PROCESS_PID: String(runningFixture?.pid ?? ""),
+      FAKE_PROCESS_CWD: project,
       HOME: home,
       PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
       TGD_SETUP_BACKUP_DIR: backupRoot,
@@ -202,6 +217,14 @@ describe("workspace root setup", () => {
     const { gitCalls, npmCalls, result, backupRoot } = runSetupFixture({ gitCheckout: true, dirty: true, forceSync: true, runningCheckout: true });
     expect(result.status).not.toBe(0);
     expect(`${result.stdout}\n${result.stderr}`).toContain("checkout is running");
+    expect(gitCalls).toBe("");
+    expect(npmCalls).toBe("");
+    expect(existsSync(backupRoot)).toBe(false);
+  });
+  it.skipIf(process.platform === "linux")("fails closed when the fixture process cwd cannot be verified", () => {
+    const { gitCalls, npmCalls, result, backupRoot } = runSetupFixture({ gitCheckout: true, runningCheckout: true, cwdLookupFails: true });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Cannot verify a live runtime marker process; setup stopped");
     expect(gitCalls).toBe("");
     expect(npmCalls).toBe("");
     expect(existsSync(backupRoot)).toBe(false);

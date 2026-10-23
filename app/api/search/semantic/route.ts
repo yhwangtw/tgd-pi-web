@@ -1,5 +1,7 @@
-import { readdir, readFile } from "node:fs/promises";
-import { extname, join, resolve, sep } from "node:path";
+import { realpath } from "node:fs/promises";
+import { extname } from "node:path";
+import { readSearchFile, resolveSearchRoot, walkSearchFiles } from "@/lib/search-files";
+import { trimToUtf8Boundary } from "@/lib/text-prefix";
 import { getAllowedRoots } from "@/lib/file-security";
 import { getSessionEntries, listAllSessions, resolveSessionPath } from "@/lib/session-reader";
 import { readTgdArtifacts } from "@/lib/tgd-artifacts";
@@ -9,7 +11,6 @@ import { durableEntries, isDurableSessionId, readDurableProjection } from "@/lib
 export const dynamic = "force-dynamic";
 
 const CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs", ".java", ".rb", ".md", ".css", ".scss", ".html", ".json", ".yml", ".yaml"]);
-const SKIP = new Set([".git", ".next", "node_modules", "dist", "build", "coverage"]);
 
 function messageText(message: unknown): string {
   const content = (message as { content?: unknown })?.content;
@@ -32,30 +33,34 @@ async function sessionDocuments(cwd: string | null): Promise<SemanticDocument[]>
   }))).filter((document): document is NonNullable<typeof document> => Boolean(document));
 }
 
-async function artifactDocuments(cwd: string): Promise<SemanticDocument[]> {
+async function artifactDocuments(cwd: string, roots: Set<string>, signal: AbortSignal): Promise<SemanticDocument[]> {
   const artifacts = readTgdArtifacts(cwd);
-  const files = [...artifacts.top, ...artifacts.features.flatMap((feature) => [...feature.docs, ...feature.prototypes])];
-  return (await Promise.all(files.map(async (file) => {
-    try { return { id: `artifact:${file.path}`, source: "artifact" as const, title: file.name, path: file.path, text: (await readFile(file.path, "utf8")).slice(0, 80_000) }; }
-    catch { return null; }
-  }))).filter((document): document is NonNullable<typeof document> => Boolean(document));
+  if (!artifacts.tgdDir) return [];
+  const root = await resolveSearchRoot(artifacts.tgdDir, roots);
+  if (!root) return [];
+  const files = [...artifacts.top, ...artifacts.features.flatMap(feature => [...feature.docs, ...feature.prototypes])].slice(0, 260);
+  const documents: SemanticDocument[] = [];
+  for (const file of files) {
+    signal.throwIfAborted();
+    try {
+      const bytes = await readSearchFile(file.path, 80_000, { root, prefix: true });
+      if (bytes) documents.push({ id: `artifact:${file.path}`, source: "artifact", title: file.name, path: file.path, text: trimToUtf8Boundary(bytes).toString("utf8") });
+    } catch { /* changed, outside root, or unreadable */ }
+  }
+  return documents;
 }
 
-async function codeDocuments(cwd: string): Promise<SemanticDocument[]> {
+async function codeDocuments(cwd: string, signal: AbortSignal): Promise<SemanticDocument[]> {
+  const { entries } = await walkSearchFiles(cwd, { signal, maxDepth: 7 });
   const documents: SemanticDocument[] = [];
-  const queue: Array<{ dir: string; depth: number }> = [{ dir: cwd, depth: 0 }];
-  for (let index = 0; index < queue.length && documents.length < 260; index++) {
-    const { dir, depth } = queue[index];
-    let entries; try { entries = await readdir(dir, { withFileTypes: true }); } catch { continue; }
-    for (const entry of entries) {
-      if (SKIP.has(entry.name) || entry.name.startsWith(".")) continue;
-      const full = join(dir, entry.name);
-      if (entry.isDirectory() && depth < 7) queue.push({ dir: full, depth: depth + 1 });
-      else if (entry.isFile() && CODE_EXTENSIONS.has(extname(entry.name).toLocaleLowerCase())) {
-        try { documents.push({ id: `code:${full}`, source: "code", title: entry.name, path: full, text: (await readFile(full, "utf8")).slice(0, 48_000) }); } catch { /* unreadable */ }
-      }
-      if (documents.length >= 260) break;
-    }
+  for (const entry of entries) {
+    signal.throwIfAborted();
+    if (entry.isDir || !CODE_EXTENSIONS.has(extname(entry.name).toLowerCase())) continue;
+    try {
+      const bytes = await readSearchFile(entry.full, 48_000, { root: cwd, prefix: true });
+      if (bytes) documents.push({ id: `code:${entry.full}`, source: "code", title: entry.name, path: entry.full, text: trimToUtf8Boundary(bytes).toString("utf8") });
+    } catch { /* changed, outside root, or unreadable */ }
+    if (documents.length >= 260) break;
   }
   return documents;
 }
@@ -65,16 +70,24 @@ export async function GET(request: Request): Promise<Response> {
   const query = url.searchParams.get("q")?.trim() ?? "";
   const cwdParam = url.searchParams.get("cwd")?.trim() || null;
   if (query.length < 2) return Response.json({ hits: [], mode: "hybrid-local" });
-  let cwd: string | null = null;
-  if (cwdParam) {
-    cwd = resolve(cwdParam);
+  try {
+    let cwd: string | null = null;
     const roots = await getAllowedRoots();
-    if (![...roots].some((root) => cwd === root || cwd!.startsWith(root + sep))) return Response.json({ error: "cwd not allowed" }, { status: 403 });
+    if (cwdParam) {
+      const permitted = await resolveSearchRoot(cwdParam, roots);
+      if (!permitted) return Response.json({ error: "cwd not allowed" }, { status: 403 });
+      cwd = await realpath(permitted);
+    }
+    request.signal.throwIfAborted();
+    const groups = await Promise.all([
+      sessionDocuments(cwdParam ? cwdParam : null),
+      cwd ? artifactDocuments(cwd, roots, request.signal) : [],
+      cwd ? codeDocuments(cwd, request.signal) : [],
+    ]);
+    request.signal.throwIfAborted();
+    const documents = groups.flat();
+    return Response.json({ hits: rankSemanticDocuments(query, documents), mode: "hybrid-local", indexed: documents.length }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return Response.json({ error: request.signal.aborted ? "Search cancelled" : "Search failed" }, { status: request.signal.aborted ? 499 : 500 });
   }
-  const documents = [
-    ...await sessionDocuments(cwd),
-    ...(cwd ? await artifactDocuments(cwd) : []),
-    ...(cwd ? await codeDocuments(cwd) : []),
-  ];
-  return Response.json({ hits: rankSemanticDocuments(query, documents), mode: "hybrid-local", indexed: documents.length }, { headers: { "Cache-Control": "no-store" } });
 }

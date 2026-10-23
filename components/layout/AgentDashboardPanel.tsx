@@ -181,7 +181,7 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
       )}
       <div className={s.header}>
         <strong>{t("agents.title")}</strong>
-        <span className={`${s.daemonIndicator} ${error ? s.daemonOffline : ""}`}><i /><span>daemon</span></span>
+        <span className={`${s.daemonIndicator} ${error ? s.daemonOffline : ""}`}><i /><span>{t("agents.backgroundService")}</span></span>
         <button
           className={s.newButton}
           type="button"

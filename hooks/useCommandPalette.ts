@@ -472,12 +472,5 @@ export function useCommandPalette({
     }
   }, [onClearTag]);
 
-  return {
-    open,
-    query,
-    setQuery,
-    results,
-    runAction,
-    register,
-  };
+  return useMemo(() => ({ open, query, setQuery, results, runAction, register }), [open, query, results, runAction, register]);
 }

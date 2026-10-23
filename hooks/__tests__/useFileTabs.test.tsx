@@ -32,6 +32,27 @@ describe("useFileTabs", () => {
     api = null;
   });
 
+  it("closing other tabs retains pins and a valid split, and clears removed or duplicate splits", async () => {
+    container = document.createElement("div"); root = createRoot(container);
+    await act(async () => root?.render(<Harness />));
+    for (const path of ["/a.ts", "/b.ts", "/c.ts"]) {
+      await act(async () => api?.handleOpenFile(path));
+    }
+    await act(async () => api?.handleTogglePin("file:/b.ts"));
+    await act(async () => api?.handleOpenSplit("file:/b.ts"));
+    await act(async () => api?.handleCloseOthers("file:/a.ts"));
+    expect(api?.fileTabs.map((tab) => tab.id)).toEqual(["file:/a.ts", "file:/b.ts"]);
+    expect(api?.activeFileTabId).toBe("file:/a.ts");
+    expect(api?.splitFileTabId).toBe("file:/b.ts");
+    await act(async () => api?.handleCloseOthers("file:/b.ts"));
+    expect(api?.fileTabs.map((tab) => tab.id)).toEqual(["file:/b.ts"]);
+    expect(api?.splitFileTabId).toBeNull();
+    await act(async () => api?.handleOpenFile("/c.ts"));
+    await act(async () => api?.handleOpenSplit("file:/c.ts"));
+    await act(async () => api?.handleCloseOthers("file:/b.ts"));
+    expect(api?.splitFileTabId).toBeNull();
+  });
+
   it.each([true, false])("restores panel visibility (%s) without losing tabs or reading position", async (open) => {
     container = document.createElement("div");
     document.body.appendChild(container);

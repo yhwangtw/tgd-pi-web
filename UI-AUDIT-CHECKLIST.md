@@ -240,8 +240,8 @@ cross-combinations include XL + Mono + Traditional Chinese at 320, 840, and
 
 - Inventory source scan: complete.
 - Current worktree and existing changes: inspected and preserved.
-- Existing `design-qa.md`: treated as historical partial evidence, not proof of
-  the complete audit.
+- Existing [design QA](docs/archive/design-qa/design-qa.md): treated as historical
+  partial evidence, not proof of the complete audit.
 - Automated visual/reflow matrix: complete across Original and TRAE geometry,
   phone/tablet/desktop breakpoints, appearance variants, typography controls,
   coarse-pointer targets, overlays, dialogs, viewers and operational panels.

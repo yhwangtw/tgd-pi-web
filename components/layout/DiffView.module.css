@@ -90,7 +90,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-control-compact);
   background: transparent;
-  color: var(--accent);
+  color: var(--accent-text);
   cursor: pointer;
   opacity: 0;
   transition: opacity .12s ease, background .12s ease;

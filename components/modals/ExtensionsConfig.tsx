@@ -1,7 +1,7 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import { RefreshCw } from "lucide-react";
 import { DialogShell } from "@/components/ui/DialogShell";
 import type { ExtensionsReport, ExtensionFlagInfo } from "@/lib/extensions-info";
@@ -37,6 +37,7 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
   const [error, setError] = useState("");
   const [reloading, setReloading] = useState(false);
   const [view, setView] = useState<"loaded" | "packages" | "runtime" | "mcp" | "security">("loaded");
+  const tabId = useId();
   const [shortcutBusy, setShortcutBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -75,10 +76,10 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (e) {
-      showToast(`Flag update failed: ${e instanceof Error ? e.message : e}`, { type: "error" });
+      showToast(`${t("extensions.flagUpdateFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
       void load();
     }
-  }, [sessionId, load]);
+  }, [sessionId, load, t]);
 
   const reload = useCallback(async () => {
     if (!sessionId || reloading) return;
@@ -94,7 +95,7 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
       onReload?.();
       await load();
     } catch (e) {
-      showToast(`Reload failed: ${e instanceof Error ? e.message : e}`, { type: "error" });
+      showToast(`${t("extensions.reloadFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
     } finally {
       setReloading(false);
     }
@@ -145,25 +146,38 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
       )}
     >
       <div data-testid="extensions-config">
-        <div className={styles.viewTabs} role="tablist" aria-label={t("extensions.title")}>
+        <div className={styles.viewTabs} role="tablist" aria-label={t("extensions.title")} onKeyDown={(event) => {
+          const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+          const index = tabs.indexOf(event.target as HTMLButtonElement);
+          if (index < 0) return;
+          const next = event.key === "ArrowRight" ? (index + 1) % tabs.length
+            : event.key === "ArrowLeft" ? (index - 1 + tabs.length) % tabs.length
+            : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
+          if (next !== null) { event.preventDefault(); tabs[next].focus(); tabs[next].click(); }
+        }}>
               <button type="button" role="tab" aria-selected={view === "loaded"}
+                id={`${tabId}-loaded`} aria-controls={`${tabId}-panel`} tabIndex={view === "loaded" ? 0 : -1}
                 className={view === "loaded" ? styles.viewTabActive : styles.viewTab}
                 onClick={() => setView("loaded")}>{t("extensions.loaded")}</button>
               <button type="button" role="tab" aria-selected={view === "packages"}
+                id={`${tabId}-packages`} aria-controls={`${tabId}-panel`} tabIndex={view === "packages" ? 0 : -1}
                 className={view === "packages" ? styles.viewTabActive : styles.viewTab}
                 onClick={() => setView("packages")}>{t("packages.title")}</button>
               <button type="button" role="tab" aria-selected={view === "runtime"}
+                id={`${tabId}-runtime`} aria-controls={`${tabId}-panel`} tabIndex={view === "runtime" ? 0 : -1}
                 className={view === "runtime" ? styles.viewTabActive : styles.viewTab}
                 onClick={() => setView("runtime")}>{t("extensions.runtimeCenter")}</button>
               <button type="button" role="tab" aria-selected={view === "mcp"}
+                id={`${tabId}-mcp`} aria-controls={`${tabId}-panel`} tabIndex={view === "mcp" ? 0 : -1}
                 className={view === "mcp" ? styles.viewTabActive : styles.viewTab}
                 onClick={() => setView("mcp")}>{t("extensions.mcp")}</button>
               <button type="button" role="tab" aria-selected={view === "security"}
+                id={`${tabId}-security`} aria-controls={`${tabId}-panel`} tabIndex={view === "security" ? 0 : -1}
                 className={view === "security" ? styles.viewTabActive : styles.viewTab}
                 onClick={() => setView("security")}>{t("securityActivity.tab")}</button>
         </div>
 
-        <div className={styles.body}>
+        <div className={styles.body} id={`${tabId}-panel`} role="tabpanel" aria-labelledby={`${tabId}-${view}`} tabIndex={0}>
           {view === "packages" ? (
             <PackageCenter sessionId={sessionId} />
           ) : view === "runtime" ? (

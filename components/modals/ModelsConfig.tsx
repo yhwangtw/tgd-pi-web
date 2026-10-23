@@ -480,6 +480,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   }, [config.providers, t]);
 
   const deleteProvider = useCallback((name: string) => {
+    if (!window.confirm(t("models.confirmDeleteProvider").replace("{name}", name))) return;
     const remaining = Object.keys(config.providers ?? {}).filter(key => key !== name);
     setConfig((prev) => {
       const providers = { ...(prev.providers ?? {}) };
@@ -487,7 +488,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       return { ...prev, providers };
     });
     setSelection(remaining.length > 0 ? { type: "provider", name: remaining[0] } : { type: "health" });
-  }, [config.providers]);
+  }, [config.providers, t]);
 
   const addModel = useCallback((providerName: string) => {
     const index = config.providers?.[providerName]?.models?.length ?? 0;
@@ -510,6 +511,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   }, []);
 
   const removeModel = useCallback((providerName: string, index: number) => {
+    const name = config.providers?.[providerName]?.models?.[index]?.id || t("models.unnamedModel");
+    if (!window.confirm(t("models.confirmRemoveModel").replace("{name}", name))) return;
     setConfig((prev) => {
       const provider = prev.providers?.[providerName] ?? {};
       const models = [...(provider.models ?? [])];
@@ -518,7 +521,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     });
     setSelection({ type: "provider", name: providerName });
     setMobilePane("detail");
-  }, []);
+  }, [config.providers, t]);
 
   const handleSave = useCallback(async () => {
     if (!revision || loadError || conflict || loading || saving) return;
@@ -560,6 +563,11 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
   const providers = Object.entries(config.providers ?? {});
   const hasUnsavedChanges = JSON.stringify(config) !== savedConfigRef.current;
+  const customSelection = selection?.type === "provider" || selection?.type === "model";
+  const showConfigActions = customSelection || hasUnsavedChanges;
+  const cancelDraft = () => {
+    if (!hasUnsavedChanges || window.confirm(t("common.discardUnsavedChanges"))) onClose();
+  };
   const activeOAuth = oauthProviders.filter((p) => p.loggedIn);
   const activeApiKey = apiKeyProviders.filter((p) => p.configured);
 
@@ -624,14 +632,15 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           <div className={styles.footerContent}>
             {saveError && <span className={styles.saveErrorText} role="alert">{saveError}</span>}
             {(conflict || (!revision && !loading && !loadError)) && <button type="button" onClick={() => void loadConfig()} className={styles.cancelButton}>{t("models.reloadDiscard")}</button>}
-            <button type="button" onClick={onClose} disabled={saving} className={styles.cancelButton}>
-              {t("common.cancel")}
+            {hasUnsavedChanges && !customSelection && <span className={styles.pendingConfigNote}>{t("models.pendingCustomChanges")}</span>}
+            <button type="button" onClick={cancelDraft} disabled={saving} className={styles.cancelButton}>
+              {t(showConfigActions ? "common.cancel" : "common.done")}
             </button>
-            <button type="button" onClick={handleSave} disabled={loading || loadError || conflict || !revision || saving || savedOk || !hasUnsavedChanges}
+            {showConfigActions && <button type="button" onClick={handleSave} disabled={loading || loadError || conflict || !revision || saving || savedOk || !hasUnsavedChanges}
               className={`${styles.saveButton} ${savedOk ? styles.saveButtonSaved : saving ? styles.saveButtonSaving : styles.saveButtonReady}`}>
               {savedOk && <CheckCircle2 size={UI_ICON_SIZE.compact} aria-hidden="true" className={styles.saveCheckIcon} />}
               <span>{savedOk ? t("common.saved") : saving ? t("common.saving") : t("common.save")}</span>
-            </button>
+            </button>}
           </div>
         )}
       >

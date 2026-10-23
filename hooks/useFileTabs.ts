@@ -72,9 +72,11 @@ export function useFileTabs() {
   }, [fileTabs]);
 
   const handleCloseOthers = useCallback((tabId: string) => {
-    setFileTabs((prev) => prev.filter((t) => t.id === tabId));
-    setActiveFileTabId(tabId);
-  }, []);
+    const retained = fileTabs.filter((tab) => tab.id === tabId || tab.pinned);
+    setFileTabs(retained);
+    setActiveFileTabId(retained.some((tab) => tab.id === tabId) ? tabId : retained[0]?.id ?? null);
+    setSplitFileTabId((current) => current !== tabId && retained.some((tab) => tab.id === current) ? current : null);
+  }, [fileTabs]);
 
   const handleCloseAll = useCallback(() => {
     setFileTabs([]);

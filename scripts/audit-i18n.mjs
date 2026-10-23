@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { isVerifiedProviderArtwork, VENDORED_PROVIDER_ARTWORK } from "./design-icon-policy.mjs";
 
 const ROOTS = ["app", "components"];
 const BASELINE_PATH = "scripts/i18n-baseline.json";
@@ -41,6 +42,13 @@ function collect() {
   const findings = new Map();
   for (const file of ROOTS.flatMap(sourceFiles)) {
     const sourceText = fs.readFileSync(file, "utf8");
+    // Original licensed SVG titles are provider brand names. Exempt only the
+    // exact reviewed artwork and retained license; new UI copy stays audited.
+    if (file.replaceAll("\\", "/") === VENDORED_PROVIDER_ARTWORK.file) {
+      const license = fs.existsSync(VENDORED_PROVIDER_ARTWORK.licenseFile)
+        ? fs.readFileSync(VENDORED_PROVIDER_ARTWORK.licenseFile, "utf8") : "";
+      if (isVerifiedProviderArtwork(file, sourceText, license)) continue;
+    }
     const source = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const add = (node, kind, raw) => {
       const text = normalize(raw);

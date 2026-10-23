@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolve, relative, sep } from "path";
-import { stat } from "fs/promises";
+import { realpath, stat } from "fs/promises";
+import { getRpcSession } from "@/lib/rpc-manager";
+import { getDurableChat } from "@/lib/durable-chat";
+import { isDurableSessionId } from "@/lib/durable-session-store";
+import { resolveMigratedSessionId } from "@/lib/session-migrations";
+import { confinedFile, FileOperationError } from "@/lib/versioned-file";
+import { resolveSearchRoot } from "@/lib/search-files";
 import { getAllowedRoots } from "@/lib/file-security";
 
 const execFileAsync = promisify(execFile);
@@ -20,26 +26,47 @@ interface Diagnostic {
 async function validate(cwd: string | null, requestedPath: string | null) {
   if (!cwd || !requestedPath) return { error: "cwd and path required", status: 400 } as const;
   const roots = await getAllowedRoots();
-  if (!roots.has(cwd)) return { error: "cwd not allowed", status: 403 } as const;
-  const abs = resolve(cwd, requestedPath);
-  if ((abs !== cwd && !abs.startsWith(cwd + sep)) || requestedPath.startsWith("-")) return { error: "path not allowed", status: 403 } as const;
-  try { if (!(await stat(abs)).isFile()) return { error: "not a file", status: 400 } as const; }
-  catch { return { error: "not found", status: 404 } as const; }
-  return { cwd, abs, relPath: relative(cwd, abs).split(sep).join("/") } as const;
+  if (requestedPath.startsWith("-")) return { error: "path not allowed", status: 403 } as const;
+  const permitted = await resolveSearchRoot(cwd, roots);
+  if (!permitted) return { error: "cwd not allowed", status: 403 } as const;
+  try {
+    const canonical = await realpath(permitted);
+    const requested = resolve(cwd, requestedPath);
+    const rel = relative(cwd, requested);
+    const abs = await confinedFile(canonical, rel);
+    if (!(await stat(abs)).isFile()) return { error: "not a file", status: 400 } as const;
+    return { cwd: canonical, abs, relPath: relative(canonical, abs).split(sep).join("/") } as const;
+  } catch (error) {
+    return { error: "path not available", status: error instanceof FileOperationError ? error.status : 404 } as const;
+  }
 }
 
-async function git(cwd: string, args: string[]) {
-  return (await execFileAsync("git", ["-C", cwd, ...args], { timeout: 15_000, maxBuffer: MAX_BUFFER })).stdout;
+// Execution uses the current session's actual trust decision. A fresh SDK
+// SettingsManager defaults to trusted and cannot authorize this endpoint.
+async function trustedSession(cwd: string, requestedId: string | null): Promise<boolean> {
+  if (!requestedId) return false;
+  const id = resolveMigratedSessionId(requestedId);
+  const session = isDurableSessionId(id) ? getDurableChat(id) : getRpcSession(id);
+  if (!session?.isAlive()) return false;
+  const trusted = "getServices" in session
+    ? session.getServices()?.settingsManager.isProjectTrusted()
+    : session.inner.settingsManager.isProjectTrusted();
+  if (!trusted) return false;
+  try { return await realpath(session.cwd) === cwd; } catch { return false; }
 }
 
-async function symbolMatches(cwd: string, symbol: string, definitionsOnly: boolean) {
+async function git(cwd: string, args: string[], signal: AbortSignal) {
+  return (await execFileAsync("git", ["-C", cwd, ...args], { timeout: 15_000, maxBuffer: MAX_BUFFER, signal })).stdout;
+}
+
+async function symbolMatches(cwd: string, symbol: string, definitionsOnly: boolean, signal: AbortSignal) {
   if (!/^[A-Za-z_$][\w$]*$/.test(symbol)) throw new Error("valid identifier required");
   const escaped = symbol.replace(/[$]/g, "\\$");
   const pattern = definitionsOnly
     ? `\\b(?:class|function|const|let|var|interface|type|enum|def)\\s+${escaped}\\b`
     : `\\b${escaped}\\b`;
   try {
-    const { stdout } = await execFileAsync("rg", ["--json", "--line-number", "--glob", "!node_modules/**", "--glob", "!.git/**", "--glob", "!dist/**", "--glob", "!.next/**", pattern, "."], { cwd, timeout: 12_000, maxBuffer: MAX_BUFFER });
+    const { stdout } = await execFileAsync("rg", ["--json", "--line-number", "--glob", "!node_modules/**", "--glob", "!.git/**", "--glob", "!dist/**", "--glob", "!.next/**", pattern, "."], { cwd, timeout: 12_000, maxBuffer: MAX_BUFFER, signal });
     return stdout.split("\n").filter(Boolean).flatMap((row) => {
       try {
         const event = JSON.parse(row) as { type?: string; data?: { path?: { text?: string }; line_number?: number; lines?: { text?: string } } };
@@ -64,20 +91,21 @@ function parseTsc(stdout: string, cwd: string, abs: string, relPath: string): Di
   });
 }
 
-async function diagnostics(cwd: string, abs: string, relPath: string): Promise<Diagnostic[]> {
+async function diagnostics(cwd: string, abs: string, relPath: string, signal: AbortSignal): Promise<Diagnostic[]> {
   const results: Diagnostic[] = [];
   const tsc = resolve(cwd, "node_modules/.bin/tsc");
   try {
-    const output = await execFileAsync(tsc, ["--noEmit", "--pretty", "false"], { cwd, timeout: 30_000, maxBuffer: MAX_BUFFER });
+    const output = await execFileAsync(tsc, ["--noEmit", "--pretty", "false"], { cwd, timeout: 30_000, maxBuffer: MAX_BUFFER, signal });
     results.push(...parseTsc(`${output.stdout}\n${output.stderr}`, cwd, abs, relPath));
   } catch (error) {
     const e = error as { stdout?: string; stderr?: string };
     results.push(...parseTsc(`${e.stdout ?? ""}\n${e.stderr ?? ""}`, cwd, abs, relPath));
   }
 
+  signal.throwIfAborted();
   const eslint = resolve(cwd, "node_modules/.bin/eslint");
   try {
-    const output = await execFileAsync(eslint, ["--format", "json", "--no-warn-ignored", relPath], { cwd, timeout: 20_000, maxBuffer: MAX_BUFFER });
+    const output = await execFileAsync(eslint, ["--format", "json", "--no-warn-ignored", relPath], { cwd, timeout: 20_000, maxBuffer: MAX_BUFFER, signal });
     const payload = JSON.parse(output.stdout || "[]") as Array<{ messages?: Array<{ line?: number; column?: number; severity?: number; ruleId?: string | null; message?: string }> }>;
     for (const message of payload[0]?.messages ?? []) results.push({ source: "eslint", line: message.line ?? 1, column: message.column ?? 1, severity: message.severity === 1 ? "warning" : "error", code: message.ruleId ?? undefined, message: message.message ?? "ESLint issue" });
   } catch (error) {
@@ -87,18 +115,20 @@ async function diagnostics(cwd: string, abs: string, relPath: string): Promise<D
       for (const message of payload[0]?.messages ?? []) results.push({ source: "eslint", line: message.line ?? 1, column: message.column ?? 1, severity: message.severity === 1 ? "warning" : "error", code: message.ruleId ?? undefined, message: message.message ?? "ESLint issue" });
     } catch { /* unsupported project or formatter output */ }
   }
+  signal.throwIfAborted();
   return results.slice(0, 250);
 }
 
-async function testDiagnostics(cwd: string, relPath: string): Promise<Diagnostic[]> {
+async function testDiagnostics(cwd: string, relPath: string, signal: AbortSignal): Promise<Diagnostic[]> {
   const vitest = resolve(cwd, "node_modules/.bin/vitest");
   let stdout = "";
   try {
-    const result = await execFileAsync(vitest, ["related", relPath, "--run", "--reporter=json", "--passWithNoTests"], { cwd, timeout: 60_000, maxBuffer: MAX_BUFFER });
+    const result = await execFileAsync(vitest, ["related", relPath, "--run", "--reporter=json", "--passWithNoTests"], { cwd, timeout: 60_000, maxBuffer: MAX_BUFFER, signal });
     stdout = result.stdout;
   } catch (error) {
     stdout = (error as { stdout?: string }).stdout ?? "";
   }
+  signal.throwIfAborted();
   if (!stdout.trim()) return [];
   try {
     const payload = JSON.parse(stdout) as { testResults?: Array<{ name?: string; assertionResults?: Array<{ title?: string; status?: string; failureMessages?: string[]; location?: { line?: number; column?: number } }> }> };
@@ -119,14 +149,18 @@ export async function GET(req: Request) {
   if ("error" in checked) return NextResponse.json({ error: checked.error }, { status: checked.status });
   const mode = url.searchParams.get("mode") ?? "history";
   try {
-    if (mode === "diagnostics") return NextResponse.json({ diagnostics: await diagnostics(checked.cwd, checked.abs, checked.relPath) });
-    if (mode === "tests") return NextResponse.json({ diagnostics: await testDiagnostics(checked.cwd, checked.relPath) });
+    req.signal.throwIfAborted();
+    if ((mode === "diagnostics" || mode === "tests") && !await trustedSession(checked.cwd, url.searchParams.get("sessionId"))) {
+      return NextResponse.json({ error: "Open this workspace in a trusted session before running diagnostics or tests" }, { status: 403 });
+    }
+    if (mode === "diagnostics") return NextResponse.json({ diagnostics: await diagnostics(checked.cwd, checked.abs, checked.relPath, req.signal) });
+    if (mode === "tests") return NextResponse.json({ diagnostics: await testDiagnostics(checked.cwd, checked.relPath, req.signal) });
     if (mode === "definition" || mode === "references") {
       const symbol = url.searchParams.get("symbol") ?? "";
-      return NextResponse.json({ symbol, matches: await symbolMatches(checked.cwd, symbol, mode === "definition") });
+      return NextResponse.json({ symbol, matches: await symbolMatches(checked.cwd, symbol, mode === "definition", req.signal) });
     }
     if (mode === "history") {
-      const output = await git(checked.cwd, ["log", "--follow", "-n", "40", "--date=iso-strict", "--format=%H%x1f%h%x1f%an%x1f%ad%x1f%s", "--", checked.relPath]);
+      const output = await git(checked.cwd, ["log", "--follow", "-n", "40", "--date=iso-strict", "--format=%H%x1f%h%x1f%an%x1f%ad%x1f%s", "--", checked.relPath], req.signal);
       const commits = output.trim().split("\n").filter(Boolean).map((line) => {
         const [sha, shortSha, author, date, ...subject] = line.split("\x1f");
         return { sha, shortSha, author, date, subject: subject.join("\x1f") };
@@ -136,11 +170,11 @@ export async function GET(req: Request) {
     if (mode === "version") {
       const ref = url.searchParams.get("ref");
       if (!ref || !/^[0-9a-f]{7,40}$/i.test(ref)) return NextResponse.json({ error: "valid ref required" }, { status: 400 });
-      const content = await git(checked.cwd, ["show", `${ref}:${checked.relPath}`]);
+      const content = await git(checked.cwd, ["show", `${ref}:${checked.relPath}`], req.signal);
       return NextResponse.json({ content, ref });
     }
     if (mode === "blame") {
-      const output = await git(checked.cwd, ["blame", "--line-porcelain", "HEAD", "--", checked.relPath]);
+      const output = await git(checked.cwd, ["blame", "--line-porcelain", "HEAD", "--", checked.relPath], req.signal);
       const lines: Array<{ line: number; sha: string; author: string; date: string; text: string }> = [];
       let current = { sha: "", line: 0, author: "", date: "" };
       for (const row of output.split("\n")) {
@@ -154,6 +188,7 @@ export async function GET(req: Request) {
     }
     return NextResponse.json({ error: "unsupported mode" }, { status: 400 });
   } catch (error) {
+    if (req.signal.aborted) return NextResponse.json({ error: "Request cancelled" }, { status: 499 });
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }

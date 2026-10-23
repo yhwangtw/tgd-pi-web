@@ -686,7 +686,7 @@ function ToolCallBlock({ block, result, duration, active = false }: { block: Too
   const [expanded, setExpanded] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
   const { t } = useI18n();
-  const inputStr = JSON.stringify(block.input, null, 2);
+  const inputStr = useMemo(() => expanded ? JSON.stringify(block.input, null, 2) : "", [block.input, expanded]);
 
   // pi's file tools get structured rendering instead of raw JSON:
   // edit {path, oldText, newText} → a real diff; write {path, content} → the
@@ -764,7 +764,7 @@ function ToolCallBlock({ block, result, duration, active = false }: { block: Too
           isError={isError}
         />
       )}
-      {(isEditTool || isWriteTool) && (
+      {focusOpen && (isEditTool || isWriteTool) && (
         <FocusDialog open={focusOpen} title={toolPath || block.toolName} onClose={() => setFocusOpen(false)}>
           <div className={styles.focusDiff}>
             <DiffViewMode

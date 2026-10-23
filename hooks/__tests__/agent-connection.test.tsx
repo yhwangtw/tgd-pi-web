@@ -84,6 +84,7 @@ describe("agent connection resume", () => {
       first.message({ type: "stale_source" }, "epoch:999");
     });
     expect(events.mock.calls.map(([event]) => event.type)).toEqual(["session_snapshot", "agent_start", "agent_end", "session_snapshot", "extension_ui_request"]);
+    expect(events.mock.calls[2][0]).toMatchObject({ type: "agent_end", replayed: true });
   });
 
   it("delivers unsequenced run timings even when EventSource inherits the last sequenced cursor", async () => {

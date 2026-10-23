@@ -59,6 +59,21 @@ describe("useModelCatalog", () => {
     await act(async () => root?.render(<Harness cwd={cwd} refreshKey={refreshKey} />));
   }
 
+  it("preserves the selectable list identity on unrelated renders and selection changes", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => responseFor("test", "stable")));
+    await render();
+    const original = catalog.modelList;
+    await render();
+    expect(catalog.modelList).toBe(original);
+    await act(async () => catalog.setNewSessionModel({ provider: "test", modelId: "stable" }));
+    expect(catalog.modelList).toBe(original);
+    await act(async () => catalog.reportModelUnavailable({ provider: "test", modelId: "stable" }));
+    expect(catalog.modelList).not.toBe(original);
+    const rejected = catalog.modelList;
+    await render();
+    expect(catalog.modelList).toBe(rejected);
+  });
+
   it("distinguishes loading, empty, and failed catalogs and supports retry", async () => {
     const pending = deferredResponse();
     const fetchMock = vi.fn().mockReturnValueOnce(pending.promise)

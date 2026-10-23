@@ -1,3 +1,6 @@
+import { readSessionHeader } from "./session-header";
+import { assistantFailure } from "./session-error-summary";
+export { readSessionHeader } from "./session-header";
 import { resolveMigratedSessionId } from "./session-migrations";
 import { getAgentDir, migrateSessionEntries, parseSessionEntries } from "@earendil-works/pi-coding-agent";
 import type { SessionEntry, SessionHeader, SessionInfo, SessionTreeNode } from "./types";
@@ -35,6 +38,7 @@ interface RawSessionInfo {
   lastMessage: string;
   lastMessageId?: string;
   parentSessionPath?: string;
+  lastAssistantError: SessionInfo["lastAssistantError"];
 }
 
 interface SessionInfoCacheEntry {
@@ -84,6 +88,7 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
   let lastMessage = "";
   let lastActivity = 0;
   let lastMessageId: string | undefined;
+  let lastAssistantError: SessionInfo["lastAssistantError"] = null;
 
   for (let i = 1; i < entries.length; i++) {
     const entry = entries[i];
@@ -95,6 +100,7 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
     if (entry.type !== "message") continue;
     const message = entry.message as { role?: string; content?: unknown; timestamp?: unknown } | undefined;
     if (message?.role === "system") continue;
+    if (message?.role === "assistant") lastAssistantError = assistantFailure(message, typeof entry.timestamp === "string" ? entry.timestamp : undefined);
     messageCount++;
     if (!message || message.content == null) continue;
     if (message.role !== "user" && message.role !== "assistant") continue;
@@ -125,6 +131,7 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
     lastMessage,
     lastMessageId,
     parentSessionPath: header.parentSession,
+    lastAssistantError,
   };
 }
 
@@ -219,6 +226,7 @@ async function scanAllSessions(sessionsDir: string): Promise<SessionInfo[]> {
       firstMessage: info.firstMessage,
       lastMessage: info.lastMessage,
       lastMessageId: info.lastMessageId,
+      lastAssistantError: info.lastAssistantError,
       parentSessionId: info.parentSessionPath ? pathToId.get(info.parentSessionPath) : undefined,
     };
   });
@@ -281,13 +289,7 @@ export function readSessionFile(filePath: string): { header: SessionHeader | nul
 
 /** Read only the immutable first-line session header without opening or rewriting the file. */
 export function readSessionCwd(filePath: string): string | null {
-  try {
-    const firstLine = readFileSync(filePath, "utf8").split(/\r?\n/, 1)[0];
-    const header = JSON.parse(firstLine) as { type?: unknown; cwd?: unknown };
-    return header.type === "session" && typeof header.cwd === "string" ? header.cwd : null;
-  } catch {
-    return null;
-  }
+  return readSessionHeader(filePath)?.cwd ?? null;
 }
 
 export function getSessionEntries(filePath: string): SessionEntry[] {

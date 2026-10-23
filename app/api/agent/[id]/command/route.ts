@@ -1,3 +1,4 @@
+import { readSessionCwd } from "@/lib/session-reader";
 import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
 import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
@@ -41,8 +42,7 @@ export async function POST(
       if (!filePath) {
         return NextResponse.json({ error: "Session not found" }, { status: 404 });
       }
-      const { SessionManager } = await import("@earendil-works/pi-coding-agent");
-      const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
+      const cwd = readSessionCwd(filePath) ?? process.cwd();
       const result = await startRpcSession(id, filePath, cwd);
       session = result.session;
     }

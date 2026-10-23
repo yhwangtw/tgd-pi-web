@@ -1451,7 +1451,7 @@
 .shortcutsOverlay {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 1400;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1785,4 +1785,13 @@
   .fileHideLabel { display: none; }
   .fileBackLabel { display: inline; white-space: nowrap; font-size: var(--text-xs); }
   .mobileFilePanelClose { width: auto; flex: 0 0 auto; padding-inline: var(--space-2); gap: var(--space-1); }
+}
+
+.shortcutsHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: 12px; }
+.shortcutsHeader .shortcutsTitle { margin: 0; }
+.welcomeModelsButton { display: inline; border: 0; background: none; padding: 0 var(--space-1); color: var(--accent-text); font: inherit; font-weight: var(--weight-semibold); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+@media (max-width: 700px), (pointer: coarse) { .welcomeModelsButton { min-height: var(--control-touch); } }
+
+@media (pointer: coarse) {
+  :global(html[data-ui-style="trae"]) .railButton { min-width: var(--control-touch); min-height: var(--control-touch); }
 }

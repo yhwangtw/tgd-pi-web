@@ -1,7 +1,7 @@
+import { readSessionCwd } from "@/lib/session-reader";
 import { waitForSessionMigration } from "@/lib/durable-migration";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { getRpcSession, getResumableRpcSession, startRpcSession, type AgentSessionWrapper } from "@/lib/rpc-manager";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { encodeAgentStreamRecord, type AgentStreamRecord } from "@/lib/agent-event-log";
 import { AGENT_STREAM_DELTA_FORMAT, AgentStreamTransport } from "@/lib/agent-stream-wire";
 import { getDurableChat, openDurableChat } from "@/lib/durable-chat";
@@ -43,7 +43,7 @@ export async function GET(
     if (!filePath) {
       return new Response("Session not found", { status: 404 });
     }
-    const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
+    const cwd = readSessionCwd(filePath) ?? process.cwd();
     try {
       ({ session } = await startRpcSession(id, filePath, cwd));
     } catch (error) {

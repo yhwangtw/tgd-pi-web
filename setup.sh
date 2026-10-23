@@ -4,6 +4,7 @@
 # 需要：Node.js 22.19+（22.x）或 23.4+（含 24 以上）
 #
 set -e
+set -o pipefail
 
 # ── 顏色 ──────────────────────────────────────────────
 RED='\033[0;31m'
@@ -89,7 +90,7 @@ if [ -e "$SCRIPT_DIR/.git" ] \
 
     if [ "${TGD_SETUP_FORCE_SYNC:-0}" != "1" ]; then
       if [ -t 0 ]; then
-        read -p "$(echo -e ${YELLOW}同步會以 origin/main 取代目前程式碼；繼續？[y/N]${NC} )" sync_source
+        read -r -p "$(echo -e ${YELLOW}同步會以 origin/main 取代目前程式碼；繼續？[y/N]${NC} )" sync_source
         case "$sync_source" in
           y|Y) ;;
           *)
@@ -229,7 +230,7 @@ if command -v pi &>/dev/null; then
     echo "  僅使用 Web 不受影響；終端機的 pi 指令仍會使用 ${PI_CLI_VERSION}。"
 
     if [ -t 0 ]; then
-      read -p "$(echo -e ${CYAN}是否將全域 Pi CLI 同步為 ${PI_RUNTIME_VERSION}？[y/N]${NC} )" sync_pi_cli
+      read -r -p "$(echo -e ${CYAN}是否將全域 Pi CLI 同步為 ${PI_RUNTIME_VERSION}？[y/N]${NC} )" sync_pi_cli
       case "$sync_pi_cli" in
         y|Y)
           npm install -g "@earendil-works/pi-coding-agent@${PI_RUNTIME_VERSION}"
@@ -293,7 +294,7 @@ echo ""
 
 # ── 詢問是否立即啟動 ──────────────────────────────────
 if [ -t 0 ]; then
-  read -p "$(echo -e ${CYAN}是否立即啟動 Production 伺服器？[Y/n]${NC} )" choice
+  read -r -p "$(echo -e ${CYAN}是否立即啟動 Production 伺服器？[Y/n]${NC} )" choice
   case "$choice" in
     n|N)
       echo "bye 👋"

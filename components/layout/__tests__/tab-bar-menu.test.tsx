@@ -274,3 +274,26 @@ it("opens the file list with the keyboard and dismisses it with Escape", async (
   expect(document.querySelector('[role="menu"]')).toBeNull();
   expect(document.activeElement).toBe(trigger);
 });
+
+it("offers move-left/right from a touch-accessible action trigger and skips disabled edge actions", async () => {
+  const reorder = vi.fn();
+  const select = vi.fn();
+  await act(async () => root.render(<TabBar tabs={tabs} activeTabId="readme" onSelectTab={select} onCloseTab={vi.fn()} onReorder={reorder} />));
+  const trigger = host.querySelector<HTMLButtonElement>('[aria-label="tabs.actions"]')!;
+  expect(host.querySelector('[data-testid="file-tab-strip"]')!.contains(trigger)).toBe(false);
+  await act(async () => trigger.click());
+  let menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+  const left = Array.from(menu.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "tabs.moveLeft")!;
+  const right = Array.from(menu.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "tabs.moveRight")!;
+  expect(left.disabled).toBe(true);
+  expect(document.activeElement).toBe(right);
+  await act(async () => right.click());
+  expect(reorder).toHaveBeenCalledExactlyOnceWith("readme", 1);
+  expect(select).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(host.querySelector('[role="tab"]'));
+  await key(host.querySelectorAll('[role="tab"]')[1], "ContextMenu");
+  menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+  const otherLeft = Array.from(menu.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "tabs.moveLeft")!;
+  await act(async () => otherLeft.click());
+  expect(reorder).toHaveBeenLastCalledWith("source", 0);
+});

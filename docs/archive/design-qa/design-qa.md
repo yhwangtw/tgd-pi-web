@@ -177,9 +177,9 @@ final result: passed
 
 - Source visual: `/Users/elon/.codex/generated_images/019fa46f-03fa-7143-b0f8-2fbd31e67ba9/exec-e50dfdd4-83a0-4738-93d7-da6bf06e0330.png`
   - Native size: 1487 × 1058
-- Desktop implementation: `design-qa-desktop.jpg`
+- Desktop implementation: [design-qa-desktop.jpg](design-qa-desktop.jpg)
   - Browser viewport: 1440 × 1024
-- Mobile implementation: `design-qa-mobile.jpg`
+- Mobile implementation: [design-qa-mobile.jpg](design-qa-mobile.jpg)
   - Browser viewport: 390 × 844
 - Tested state: assistant response with explanatory prose, collapsed Work log, semantic result block, and collapsed technical details.
 

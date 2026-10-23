@@ -148,6 +148,10 @@ it("resolves late references and returns to full rendering for replacements, pre
 
     count = fixture.parses;
     await act(async () => root.render(<MarkdownBody isStreaming allowSafeHtml>{markdown + "\n\n<div>Preview</div>"}</MarkdownBody>));
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(host.querySelector(".markdown-body > div")?.textContent).toBe("Preview");
+    });
     expect(fixture.inputs.slice(count)).toEqual([markdown + "\n\n<div>Preview</div>"]);
     expect(host.querySelector(".markdown-body > div")!.textContent).toBe("Preview");
 
@@ -203,5 +207,22 @@ it("keeps display math on the full parser and Mermaid preview deferred during st
     expect(preview!.disabled).toBe(true);
     expect(host.querySelector("pre code")!.textContent).toContain("graph TD; A-->B");
     expect(fixture.mermaidLoads).toBe(0);
+  } finally { await act(async () => root.unmount()); }
+});
+
+it("chunks prose within structured output cards while retaining whole-document fallback for references", async () => {
+  const host = document.createElement("div"); const root = createRoot(host);
+  let markdown = "Intro.\n\n> [!RESULT] Summary\n> First **complete** paragraph.\n>\n> Active tail";
+  try {
+    await act(async () => root.render(<MarkdownBody isStreaming structuredOutput>{markdown}</MarkdownBody>));
+    const complete = [...host.querySelectorAll("p")].find((node) => node.textContent === "First complete paragraph.");
+    const count = fixture.inputs.length;
+    markdown += " grows.";
+    await act(async () => root.render(<MarkdownBody isStreaming structuredOutput>{markdown}</MarkdownBody>));
+    expect(fixture.inputs.slice(count)).toEqual(["Active tail grows."]);
+    expect([...host.querySelectorAll("p")].find((node) => node.textContent === "First complete paragraph.")).toBe(complete);
+    markdown += "\n>\n> [Guide][ref]\n>\n> [ref]: https://example.com";
+    await act(async () => root.render(<MarkdownBody isStreaming structuredOutput>{markdown}</MarkdownBody>));
+    expect(host.querySelector("a")?.href).toBe("https://example.com/");
   } finally { await act(async () => root.unmount()); }
 });

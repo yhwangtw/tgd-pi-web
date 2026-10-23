@@ -1,6 +1,15 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 
-const MAIN = "/?session=aaaa1111-2222-3333-4444-555566667777";
+const SID = "aaaa1111-2222-3333-4444-555566667777";
+const MAIN = `/?session=${SID}`;
+const OWNED_TAGS = ["chiptest", "menutest", "filtertest"];
+
+async function clearOwnedTags(request: APIRequestContext) {
+  for (const tag of OWNED_TAGS) {
+    const response = await request.delete("/api/sessions/tags", { data: { id: SID, tag } });
+    expect(response.ok(), `clean up #${tag}`).toBe(true);
+  }
+}
 
 async function openMain(page: Page) {
   await page.goto(MAIN);
@@ -16,12 +25,16 @@ async function addTag(page: Page, tag: string) {
   const input = page.locator("input[placeholder*='tag']");
   await input.waitFor();
   await input.fill(tag); // fill, not type — typing races the focus timeout
+  const saved = page.waitForResponse(response => response.url().endsWith("/api/sessions/tags") && response.request().method() === "POST");
   await page.keyboard.press("Enter");
+  expect((await saved).ok()).toBe(true);
 }
 
 // Fixtures are regenerated per run, but tags.json persists within one run —
-// each test cleans up after itself via the chips it asserts on.
+// clean up only this suite's tags even when a UI assertion fails or retries.
 test.describe("session tags", () => {
+  test.beforeEach(async ({ request }) => { await clearOwnedTags(request); });
+  test.afterEach(async ({ request }) => { await clearOwnedTags(request); });
   test("add → chip appears immediately with a remove control", async ({ page }) => {
     await openMain(page);
     await addTag(page, "chiptest");
@@ -42,7 +55,7 @@ test.describe("session tags", () => {
 
     await page.locator('[data-session-row="aaaa1111-2222-3333-4444-555566667777"]').click({ button: "right" });
     const menu = page.getByRole("menu");
-    const menuRemove = menu.getByRole("button", { name: "Remove #menutest" });
+    const menuRemove = menu.getByRole("menuitem", { name: "Remove #menutest", exact: true });
     await expect(menuRemove).toBeVisible();
     await menuRemove.click();
     await page.keyboard.press("Escape");
@@ -52,6 +65,8 @@ test.describe("session tags", () => {
   test("tag filter chips filter the session list", async ({ page }) => {
     await openMain(page);
     await addTag(page, "filtertest");
+    // Exercise the tag filter independently of the search used to find the row.
+    await page.getByRole("textbox", { name: "Search conversations", exact: true }).fill("");
     // Tags live in the explicit conversation-filter dialog so the session
     // list stays scannable instead of growing another persistent toolbar.
     await page.getByRole("button", { name: "Conversation filters" }).click();

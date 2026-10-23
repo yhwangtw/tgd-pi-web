@@ -1,3 +1,4 @@
+import { assistantFailure } from "./session-error-summary";
 import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -54,7 +55,7 @@ interface DurableIndexEntry extends DurableFingerprint {
   value?: { info: SessionInfo; agentRun?: AgentRun };
 }
 interface DurableDiskIndex {
-  version: 1;
+  version: 2;
   sessionId: string;
   source: DurableFingerprint;
   value: DurableIndexEntry["value"] | null;
@@ -68,13 +69,27 @@ function sameFingerprint(a: DurableFingerprint, b: DurableFingerprint): boolean 
 }
 const indexPath = (path: string) => path.replace(/\.json$/, ".index.json");
 function projectionIndex(projection: DurableSessionProjection): DurableIndexEntry["value"] {
-  return projection.version === 1 && !projection.deleted
-    ? { info: { ...projection.info }, ...(projection.agentRun ? { agentRun: structuredClone(projection.agentRun) } : {}) } : undefined;
+  if (projection.version !== 1 || projection.deleted) return undefined;
+  let lastAssistantError: SessionInfo["lastAssistantError"] = null;
+  // Only convert the tail needed to locate the last assistant. A legacy archive
+  // is expanded at most once, when no newer native assistant supersedes it.
+  outer: for (let i = projection.entries.length - 1; i >= 0; i--) {
+    const entries = durableEntries([projection.entries[i]], projection.info.created);
+    for (let j = entries.length - 1; j >= 0; j--) {
+      const entry = entries[j];
+      if (entry.type === "message" && entry.message.role === "assistant") {
+        lastAssistantError = assistantFailure(entry.message, entry.timestamp);
+        break outer;
+      }
+    }
+  }
+  return { info: { ...projection.info, lastAssistantError }, ...(projection.agentRun ? { agentRun: structuredClone(projection.agentRun) } : {}) };
 }
+
 function readDiskIndex(path: string, id: string, metadata: DurableFingerprint): DurableIndexEntry["value"] | null {
   try {
     const saved = JSON.parse(readFileSync(indexPath(path), "utf8")) as DurableDiskIndex;
-    if (saved.version !== 1 || saved.sessionId !== id || !saved.source || !sameFingerprint(saved.source, metadata)) return null;
+    if (saved.version !== 2 || saved.sessionId !== id || !saved.source || !sameFingerprint(saved.source, metadata)) return null;
     if (saved.value === null) return undefined;
     return saved.value?.info?.id === id ? saved.value : null;
   } catch { return null; }
@@ -98,7 +113,7 @@ export function saveDurableProjection(directory: string, conversation: number, p
     // pair its fingerprint with our older sidebar metadata.
     if (writtenInode === undefined || source.ino !== writtenInode) return;
     const value = projectionIndex(projection);
-    writeDurableJson(indexPath(path), { version: 1, sessionId: projection.info.id, source, value: value ?? null } satisfies DurableDiskIndex);
+    writeDurableJson(indexPath(path), { version: 2, sessionId: projection.info.id, source, value: value ?? null } satisfies DurableDiskIndex);
     durableIndex().set(path, { ...source, value });
   } catch { /* Optional derived metadata must never fail a durable save. */ }
 }

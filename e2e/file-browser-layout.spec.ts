@@ -136,9 +136,9 @@ for (const style of ["original", "trae"] as const) {
     await sourceTab.click({ button: "right", position: { x: box.width - 5, y: box.height / 2 } });
     const menu = page.getByRole("menu");
     await withinViewport(page, menu);
-    await expect(menu.getByRole("menuitem").first()).toBeFocused();
+    await expect(menu.locator('[role="menuitem"]:not(:disabled)').first()).toBeFocused();
     await page.keyboard.press("ArrowDown");
-    await expect(menu.getByRole("menuitem").nth(1)).toBeFocused();
+    await expect(menu.locator('[role="menuitem"]:not(:disabled)').nth(1)).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(menu).toBeHidden();
     await expect(sourceTab).toBeFocused();

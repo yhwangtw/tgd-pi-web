@@ -2,7 +2,7 @@
 
 import { useState, useRef, useLayoutEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Columns2, Pin, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Columns2, MoreHorizontal, Pin, X } from "lucide-react";
 import { ActionMenu, ActionMenuRadioGroup, ActionMenuRadioItem } from "@/components/ui/ActionMenu";
 import { getFileIcon } from "../sidebar/FileIcons";
 import { useI18n } from "@/lib/i18n";
@@ -138,7 +138,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
       setMenuPosition(previous => previous.left === next.left && previous.top === next.top ? previous : next);
     };
     update();
-    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true });
+    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus({ preventScroll: true });
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
     if (menuRef.current) observer?.observe(menuRef.current);
     window.addEventListener("resize", update);
@@ -269,6 +269,12 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
 
     </div>
     {tabs.length > 1 && <div className={styles.navigation}>
+      {onReorder && <button type="button" className={styles.navigationButton}
+        aria-label={t("tabs.actions")} title={t("tabs.actions")}
+        aria-haspopup="menu" aria-expanded={!!menu}
+        onClick={() => { const active = tabs.find(tab => tab.id === activeTabId) ?? tabs[0]; if (active) openMenu(active); }}>
+        <MoreHorizontal aria-hidden="true" />
+      </button>}
       {(overflow.left || overflow.right) && <>
         <button type="button" className={styles.navigationButton} disabled={!overflow.left}
           aria-label={t("tabs.scrollLeft")} title={t("tabs.scrollLeft")} onClick={() => scrollTabs(-1)}>
@@ -321,13 +327,22 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
                 (target ?? anchor)?.focus({ preventScroll: true });
                 return;
               }
-              const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+              const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)'));
               const current = items.indexOf(document.activeElement as HTMLButtonElement);
               const index = event.key === "ArrowDown" ? (current + 1) % items.length
                 : event.key === "ArrowUp" ? (current - 1 + items.length) % items.length
                 : event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : null;
               if (index !== null) { event.preventDefault(); event.stopPropagation(); items[index]?.focus(); }
             }}>
+            {onReorder && tabs.length > 1 && ([-1, 1] as const).map(direction => {
+              const index = tabs.findIndex(tab => tab.id === menu.tab.id);
+              const destination = index + direction;
+              return <button key={direction} type="button" role="menuitem" tabIndex={-1}
+                className={styles.tabMenuItem} disabled={index < 0 || destination < 0 || destination >= tabs.length}
+                onClick={() => { onReorder(menu.tab.id, destination); dismissMenu(); }}>
+                {t(direction < 0 ? "tabs.moveLeft" : "tabs.moveRight")}
+              </button>;
+            })}
             {onReveal && (
               <button type="button" role="menuitem" tabIndex={-1} className={styles.tabMenuItem} onClick={() => { dismissMenu(); onReveal(menu.tab.filePath); }}>
                 {t("explorer.revealInTree")}

@@ -33,6 +33,7 @@ const RECENT_COMPLETION_AGE_MS = 24 * 60 * 60 * 1_000;
 const SESSION_SCAN_LIMIT = 60;
 
 function assistantErrorFromSession(session: SessionInfo): { message: string; at?: string } | null {
+  if (session.lastAssistantError !== undefined) return session.lastAssistantError;
   const projection = isDurableSessionId(session.id) ? readDurableProjection(session.id) : undefined;
   if (isDurableSessionId(session.id) && !projection) return null;
   const entries = projection ? durableEntries(projection.entries, projection.info.created) : readSessionFile(session.path).entries;

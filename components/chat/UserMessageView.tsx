@@ -201,15 +201,16 @@ export function UserMessageView({ message, entryId, onFork, forking, prevAssista
                     ? `data:${flat.mimeType};base64,${flat.data}`
                     : "";
                 return (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <button
                     key={i}
-                    src={src}
-                    alt=""
-                    className={styles.image}
+                    type="button"
+                    className={styles.imageButton}
+                    aria-label={t("image.preview")}
                     onClick={() => setLightboxSrc(src)}
-                    style={{ cursor: "zoom-in" }}
-                  />
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt="" className={styles.image} />
+                  </button>
                 );
               })}
             </div>

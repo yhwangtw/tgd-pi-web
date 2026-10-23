@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
+import { fetchJson, useRequestResource } from "@/hooks/useRequestResource";
 import { useI18n } from "@/lib/i18n";
 import { THINKING_LEVEL_OPTIONS } from "@/lib/thinking-levels";
 import type { AgentRun } from "@/lib/agent-run-types";
@@ -35,31 +36,28 @@ export function AgentRunForm({ defaultCwd, onCancel, onCreated }: Props) {
   const [cwd, setCwd] = useState(defaultCwd ?? "");
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("");
-  const [models, setModels] = useState<ModelOption[]>([]);
+  const catalogCwd = cwd.trim();
+  const catalog = useRequestResource<{ modelList?: ModelOption[] }>(
+    catalogCwd.startsWith("/") ? `run-form-models:${catalogCwd}` : null,
+    signal => fetchJson("/api/models", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cwd: catalogCwd }),
+    }, signal),
+    { debounceMs: 350, staleTimeMs: 60_000, retries: 0 },
+  );
+  const models = catalog.data?.modelList ?? [];
+  const modelsLoading = catalogCwd.startsWith("/") && !catalog.data && !catalog.error;
+  const projects = useRequestResource<{ repos?: { path: string; name: string }[] }>(
+    "run-form-projects", signal => fetchJson("/api/projects/discover", {}, signal),
+    { staleTimeMs: 60_000, retries: 0 },
+  );
+  const projectPaths = [...new Set([defaultCwd, ...(projects.data?.repos ?? []).map(repo => repo.path)].filter((path): path is string => Boolean(path)))];
   const [thinkingLevel, setThinkingLevel] = useState("auto");
   const [toolMode, setToolMode] = useState<ToolMode>("readonly");
   const [durable, setDurable] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationAttempted, setValidationAttempted] = useState(false);
-
-  useEffect(() => {
-    if (!defaultCwd) return;
-    const controller = new AbortController();
-    fetch("/api/models", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cwd: defaultCwd }),
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<{ modelList?: ModelOption[] }>;
-      })
-      .then((data) => setModels(data.modelList ?? []))
-      .catch(() => {});
-    return () => controller.abort();
-  }, [defaultCwd]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -147,12 +145,14 @@ export function AgentRunForm({ defaultCwd, onCancel, onCreated }: Props) {
               maxLength={4096}
               className={s.monoInput}
               value={cwd}
+              list={`${formId}-projects`}
               onChange={(event) => {
                 setCwd(event.target.value);
-                if (event.target.value !== defaultCwd) setModel("");
+                setModel("");
               }}
               aria-invalid={cwdError}
             />
+            <datalist id={`${formId}-projects`}>{projectPaths.map(path => <option key={path} value={path} />)}</datalist>
             {cwdError && <small className={s.fieldError}>{t("common.required")}</small>}
           </label>
           <label className={s.field}>
@@ -182,14 +182,15 @@ export function AgentRunForm({ defaultCwd, onCancel, onCreated }: Props) {
             <div className={s.twoColumns}>
               <label className={s.field}>
                 <span>{t("agents.model")}</span>
-                <select aria-label={t("agents.model")} value={model} onChange={(event) => setModel(event.target.value)} disabled={cwd !== defaultCwd}>
-                  <option value="">{t("agents.projectDefault")}</option>
+                <select aria-label={t("agents.model")} value={model} onChange={(event) => setModel(event.target.value)} disabled={!catalogCwd.startsWith("/")} aria-busy={modelsLoading}>
+                  <option value="">{t(modelsLoading ? "model.catalogLoading" : "agents.projectDefault")}</option>
                   {models.map((item) => (
                     <option key={`${item.provider}\u0000${item.id}`} value={`${item.provider}\u0000${item.id}`}>
                       {item.name || item.id}
                     </option>
                   ))}
                 </select>
+                {catalog.error && <small className={s.fieldError} role="status">{t("model.catalogError")} <button type="button" onClick={() => void catalog.refresh()}>{t("common.retry")}</button></small>}
               </label>
               <label className={s.field}>
                 <span>{t("agents.thinking")}</span>

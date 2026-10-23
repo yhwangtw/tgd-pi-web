@@ -19,7 +19,7 @@
   place-items: center;
   border-radius: var(--radius-control);
   background: var(--color-accent-bg);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .headingCopy { display: grid; min-width: 0; gap: var(--space-optical); }
 .headingCopy h2 { margin: 0; font-size: var(--type-title-size); font-weight: var(--weight-semibold); line-height: var(--leading-tight); }
@@ -33,7 +33,7 @@
   place-items: center;
   border-radius: var(--radius-pill);
   background: var(--color-accent-bg);
-  color: var(--accent);
+  color: var(--accent-text);
   font-family: var(--font-ui);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
@@ -65,7 +65,7 @@
 .toolbarButton svg { flex: 0 0 auto; }
 .toolbarButton span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toolbarButton:disabled { cursor: default; opacity: .42; }
-.pushButton[aria-pressed="true"] { border-color: var(--color-accent-border); background: var(--color-accent-bg); color: var(--accent); }
+.pushButton[aria-pressed="true"] { border-color: var(--color-accent-border); background: var(--color-accent-bg); color: var(--accent-text); }
 .refreshing svg { animation: attention-spin .85s linear var(--motion-loop-count, infinite); }
 .filters {
   display: grid;
@@ -84,7 +84,7 @@
   white-space: nowrap;
 }
 .filters button:nth-child(n + 4) { grid-column: span 3; }
-.filters button[aria-pressed="true"] { border-color: var(--color-accent-border); background: var(--color-accent-bg); color: var(--accent); font-weight: var(--weight-semibold); }
+.filters button[aria-pressed="true"] { border-color: var(--color-accent-border); background: var(--color-accent-bg); color: var(--accent-text); font-weight: var(--weight-semibold); }
 .error { margin: 0 12px 8px; padding: var(--space-2) var(--space-2); border-radius: var(--radius-control); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--text-xs); }
 .list { min-height: 0; flex: 1; padding: var(--space-optical) var(--space-2) var(--space-3); overflow-y: auto; overscroll-behavior: contain; }
 .group + .group { margin-top: var(--space-4); }

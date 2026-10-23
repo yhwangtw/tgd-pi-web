@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import { forgetSession, rememberNewSession, getSessionListSnapshot, getServerSessionListSnapshot, subscribeSessionList } from "@/lib/session-list-store";
@@ -19,6 +19,7 @@ export interface ContextUsage {
 export interface AppShellState {
   // Session/cwd
   selectedSession: SessionInfo | null;
+  allSessions: SessionInfo[];
   newSessionCwd: string | null;
   refreshKey: number;
   sessionKey: number;
@@ -293,27 +294,7 @@ export function useAppShellState(): {
     setActiveTopPanel((cur) => (cur === panel ? null : panel));
   }, []);
 
-  return {
-    state: {
-      selectedSession,
-      newSessionCwd,
-      refreshKey,
-      sessionKey,
-      explorerRefreshKey,
-      activeCwd,
-      initialSessionId,
-      initialSessionRestored,
-      branchTree,
-      branchActiveLeafId,
-      systemPrompt,
-      activeTopPanel,
-      topPanelPos,
-      sessionStats,
-      contextUsage,
-      parallelSessions,
-      parallelActiveId,
-    },
-    actions: {
+  const actions = useMemo<AppShellActions>(() => ({
       setBranchTree,
       setBranchActiveLeafId,
       setSystemPrompt,
@@ -332,8 +313,32 @@ export function useAppShellState(): {
       openParallel,
       closeParallel,
       setActiveParallel,
+  }), [toggleTopPanel, handleCwdChange, handleSelectSession, handleNewSession, handleSessionCreated, handleAgentEnd, handleSessionForked, handleInitialRestoreDone, handleSessionDeleted, bumpRefreshKey, openParallel, closeParallel, setActiveParallel]);
+  const refs = useMemo(() => ({ branchLeafChangeFnRef, suppressCwdBumpRef }), []);
+
+  return {
+    state: {
+      allSessions,
+      selectedSession,
+      newSessionCwd,
+      refreshKey,
+      sessionKey,
+      explorerRefreshKey,
+      activeCwd,
+      initialSessionId,
+      initialSessionRestored,
+      branchTree,
+      branchActiveLeafId,
+      systemPrompt,
+      activeTopPanel,
+      topPanelPos,
+      sessionStats,
+      contextUsage,
+      parallelSessions,
+      parallelActiveId,
     },
-    refs: { branchLeafChangeFnRef, suppressCwdBumpRef },
+    actions,
+    refs,
     topBarRef,
   };
 }

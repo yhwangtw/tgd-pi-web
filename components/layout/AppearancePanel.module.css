@@ -249,7 +249,7 @@
   cursor: pointer;
 }
 .logoutRow:hover {
-  color: var(--color-error);
+  color: var(--color-error-text);
   border-color: var(--color-error);
 }
 
@@ -344,5 +344,14 @@
   :global(html[data-ui-style="trae"]) .panel {
     border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
     box-shadow: 0 -16px 50px color-mix(in srgb, var(--text) 14%, transparent);
+  }
+}
+
+/* Compact desktop geometry must not shrink phone or coarse-pointer targets. */
+@media (max-width: 700px), (pointer: coarse) {
+  .skinRow,
+  :global(html[data-ui-style="trae"]) .skinRow {
+    min-height: var(--control-touch);
+    min-width: var(--control-touch);
   }
 }

@@ -68,7 +68,7 @@ const AUTO_PROVIDER_FALLBACK_KEY = "pi-auto-provider-fallback";
 
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
-    session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
+    session, newSessionCwd, onAgentEnd, onAgentComplete, onSessionCreated, onSessionForked,
     modelsRefreshKey, onBranchDataChange, onSystemPromptChange, onSessionNamed,
   } = opts;
 
@@ -496,7 +496,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // follow-ups) show up in the transcript from the session file.
         if (sessionIdRef.current) loadSession(sessionIdRef.current);
         break;
-      case "agent_end":
+      case "agent_end": {
+        const observedRunning = agentRunningRef.current;
         agentRunningRef.current = false;
         streamScheduler.cancel();
         setAgentRunning(false);
@@ -572,8 +573,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               .catch(() => {});
           }
         }
+        const finalAssistant = Array.isArray(event.messages) ? (event.messages as AgentMessage[]).findLast((message) => message.role === "assistant") : undefined;
+        if (observedRunning && !event.replayed && !getRunError(event) && finalAssistant?.stopReason !== "aborted") onAgentComplete?.();
         onAgentEnd?.();
         break;
+      }
       case "message_start":
       case "message_update": {
         const msg = event.message as Partial<AgentMessage> | undefined;
@@ -643,7 +647,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setRetryInfo(null);
         break;
     }
-  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef, reportModelUnavailable, handleCompactionEvent, reconcileCompaction, generationMetrics, streamScheduler, runLatency]);
+  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onAgentComplete, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef, reportModelUnavailable, handleCompactionEvent, reconcileCompaction, generationMetrics, streamScheduler, runLatency]);
   handleAgentEventRef.current = handleAgentEvent;
 
   useEffect(() => {

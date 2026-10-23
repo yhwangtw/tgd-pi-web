@@ -1,4 +1,5 @@
 import { OAuthWebBridge, submitOAuthWebInput, type OAuthWebEvent } from "@/lib/oauth-web-bridge";
+import { invalidateDurableSessionsForAuthChange } from "@/lib/durable-chat";
 import { invalidateRpcSessionsForAuthChange } from "@/lib/rpc-manager";
 import { createPiModelRuntime } from "@/lib/pi-model-runtime";
 
@@ -33,12 +34,24 @@ export async function GET(
   const { provider } = await params;
   const encoder = new TextEncoder();
   const abort = new AbortController();
-  req.signal.addEventListener("abort", () => abort.abort(), { once: true });
+  let closed = false;
+  let closeStream: (() => void) | undefined;
+  const stop = () => { abort.abort(); closeStream?.(); };
+  req.signal.addEventListener("abort", stop, { once: true });
 
   const stream = new ReadableStream({
     async start(controller) {
+      closeStream = () => {
+        if (closed) return;
+        closed = true;
+        req.signal.removeEventListener("abort", stop);
+        try { controller.close(); } catch { /* canceled stream */ }
+      };
+      if (req.signal.aborted) { stop(); return; }
       const send = (data: OAuthWebEvent | { type: "success" | "cancelled" } | { type: "error"; message: string }) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        if (closed) return;
+        try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)); }
+        catch { stop(); }
       };
 
       let bridge: OAuthWebBridge | undefined;
@@ -50,9 +63,11 @@ export async function GET(
           return;
         }
 
+        if (abort.signal.aborted) return;
         bridge = new OAuthWebBridge(provider, send, abort.signal);
         await runtime.login(provider, "oauth", bridge.interaction);
         invalidateRpcSessionsForAuthChange();
+        await invalidateDurableSessionsForAuthChange();
         send({ type: "success" });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -60,10 +75,12 @@ export async function GET(
         else send({ type: "error", message });
       } finally {
         bridge?.cleanup();
-        controller.close();
+        closeStream();
       }
     },
     cancel() {
+      closed = true;
+      req.signal.removeEventListener("abort", stop);
       abort.abort();
     },
   });

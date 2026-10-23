@@ -6,19 +6,65 @@ Architecture and implementation invariants. Read the sections relevant to the ch
 
 Use `npm run dev` on port 30141. Stop the server using a checkout before building
 there: E2E builds `.next` and starts generated fixtures on port 30177. Never build
-into a running development or production checkout. Playwright is installed ad hoc
-with `npm i -D --no-save @playwright/test`; a preinstalled browser can be selected
-with `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`. E2E files are excluded from the
-normal TypeScript/lint scope so offline installations do not need Playwright.
+into a running development or production checkout. Install the optional Playwright
+runner in a separate tools directory, keeping its version aligned with the locked
+`playwright-core`. This avoids npm re-resolving the app's installed dependency graph
+(which can fail in npm 10 with a null `edgesOut`) and leaves the app manifests,
+lockfile and dependencies unchanged:
+
+```sh
+E2E_TOOLS="$(mktemp -d "${TMPDIR:-/tmp}/piweb-playwright.XXXXXX")"
+npm install --prefix "$E2E_TOOLS" --no-save --package-lock=false --no-audit --no-fund @playwright/test@1.64.0
+export NODE_PATH="$E2E_TOOLS/node_modules${NODE_PATH:+:$NODE_PATH}"
+node "$E2E_TOOLS/node_modules/@playwright/test/cli.js" install --only-shell chromium
+node "$E2E_TOOLS/node_modules/@playwright/test/cli.js" test
+```
+
+`NODE_PATH` lets the config and specs resolve the isolated runner; the absolute CLI
+avoids `npx` downloading or choosing another version. CI uses the same installation
+with `--with-deps` for Linux browser dependencies. A preinstalled browser can be
+selected with `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`. E2E files are excluded
+from the normal TypeScript/lint scope so offline installations do not need Playwright.
 
 CI builds once, records `node scripts/e2e-build.mjs record`, then distributes
 `.next` (without mutable cache/trace) to four independent jobs. Each job uses
-`PI_E2E_REUSE_BUILD=1 npm run test:e2e -- --shard=N/4`; reuse fails on changed
-source, build bytes, Node/platform or build environment. Keep one worker per
-shard because specs share its store. On one machine, parallel shards additionally
+`PI_E2E_REUSE_BUILD=1 node "$PIWEB_PLAYWRIGHT_CLI" test --shard=N/4` with the
+isolated CLI path set by its install step; reuse fails on changed
+source, build bytes, Node/platform or build environment, including on worker
+restarts. Only mutable Next cache/trace and the exact `server/route-cache/`
+response cache directory are excluded; compiled routes and prerender seeds remain
+verified. Keep one worker per shard because specs share its store. On one machine, parallel shards additionally
 need separate checkouts/build copies and distinct `E2E_PORT` values. Never share
 `PI_E2E_RUN_ROOT` between shards. Local runs still build the full suite by default;
 `PI_E2E_SPECS_JSON` accepts an explicit existing spec array, with `[]` meaning all.
+
+JavaScript has two independent measurement scopes and gates. Both sum unique
+script bodies and estimate gzip by compressing each body at Node gzip level 9;
+the gzip figure is not a measurement of the server's HTTP compression.
+
+- HTML entry: `npm run audit:js-budget` measures script sources rendered into the
+  prerendered `/` and `/login` HTML, including the legacy polyfill. The gate stays
+  **1800 KiB raw / 550 KiB gzip**. Its existing overrides are
+  `PIWEB_MAX_INITIAL_JS_KB` and `PIWEB_MAX_INITIAL_JS_GZIP_KB`. It fails if a route
+  is no longer prerendered or a referenced chunk is absent. Client-reference
+  manifests contain modules from other entries and are not a route download list.
+- Hydrated UI: `e2e/js-budget.spec.ts` records unique `/_next/static/**/*.js`
+  responses from fresh browser pages through the Unlock button or fixture session
+  becoming visible, two animation frames, and tracked script requests completing.
+  This includes dynamic imports needed for that initial UI, such as the existing
+  async syntax highlighter when the fixture transcript contains code. Later user
+  actions are outside this checkpoint. Its independent gate is **2100 KiB raw /
+  675 KiB gzip**, using only `PIWEB_MAX_HYDRATED_JS_KB` and
+  `PIWEB_MAX_HYDRATED_JS_GZIP_KB`. JSON evidence records its scope, checkpoint,
+  limits and chunk list. Raising this gate cannot change the HTML entry gate.
+
+The hydrated limit was established from the 2026-10-23 fixture measurement:
+2011828 raw / 637833 gzip bytes, including the existing refractor async chunk
+(599617 / 215403 bytes). Read-only inspection of the production build found the
+same highlighter chunk family already present (596683 / 214214 bytes); this
+async dependency predates the new browser gate. The corresponding candidate HTML entry
+was 1524805 / 461950 bytes. Offline build inspection does not establish an actual
+production browser hydration total.
 
 Transcript rows use normal layout because scroll restoration, disclosures and
 the minimap measure their geometry. Do not add `content-visibility` to these rows:

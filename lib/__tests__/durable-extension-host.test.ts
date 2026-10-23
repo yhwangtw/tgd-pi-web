@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createAgentSessionServices, ModelRuntime, SettingsManager, type ExtensionUIContext, type InlineExtension } from "@earendil-works/pi-coding-agent";
+import { createAgentSessionServices, ModelRuntime, SessionManager, SettingsManager, type ExtensionUIContext, type InlineExtension } from "@earendil-works/pi-coding-agent";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, Type } from "@earendil-works/pi-ai";
 import { createRegistry, Harness, type Conversation, type HarnessOptions } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
@@ -14,6 +14,7 @@ const context = BACKGROUND_CONTEXT;
 const directories: string[] = [];
 const opened = new Set<Harness>();
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const harness of opened) await harness.close(context);
   opened.clear();
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
@@ -97,7 +98,7 @@ function fixture(resources = false) {
     }
     const bridge = await host(root, "root-session");
     const close = async () => { await harness.close(context); opened.delete(harness); };
-    return { harness, root, bridge, host, close };
+    return { harness, root, bridge, host, close, registry };
   }
   return { open, faux, calls, errors };
 }
@@ -130,8 +131,9 @@ describe("real Pi ExtensionRunner hosted by Durable without an AgentSession loop
     const entries = (await r.root.entries({}, 100, undefined, context)).items;
     expect(entries.filter(entry => entry.kind === "pi-web.extension-entry")).toHaveLength(3);
     expect(f.errors).toEqual([]);
-    await r.bridge.shutdown();
+    await Promise.all([r.bridge.shutdown(), r.bridge.shutdown()]);
     expect(f.calls.shutdown).toBe(1);
+    expect(r.registry.snapshot().extension(r.bridge.name)).toBeUndefined();
   });
 
   it("restores the persisted generation context after close/reopen without recalling again", async () => {
@@ -223,6 +225,64 @@ describe("real Pi ExtensionRunner hosted by Durable without an AgentSession loop
     const messages = (await r.root.entries({}, 100, undefined, context)).items.flatMap(entry => entry.model ?? []);
     expect(messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: "assistant", content: [{ type: "text", text: "Saw note" }], stopReason: "stop" })]));
     expect(f.errors).toEqual([]);
+  });
+
+  it("reads only appended history, reuses unchanged SDK projections, and serializes concurrent refreshes", async () => {
+    const f = fixture(); const r = await f.open();
+    const built = vi.spyOn(SessionManager, "inMemory");
+    const scans = vi.spyOn(r.root, "entries");
+    for (let index = 0; index < 5; index++) await r.bridge.refreshProjection();
+    expect(built).not.toHaveBeenCalled();
+    await r.root.commit(async tx => {
+      for (let index = 0; index < 450; index++) await tx.appendEntry(r.root.id, { kind: "pi.user", model: [{ role: "user", content: `History ${index}`, timestamp: index }] });
+    }, context);
+    await Promise.all([r.bridge.refreshProjection(), r.bridge.refreshProjection(), r.bridge.refreshProjection()]);
+    expect(built).toHaveBeenCalledTimes(1);
+    expect(r.bridge.runner.createContext().sessionManager.getEntries()).toHaveLength(450);
+    scans.mockClear();
+    await r.root.commit(async tx => { await tx.appendEntry(r.root.id, { kind: "pi.user", model: [{ role: "user", content: "Only new history", timestamp: 500 }] }); }, context);
+    await r.bridge.refreshProjection();
+    expect(scans).toHaveBeenCalledTimes(1);
+    expect(scans.mock.calls[0][0]).toHaveProperty("minEntryId");
+    expect(r.bridge.runner.createContext().sessionManager.getEntries()).toHaveLength(451);
+    expect(built).toHaveBeenCalledTimes(2);
+    built.mockRestore(); scans.mockRestore();
+  });
+
+  it("keeps edits, compaction, resets and fork history equivalent after incremental refresh", async () => {
+    const f = fixture(); const r = await f.open();
+    const first = await r.root.commit(tx => tx.appendEntry(r.root.id, { kind: "pi.user", model: [{ role: "user", content: "Old context", timestamp: 1 }] }), context);
+    const kept = await r.root.commit(tx => tx.appendEntry(r.root.id, { kind: "pi.user", model: [{ role: "user", content: "Keep this", timestamp: 2 }] }), context);
+    await r.bridge.refreshProjection();
+    await r.root.commit(tx => tx.appendEntry(r.root.id, { kind: "fixture.edit", edits: [{ target: kept.id, action: "replace", messages: [{ role: "user", content: "Edited context", timestamp: 2 }] }, { target: first.id, action: "omit" }] }), context);
+    await r.bridge.refreshProjection();
+    const manager = r.bridge.runner.createContext().sessionManager;
+    expect(manager.buildSessionProjection().messages).toMatchObject([{ role: "user", content: "Edited context" }]);
+    await r.root.commit(tx => tx.appendEntry(r.root.id, { kind: "pi.compaction", head: kept.id, model: [{ role: "user", content: "Summary", timestamp: 3 }] }), context);
+    await r.bridge.refreshProjection();
+    expect(JSON.stringify(manager.buildSessionProjection().messages)).toContain("Summary");
+    const custom = await r.root.commit(tx => tx.appendEntry(r.root.id, { kind: "pi-web.extension-message", data: { customType: "editable", content: "Old custom", display: false, details: null }, model: [{ role: "user", content: "Old custom", timestamp: 4 }] }), context);
+    await r.bridge.refreshProjection();
+    await r.root.commit(tx => tx.appendEntry(r.root.id, { kind: "fixture.edit", edits: [{ target: custom.id, action: "replace", messages: [{ role: "user", content: "Edited custom", timestamp: 4 }] }] }), context);
+    await r.bridge.refreshProjection();
+    expect(JSON.stringify(manager.buildSessionProjection().messages)).toContain("Edited custom");
+    expect(JSON.stringify(manager.buildSessionProjection().messages)).not.toContain("Old custom");
+    const forkAt = (await r.root.entries({}, 1, undefined, context)).items[0].id;
+    const fork = await r.root.fork(forkAt, { ownership: { kind: "ownerless" } }, context);
+    const child = await r.host(fork, "projection-fork");
+    const childBefore = child.runner.createContext().sessionManager.getEntries();
+    await r.root.reset("New handoff", context);
+    await Promise.all([r.bridge.refreshProjection(), r.bridge.refreshProjection()]);
+    expect(JSON.stringify(manager.buildSessionProjection().messages)).toContain("New handoff");
+    expect(JSON.stringify(manager.buildSessionProjection().messages)).not.toContain("Edited context");
+    await r.root.reset(undefined, context);
+    await r.bridge.refreshProjection();
+    await r.root.commit(tx => tx.appendEntry(r.root.id, { kind: "pi.user", model: [{ role: "user", content: "After empty reset", timestamp: 4 }] }), context);
+    await r.bridge.refreshProjection();
+    expect(manager.buildSessionProjection().messages).toMatchObject([{ role: "user", content: "After empty reset" }]);
+    await child.refreshProjection();
+    expect(child.runner.createContext().sessionManager.getEntries()).toEqual(childBefore);
+    expect(f.faux.state.callCount).toBe(0);
   });
 
 });

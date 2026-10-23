@@ -1,8 +1,8 @@
+import { readSessionCwd } from "@/lib/session-reader";
 import { migrateLegacySession, waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { startRpcSession, getRpcSession } from "@/lib/rpc-manager";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { forkRequests } from "@/lib/fork-request-cache";
 import { getDurableChat, openDurableChat } from "@/lib/durable-chat";
 import { isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
@@ -42,7 +42,7 @@ export async function POST(
         return NextResponse.json({ error: "Session not found" }, { status: 404 });
       }
 
-      const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
+      const cwd = readSessionCwd(filePath) ?? process.cwd();
 
       const { session } = await startRpcSession(id, filePath, cwd);
       const result = await session.send(body);

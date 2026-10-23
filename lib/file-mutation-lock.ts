@@ -15,37 +15,44 @@ export class FileMutationLockError extends Error {
 /** Reserve lock inodes and secret-bearing configuration backups from ordinary
  * file/search APIs, including aliases and destructive ancestor paths.
  * The historical name is kept for existing callers. */
-export function isFileMutationLockPath(target: string, agentDirectory: string, options: { includeAncestors?: boolean } = {}): boolean {
-  const canonical = (value: string) => {
-    const original = resolve(value);
-    let candidate = original;
-    const suffix: string[] = [];
-    let links = 0;
-    // Resolve the existing ancestor too: the reserved child may not exist yet.
-    // A dangling alias can also name a future lock file, so follow its target
-    // without opening any file descriptor. Loops remain unusable by the OS.
-    for (;;) {
-      try { return resolve(realpathSync(candidate), ...suffix); } catch { /* inspect missing/linked paths below */ }
-      try {
-        if (lstatSync(candidate).isSymbolicLink()) {
-          if (++links > 40) return original;
-          candidate = resolve(dirname(candidate), readlinkSync(candidate));
-          continue;
-        }
-      } catch { /* missing child; continue with its parent */ }
-      const parent = dirname(candidate);
-      if (parent === candidate) return original;
-      suffix.unshift(basename(candidate));
-      candidate = parent;
-    }
-  };
+function canonical(value: string): string {
+  const original = resolve(value);
+  let candidate = original;
+  const suffix: string[] = [];
+  let links = 0;
+  // Resolve the existing ancestor too: the reserved child may not exist yet.
+  // A dangling alias can also name a future lock file, so follow its target
+  // without opening any file descriptor. Loops remain unusable by the OS.
+  for (;;) {
+    try { return resolve(realpathSync(candidate), ...suffix); } catch { /* inspect missing/linked paths below */ }
+    try {
+      if (lstatSync(candidate).isSymbolicLink()) {
+        if (++links > 40) return original;
+        candidate = resolve(dirname(candidate), readlinkSync(candidate));
+        continue;
+      }
+    } catch { /* missing child; continue with its parent */ }
+    const parent = dirname(candidate);
+    if (parent === candidate) return original;
+    suffix.unshift(basename(candidate));
+    candidate = parent;
+  }
+}
+
+/** Scoped checker: roots are fixed for one listing; target aliases stay checked. */
+export function createFileMutationPathGuard(agentDirectory: string) {
   const contains = (root: string, candidate: string) => {
     const rel = relative(root, candidate);
     return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
   };
-  const roots = ["file-mutation-locks", "models-config-backups"].flatMap(name => [join(resolve(agentDirectory), name), join(canonical(agentDirectory), name)]);
-  return [resolve(target), canonical(target)].some(candidate => roots.some(root =>
+  const canonicalDirectory = canonical(agentDirectory);
+  const roots = ["file-mutation-locks", "models-config-backups"].flatMap(name => [join(resolve(agentDirectory), name), join(canonicalDirectory, name)]);
+  return (target: string, options: { includeAncestors?: boolean } = {}) => [resolve(target), canonical(target)].some(candidate => roots.some(root =>
     contains(root, candidate) || (options.includeAncestors === true && contains(candidate, root))));
+}
+
+export function isFileMutationLockPath(target: string, agentDirectory: string, options: { includeAncestors?: boolean } = {}): boolean {
+  return createFileMutationPathGuard(agentDirectory)(target, options);
 }
 
 /**

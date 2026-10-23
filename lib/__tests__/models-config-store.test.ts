@@ -80,7 +80,7 @@ describe("models configuration integrity", () => {
     expect(second.revision).not.toBe(first.revision);
     await expect(saveModelsConfig(config("stale"), first.revision)).rejects.toMatchObject({ status: 409 });
     expect((await readModelsConfig()).config).toEqual(config("updated"));
-  });
+  }, 15_000); // First disk/SQLite initialization can stall on a loaded CI runner.
   it.each(["private-fixture-key not json", "null", "[]", "{}", '{"providers":[]}', '{"providers":{"bad":{"models":[{"id":4}]}}}'])("fails closed for unreadable configuration syntax/schema: %s", async text => {
     await fs.writeFile(filename(), text);
     await expect(readModelsConfig()).rejects.toMatchObject({ status: 503 });

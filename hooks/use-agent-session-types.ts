@@ -125,6 +125,8 @@ export interface UseAgentSessionOptions {
   session: SessionInfo | null;
   newSessionCwd: string | null;
   onAgentEnd?: () => void;
+  /** Successful completion observed live; snapshots and duplicate end events do not fire it. */
+  onAgentComplete?: () => void;
   onSessionCreated?: (session: SessionInfo) => void;
   onSessionForked?: (newSessionId: string, cwd?: string, sessionFile?: string) => void;
   modelsRefreshKey?: number;

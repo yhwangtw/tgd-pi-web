@@ -1,3 +1,4 @@
+import { readSessionCwd } from "@/lib/session-reader";
 import { waitForSessionMigration } from "@/lib/durable-migration";
 import { NextResponse } from "next/server";
 import { getAllowedRoots } from "@/lib/file-security";
@@ -16,7 +17,7 @@ async function ensureSession(id: string): Promise<AgentSessionWrapper | null> {
   if (existing?.isAlive()) return existing;
   const filePath = await resolveSessionPath(id);
   if (!filePath) return null;
-  const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
+  const cwd = readSessionCwd(filePath) ?? process.cwd();
   return (await startRpcSession(id, filePath, cwd)).session;
 }
 

@@ -60,28 +60,27 @@ export async function GET(
   const { id: requestedId } = await params;
   const id = await waitForSessionMigration(requestedId);
   try {
-    let content: string;
+    let records: SessionLine[];
     if (isDurableSessionId(id)) {
       const live = getDurableChat(id);
       const projection = live?.isAlive() ? live.getProjection() : readDurableProjection(id);
       if (!projection || projection.deleted) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-      content = [
+      records = [
         { type: "session", version: 3, id, cwd: projection.info.cwd, timestamp: projection.info.created, parentSession: projection.info.parentSessionId },
         ...durableEntries(projection.entries, projection.info.created),
-      ].map(entry => JSON.stringify(entry)).join("\n");
+      ] as SessionLine[];
     } else {
       const filePath = await resolveSessionPath(id);
       if (!filePath || !existsSync(filePath)) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-      content = readFileSync(filePath, "utf8");
+      records = readFileSync(filePath, "utf8").split("\n").flatMap(line => {
+        try { return line.trim() ? [JSON.parse(line) as SessionLine] : []; } catch { return []; }
+      });
     }
 
     let header: { id: string; cwd: string; timestamp: string; parentSession?: string } | null = null;
     const messages: MessageEntry[] = [];
-    const lines = content.split("\n").filter((l) => l.trim());
-
-    for (const line of lines) {
+    for (const entry of records) {
       try {
-        const entry = JSON.parse(line) as SessionLine;
         if (entry.type === "session" && !header) {
           header = { id: entry.id ?? id, cwd: entry.cwd ?? "", timestamp: entry.timestamp ?? new Date().toISOString(), parentSession: entry.parentSession };
         } else if (entry.type === "message" && entry.message) {

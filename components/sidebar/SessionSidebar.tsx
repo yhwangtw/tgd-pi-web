@@ -364,41 +364,44 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const rowMeasureRef = useRef<HTMLDivElement>(null);
   const virtualContentRef = useRef<HTMLDivElement>(null);
   const [virtualViewport, setVirtualViewport] = useState({ scrollTop: 0, height: 600, rowHeight: 60, groupHeight: 34 });
+  const virtualGeometry = useRef({ height: 600, rowHeight: 60, groupHeight: 34, sectionTop: 0 });
   const updateVirtualViewport = useCallback(() => {
     const list = listRef.current;
     if (!list) return;
-    const styles = getComputedStyle(list);
-    const rowHeight = rowMeasureRef.current?.getBoundingClientRect().height || 84;
-    const groupHeight = Number.parseFloat(styles.getPropertyValue("--session-group-height")) || 34;
-    const sectionTop = virtualContentRef.current?.offsetTop ?? 0;
+    const { height, rowHeight, groupHeight, sectionTop } = virtualGeometry.current;
     const scrollTop = Math.max(0, list.scrollTop - sectionTop);
-    const height = list.clientHeight;
-    setVirtualViewport((current) => (
-      current.scrollTop === scrollTop
-      && current.height === height
-      && current.rowHeight === rowHeight
-      && current.groupHeight === groupHeight
-        ? current
-        : { scrollTop, height, rowHeight, groupHeight }
-    ));
+    setVirtualViewport((current) => current.scrollTop === scrollTop && current.height === height
+      && current.rowHeight === rowHeight && current.groupHeight === groupHeight
+      ? current : { scrollTop, height, rowHeight, groupHeight });
   }, []);
+  const measureVirtualViewport = useCallback(() => {
+    const list = listRef.current;
+    if (!list) return;
+    virtualGeometry.current = {
+      height: list.clientHeight,
+      rowHeight: rowMeasureRef.current?.getBoundingClientRect().height || 84,
+      groupHeight: Number.parseFloat(getComputedStyle(list).getPropertyValue("--session-group-height")) || 34,
+      sectionTop: virtualContentRef.current?.offsetTop ?? 0,
+    };
+    updateVirtualViewport();
+  }, [updateVirtualViewport]);
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
-    const onScroll = () => updateVirtualViewport();
-    list.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(onScroll);
+    list.addEventListener("scroll", updateVirtualViewport, { passive: true });
+    window.addEventListener("resize", measureVirtualViewport);
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measureVirtualViewport);
     resizeObserver?.observe(list);
     if (rowMeasureRef.current) resizeObserver?.observe(rowMeasureRef.current);
-    const frame = requestAnimationFrame(onScroll);
+    if (virtualContentRef.current) resizeObserver?.observe(virtualContentRef.current);
+    const frame = requestAnimationFrame(measureVirtualViewport);
     return () => {
       cancelAnimationFrame(frame);
-      list.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
+      list.removeEventListener("scroll", updateVirtualViewport);
+      window.removeEventListener("resize", measureVirtualViewport);
       resizeObserver?.disconnect();
     };
-  }, [pinnedNodes.length, updateVirtualViewport, virtualRows.length]);
+  }, [pinnedNodes.length, measureVirtualViewport, updateVirtualViewport, virtualRows.length]);
   useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = 0;
@@ -783,8 +786,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             <button
               type="button"
               className={styles.filterFooterSecondary}
-              onClick={() => { setActiveTagFilter(null); setShowArchived(false); }}
-              disabled={!activeTagFilter && !showArchived}
+              onClick={() => { setActiveTagFilter(null); setShowArchived(false); setUnreadOnly(false); }}
+              disabled={activeFilterCount === 0}
             >
               {t("sidebar.clearFilters")}
             </button>

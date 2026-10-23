@@ -30,6 +30,7 @@ import { useWorkflowVisibility } from "@/hooks/use-workflow-visibility";
 import { useWorkflowCommand } from "@/hooks/use-workflow-command";
 import { UserQuestionCard, type UserQuestionCardHandle } from "./UserQuestionCard";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
+import { MobileTurnNavigator, type MobileTurnItem } from "./MobileTurnNavigator";
 import { BashBlock } from "./BashBlock";
 import { CollapsibleMessage } from "./CollapsibleMessage";
 import { TgdPipeline, type PhaseStatus } from "./TgdPipeline";
@@ -39,7 +40,6 @@ import { useScrollFollowMode } from "@/lib/prefs";
 import { useTranscriptHistory } from "@/hooks/use-transcript-history";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { isTranscriptTailOutOfView, preservedRunSpacerHeight } from "@/hooks/use-transcript-scroll";
-import { getRunError } from "@/hooks/use-agent-session-types";
 import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import styles from "./ChatWindow.module.css";
@@ -154,6 +154,10 @@ const TYPEWRITER_PHRASES = [
 ];
 
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef: providedChatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange, onSessionNamed, isParallel, paneLabel, onClosePane, wideChat, onOpenModels }: Props) {
+  const { soundEnabled, onSoundToggle, playDoneSound } = useAudio();
+  const handleAgentComplete = useCallback(() => {
+    if (soundEnabled) playDoneSound();
+  }, [soundEnabled, playDoneSound]);
   const localChatInputRef = useRef<ChatInputHandle>(null);
   const chatInputRef = providedChatInputRef ?? localChatInputRef;
   const {
@@ -172,9 +176,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     handleUpdateQueued, handleMoveQueued,
     handleToolPresetChange, handleThinkingLevelChange, setEphemeralNewSession, handleClearQueue, handleRemoveQueued, handleRetry,
     handleRetryWithModel, handleAutoProviderFallbackChange, setProviderRecovery,
-    handleEditRerun, handleAbortBash, handleExtensionUIResponse, handleAgentEventRef,
+    handleEditRerun, handleAbortBash, handleExtensionUIResponse,
   } = useAgentSession({
-    session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
+    session, newSessionCwd, onAgentEnd, onAgentComplete: handleAgentComplete, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionNamed,
   });
 
@@ -272,7 +276,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     return done.has(cmd) ? "done" : "todo";
   }, [diskDone, tgdState]);
   const runPhase = useCallback((cmd: string) => {
-    chatInputRef?.current?.setText(cmd + " ");
+    chatInputRef?.current?.applyPhase(cmd);
   }, [chatInputRef]);
   const activeTgdRun = useMemo(() => {
     if (!agentRunning) return false;
@@ -286,23 +290,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     || tgdState.invoked.size > 0
     || diskDone.size > 0
     || currentFeature !== null;
-
-  const { soundEnabled, onSoundToggle, playDoneSound } = useAudio();
-  const playDoneSoundRef = useRef(playDoneSound);
-  playDoneSoundRef.current = playDoneSound;
-  const soundEnabledRef = useRef(soundEnabled);
-  soundEnabledRef.current = soundEnabled;
-
-  // Wrap agent event handler to play sound on agent_end
-  const origHandler = handleAgentEventRef.current;
-  useEffect(() => {
-    handleAgentEventRef.current = (event) => {
-      if (event.type === "agent_end" && soundEnabledRef.current && !getRunError(event)) {
-        playDoneSoundRef.current();
-      }
-      origHandler?.(event);
-    };
-  }, [origHandler, handleAgentEventRef]);
 
   // Push session stats up to AppShell for the top bar.
   // Compare scalar fields to avoid loops from new object identity each render.
@@ -599,6 +586,31 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     return null;
   }, [bookmarkedIndices, historyStartIndex]);
   const unreadVisibleIndex = unreadMessageIndex === null ? -1 : conversationLayout.displayIndices.indexOf(unreadMessageIndex);
+  const mobileNavigation = useMemo(() => {
+    const turns: MobileTurnItem[] = [];
+    const bookmarkedMessages: MobileTurnItem[] = [];
+    let turnNumber = 0;
+    conversationLayout.displayIndices.forEach((messageIndex, visibleIndex) => {
+      const message = messages[messageIndex];
+      if (getCompactionSummary(message) !== null) return;
+      const isUser = message.role === "user";
+      if (isUser) turnNumber++;
+      const entryId = entryIds[messageIndex];
+      const bookmarked = Boolean(entryId && bookmarks.has(entryId));
+      if (!isUser && !bookmarked) return;
+      const item: MobileTurnItem = {
+        entryId, visibleIndex, turnNumber: Math.max(1, turnNumber), bookmarked,
+        preview: messageText(message).replace(/\s+/g, " ").trim().slice(0, 160)
+          || t(isUser ? "chat.userMessage" : "chat.assistantMessage"),
+      };
+      if (isUser) turns.push(item);
+      if (bookmarked) bookmarkedMessages.push(item);
+    });
+    return { turns, bookmarkedMessages };
+  }, [conversationLayout.displayIndices, messages, entryIds, bookmarks, t]);
+  const navigateFromMobile = useCallback((index: number) => {
+    navigateToMessage(index, element => element.scrollIntoView({ block: "start", behavior: motionScrollBehavior() }));
+  }, [navigateToMessage]);
 
   const historicalAssistantModelKey = useMemo<string | null>(() => {
     for (let i = conversationLayout.displayIndices.length - 1; i >= 0; i--) {
@@ -1053,6 +1065,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     ? (modelThinkingLevelMaps[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
     : null;
 
+  const compactFromComposer = useCallback(() => { void handleCompact(); }, [handleCompact]);
+  const runWorkflowCommand = workflowCommand.run;
+  const exitPlanFromComposer = useCallback(() => runWorkflowCommand("/plan exit"), [runWorkflowCommand]);
+  const clearComposerQuote = useCallback(() => setMessageQuoteState(null), []);
+  const workflowControls = useMemo(() => <WorkflowToolbar state={extensionUIState} workflowVisibility={workflowVisibility} />, [extensionUIState, workflowVisibility]);
+
   const chatInputElement = (
     <ChatInput
       ref={chatInputRef}
@@ -1070,7 +1088,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       modelCatalogDiagnostics={catalogDiagnostics}
       onRetryModelCatalog={retryModelCatalog}
       onOpenModels={onOpenModels}
-      onCompact={session ? () => void handleCompact() : undefined}
+      onCompact={session ? compactFromComposer : undefined}
       onAbortCompaction={handleAbortCompaction}
       isCompacting={isCompacting}
       compactError={compactError}
@@ -1081,9 +1099,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       availableTools={availableTools}
       customToolNames={customToolNames}
       onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
-      onExitPlan={session ? () => workflowCommand.run("/plan exit") : undefined}
+      onExitPlan={session ? exitPlanFromComposer : undefined}
       workflowPending={workflowCommand.pending}
-      workflowControls={<WorkflowToolbar state={extensionUIState} workflowVisibility={workflowVisibility} />}
+      workflowControls={workflowControls}
       thinkingLevel={thinkingLevel}
       onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
       availableThinkingLevels={availableThinkingLevels}
@@ -1098,7 +1116,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       cwd={tgdCwd}
       persistKey={session?.id ?? (newSessionCwd ? `new:${newSessionCwd}` : null)}
       quote={messageQuote}
-      onClearQuote={() => setMessageQuoteState(null)}
+      onClearQuote={clearComposerQuote}
       onOpenQuote={openQuotedMessage}
       wide={wideChat}
     />
@@ -1345,7 +1363,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               {PHASE_ACTIONS.map((phase) => (
                 <button
                   key={phase.cmd}
-                  onClick={() => chatInputRef?.current?.setText(phase.cmd + " ")}
+                  onClick={() => runPhase(phase.cmd)}
                   className={styles.phaseButton}
                   title={`${phase.cmd} — ${t(phase.descKey)}`}
                 >
@@ -1544,9 +1562,16 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       </div>
 
       <div className={`${styles.composerDock} relative`}>
-        {showJumpToBottom && (
-          <div className={styles.jumpControlRow}>
-          <button
+        <div className={styles.jumpControlRow}>
+          {!isParallel && <MobileTurnNavigator
+            key={session?.id ?? newSessionCwd ?? "new"}
+            turns={mobileNavigation.turns}
+            bookmarkedMessages={mobileNavigation.bookmarkedMessages}
+            scrollContainer={scrollContainerRef}
+            messageRefs={messageRefs}
+            onNavigate={navigateFromMobile}
+          />}
+          {showJumpToBottom && <button
             onPointerDown={event => {
               // Keep the mobile dock still until pointerup while typing.
               if (event.isPrimary && event.button === 0) event.preventDefault();
@@ -1559,9 +1584,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             <span className="text-[11.5px] font-medium whitespace-nowrap">
               {agentRunning && newLines > 0 ? `+${newLines} ${t("chat.lines")}` : t("chat.latest")}
             </span>
-          </button>
-          </div>
-        )}
+          </button>}
+        </div>
         {/* Context-pressure nudge: suggest compaction before it's too late */}
         {contextUsage?.percent != null && contextUsage.percent >= 80 && !isCompacting && (
           /* pl-4 pr-[52px]: mirror ChatInput's container padding (right side
