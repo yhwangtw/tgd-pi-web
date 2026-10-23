@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, statSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "fs";
 import { join, dirname, resolve, sep } from "path";
 import { tmpdir } from "os";
 import { createHash, randomBytes } from "crypto";
@@ -26,7 +26,7 @@ export interface SnapshotMeta {
   id: string;
   /** git ref keeping the snapshot commit alive */
   ref: string;
-  /** snapshot commit sha (used for diff + checkout) */
+  /** snapshot commit sha (used for diff + restore) */
   commit: string;
   /** snapshot tree sha (used for cheap dedup) */
   tree: string;
@@ -67,6 +67,7 @@ export interface SnapshotRestoreReview {
 }
 
 const MAX_PER_SESSION = 20;
+const RESTORE_BATCH_SIZE = 128;
 const GIT_IDENTITY = {
   GIT_AUTHOR_NAME: "pi-web",
   GIT_AUTHOR_EMAIL: "pi-web@local",
@@ -267,6 +268,39 @@ function safeJoin(cwd: string, rel: string): string | null {
   return null;
 }
 
+/** Restore a bounded batch, narrowing failures to individual paths if needed. */
+async function restorePaths(cwd: string, commit: string, paths: string[], result: RestoreResult): Promise<void> {
+  if (paths.length === 0) return;
+  let tempDir: string | undefined;
+  try {
+    tempDir = mkdtempSync(join(tmpdir(), "pi-restore-"));
+    const pathspec = join(tempDir, "paths");
+    // Filenames are literal and NUL-delimited, including newlines and pathspec
+    // magic. A file also avoids command-line length limits for long paths.
+    writeFileSync(pathspec, paths.join("\0") + "\0", { flag: "wx", mode: 0o600 });
+    await git(cwd, [
+      "--literal-pathspecs", "restore", `--source=${commit}`, "--worktree",
+      `--pathspec-from-file=${pathspec}`, "--pathspec-file-nul",
+    ]);
+    result.restored += paths.length;
+  } catch {
+    if (paths.length === 1) {
+      result.failed.push(paths[0]);
+    } else {
+      // Git may have restored some files before failing. Repeating a restore
+      // is safe, and splitting preserves exact per-file results without making
+      // every successful restore pay for a separate Git process.
+      const middle = Math.floor(paths.length / 2);
+      await restorePaths(cwd, commit, paths.slice(0, middle), result);
+      await restorePaths(cwd, commit, paths.slice(middle), result);
+    }
+  } finally {
+    if (tempDir) {
+      try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  }
+}
+
 /**
  * Revert the working tree to a snapshot, touching only the files that differ:
  * modified/deleted files are restored from the snapshot, files created since
@@ -289,23 +323,31 @@ export async function restoreSnapshot(
   const diff = await git(cwd, ["diff", "--name-status", "-z", meta.commit, curTree]);
   const changes = parseSnapshotDiff(diff);
   const result: RestoreResult = { restored: 0, removed: 0, failed: [] };
+  let pending: string[] = [];
 
   for (const change of changes) {
     const { path } = change;
+    if (change.action === "restore") {
+      pending.push(path);
+      if (pending.length === RESTORE_BATCH_SIZE) {
+        await restorePaths(cwd, meta.commit, pending, result);
+        pending = [];
+      }
+      continue;
+    }
+    // Preserve the diff's ordering, including removals before rename restores.
+    await restorePaths(cwd, meta.commit, pending, result);
+    pending = [];
     try {
-      if (change.action === "remove") {
-        const full = safeJoin(cwd, path);
-        if (full && existsSync(full) && statSync(full).isFile()) {
-          rmSync(full, { force: true });
-          result.removed++;
-        }
-      } else {
-        await git(cwd, ["checkout", meta.commit, "--", path]);
-        result.restored++;
+      const full = safeJoin(cwd, path);
+      if (full && existsSync(full) && statSync(full).isFile()) {
+        rmSync(full, { force: true });
+        result.removed++;
       }
     } catch {
       result.failed.push(path);
     }
   }
+  await restorePaths(cwd, meta.commit, pending, result);
   return result;
 }

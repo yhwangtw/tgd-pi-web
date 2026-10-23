@@ -513,25 +513,32 @@ async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: bool
   await auditControls(page, chat, `${style}/${viewport}/chat`, mobile);
   await auditControls(page, page.getByRole("navigation", { name: "Primary" }), `${style}/${viewport}/navigation`, mobile);
 
+  const openPanel = page.locator(".sidebar-container.sidebar-open");
   const panels = [
-    { button: "Sessions", testId: undefined },
-    { button: "Attention", testId: undefined },
-    { button: "Agents", testId: "agent-dashboard" },
-    { button: "Schedules", testId: "schedule-panel" },
-    { button: mobile ? "Files" : "Explorer", testId: undefined },
-    { button: "Search", testId: "unified-search" },
-    { button: "Changes", testId: undefined },
-    { button: "tGD artifacts", testId: undefined },
+    { button: "Sessions", ready: openPanel.getByRole("grid", { name: "Sessions", exact: true }) },
+    { button: "Attention", ready: openPanel.getByRole("region", { name: "Attention", exact: true }) },
+    { button: "Agents", ready: openPanel.getByRole("region", { name: "Agents", exact: true }) },
+    { button: "Schedules", ready: openPanel.getByTestId("schedule-panel").getByRole("button", { name: "New", exact: true }) },
+    { button: mobile ? "Files" : "Explorer", ready: openPanel.getByRole("treeitem", { name: "README.md", exact: true }) },
+    { button: "Search", ready: openPanel.getByRole("textbox", { name: "Unified search", exact: true }) },
+    { button: "Changes", ready: openPanel.getByRole("button", { name: "Refresh", exact: true }) },
+    { button: "tGD artifacts", ready: openPanel.getByRole("tab", { name: "Artifacts", exact: true }) },
   ];
 
   for (const panel of panels) {
     await openPrimaryView(page, panel.button, mobile);
-    if (panel.testId) await expect(page.getByTestId(panel.testId)).toBeVisible();
-    if (panel.button === "Explorer" || panel.button === "Files") {
-      await expect(page.getByText("README.md", { exact: true })).toBeVisible({ timeout: 10_000 });
-    }
-    const openPanel = page.locator(".sidebar-container.sidebar-open");
     await expect(openPanel, `${panel.button} panel`).toBeVisible();
+    // The shell can be visible while a lazy module still shows its fallback.
+    // Require each panel's own semantic content before the immediate audit.
+    await expect(panel.ready, `${panel.button} content`).toBeVisible({ timeout: 10_000 });
+    if (panel.button === "Attention") {
+      await expect(panel.ready.getByRole("button", { name: "Refresh attention items", exact: true })).toBeEnabled();
+    }
+    if (panel.button === "tGD artifacts") {
+      // This generated fixture is also asserted by tgd-artifacts.spec.ts.
+      await expect(openPanel.getByRole("button", { name: "CONTEXT.md", exact: true })).toBeVisible();
+      await expect(openPanel.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
+    }
     await expect.poll(async () => (await openPanel.boundingBox())?.x ?? -999).toBeGreaterThanOrEqual(-1);
     if (!mobile) {
       const settledWidth = panel.button === "Agents" || panel.button === "Schedules"
@@ -546,7 +553,8 @@ async function auditMainSurfaces(page: Page, style: InterfaceStyle, mobile: bool
         .toBeGreaterThanOrEqual(settledWidth - 1);
     }
     if (panel.button === "Changes") {
-      await expect(openPanel.getByRole("button", { name: "Refresh" })).toBeEnabled();
+      await expect(panel.ready).toBeEnabled();
+      await expect(panel.ready).toHaveAttribute("aria-busy", "false");
     }
     await auditControls(page, openPanel, `${style}/${viewport}/${panel.button}`, mobile);
   }

@@ -1,7 +1,7 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo, useImperativeHandle, forwardRef, KeyboardEvent, type ReactNode, type RefObject } from "react";
+import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo, useImperativeHandle, forwardRef, memo, KeyboardEvent, type ReactNode, type RefObject } from "react";
 import {
   ArrowRight,
   History,
@@ -135,6 +135,8 @@ export interface ChatInputHandle {
   insertIfEmpty: (text: string) => void;
   /** Forcefully replace the entire input value (no-op on identical value). */
   setText: (text: string) => void;
+  /** Apply a tGD phase without losing the current prompt body. */
+  applyPhase: (command: string) => void;
   addImages: (files: File[]) => void;
   addFiles: (files: File[]) => void;
   openControls?: () => void;
@@ -202,7 +204,7 @@ function ResponsiveComposerControls({
 }
 
 
-export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
+export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
   modelCatalogStatus, modelCatalogError, modelCatalogDiagnostics, onRetryModelCatalog, onOpenModels,
   onCompact, onAbortCompaction, isCompacting, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, availableTools, customToolNames, onToolPresetChange,
@@ -291,10 +293,23 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         resizeTextarea(ta, expandedRef.current);
       });
     },
+    applyPhase(command: string) {
+      if (!/^\/tgd-[a-z-]+$/.test(command)) return;
+      // The draft setter reads its current value synchronously, including a
+      // phase applied earlier in the same event before React commits.
+      setValue(current => {
+        const body = current.replace(/^\s*\/tgd-[a-z-]+(?=\s|$)[ \t]*/, "");
+        return `${command} ${body}`;
+      });
+      requestAnimationFrame(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        resizeTextarea(textarea, expandedRef.current);
+      });
+    },
     setText(text: string) {
-      // Forcefully replace the entire input value. Used by quick-action
-      // buttons (e.g. tGD phase chips) so clicking a different phase
-      // swaps the slash command rather than appending to the existing one.
       setValue(text);
       requestAnimationFrame(() => {
         const ta = textareaRef.current;
@@ -1386,4 +1401,4 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       </div>
     </div>
   );
-});
+}));

@@ -5,7 +5,6 @@ import type { Pluggable, PluggableList } from "unified";
 import { createElement, Fragment, memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createContext, useContext } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
-import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 // PrismAsync keeps the full language set but splits refractor + languages into
 // a lazily-loaded chunk, so the highlighter never blocks the initial bundle.
@@ -128,6 +127,7 @@ function copyText(text: string): Promise<void> {
 }
 
 export function MarkdownBody({ children, className, isStreaming, allowSafeHtml = false, sourceFilePath, structuredOutput = false, outputAccessory }: MarkdownBodyProps) {
+  const { t } = useI18n();
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
   const needsMath = useMemo(() => containsMath(normalizedMarkdown), [normalizedMarkdown]);
   const outputSegments = useMemo(
@@ -135,6 +135,19 @@ export function MarkdownBody({ children, className, isStreaming, allowSafeHtml =
     [normalizedMarkdown, structuredOutput],
   );
   const [mathPlugins, setMathPlugins] = useState<MathPlugins | null>(null);
+  const [rawHtmlPlugin, setRawHtmlPlugin] = useState<Pluggable | null>(null);
+  const [rawHtmlFailed, setRawHtmlFailed] = useState(false);
+
+  useEffect(() => {
+    if (!allowSafeHtml) return;
+    let cancelled = false;
+    // Raw HTML is only parsed after both the parser and inert-HTML filter
+    // can be installed together. Show a loading state until that safe pair is ready.
+    void import("rehype-raw").then((module) => {
+      if (!cancelled) setRawHtmlPlugin(() => module.default as Pluggable);
+    }).catch(() => { if (!cancelled) setRawHtmlFailed(true); });
+    return () => { cancelled = true; };
+  }, [allowSafeHtml]);
 
   useEffect(() => {
     if (!needsMath) {
@@ -166,16 +179,20 @@ export function MarkdownBody({ children, className, isStreaming, allowSafeHtml =
   const rehypePlugins: PluggableList = useMemo(
     () => {
       const plugins: PluggableList = [];
-      if (allowSafeHtml) {
-        plugins.push(rehypeRaw as Pluggable, rehypeSafeLocalHtml as Pluggable);
+      if (allowSafeHtml && rawHtmlPlugin) {
+        plugins.push(rawHtmlPlugin, rehypeSafeLocalHtml as Pluggable);
       }
       if (mathPlugins) {
         plugins.push([mathPlugins.rehypeKatex, { throwOnError: false, strict: false }] as Pluggable);
       }
       return plugins;
     },
-    [allowSafeHtml, mathPlugins],
+    [allowSafeHtml, rawHtmlPlugin, mathPlugins],
   );
+
+  if (allowSafeHtml && !rawHtmlPlugin && !rawHtmlFailed) {
+    return <div className={[styles.outputStack, className].filter(Boolean).join(" ")}><span role="status">{t("common.loading")}</span></div>;
+  }
 
   if (outputSegments?.some((segment) => segment.type === "card")) {
     const firstCardIndex = outputSegments.findIndex((segment) => segment.type === "card");
@@ -186,6 +203,7 @@ export function MarkdownBody({ children, className, isStreaming, allowSafeHtml =
           {segment.type === "markdown" ? (
           <MarkdownRenderer
             markdown={segment.content}
+            allowStreamingChunks={!allowSafeHtml && !sourceFilePath}
             isStreaming={isStreaming}
             sourceFilePath={sourceFilePath}
             remarkPlugins={remarkPlugins}
@@ -199,6 +217,7 @@ export function MarkdownBody({ children, className, isStreaming, allowSafeHtml =
             details={segment.details ? (
               <MarkdownRenderer
                 markdown={segment.details}
+                allowStreamingChunks={!allowSafeHtml && !sourceFilePath}
                 isStreaming={isStreaming}
                 sourceFilePath={sourceFilePath}
                 remarkPlugins={remarkPlugins}
@@ -208,6 +227,7 @@ export function MarkdownBody({ children, className, isStreaming, allowSafeHtml =
           >
             <MarkdownRenderer
               markdown={segment.content}
+              allowStreamingChunks={!allowSafeHtml && !sourceFilePath}
               isStreaming={isStreaming}
               sourceFilePath={sourceFilePath}
               remarkPlugins={remarkPlugins}
@@ -594,7 +614,7 @@ function CodeBlock({ code, lang, headerAction, plain }: { code: string; lang: st
         {code}
       </SyntaxHighlighter>
       )}
-      <FocusDialog
+      {focusOpen && <FocusDialog
         open={focusOpen}
         title={lang || t("code.plainText")}
         onClose={() => setFocusOpen(false)}
@@ -624,7 +644,7 @@ function CodeBlock({ code, lang, headerAction, plain }: { code: string; lang: st
             </div>
           ))}
         </div>
-      </FocusDialog>
+      </FocusDialog>}
     </div>
   );
 }

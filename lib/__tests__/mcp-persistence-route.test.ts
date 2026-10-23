@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readMcpServers } from "../mcp";
 
-const runtime = vi.hoisted(() => ({ getSession: vi.fn(), reload: vi.fn(async () => {}) }));
+const runtime = vi.hoisted(() => ({ getSession: vi.fn(), getDurable: vi.fn(), refreshDurable: vi.fn(), reload: vi.fn(async () => {}) }));
 vi.mock("@/lib/rpc-manager", () => ({ getRpcSession: runtime.getSession }));
+vi.mock("@/lib/durable-chat", () => ({ getDurableChat: runtime.getDurable }));
 import { GET, POST } from "../../app/api/mcp/route";
 
 const invalidated = vi.fn(async () => {});
@@ -18,7 +19,7 @@ function post(body: unknown) {
 }
 beforeEach(async () => {
   await rm(configPath(), { force: true });
-  invalidated.mockReset(); runtime.getSession.mockReset(); runtime.reload.mockReset();
+  invalidated.mockReset(); runtime.getSession.mockReset(); runtime.reload.mockReset(); runtime.getDurable.mockReset(); runtime.refreshDurable.mockReset();
   globalThis.__piMcpManager = { invalidate: invalidated, status: (server: { id: string }) => ({ id: server.id, state: "disabled", toolCount: 0, tools: [] }) } as never;
 });
 afterEach(() => { globalThis.__piMcpManager = undefined; });
@@ -58,6 +59,23 @@ describe("MCP route with real persistence", () => {
     expect(body.reloaded).toBe(false);
     expect(body.reloadWarning).toContain("configuration was saved");
     expect(await readMcpServers()).toEqual([body.server]);
+  });
+  it.each([false, true])("refreshes Durable MCP configuration with deferred=%s while preserving the committed save", async deferred => {
+    runtime.getDurable.mockReturnValue({ isAlive: () => true, requestMcpRefresh: runtime.refreshDurable });
+    runtime.refreshDurable.mockResolvedValue({ reloaded: !deferred, deferred });
+    const response = await post({ action: "save", server: seed, sessionId: "dw-fixture" });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ reloaded: !deferred, deferred });
+    expect(runtime.refreshDurable).toHaveBeenCalledOnce();
+    expect(runtime.getSession).not.toHaveBeenCalled();
+  });
+  it("reports a Durable refresh failure separately from a successful MCP save", async () => {
+    runtime.getDurable.mockReturnValue({ isAlive: () => true, requestMcpRefresh: runtime.refreshDurable });
+    runtime.refreshDurable.mockRejectedValue(new Error("Fixture durable restart failure"));
+    const response = await post({ action: "save", server: seed, sessionId: "dw-fixture" });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ reloaded: false, deferred: false, reloadWarning: expect.stringContaining("configuration was saved") });
+    expect(await readMcpServers()).toHaveLength(1);
   });
   it("returns cleanup warnings without losing the successful revision", async () => {
     invalidated.mockRejectedValueOnce(new Error("cleanup unavailable"));

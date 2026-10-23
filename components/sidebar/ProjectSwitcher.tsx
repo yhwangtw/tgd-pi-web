@@ -2,6 +2,7 @@
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useModalDialog } from "@/hooks/useModalDialog";
 import { createPortal } from "react-dom";
 import { Folder, GitBranch, Search, Star, X } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
@@ -86,6 +87,7 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
   const [idx, setIdx] = useState(0);
   const [pins, setPins] = useState<string[]>([]);
   const [hidden, setHidden] = useState<string[]>([]);
+  const [lastHidden, setLastHidden] = useState<string | null>(null);
   const [pathError, setPathError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -93,6 +95,7 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
   const invalidateSelection = useCallback(() => { selectionEpoch.current++; }, []);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const { panelRef } = useModalDialog<HTMLDivElement>({ open, onClose, canClose: !submitting, initialFocusRef: inputRef });
 
   const pathMode = isPathQuery(query);
   const projectTargets = useMemo(() => projects.slice(0, 8).map((project) => project.cwd), [projects]);
@@ -147,8 +150,8 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
     setPathError(null);
     setPins(loadList(PINS_KEY));
     setHidden(loadList(HIDDEN_KEY));
-    const frame = requestAnimationFrame(() => inputRef.current?.focus());
-    return () => { cancelAnimationFrame(frame); invalidateSelection(); };
+    setLastHidden(null);
+    return invalidateSelection;
   }, [open, invalidateSelection]);
 
   // ── Result rows (flat, grouped by kind for labels) ───────────────────────
@@ -215,6 +218,11 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
   }, [idx]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
+  const restoreProject = useCallback((path: string) => {
+    setHidden(prev => { const next = prev.filter(item => item !== path); saveList(HIDDEN_KEY, next); return next; });
+    setLastHidden(previous => previous === path ? null : previous);
+  }, []);
+
   const pick = useCallback((row: Row) => {
     if (row.kind === "dir") {
       // Drill into the directory; Enter on the typed path itself commits.
@@ -222,9 +230,10 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
       inputRef.current?.focus();
       return;
     }
+    restoreProject(row.path);
     onPick(row.path);
     onClose();
-  }, [onPick, onClose]);
+  }, [onPick, onClose, restoreProject]);
 
   const submitSelection = useCallback(async (choose: () => void | Promise<string | null | void>) => {
     if (submittingRef.current) return;
@@ -245,8 +254,13 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
   }, [onClose]);
 
   const commitTypedPath = useCallback(() => submitSelection(
-    () => onPickPath(query.trim().replace(/\/$/, "") || "/"),
-  ), [query, onPickPath, submitSelection]);
+    async () => {
+      const path = query.trim().replace(/\/$/, "") || "/";
+      const error = await onPickPath(path);
+      if (!error) restoreProject(path === "~" ? homeDir : path.startsWith("~/") ? `${homeDir}/${path.slice(2)}` : path);
+      return error;
+    },
+  ), [query, onPickPath, submitSelection, restoreProject, homeDir]);
 
   const togglePin = useCallback((path: string) => {
     setPins((prev) => {
@@ -257,6 +271,7 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
   }, []);
 
   const hideProject = useCallback((path: string) => {
+    setLastHidden(path);
     setHidden((prev) => {
       const next = prev.includes(path) ? prev : [...prev, path];
       saveList(HIDDEN_KEY, next);
@@ -265,10 +280,9 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
   }, []);
 
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
     if (e.key === "ArrowDown") { e.preventDefault(); setIdx((i) => rows.length ? (i + 1) % rows.length : 0); return; }
     if (e.key === "ArrowUp") { e.preventDefault(); setIdx((i) => rows.length ? (i - 1 + rows.length) % rows.length : 0); return; }
-    if (e.key === "Tab" && pathMode && rows[idx]) {
+    if (e.key === "Tab" && !e.shiftKey && pathMode && rows[idx]) {
       e.preventDefault();
       setQuery(rows[idx].path + "/");
       return;
@@ -283,7 +297,7 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
         pick(rows[idx]);
       }
     }
-  }, [rows, idx, pathMode, pick, commitTypedPath, onClose]);
+  }, [rows, idx, pathMode, pick, commitTypedPath]);
 
   if (!open || typeof document === "undefined") return null;
 
@@ -294,8 +308,8 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
   const retryResource = () => void (pathMode ? browseResource.refresh() : projectResource.refresh());
   let rowCursor = -1;
   return createPortal(
-    <div className={s.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={s.modal} role="dialog" aria-modal="true" aria-label={t("cwd.switcherTitle")} data-testid="project-switcher">
+    <div className={s.overlay} data-dialog-root="true" onMouseDown={(e) => { if (e.target === e.currentTarget && !submitting) onClose(); }}>
+      <div ref={panelRef} tabIndex={-1} className={s.modal} role="dialog" aria-modal="true" aria-label={t("cwd.switcherTitle")} data-testid="project-switcher">
         <div className={s.inputRow}>
           {pathMode ? (
             <Folder size={UI_ICON_SIZE.compact} color="var(--color-accent)" aria-hidden="true" />
@@ -313,6 +327,7 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
             className={pathMode ? s.inputMono : s.input}
             spellCheck={false}
           />
+          <IconButton label={t("common.close")} icon={<X />} onClick={onClose} disabled={submitting} />
         </div>
 
         <div className={s.body} ref={listRef} role="listbox" aria-label={t("cwd.switcherTitle")}>
@@ -395,6 +410,17 @@ export function ProjectSwitcher({ open, onClose, onPick, onPickPath, onDefaultCw
           })}
         </div>
 
+        {lastHidden && <div className={s.hiddenNotice} role="status">
+          <span>{t("cwd.hiddenNotice").replace("{name}", lastSegment(lastHidden))}</span>
+          <button type="button" onClick={() => restoreProject(lastHidden)}>{t("common.undo")}</button>
+        </div>}
+        {hidden.length > 0 && <details className={s.hiddenProjects}>
+          <summary>{t("cwd.hiddenProjects").replace("{count}", String(hidden.length))}</summary>
+          <div className={s.hiddenList}>{hidden.map(path => <div key={path} className={s.hiddenRow}>
+            <span title={path}>{shortenCwd(path, homeDir)}</span>
+            <button type="button" aria-label={`${t("cwd.restore")}: ${path}`} onClick={() => restoreProject(path)}>{t("cwd.restore")}</button>
+          </div>)}</div>
+        </details>}
         <div className={s.footer}>
           {pathMode ? (
             <>

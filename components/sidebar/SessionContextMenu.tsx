@@ -57,6 +57,8 @@ export function SessionContextMenu({
   const [tagDraft, setTagDraft] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
+  const addTagRef = useRef<HTMLButtonElement>(null);
+  const wasAddingTag = useRef(false);
 
   // Close on outside-click and ESC
   useEffect(() => {
@@ -81,11 +83,11 @@ export function SessionContextMenu({
     };
   }, [position, onClose]);
 
-  // Focus the tag input when entering add-tag mode
+  // Focus only after the input or its launcher has committed to the DOM.
   useEffect(() => {
-    if (addingTag) {
-      setTimeout(() => tagInputRef.current?.focus(), 0);
-    }
+    if (addingTag) tagInputRef.current?.focus();
+    else if (wasAddingTag.current) addTagRef.current?.focus();
+    wasAddingTag.current = addingTag;
   }, [addingTag]);
 
   // Clamp the menu to the viewport so it never opens off-screen
@@ -173,14 +175,15 @@ export function SessionContextMenu({
         e.stopPropagation();
         if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
         if (e.key === "Tab") { onClose(); return; }
-        if ((e.target as HTMLElement).tagName === "INPUT") return;
+        if ((e.target as HTMLElement).tagName === "INPUT" && !["ArrowDown", "ArrowUp"].includes(e.key)) return;
         if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
         e.preventDefault();
-        const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)') ?? []);
-        const current = items.indexOf(document.activeElement as HTMLButtonElement);
-        const next = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1
-          : (current + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
-        items[next]?.focus();
+        const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('button[role="menuitem"], input[data-menu-focus]') ?? []);
+        const enabled = items.filter(item => !item.matches(":disabled"));
+        const current = enabled.indexOf(document.activeElement as HTMLElement);
+        const next = e.key === "Home" ? 0 : e.key === "End" ? enabled.length - 1
+          : (current + (e.key === "ArrowDown" ? 1 : -1) + enabled.length) % enabled.length;
+        enabled[next]?.focus();
       }}
     >
       <button role="menuitem" onClick={handlePin} className={styles.menuItem}>
@@ -203,10 +206,12 @@ export function SessionContextMenu({
         <span>{t("session.rename")}</span>
       </button>
       {addingTag ? (
-        <form onSubmit={handleSubmitTag} className={styles.tagForm} role="menuitem">
+        <form onSubmit={handleSubmitTag} className={styles.tagForm} role="group" aria-label={t("session.addTag")}>
           <Tag size={UI_ICON_SIZE.compact} className={styles.menuIcon} aria-hidden />
           <input
             ref={tagInputRef}
+            data-menu-focus
+            aria-label={t("session.addTag")}
             value={tagDraft}
             onChange={(e) => setTagDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -223,6 +228,7 @@ export function SessionContextMenu({
         </form>
       ) : (
         <button
+          ref={addTagRef}
           role="menuitem"
           onClick={() => setAddingTag(true)}
           className={styles.menuItem}
@@ -233,7 +239,7 @@ export function SessionContextMenu({
       )}
       {/* Current tags — click × to remove (the menu stays open for multi-remove) */}
       {onRemoveTag && existingTags.length > 0 && (
-        <div className={styles.tagList} role="menuitem" aria-label={t("session.currentTags")}>
+        <div className={styles.tagList} role="group" aria-label={t("session.currentTags")}>
           {existingTags.map((tag) => {
             const ts = getTagStyle(tag, theme);
             return (
@@ -244,6 +250,8 @@ export function SessionContextMenu({
               >
                 #{tag}
                 <button
+                  type="button"
+                  role="menuitem"
                   onClick={() => onRemoveTag(tag)}
                   className={styles.tagListRemove}
                   title={`${t("session.removeTag")} #${tag}`}

@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreviewView } from "../text-viewer/PreviewView";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -30,6 +30,10 @@ describe("Markdown file preview", () => {
       />,
     ));
 
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(container?.querySelector("p")?.getAttribute("align")).toBe("center");
+    });
     const paragraph = container.querySelector("p");
     const image = container.querySelector("img");
     expect(paragraph?.getAttribute("align")).toBe("center");

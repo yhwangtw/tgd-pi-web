@@ -11,6 +11,7 @@ import {
   Ellipsis,
   FileText,
   Gauge,
+  GitBranch,
   Menu,
   Maximize2,
   Minimize2,
@@ -23,15 +24,7 @@ import {
 } from "lucide-react";
 import { SessionSidebar } from "../sidebar/SessionSidebar";
 import { ChatWindow } from "../chat/ChatWindow";
-import { FileViewer } from "./FileViewer";
-import { FilesPanel } from "./FilesPanel";
-import { SearchPanel } from "./SearchPanel";
-import { ChangesPanel } from "./ChangesPanel";
-import { TgdArtifactsPanel } from "./TgdArtifactsPanel";
-import { AttentionPanel } from "./AttentionPanel";
-import { DiffPanel } from "./DiffPanel";
 import type { DiffAnnotation } from "./DiffView";
-import { DesignInspector } from "./DesignInspector";
 import { IconRail, type PanelView } from "./IconRail";
 import { MobileNavigation } from "./MobileNavigation";
 import { TabBar, fileTabId, filePanelId } from "./TabBar";
@@ -41,14 +34,15 @@ import { useAppShellState } from "@/hooks/useAppShellState";
 import { useFileTabs } from "@/hooks/useFileTabs";
 import { useFileReviewQueue } from "@/hooks/useFileReviewQueue";
 import { useRightPanelWidth } from "@/hooks/useRightPanelWidth";
-import { useSessions } from "@/hooks/useSessions";
 import { useTags } from "@/hooks/useTags";
+import { refreshSessionList } from "@/lib/session-list-store";
 import { useCommandPalette } from "@/hooks/useCommandPalette";
 import { useToast, showToast } from "@/hooks/useToast";
 import { useAttentionCenter } from "@/hooks/useAttentionCenter";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { onOpenFileRequest } from "@/lib/file-links";
 import type { FileOpenMode, FileOpenOrigin } from "@/lib/file-open";
+import { useDismissiblePanel } from "@/hooks/useDismissiblePanel";
 import { usePopupMenuKeyboard } from "@/hooks/usePopupMenuKeyboard";
 import { useI18n, translate } from "@/lib/i18n";
 import { setScrollFollowMode } from "@/lib/prefs";
@@ -65,6 +59,26 @@ import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ChatInputHandle } from "../chat/ChatInput";
 import { getSessionDisplayTitle } from "../sidebar/session-utils";
 import s from "./AppShell.module.css";
+
+function MobileActionPortal({ open, children }: { open: boolean; children: React.ReactNode }) {
+  return open ? createPortal(children, document.body) : children;
+}
+
+const FileViewer = lazy(() => import("./FileViewer").then((module) => ({ default: module.FileViewer })));
+
+const FilesPanel = lazy(() => import("./FilesPanel").then((module) => ({ default: module.FilesPanel })));
+
+const SearchPanel = lazy(() => import("./SearchPanel").then((module) => ({ default: module.SearchPanel })));
+
+const ChangesPanel = lazy(() => import("./ChangesPanel").then((module) => ({ default: module.ChangesPanel })));
+
+const TgdArtifactsPanel = lazy(() => import("./TgdArtifactsPanel").then((module) => ({ default: module.TgdArtifactsPanel })));
+
+const AttentionPanel = lazy(() => import("./AttentionPanel").then((module) => ({ default: module.AttentionPanel })));
+
+const DiffPanel = lazy(() => import("./DiffPanel").then((module) => ({ default: module.DiffPanel })));
+
+const DesignInspector = lazy(() => import("./DesignInspector").then((module) => ({ default: module.DesignInspector })));
 
 // Lazy-load heavy modals — they're ~1000 lines each and rarely opened
 const AppearancePanel = lazy(() => import("./AppearancePanel").then((m) => ({ default: m.AppearancePanel })));
@@ -117,6 +131,9 @@ export function AppShell() {
   const sidebarOpenRef = useRef(sidebarOpen);
   const autoCollapsedSidebarRef = useRef(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const mobileActionsToggleRef = useRef<HTMLButtonElement>(null);
+  const mobileActionsPanelRef = useRef<HTMLDivElement>(null);
+  useDismissiblePanel(mobileActionsOpen, mobileActionsPanelRef, () => setMobileActionsOpen(false), mobileActionsToggleRef);
   const [designModeOpen, setDesignModeOpen] = useState(false);
   const [panelView, setPanelView] = useState<PanelView>("sessions");
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
@@ -298,7 +315,15 @@ export function AppShell() {
   }, [actions, closeSidebarIfOverlay]);
 
   // ── ⌘K Command Palette wiring ──────────────────────────────────────────
-  const { allSessions } = useSessions(state.refreshKey);
+  const { allSessions } = state;
+  const lastCatalogRefresh = useRef(state.refreshKey);
+  useEffect(() => {
+    const changed = lastCatalogRefresh.current !== state.refreshKey;
+    lastCatalogRefresh.current = state.refreshKey;
+    // The session panel owns visible refreshes. Keep the shared catalog fresh
+    // after run/deletion events while another contextual panel is mounted.
+    if (changed && panelView !== "sessions") void refreshSessionList(true);
+  }, [panelView, state.refreshKey]);
   const { tags } = useTags();
   const { ToastContainer } = useToast();
   const effectiveCwdForPalette = state.selectedSession?.cwd ?? state.newSessionCwd ?? state.activeCwd;
@@ -315,11 +340,12 @@ export function AppShell() {
     handleNewSessionFromSidebar(tempId, effectiveCwdForPalette);
   }, [effectiveCwdForPalette, handleNewSessionFromSidebar]);
 
+  const clearTagFilter = useCallback(() => setActiveTagFilter(null), []);
   const palette = useCommandPalette({
     sessions: allSessions,
     tags,
     activeTag: activeTagFilter,
-    onClearTag: () => setActiveTagFilter(null),
+    onClearTag: clearTagFilter,
   });
 
   // File-path links clicked inside chat messages (MarkdownBody broadcasts;
@@ -369,6 +395,8 @@ export function AppShell() {
 
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
+  const { open: openPalette, register: registerPalette } = palette;
+
   // Global hotkeys. Every hint shown in the ⌘K palette must be bound here —
   // an advertised shortcut that does nothing reads as a broken app.
   useEffect(() => {
@@ -378,7 +406,7 @@ export function AppShell() {
       if (key === "k" && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
-        palette.open();
+        openPalette();
         setPanelView("search");
         setSidebarOpen(true);
         setSearchFocusSignal((signal) => signal + 1);
@@ -407,11 +435,11 @@ export function AppShell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [palette, effectiveCwdForPalette, setRightPanelOpen]);
+  }, [openPalette, effectiveCwdForPalette, setRightPanelOpen]);
 
   // Register the action callbacks the palette can fire.
   useEffect(() => {
-    palette.register({
+    registerPalette({
       openModels: () => setModelsConfigOpen(true),
       openSkills: () => setSkillsConfigOpen(true),
       openExtensions: () => setExtensionsConfigOpen(true),
@@ -438,7 +466,7 @@ export function AppShell() {
       },
       openHelp: () => setShortcutsOpen(true),
     });
-  }, [palette, toggleTheme, actions, state.selectedSession, setRightPanelOpen, handleStartNewSession, toggleChatWidth]);
+  }, [registerPalette, toggleTheme, actions, state.selectedSession, setRightPanelOpen, handleStartNewSession, toggleChatWidth]);
 
   // Helper: turn a session id into the full SessionInfo record (palette only
   // stores the id in its data when the user picked it via the palette).
@@ -586,6 +614,12 @@ export function AppShell() {
   const sessionMenuPanelRef = useRef<HTMLDivElement>(null);
   const [sessionMenuPos, setSessionMenuPos] = useState<{ top: number; right: number } | null>(null);
 
+  const systemPanelRef = useRef<HTMLElement>(null);
+  const topPanelReturnRef = useRef<HTMLElement | null>(null);
+  // Keep a stable, visible launcher after an action menu unmounts.
+  useEffect(() => { topPanelReturnRef.current = window.matchMedia("(max-width: 700px)").matches ? mobileActionsToggleRef.current : sessionMenuRef.current; });
+  useDismissiblePanel(state.activeTopPanel === "system", systemPanelRef, () => actions.toggleTopPanel("system"), topPanelReturnRef);
+
   const closeSessionMenu = useCallback(() => setSessionMenuOpen(false), []);
   const closeExportMenu = useCallback(() => setExportMenuOpen(false), []);
   usePopupMenuKeyboard(sessionMenuOpen && sessionMenuPos !== null, sessionMenuPanelRef, sessionMenuRef, closeSessionMenu);
@@ -710,8 +744,10 @@ export function AppShell() {
 
   const panelCwd = state.selectedSession?.cwd ?? state.newSessionCwd ?? state.activeCwd ?? null;
 
+  const panelLoading = <span role="status">{t("common.loading")}</span>;
   const sidebarContent = (
     <ErrorBoundary>
+    <Suspense fallback={panelLoading}>
       {panelView === "sessions" ? (
         <SessionSidebar
           selectedSessionId={state.selectedSession?.id ?? null}
@@ -802,6 +838,7 @@ export function AppShell() {
           selectedPath={diffFile}
         />
       )}
+    </Suspense>
     </ErrorBoundary>
   );
 
@@ -936,6 +973,7 @@ export function AppShell() {
           {showChat && (
             <button
               type="button"
+              ref={mobileActionsToggleRef}
               className={s.mobileActionsToggle}
               onClick={() => setMobileActionsOpen((open) => !open)}
               aria-label={t("mobile.sessionActions")}
@@ -944,7 +982,7 @@ export function AppShell() {
               <Ellipsis size={UI_ICON_SIZE.navigation} aria-hidden="true" />
             </button>
           )}
-          {mobileActionsOpen && <button type="button" className={s.mobileActionsBackdrop} onClick={() => setMobileActionsOpen(false)} aria-label={t("mobile.closeActions")} />}
+          {mobileActionsOpen && createPortal(<button type="button" className={s.mobileActionsBackdrop} onClick={() => setMobileActionsOpen(false)} aria-label={t("mobile.closeActions")} />, document.body)}
           {showChat && (
             <div className={s.desktopSessionMenu} ref={sessionMenuRef}>
               <button
@@ -1018,7 +1056,7 @@ export function AppShell() {
             </div>
           )}
           {showChat && (
-            <div className={`${s.chatActions} ${mobileActionsOpen ? s.chatActionsMobileOpen : ""}`}>
+            <MobileActionPortal open={mobileActionsOpen}><div ref={mobileActionsPanelRef} tabIndex={-1} className={`${s.chatActions} ${mobileActionsOpen ? s.chatActionsMobileOpen : ""}`}>
               <div className={s.exportMenuWrapper} ref={exportMenuRef}>
                 <button
                   onClick={() => setExportMenuOpen((v) => !v)}
@@ -1078,6 +1116,12 @@ export function AppShell() {
                 <BarChart3 size={UI_ICON_SIZE.inline} style={{ color: "var(--text-dim)", flexShrink: 0 }} aria-hidden="true" />
                 <span>{t("topbar.analytics")}</span>
               </button>
+              <button type="button" className={`${s.systemButton} ${s.systemButtonDefault} ${s.mobileFileAction}`}
+                data-top-panel-trigger="branches" disabled={!sessionHasBranches}
+                onClick={() => { actions.toggleTopPanel("branches"); setMobileActionsOpen(false); }}>
+                <GitBranch size={UI_ICON_SIZE.compact} aria-hidden />
+                <span>{t("topbar.branches")}</span>
+              </button>
               <BranchNavigator
                 tree={state.branchTree}
                 activeLeafId={state.branchActiveLeafId}
@@ -1088,6 +1132,7 @@ export function AppShell() {
                 onToggle={() => actions.toggleTopPanel("branches")}
                 hasSession
                 hideTrigger
+                returnFocusRef={topPanelReturnRef}
               />
               <button
                 type="button"
@@ -1109,6 +1154,7 @@ export function AppShell() {
               </button>
               <button
                 type="button"
+                data-top-panel-trigger="system"
                 onClick={() => { actions.toggleTopPanel("system"); setMobileActionsOpen(false); }}
                 className={`${s.systemButton} ${state.activeTopPanel === "system" ? s.systemButtonActive : s.systemButtonDefault} hover-text`}
                 disabled={systemPromptUnavailable}
@@ -1117,7 +1163,7 @@ export function AppShell() {
                 <FileText size={UI_ICON_SIZE.compact} aria-hidden style={{ color: state.systemPrompt ? "var(--accent)" : "var(--text-dim)", flexShrink: 0 }} />
                 <span>{t("topbar.system")}</span>
               </button>
-            </div>
+            </div></MobileActionPortal>
           )}
           {/* Session stats — right-aligned in top bar */}
           {showChat && (state.sessionStats || state.contextUsage) && (() => {
@@ -1208,6 +1254,8 @@ export function AppShell() {
             this fixed panel. */}
         {state.activeTopPanel === "system" && systemPanelStyle && typeof document !== "undefined" && createPortal(
           <section
+            ref={systemPanelRef}
+            tabIndex={-1}
             className={s.topPanelDropdown}
             style={systemPanelStyle}
             role="dialog"
@@ -1220,7 +1268,11 @@ export function AppShell() {
                 <button
                   type="button"
                   className={s.systemPanelClose}
-                  onClick={() => actions.toggleTopPanel("system")}
+                  onClick={() => {
+                    actions.toggleTopPanel("system");
+                    const launcher = topPanelReturnRef.current;
+                    (launcher?.matches("button") ? launcher : launcher?.querySelector<HTMLElement>("button"))?.focus();
+                  }}
                   aria-label={t("common.close")}
                   title={t("common.close")}
                 >
@@ -1345,7 +1397,7 @@ export function AppShell() {
                   </div>
                   <div className={s.welcomeStep}>
                     <span className={s.welcomeStepNumber}>3</span>
-                    <span className={s.welcomeStepText}>{t("welcome.step3pre")} <strong style={{ color: "var(--text)" }}>{t("sidebar.models")}</strong> {t("welcome.step3post")}</span>
+                    <span className={s.welcomeStepText}>{t("welcome.step3pre")} <button type="button" className={s.welcomeModelsButton} onClick={handleOpenModels}>{t("sidebar.models")}</button> {t("welcome.step3post")}</span>
                   </div>
                 </div>
               </div>
@@ -1436,6 +1488,7 @@ export function AppShell() {
 
         {/* File content */}
         <div className={s.rightPanelContent}>
+          <Suspense fallback={panelLoading}>
           {fileTabs.filter((tab) => tab.id !== activeFileTabId).map((tab) => (
             <div key={tab.id} role="tabpanel" id={filePanelId(tab.id)} aria-labelledby={fileTabId(tab.id)} hidden />
           ))}
@@ -1485,6 +1538,7 @@ export function AppShell() {
               </div>
             </div>
           )}
+          </Suspense>
         </div>
       </div>
     </div>
@@ -1518,7 +1572,7 @@ export function AppShell() {
     )}
     {appearanceOpen && <Suspense fallback={null}><AppearancePanel returnFocus={appearanceReturnFocus.current} onClose={closeAppearance} /></Suspense>}
     {shortcutsOpen && <Suspense fallback={null}><ShortcutsDialog onClose={() => setShortcutsOpen(false)} /></Suspense>}
-    <DesignInspector active={designModeOpen && showChat} onClose={() => setDesignModeOpen(false)} onCapture={handleDesignCapture} />
+    {designModeOpen && showChat && <Suspense fallback={panelLoading}><DesignInspector active onClose={() => setDesignModeOpen(false)} onCapture={handleDesignCapture} /></Suspense>}
     {/* Toast notifications — mount once at app root */}
     <ToastContainer />
     </>

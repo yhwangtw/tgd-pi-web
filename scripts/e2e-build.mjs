@@ -21,6 +21,11 @@ function buildFiles(root, prefix = '') {
   return readdirSync(join(root, prefix), { withFileTypes: true }).flatMap(entry => {
     const name = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (name === 'cache' || name === manifest || name === 'trace') return [];
+    // Next writes scoped response HTML/RSC here after startup (see its
+    // server/lib/incremental-cache/file-system-cache). Compiled routes and
+    // immutable prerender seeds stay in server/app and remain fully hashed.
+    // Exempt only the actual directory, never a same-named file or symlink.
+    if (name === 'server/route-cache' && entry.isDirectory()) return [];
     return entry.isDirectory() ? buildFiles(root, name) : [name];
   });
 }
@@ -28,7 +33,11 @@ function snapshot(root, env) {
   const buildRoot = join(root, '.next');
   const buildId = readFileSync(join(buildRoot, 'BUILD_ID'), 'utf8').trim();
   if (!buildId) throw new Error('E2E requires a completed production build');
-  const sourceFiles = git(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
+  // A local candidate may contain reviewed moves/deletions that are not yet
+  // staged. Hash the actual source tree; restoring a deleted path changes the
+  // file list and still invalidates reuse. Unexpected read races fail closed.
+  const deleted = new Set(git(root, ['ls-files', '--deleted', '-z']).split('\0'));
+  const sourceFiles = git(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z']).split('\0').filter(file => file && !deleted.has(file));
   const buildEnv = Object.fromEntries(Object.keys(env).sort()
     .filter(key => /^(?:NEXT_PUBLIC_|PIWEB_BUILD_)/.test(key)
       || ['CI', 'NODE_ENV', 'NODE_OPTIONS', 'PIWEB_ENVIRONMENT', 'ANALYZE'].includes(key))

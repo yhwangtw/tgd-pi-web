@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useModalDialog } from "@/hooks/useModalDialog";
 import { validateEntryName } from "@/lib/file-name";
 import { useI18n } from "@/lib/i18n";
 import styles from "./FileOpsDialog.module.css";
@@ -31,21 +33,21 @@ export function FileOpsDialog({ req, onClose, onSubmit }: Props) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
   const isNameOp = req.kind !== "delete";
+  const { panelRef } = useModalDialog<HTMLDivElement>({ open: true, onClose, canClose: !busy, initialFocusRef: isNameOp ? inputRef : cancelRef });
 
   useEffect(() => {
     const input = inputRef.current;
     if (input) {
-      input.focus();
       // Select the basename (before extension) for quick rename.
       const dot = (req.currentName ?? "").lastIndexOf(".");
       if (req.kind === "rename" && dot > 0) input.setSelectionRange(0, dot);
       else input.select();
     }
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [req, onClose]);
+  }, [req]);
 
   const submit = async () => {
     if (busy) return;
@@ -55,9 +57,14 @@ export function FileOpsDialog({ req, onClose, onSubmit }: Props) {
     }
     setBusy(true);
     setError("");
-    const err = await onSubmit(name.trim());
-    if (err) { setError(err); setBusy(false); return; }
-    onClose();
+    try {
+      const err = await onSubmit(name.trim());
+      if (err) { setError(err); setBusy(false); return; }
+      onClose();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : t("fileops.operationFailed"));
+      setBusy(false);
+    }
   };
 
   const titles: Record<FileOpKind, string> = {
@@ -67,11 +74,12 @@ export function FileOpsDialog({ req, onClose, onSubmit }: Props) {
     "delete": t("fileops.deleteTitle"),
   };
 
-  return (
-    <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={styles.dialog} role="dialog" aria-label={titles[req.kind]} data-testid="file-ops-dialog">
-        <div className={styles.title}>{titles[req.kind]}</div>
-        <div className={styles.subtitle}>{req.label}</div>
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div data-dialog-root className={styles.overlay} onMouseDown={(e) => { if (!busy && e.target === e.currentTarget) onClose(); }}>
+      <div ref={panelRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} tabIndex={-1} data-testid="file-ops-dialog">
+        <div id={titleId} className={styles.title}>{titles[req.kind]}</div>
+        <div id={descriptionId} className={styles.subtitle}>{req.label}</div>
 
         {isNameOp ? (
           <>
@@ -85,15 +93,16 @@ export function FileOpsDialog({ req, onClose, onSubmit }: Props) {
               spellCheck={false}
               aria-label={t("fileops.name")}
             />
-            <div className={styles.error}>{error}</div>
+            <div className={styles.error} role="alert">{error}</div>
           </>
         ) : (
-          <div className={styles.error} style={{ minHeight: 0 }}>{error || t("fileops.deleteWarn")}</div>
+          <div className={styles.error} role="alert" style={{ minHeight: 0 }}>{error || t("fileops.deleteWarn")}</div>
         )}
 
         <div className={styles.actions}>
-          <button className={styles.btn} onClick={onClose} disabled={busy}>{t("fileops.cancel")}</button>
+          <button ref={cancelRef} type="button" className={styles.btn} onClick={onClose} disabled={busy}>{t("fileops.cancel")}</button>
           <button
+            type="button"
             className={`${styles.btn} ${req.kind === "delete" ? styles.danger : styles.primary}`}
             onClick={() => void submit()}
             disabled={busy || (isNameOp && !name.trim())}
@@ -102,6 +111,6 @@ export function FileOpsDialog({ req, onClose, onSubmit }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>, document.body,
   );
 }

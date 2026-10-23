@@ -10,10 +10,10 @@ const fixture = vi.hoisted(() => ({
   snapshot: { allSessions: [] as SessionInfo[], loading: false, error: null },
   listeners: new Set<() => void>(),
 }));
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: fixture.replace }),
-  useSearchParams: () => new URLSearchParams(),
-}));
+vi.mock("next/navigation", () => {
+  const router = { replace: fixture.replace };
+  return { useRouter: () => router, useSearchParams: () => new URLSearchParams() };
+});
 vi.mock("@/lib/session-list-store", () => ({
   getSessionListSnapshot: () => fixture.snapshot,
   getServerSessionListSnapshot: () => fixture.snapshot,
@@ -42,11 +42,16 @@ it("updates main and parallel names without resetting the transcript or navigati
       current.actions.openParallel(session("side", "Old side"));
     });
     const sessionKey = current.state.sessionKey;
+    const actions = current.actions;
+    const refs = current.refs;
     fixture.replace.mockClear();
     await act(async () => {
       fixture.snapshot = { ...fixture.snapshot, allSessions: [session("main", "New main"), session("side", "New side")] };
       fixture.listeners.forEach(listener => listener());
     });
+    expect(current.state.allSessions).toBe(fixture.snapshot.allSessions);
+    expect(current.actions).toBe(actions);
+    expect(current.refs).toBe(refs);
     expect(current.state.selectedSession?.name).toBe("New main");
     expect(current.state.parallelSessions[0].name).toBe("New side");
     expect(current.state.sessionKey).toBe(sessionKey);

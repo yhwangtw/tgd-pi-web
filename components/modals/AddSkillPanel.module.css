@@ -201,7 +201,7 @@
 
 .skillsLink {
   font-size: var(--text-sm);
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
@@ -230,13 +230,13 @@
 .installBtnInstalled {
   cursor: not-allowed;
   background: var(--color-success-bg);
-  color: var(--color-success);
+  color: var(--color-success-text);
 }
 
 .installBtnInstalling {
   cursor: not-allowed;
   background: none;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .emptyState {
@@ -246,7 +246,7 @@
 }
 
 .emptyStateLink {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 

@@ -137,7 +137,8 @@ test("empty catalog opens Models and shows the zero-configuration next step", as
   const health = models.getByTestId("provider-health");
   await expect(health).toContainText("No provider configured");
   await expect(health.getByRole("button", { name: "Add provider", exact: true })).toBeEnabled();
-  await expect(models.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await expect(models.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+  await expect(models.getByRole("button", { name: "Done", exact: true })).toBeEnabled();
 });
 
 test("failed catalog can be retried without losing the permanent selector", async ({ page }) => {
@@ -162,7 +163,7 @@ test("failed catalog can be retried without losing the permanent selector", asyn
   await expectDesktopModels(page, BETA);
 });
 
-for (const closeAction of ["Close", "Cancel"]) {
+for (const closeAction of ["Close", "Done"]) {
   test(`new conversation keeps a manually chosen model after Models ${closeAction} refreshes the catalog`, async ({ page }) => {
     let catalogsLoaded = 0;
     await page.route(MODEL_API, (route) => {

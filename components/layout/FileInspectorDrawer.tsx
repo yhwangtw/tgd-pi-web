@@ -72,7 +72,11 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
 
   useEffect(() => { setTab(initialTab); }, [initialTab]);
   useEffect(() => { setNotes(readNotes(filePath)); setDiagnostics(null); setHistory(null); setBlame(null); }, [filePath]);
-  const endpoint = useCallback((mode: InspectorTab) => `/api/files/insights?cwd=${encodeURIComponent(cwd ?? "")}&path=${encodeURIComponent(relativePath)}&mode=${mode === "problems" ? "diagnostics" : mode}`, [cwd, relativePath]);
+  const endpoint = useCallback((mode: InspectorTab | "tests") => {
+    const url = `/api/files/insights?cwd=${encodeURIComponent(cwd ?? "")}&path=${encodeURIComponent(relativePath)}&mode=${mode === "problems" ? "diagnostics" : mode}`;
+    return (mode === "problems" || mode === "tests") && sessionId
+      ? `${url}&sessionId=${encodeURIComponent(sessionId)}` : url;
+  }, [cwd, relativePath, sessionId]);
 
   useEffect(() => {
     if (!cwd || tab === "outline" || tab === "notes") return;
@@ -115,7 +119,7 @@ export function FileInspectorDrawer({ filePath, relativePath, cwd, sessionId, ou
     if (!cwd || runningTests) return;
     setRunningTests(true); setError("");
     try {
-      const response = await fetch(`/api/files/insights?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(relativePath)}&mode=tests`);
+      const response = await fetch(endpoint("tests"));
       const payload = await response.json() as { diagnostics?: Diagnostic[]; error?: string };
       if (!response.ok || payload.error) throw new Error(payload.error ?? `HTTP ${response.status}`);
       const next = [...(diagnostics ?? []).filter((item) => item.source !== "test"), ...(payload.diagnostics ?? [])];

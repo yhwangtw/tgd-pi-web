@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { ModelCatalogEntry } from "@/lib/model-catalog-types";
 
 export interface ModelRef {
@@ -21,6 +21,8 @@ interface CatalogSnapshot {
   thinkingLevelMaps: Record<string, Record<string, string | null>>;
   diagnostics: ModelCatalogDiagnostic[];
 }
+
+const NO_REJECTIONS: string[] = [];
 
 const EMPTY_CATALOG: Pick<CatalogSnapshot, "models" | "modelList" | "thinkingLevels" | "thinkingLevelMaps" | "diagnostics"> = {
   models: {}, modelList: [], thinkingLevels: {}, thinkingLevelMaps: {}, diagnostics: [],
@@ -126,8 +128,10 @@ export function useModelCatalog(
   const active = snapshot.sourceKey === sourceKey;
   const catalogStatus = !sourceKey ? "empty" : active ? snapshot.status : "loading";
   const data = active && catalogStatus === "ready" ? snapshot : EMPTY_CATALOG;
-  const rejected = rejections.sourceKey === sourceKey && rejections.refreshKey === modelsRefreshKey ? rejections.keys : [];
-  const modelList = data.modelList.map(model => rejected.includes(`${model.provider}:${model.id}`) ? { ...model, available: false } : model);
+  const rejected = rejections.sourceKey === sourceKey && rejections.refreshKey === modelsRefreshKey ? rejections.keys : NO_REJECTIONS;
+  const modelList = useMemo(() => rejected.length
+    ? data.modelList.map(model => rejected.includes(`${model.provider}:${model.id}`) ? { ...model, available: false } : model)
+    : data.modelList, [data.modelList, rejected]);
   const newSessionModel = catalogStatus === "ready" && selection.sourceKey === sourceKey && selection.model
     && !rejected.includes(`${selection.model.provider}:${selection.model.modelId}`) ? selection.model : null;
   return {

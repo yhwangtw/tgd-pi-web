@@ -115,7 +115,9 @@ export function useAgentEvents(
           const sequenced = frame.type !== "connected" && frame.type !== "run_timing" && !frame.type.startsWith("extension_ui_");
           if (sequenced && !snapshot && e.lastEventId && isDuplicateAgentCursor(cursorRef.current, e.lastEventId)) return;
           const event = decoder.decode(frame, e.data, e.lastEventId);
-          handleAgentEventRef.current?.(event);
+          // Events replayed before the authoritative checkpoint restore state
+          // silently; completion audio belongs to live delivery only.
+          handleAgentEventRef.current?.(event.type === "agent_end" && !readyRef.current ? { ...event, replayed: true } : event);
           if (sequenced && e.lastEventId) cursorRef.current = e.lastEventId;
           if (event.type === "session_closed") {
             settle(false);

@@ -31,6 +31,34 @@ describe('shared CI E2E build', () => {
     cpSync(root, copy, { recursive: true });
     expect(verifyE2EBuild(copy, { CI: 'true' }).buildId).toBe('build-123');
   });
+  it('allows runtime response cache writes while still checking the full compiled artifact', () => {
+    const root = fixture();
+    const route = join(root, '.next/server/app');
+    const runtimeCache = join(root, '.next/server/route-cache/APP_PAGE/source/$/index.segments');
+    mkdirSync(route, { recursive: true });
+    writeFileSync(join(route, 'page.js'), 'compiled route');
+    writeFileSync(join(route, 'index.html'), 'immutable prerender seed');
+    recordE2EBuild(root, {});
+    mkdirSync(runtimeCache, { recursive: true });
+    writeFileSync(join(runtimeCache, '_full.segment.rsc'), 'first response');
+    expect(verifyE2EBuild(root, {}).buildId).toBe('build-123');
+    writeFileSync(join(runtimeCache, '_full.segment.rsc'), 'next response');
+    expect(verifyE2EBuild(root, {}).buildId).toBe('build-123');
+    writeFileSync(join(route, 'page.js'), 'tampered compiled route');
+    expect(() => verifyE2EBuild(root, {})).toThrow('differing fields: build;');
+    writeFileSync(join(route, 'page.js'), 'compiled route');
+    rmSync(join(route, 'index.html'));
+    expect(() => verifyE2EBuild(root, {})).toThrow('differing fields: build;');
+  });
+  it.each(['static/route-cache/response', 'server/route-cache'])('does not exempt %s as a runtime cache directory', file => {
+    const root = fixture();
+    const target = join(root, '.next', file);
+    mkdirSync(join(target, '..'), { recursive: true });
+    writeFileSync(target, 'original artifact');
+    recordE2EBuild(root, {});
+    writeFileSync(target, 'changed artifact');
+    expect(() => verifyE2EBuild(root, {})).toThrow('differing fields: build;');
+  });
   it.each([
     ['source.ts', 'source'],
     ['package-lock.json', 'source'],
@@ -40,6 +68,16 @@ describe('shared CI E2E build', () => {
     const root = fixture(); recordE2EBuild(root, {});
     writeFileSync(join(root, file), 'different');
     expect(() => verifyE2EBuild(root, {})).toThrow(`differing fields: ${fields};`);
+  });
+  it('records unstaged source deletions and invalidates reuse when paths return or disappear', () => {
+    const root = fixture();
+    recordE2EBuild(root, {});
+    rmSync(join(root, 'source.ts'));
+    expect(() => verifyE2EBuild(root, {})).toThrow('differing fields: source;');
+    recordE2EBuild(root, {});
+    expect(verifyE2EBuild(root, {}).buildId).toBe('build-123');
+    writeFileSync(join(root, 'source.ts'), 'export const value = 1;\n');
+    expect(() => verifyE2EBuild(root, {})).toThrow('differing fields: source;');
   });
   it('rejects changed build environment and Node/platform without storing environment values', () => {
     const root = fixture(); recordE2EBuild(root, { NEXT_PUBLIC_EXAMPLE: 'fixture-private-value' });

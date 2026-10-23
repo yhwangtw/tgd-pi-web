@@ -157,7 +157,7 @@
 
 .addSkillButtonActive {
   background: var(--bg-selected);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .rightPanel {
@@ -259,5 +259,16 @@
   .skillItem,
   .addSkillButton {
     width: 100%;
+  }
+}
+
+/* Compact desktop geometry must not shrink phone or coarse-pointer targets. */
+@media (max-width: 700px), (pointer: coarse) {
+  .skillItem,
+  .addSkillButton,
+  :global(html[data-ui-style="trae"]) .skillItem,
+  :global(html[data-ui-style="trae"]) .addSkillButton {
+    min-height: var(--control-touch);
+    min-width: var(--control-touch);
   }
 }

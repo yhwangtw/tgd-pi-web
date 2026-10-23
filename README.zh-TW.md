@@ -302,7 +302,7 @@ OAuth/PKCE、resource/prompt 瀏覽與 required-task 執行尚未整合；詳見
 Playwright 刻意不儲存在 `package.json`，需要臨時安裝：
 
 ```bash
-npm i -D --no-save @playwright/test
+npm i -D --no-save --package-lock=false @playwright/test@1.64.0
 npm run test:e2e
 ```
 

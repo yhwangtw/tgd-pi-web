@@ -123,3 +123,12 @@
     min-height: var(--control-touch);
   }
 }
+
+/* Compact desktop geometry must not shrink phone or coarse-pointer targets. */
+@media (max-width: 700px), (pointer: coarse) {
+  .summary,
+  :global(html[data-ui-style="trae"]) .summary {
+    min-height: var(--control-touch);
+    min-width: var(--control-touch);
+  }
+}

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionInfo, AgentMessage } from "@/lib/types";
 import type { AgentEvent, SessionData } from "../use-agent-session-types";
 
-const harness = vi.hoisted(() => ({ send: vi.fn(), toast: vi.fn(), created: vi.fn(), fetch: vi.fn(), rejectModel: vi.fn() }));
+const harness = vi.hoisted(() => ({ send: vi.fn(), toast: vi.fn(), created: vi.fn(), fetch: vi.fn(), rejectModel: vi.fn(), complete: vi.fn() }));
 vi.mock("@/lib/agent-client", () => ({ sendAgentCommand: harness.send }));
 vi.mock("@/hooks/useToast", () => ({ showToast: harness.toast }));
 vi.mock("@/lib/attention", () => ({ setIdleTitle: vi.fn(), setRunningTitle: vi.fn(), setDoneTitle: vi.fn(), setErrorTitle: vi.fn(), setExtensionTitle: vi.fn(), notifyDone: vi.fn(), requestNotifyPermission: vi.fn() }));
@@ -43,7 +43,7 @@ describe("session reconciliation and first-prompt ordering", () => {
   let serverMessages: AgentMessage[];
   let serverStreaming: boolean;
   function Harness({ selected }: { selected: SessionInfo | null }) {
-    const value = useAgentSession({ session: selected, newSessionCwd: selected ? null : "/fixture", onSessionCreated: harness.created });
+    const value = useAgentSession({ session: selected, newSessionCwd: selected ? null : "/fixture", onSessionCreated: harness.created, onAgentComplete: harness.complete });
     useEffect(() => { current = value; }, [value]);
     return null;
   }
@@ -52,7 +52,7 @@ describe("session reconciliation and first-prompt ordering", () => {
     vi.useFakeTimers(); vi.stubGlobal("EventSource", FakeEventSource); vi.stubGlobal("fetch", harness.fetch);
     FakeEventSource.instances = []; serverMessages = []; serverStreaming = false;
     harness.send.mockReset(); harness.created.mockReset(); harness.toast.mockReset(); harness.fetch.mockReset();
-    harness.rejectModel.mockReset();
+    harness.rejectModel.mockReset(); harness.complete.mockReset();
     harness.send.mockResolvedValue(null);
     harness.fetch.mockImplementation(async (url: string) => {
       if (url === "/api/agent/new") return new Response(JSON.stringify({ sessionId: "one", deferred: true }));
@@ -62,6 +62,26 @@ describe("session reconciliation and first-prompt ordering", () => {
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it("notifies one live successful completion across rerenders, and stays silent on errors, replay and checkpoints", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    const emit = (event: AgentEvent) => act(async () => current.handleAgentEventRef.current?.(event));
+    await emit(snapshot([]));
+    await emit({ type: "agent_start" });
+    await act(async () => root.render(<Harness selected={{ ...session, name: "renamed" }} />));
+    await emit({ type: "agent_end", messages: [assistant] });
+    expect(harness.complete).toHaveBeenCalledTimes(1);
+    await emit({ type: "agent_end", messages: [assistant] });
+    await emit(snapshot([user, assistant]));
+    expect(harness.complete).toHaveBeenCalledTimes(1);
+    await emit({ type: "agent_start" });
+    await emit({ type: "agent_end", messages: [{ ...assistant, stopReason: "error", errorMessage: "failed" }] });
+    await emit({ type: "agent_start" });
+    await emit({ type: "agent_end", messages: [{ ...assistant, stopReason: "aborted" }] });
+    await emit({ type: "agent_start" });
+    await emit({ type: "agent_end", messages: [assistant], replayed: true });
+    expect(harness.complete).toHaveBeenCalledTimes(1);
+  });
 
   it("decodes the compact REST and SSE tree while preserving context and branch targets", async () => {
     const stored = { ...data([user]), leafId: "e0", tree: [{ entry: { type: "message" as const, id: "e0", parentId: null, timestamp: "2026-10-22T00:00:00Z", message: user }, children: [] }] };

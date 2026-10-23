@@ -40,9 +40,9 @@
 }
 
 .groupRunning .stateIcon,
-.groupRunning .label strong { color: var(--accent); }
+.groupRunning .label strong { color: var(--accent-text); }
 .groupError .stateIcon,
-.failed { color: var(--color-error); }
+.failed { color: var(--color-error-text); }
 
 .spinner { animation: tool-run-spin 0.8s linear var(--motion-loop-count, infinite); }
 
@@ -101,3 +101,12 @@
 :global(html[data-ui-style="trae"]) .groupError { box-shadow: inset 3px 0 var(--color-error), var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .summary { min-height: 40px; padding: var(--space-2) var(--space-3); }
 :global(html[data-ui-style="trae"]) .children { border-top-color: var(--trae-hairline); background: var(--trae-canvas); }
+
+/* Compact desktop geometry must not shrink phone or coarse-pointer targets. */
+@media (max-width: 700px), (pointer: coarse) {
+  .summary,
+  :global(html[data-ui-style="trae"]) .summary {
+    min-height: var(--control-touch);
+    min-width: var(--control-touch);
+  }
+}

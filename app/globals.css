@@ -138,7 +138,9 @@
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 20px;
   --space-6: 24px;
+  --space-7: 28px;
   --space-8: 32px;
 
   --control-xs: 24px;
@@ -273,12 +275,12 @@
 
   /* Design Tokens - Semantic Colors */
   --color-error: #ef4444;
-  --color-error-text: #dc2626;
+  --color-error-text: #a31b1b;
   --color-error-bg: rgba(239,68,68,0.08);
   --color-error-bg-strong: rgba(239,68,68,0.16);
   --color-error-border: rgba(239,68,68,0.3);
   --color-success: #24864a;
-  --color-success-text: #19713c;
+  --color-success-text: #155e32;
   --color-success-bg: rgba(36,134,74,0.09);
   --color-success-border: rgba(36,134,74,0.24);
   --color-info-border: rgba(59,130,246,0.2);
@@ -311,7 +313,7 @@
   --color-info: #2563eb;
   --color-info-bg: rgba(59,130,246,0.12);
   --color-project-bg: rgba(99,102,241,0.12);
-  --color-project-text: rgba(99,102,241,0.8);
+  --color-project-text: #4035c3;
   --color-shadow-modal: 0 16px 48px rgba(0,0,0,0.14);
   --color-shadow-popup: 0 -4px 16px rgba(0,0,0,0.10);
   --color-shadow-dropdown: 0 2px 8px rgba(0,0,0,0.2);
@@ -380,6 +382,7 @@ html.dark {
   --color-error-bg-strong: rgba(239,68,68,0.22);
   --color-error-border: rgba(239,68,68,0.4);
   --color-success: #4ade80;
+  --color-success-text: #4ade80;
   --color-success-bg: rgba(74,222,128,0.12);
   --color-success-border: rgba(74,222,128,0.3);
   --color-info-border: rgba(52,211,153,0.3);
@@ -394,10 +397,6 @@ html.dark {
   /* Dark mode - Overlay & Accent tints */
   --color-overlay: rgba(0,0,0,0.5);
   --color-overlay-heavy: rgba(0,0,0,0.6);
-  --color-accent-bg: rgba(52,211,153,0.12);
-  --color-accent-bg-strong: rgba(52,211,153,0.16);
-  --color-accent-border: rgba(52,211,153,0.3);
-  --color-accent-glow: rgba(52,211,153,0.3);
   --color-warning-bg: rgba(250,204,21,0.1);
   --color-warning-border: rgba(250,204,21,0.3);
   --color-warning-text: rgba(250,204,21,0.9);
@@ -408,15 +407,11 @@ html.dark {
   --color-info: #60a5fa;
   --color-info-bg: rgba(59,130,246,0.16);
   --color-project-bg: rgba(167,139,250,0.12);
-  --color-project-text: rgba(167,139,250,0.8);
+  --color-project-text: #b9a2ff;
   --color-shadow-modal: 0 8px 32px rgba(0,0,0,0.35);
   --color-shadow-popup: 0 -4px 16px rgba(0,0,0,0.2);
   --color-shadow-dropdown: 0 2px 8px rgba(0,0,0,0.4);
   --color-shadow-input: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px -12px rgba(0,0,0,0.3);
-  --color-accent-border-focus: rgba(52,211,153,0.4);
-  --color-accent-border-focus-strong: rgba(52,211,153,0.5);
-  --color-accent-bg-subtle: rgba(52,211,153,0.06);
-  --color-accent-border-subtle: rgba(52,211,153,0.2);
   --color-success-bg-strong: rgba(74,222,128,0.22);
   --color-success-border-strong: rgba(74,222,128,0.5);
   --color-diff-add-bg: rgba(0,200,80,0.15);
@@ -590,6 +585,7 @@ html[data-skin="aurora"] {
 }
 
 html.dark[data-skin="aurora"] {
+  --accent-text: #b8a0ff;
   --bg: #131020;
   --bg-panel: #191430;
   --bg-hover: #241d42;
@@ -675,6 +671,8 @@ html.dark[data-skin="editorial"] {
    everywhere; --bg-elev-* stay near-opaque so dropdowns/menus (which have no
    backdrop blur) remain readable over arbitrary content. */
 html[data-skin="glass"] {
+  /* Text remains readable over the rendered translucent Glass surfaces. */
+  --accent-text: #4444b4;
   background: #e9edfb;
   --bg: rgba(255,255,255,0.42);
   --bg-panel: rgba(255,255,255,0.38);
@@ -717,6 +715,11 @@ html[data-skin="glass"] body {
 }
 
 html.dark[data-skin="glass"] {
+  /* Text remains readable over the rendered translucent Glass surfaces. */
+  --accent-text: #c9d2fd;
+  --color-success-text: #80e8a6;
+  --color-error-text: #fcb1b1;
+  --color-project-text: #d5c7ff;
   background: #0b0e1e;
   --bg: rgba(16,19,38,0.5);
   --bg-panel: rgba(22,26,50,0.45);
@@ -851,7 +854,7 @@ body {
 
 /* Keyboard focus indicator */
 :where(button, a, input, textarea, select, [tabindex]):focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
   border-radius: var(--radius-control);
 }
@@ -1441,23 +1444,23 @@ span.linenumber {
   color: var(--text);
 }
 .hover-accent:hover:not(:disabled):not([aria-disabled="true"]) {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .hover-error-bg:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--color-error-bg-strong);
 }
 .hover-error-bg-text:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--color-error-bg-strong);
-  color: var(--color-error);
+  color: var(--color-error-text);
 }
 .hover-bg-selected-accent:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--bg-selected);
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--color-accent-border-focus);
 }
 .hover-bg-error-border:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--color-error-bg);
-  color: var(--color-error);
+  color: var(--color-error-text);
   border-color: var(--color-error-border);
 }
 .hover-border-accent-bg:hover:not(:disabled):not([aria-disabled="true"]) {
@@ -1466,7 +1469,7 @@ span.linenumber {
 }
 .hover-border-accent:hover:not(:disabled):not([aria-disabled="true"]) {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .hover-bg-text-full:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--bg-hover);
@@ -1476,7 +1479,7 @@ span.linenumber {
 /* Text color utility classes */
 .text-muted { color: var(--text-muted); }
 .text-dim { color: var(--text-dim); }
-.text-accent { color: var(--accent); }
+.text-accent { color: var(--accent-text); }
 /* Base background utility classes for className switching */
 .bg-none { background: none; }
 .bg-selected { background: var(--bg-selected); }
@@ -1487,7 +1490,8 @@ span.linenumber {
 .bg-transparent { background: transparent; }
 /* Parent hover reveal pattern — replaces onMouseEnter/Leave state tracking */
 .hover-group .hover-reveal { opacity: 0; pointer-events: none; transition: opacity 0.12s; }
-.hover-group:hover .hover-reveal { opacity: 1; pointer-events: auto; }
+.hover-group:hover .hover-reveal,
+.hover-group:focus-within .hover-reveal { opacity: 1; pointer-events: auto; }
 
 @media (pointer: coarse) {
   .hover-group .hover-reveal {

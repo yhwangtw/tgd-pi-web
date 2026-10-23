@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 export type WorkflowKey = "Goal" | "Plan";
 type HiddenWorkflows = Partial<Record<WorkflowKey, boolean>>;
@@ -43,16 +43,16 @@ export function useWorkflowVisibility(sessionId?: string) {
     (target.hide ? toolbarRefs : cardRefs).current[target.key]?.focus();
   }, [preference, scope]);
 
-  const setHidden = (key: WorkflowKey, hide: boolean, control?: HTMLButtonElement) => {
+  const setHidden = useCallback((key: WorkflowKey, hide: boolean, control?: HTMLButtonElement) => {
     // Pointer activation preserves the mobile composer focus; keyboard users
     // follow the card to its toolbar control and back when it is reopened.
     if (control && document.activeElement === control) focusTarget.current = { scope, key, hide };
     const next = { ...hidden, [key]: hide };
     setPreference({ scope, hidden: next });
     try { localStorage.setItem(scope, JSON.stringify(next)); } catch { /* In-memory preference still works. */ }
-  };
-
-  return { hidden, setHidden, toolbarRefs, cardRefs, cardId: (key: WorkflowKey) => `${id}-${key}` };
+  }, [hidden, scope]);
+  const cardId = useCallback((key: WorkflowKey) => `${id}-${key}`, [id]);
+  return useMemo(() => ({ hidden, setHidden, toolbarRefs, cardRefs, cardId }), [hidden, setHidden, cardId]);
 }
 
 export type WorkflowVisibility = ReturnType<typeof useWorkflowVisibility>;

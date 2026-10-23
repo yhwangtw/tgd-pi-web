@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { isFileMutationLockPath } from "@/lib/file-mutation-lock";
+import { createFileMutationPathGuard, isFileMutationLockPath } from "@/lib/file-mutation-lock";
 import {
   IGNORED_NAMES,
   IGNORED_SUFFIXES,
@@ -27,6 +27,7 @@ import { previewContentSecurityPolicy } from "@/lib/preview-policy";
 import { FileOperationError } from "@/lib/versioned-file";
 import { FileSaveConflict, readEditableFile, saveEditableFile } from "@/lib/file-editor";
 import { readTextPrefix } from "@/lib/text-prefix";
+import { watchFileResponse } from "@/lib/file-watch";
 import { coalesceFileRead } from "@/lib/file-read-coalescing";
 import { validateEntryName } from "@/lib/file-name";
 import { textPreviewLimit } from "@/lib/preview-limits";
@@ -119,59 +120,13 @@ async function handlePreview(filePath: string, stat: fs.Stats, allowedRoots: Set
   });
 }
 
-function handleWatch(filePath: string, stat: fs.Stats): Response {
-  if (!stat.isFile()) {
-    return NextResponse.json({ error: "Not a file" }, { status: 400 });
-  }
-  let watcher: fs.FSWatcher | null = null;
-  const stream = new ReadableStream({
-    start(controller) {
-      const send = (eventName: string, data: Record<string, unknown>) => {
-        const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
-        try {
-          controller.enqueue(new TextEncoder().encode(payload));
-        } catch {
-          // client disconnected
-        }
-      };
-      // Send initial ping so client knows connection is live
-      send("connected", { filePath });
-      try {
-        watcher = fs.watch(filePath, () => {
-          try {
-            const s = fs.statSync(filePath);
-            send("change", { mtime: s.mtime.toISOString(), size: s.size });
-          } catch {
-            send("change", { mtime: new Date().toISOString(), size: 0 });
-          }
-        });
-        watcher.on("error", () => {
-          try { controller.close(); } catch { /* ignore */ }
-        });
-      } catch {
-        send("error", { message: "Failed to watch file" });
-        controller.close();
-      }
-    },
-    cancel() {
-      try { watcher?.close(); } catch { /* ignore */ }
-    },
-  });
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
-  });
-}
 
 async function handleList(filePath: string, stat: fs.Stats): Promise<Response> {
   if (!stat.isDirectory()) return NextResponse.json({ error: "Not a directory" }, { status: 400 });
+  const reserved = createFileMutationPathGuard(getAgentDir());
   const names = (await fs.promises.readdir(filePath))
     .filter(name => !IGNORED_NAMES.has(name) && !IGNORED_SUFFIXES.some(suffix => name.endsWith(suffix)))
-    .filter(name => !isFileMutationLockPath(path.join(filePath, name), getAgentDir()));
+    .filter(name => !reserved(path.join(filePath, name)));
   type ListedEntry = { name: string; isDir: boolean; size: number; modified: string };
   const entries: Array<ListedEntry | null> = Array(names.length);
   let next = 0;
@@ -251,7 +206,7 @@ export async function GET(
         return NextResponse.json(await coalesceFileRead("html", filePath, stat, allowedRoots, () => buildHtmlPreview(filePath, allowedRoots)), { headers: { "Cache-Control": "private, no-store" } });
       }
       case "watch":
-        return handleWatch(filePath, stat);
+        return stat.isFile() ? watchFileResponse(filePath, request.signal) : NextResponse.json({ error: "Not a file" }, { status: 400 });
       case "list":
       default:
         return await handleList(filePath, stat);

@@ -1,7 +1,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: 1400;
   background: var(--color-image-overlay);
   display: flex;
   align-items: center;

@@ -3,8 +3,9 @@ import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { X } from "lucide-react";
 
-import { useEffect } from "react";
+import { useRef } from "react";
 import { createPortal } from "react-dom";
+import { useModalDialog } from "@/hooks/useModalDialog";
 import styles from "./ImageLightbox.module.css";
 import { useI18n } from "@/lib/i18n";
 
@@ -21,21 +22,13 @@ interface Props {
  */
 export function ImageLightbox({ src, onClose }: Props) {
   const { t } = useI18n();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const { panelRef } = useModalDialog<HTMLDivElement>({ open: true, onClose, initialFocusRef: closeRef });
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className={styles.overlay} onClick={onClose} role="dialog" aria-label={t("image.preview")}>
-      <button className={styles.close} onClick={onClose} aria-label={t("common.close")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>
+    <div ref={panelRef} data-dialog-root className={styles.overlay} tabIndex={-1} onClick={onClose} role="dialog" aria-modal="true" aria-label={t("image.preview")}>
+      <button ref={closeRef} type="button" className={styles.close} onClick={(event) => { event.stopPropagation(); onClose(); }} aria-label={t("common.close")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt="" className={styles.image} onClick={(e) => e.stopPropagation()} />
     </div>,

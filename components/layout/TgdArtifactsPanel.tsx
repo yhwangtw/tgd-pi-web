@@ -1,7 +1,7 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { ChevronRight, FileCode2, FileStack, FileText, RefreshCw } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 import { encodeFilePathForApi, joinFilePath } from "@/lib/file-paths";
@@ -115,6 +115,8 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
   const [data, setData] = useState<Artifacts | null>(null);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"artifacts" | "files">("artifacts");
+  const tabId = useId();
+  const panelId = `${tabId}-panel`;
   useEffect(() => { setView((localStorage.getItem("pi-tgd-artifacts-view") as "artifacts" | "files") ?? "artifacts"); }, []);
   const pickView = useCallback((v: "artifacts" | "files") => { setView(v); localStorage.setItem("pi-tgd-artifacts-view", v); }, []);
 
@@ -147,9 +149,17 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
     <div className={s.container}>
       <div className={s.header}>
         <span className={s.brand}>tGD</span>
-        <div className={s.viewToggle} role="tablist">
-          <button type="button" role="tab" aria-selected={view === "artifacts"} onClick={() => pickView("artifacts")} className={view === "artifacts" ? s.viewTabActive : s.viewTab}>{t("tgd.viewArtifacts")}</button>
-          <button type="button" role="tab" aria-selected={view === "files"} onClick={() => pickView("files")} className={view === "files" ? s.viewTabActive : s.viewTab}>{t("tgd.viewFiles")}</button>
+        <div className={s.viewToggle} role="tablist" aria-label={t("tgd.artifacts")} onKeyDown={(event) => {
+          const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+          const index = tabs.indexOf(event.target as HTMLButtonElement);
+          if (index < 0) return;
+          const next = event.key === "ArrowRight" ? (index + 1) % tabs.length
+            : event.key === "ArrowLeft" ? (index - 1 + tabs.length) % tabs.length
+            : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
+          if (next !== null) { event.preventDefault(); tabs[next].focus(); tabs[next].click(); }
+        }}>
+          <button id={`${tabId}-artifacts`} aria-controls={panelId} tabIndex={view === "artifacts" ? 0 : -1} type="button" role="tab" aria-selected={view === "artifacts"} onClick={() => pickView("artifacts")} className={view === "artifacts" ? s.viewTabActive : s.viewTab}>{t("tgd.viewArtifacts")}</button>
+          <button id={`${tabId}-files`} aria-controls={panelId} tabIndex={view === "files" ? 0 : -1} type="button" role="tab" aria-selected={view === "files"} onClick={() => pickView("files")} className={view === "files" ? s.viewTabActive : s.viewTab}>{t("tgd.viewFiles")}</button>
         </div>
         <IconButton
           label={t("common.refresh")}
@@ -162,17 +172,17 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
       </div>
 
       {!data || !data.exists ? (
-        <div className={s.empty}>
+        <div className={s.empty} id={panelId} role="tabpanel" aria-labelledby={`${tabId}-${view}`} tabIndex={0}>
           <FileStack size={24} aria-hidden="true" />
           <span>{t("tgd.emptyArtifacts")}</span>
           <span className={s.emptyHint}>{t("tgd.run")} <code>/tgd-map</code> {t("tgd.then")} <code>/tgd-define</code> {t("tgd.produceHint")}</span>
         </div>
       ) : view === "files" && data.tgdDir ? (
-        <div className={s.body}>
+        <div className={s.body} id={panelId} role="tabpanel" aria-labelledby={`${tabId}-${view}`} tabIndex={0}>
           <FileTree key={data.tgdDir + (refreshKey ?? 0)} root={data.tgdDir} onOpenFile={onOpenFile} />
         </div>
       ) : (
-        <div className={s.body}>
+        <div className={s.body} id={panelId} role="tabpanel" aria-labelledby={`${tabId}-${view}`} tabIndex={0}>
           {data.top.length > 0 && (
             <div className={s.section}>
               <div className={s.sectionTitle}>{t("tgd.project")}</div>

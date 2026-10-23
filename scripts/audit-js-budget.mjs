@@ -1,50 +1,60 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
+import { parse } from "parse5";
+import { javascriptBudget } from "./js-budget-policy.mjs";
 
 const NEXT_DIR = resolve(process.env.NEXT_DIR ?? ".next");
-const RAW_BUDGET = Number(process.env.PIWEB_MAX_INITIAL_JS_KB ?? 1_800) * 1_024;
-const GZIP_BUDGET = Number(process.env.PIWEB_MAX_INITIAL_JS_GZIP_KB ?? 550) * 1_024;
+const { rawBytes: RAW_BUDGET, gzipBytes: GZIP_BUDGET } = javascriptBudget("entry");
 
-export function parseClientReferenceManifest(file, routeKey) {
-  const source = readFileSync(file, "utf8");
-  const marker = `globalThis.__RSC_MANIFEST[${JSON.stringify(routeKey)}]=`;
-  const start = source.indexOf(marker);
-  if (start < 0) throw new Error(`${file} does not contain route ${routeKey}`);
-  return JSON.parse(source.slice(start + marker.length).replace(/;\s*$/, ""));
-}
-
-function existingRouteManifests(nextDir) {
-  return [
-    { route: "/", key: "/page", file: resolve(nextDir, "server/app/page_client-reference-manifest.js") },
-    { route: "/login", key: "/login/page", file: resolve(nextDir, "server/app/login/page_client-reference-manifest.js") },
-  ].filter(({ file }) => existsSync(file));
+// Webpack client-reference manifests include reachable modules from other
+// entries, not the scripts rendered for this route. Audit Next's prerendered
+// route HTML instead. Hydrated dynamic requests have separate browser coverage.
+export function entryScriptChunks(html, route) {
+  const chunks = new Set();
+  function visit(node) {
+    if (node.tagName === "script") {
+      const src = node.attrs.find(attr => attr.name === "src")?.value;
+      if (src) {
+        const url = new URL(src, "http://piweb.invalid");
+        if (url.origin !== "http://piweb.invalid" || !url.pathname.startsWith("/_next/static/") || !url.pathname.endsWith(".js")) {
+          throw new Error(`${route} contains an unsupported entry script: ${src}`);
+        }
+        const chunk = decodeURIComponent(url.pathname.slice("/_next/".length));
+        if (chunk.split("/").some(part => part === ".." || part === "." || part.includes("\\"))) {
+          throw new Error(`${route} contains an invalid chunk: ${src}`);
+        }
+        chunks.add(chunk);
+      }
+    }
+    for (const child of node.childNodes ?? []) visit(child);
+  }
+  visit(parse(html));
+  if (!chunks.size) throw new Error(`${route} has no rendered entry scripts`);
+  return [...chunks];
 }
 
 export function measureInitialJs(nextDir = NEXT_DIR) {
-  const buildManifestPath = resolve(nextDir, "build-manifest.json");
-  if (!existsSync(buildManifestPath)) throw new Error("Run `npm run build` before the JavaScript budget audit.");
-  const buildManifest = JSON.parse(readFileSync(buildManifestPath, "utf8"));
-  const shared = [...(buildManifest.rootMainFiles ?? []), ...(buildManifest.polyfillFiles ?? [])];
-  const routes = existingRouteManifests(nextDir);
-  if (routes.length === 0) throw new Error("No production App Router client-reference manifests were found.");
-
-  return routes.map(({ route, key, file }) => {
-    const manifest = parseClientReferenceManifest(file, key);
-    const routeChunks = Object.values(manifest.clientModules ?? {})
-      .flatMap((module) => Array.isArray(module?.chunks) ? module.chunks : [])
-      .filter((chunk) => typeof chunk === "string" && chunk.endsWith(".js"));
-    const chunks = [...new Set([...shared, ...routeChunks])];
-    const missing = chunks.filter((chunk) => !existsSync(resolve(nextDir, chunk)));
-    if (missing.length > 0) throw new Error(`${route} references missing chunks: ${missing.join(", ")}`);
-    const files = chunks.map((chunk) => readFileSync(resolve(nextDir, chunk)));
+  const prerenderPath = resolve(nextDir, "prerender-manifest.json");
+  if (!existsSync(prerenderPath)) throw new Error("Run `npm run build` before the JavaScript budget audit.");
+  const manifest = JSON.parse(readFileSync(prerenderPath, "utf8"));
+  return ["/", "/login"].map(route => {
+    if (!manifest.routes?.[route]) throw new Error(`${route} is no longer prerendered; update the entry-script audit before proceeding`);
+    const htmlPath = resolve(nextDir, "server/app", route === "/" ? "index.html" : "login.html");
+    const chunks = entryScriptChunks(readFileSync(htmlPath, "utf8"), route);
+    const files = chunks.map(chunk => {
+      const file = resolve(nextDir, chunk);
+      if (relative(nextDir, file).startsWith("..") || !existsSync(file)) throw new Error(`${route} references missing or invalid chunk: ${chunk}`);
+      return readFileSync(file);
+    });
     return {
       route,
       chunkCount: chunks.length,
-      rawBytes: chunks.reduce((total, chunk) => total + statSync(resolve(nextDir, chunk)).size, 0),
+      chunks,
+      rawBytes: files.reduce((total, contents) => total + contents.byteLength, 0),
       gzipBytes: files.reduce((total, contents) => total + gzipSync(contents, { level: 9 }).byteLength, 0),
     };
   });
@@ -73,10 +83,10 @@ function main() {
   }
   const failures = budgetFailures(results);
   if (failures.length > 0) {
-    console.error(`Initial JavaScript budget exceeded:\n${failures.join("\n")}`);
+    console.error(`Entry-script JavaScript budget exceeded:\n${failures.join("\n")}`);
     process.exit(1);
   }
-  console.log(`Initial JavaScript budget passed (${formatKb(RAW_BUDGET)} raw / ${formatKb(GZIP_BUDGET)} gzip per route).`);
+  console.log(`Entry-script JavaScript budget passed (${formatKb(RAW_BUDGET)} raw / ${formatKb(GZIP_BUDGET)} gzip per route).`);
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) main();

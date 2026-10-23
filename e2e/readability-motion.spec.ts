@@ -85,9 +85,18 @@ for (const width of [390, 840, 1440]) for (const style of ["original", "trae"]) 
         const root = document.documentElement;
         if (skin === "terminal") root.removeAttribute("data-skin"); else root.dataset.skin = skin;
         root.classList.toggle("dark", dark);
-        // Let real background transitions settle before measuring their final state.
+        // Wait only for the metadata and the ancestors composing its background.
+        // Unrelated transitions elsewhere in the app need not finish to measure it.
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        await Promise.all(document.getAnimations().filter((animation) => animation instanceof CSSTransition).map((animation) => animation.finished.catch(() => {})));
+        const surfaces = new Set<Element>();
+        for (const selected of ["true", "false"]) {
+          const target = document.querySelector(`[data-session-row][aria-selected="${selected}"] time`);
+          if (!target) throw new Error(`Missing ${selected === "true" ? "selected" : "unselected"} metadata`);
+          for (let node: Element | null = target; node; node = node.parentElement) surfaces.add(node);
+        }
+        const transitions = [...surfaces].flatMap((node) => node.getAnimations({ subtree: false }))
+          .filter((animation) => animation instanceof CSSTransition);
+        await Promise.all(transitions.map((animation) => animation.finished.catch(() => {})));
       }, { skin, dark });
       for (const [state, target] of [["selected", selected], ["unselected", unselected]] as const) {
         const label = `${skin}-${dark ? "dark" : "light"}-${state}`;

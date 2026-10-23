@@ -101,7 +101,8 @@ describe("models config draft safety", () => {
     failRead = true;
     await act(async () => root.render(<ModelsConfig onClose={() => {}} />));
     expect(document.body.textContent).not.toContain("private-fixture-key");
-    expect(button("Save").disabled).toBe(true);
+    expect(button("Save")).toBeUndefined();
+    expect(button("Done").disabled).toBe(false);
     expect(document.querySelector('[role="alert"]')).toBeTruthy();
     expect(requests).toHaveLength(0);
   });

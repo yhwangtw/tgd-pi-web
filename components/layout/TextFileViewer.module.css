@@ -155,7 +155,7 @@
   background: var(--bg-elev-1);
   flex-shrink: 0;
 }
-.truncatedNotice button { color: var(--accent); font: inherit; padding: var(--space-2); border-radius: var(--radius-control); }
+.truncatedNotice button { color: var(--accent-text); font: inherit; padding: var(--space-2); border-radius: var(--radius-control); }
 
 .truncatedNotice a {
   color: inherit;
@@ -261,7 +261,7 @@
 
 .watchIndicatorActive {
   composes: watchIndicator;
-  color: var(--color-success);
+  color: var(--color-success-text);
 }
 
 .watchIndicatorInactive {

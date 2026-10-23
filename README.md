@@ -370,7 +370,7 @@ the download to obtain the current file.
 Playwright is intentionally installed ad hoc and is not saved in `package.json`:
 
 ```bash
-npm i -D --no-save @playwright/test
+npm i -D --no-save --package-lock=false @playwright/test@1.64.0
 npm run test:e2e
 ```
 

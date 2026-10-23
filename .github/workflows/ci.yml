@@ -263,7 +263,7 @@ jobs:
       # installs at the company. CI installs it ad hoc without touching
       # package.json / package-lock.json.
       - name: Install Playwright (not in package.json — offline installs)
-        run: npm i -D --no-save @playwright/test
+        run: npm i -D --no-save --package-lock=false @playwright/test@1.64.0
 
       - name: Install Playwright chromium
         run: npx playwright install --with-deps --only-shell chromium
@@ -329,7 +329,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --omit=dev
 
       - name: Audit (high+critical only)
         run: npm run audit:production

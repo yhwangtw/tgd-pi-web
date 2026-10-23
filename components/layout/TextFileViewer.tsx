@@ -750,11 +750,6 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
             {viewMode === "source" && !previewMode && !structuredMode && !editing && !data.truncated && <ActionMenuItem><button disabled={!data.version} onClick={startEditing}>{t("files.editFile")}</button></ActionMenuItem>}
             {viewMode === "source" && !previewMode && !structuredMode && !editing && <ActionMenuItem><button onClick={() => setWrapLines((current) => !current)}>{t(wrapLines ? "files.disableWrap" : "files.enableWrap")}</button></ActionMenuItem>}
             {isLarge && <ActionMenuItem><button onClick={() => setForceHighlight((current) => !current)}>{t(usePlain ? "files.forceHighlight" : "files.fastPlainView")}</button></ActionMenuItem>}
-            <ActionMenuItem><button onClick={() => setInspectorTab("outline")}>{t("files.inspector.outline")}</button></ActionMenuItem>
-            <ActionMenuItem><button onClick={() => setInspectorTab("problems")}>{t("files.inspector.problems")}</button></ActionMenuItem>
-            <ActionMenuItem><button onClick={() => setInspectorTab("history")}>{t("files.inspector.history")}</button></ActionMenuItem>
-            <ActionMenuItem><button onClick={() => setInspectorTab("blame")}>{t("files.gitBlame")}</button></ActionMenuItem>
-            <ActionMenuItem><button onClick={() => setInspectorTab("notes")}>{t("files.inspector.notes")}</button></ActionMenuItem>
             <ActionMenuItem><button onClick={() => setFullscreen((current) => !current)}>{t(fullscreen ? "files.exitFocus" : "files.focusMode")}</button></ActionMenuItem>
             <ActionMenuItem><a href={`/api/files/${encodeFilePathForApi(filePath)}?type=download`} download>
               {t(isHtml ? "files.downloadHtml" : isMarkdown ? "files.downloadMarkdown" : "files.downloadFile")}
@@ -781,7 +776,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
             />
             {findQuery.trim() && !findQuery.trim().startsWith(":") && <span className={styles.findCount}>{matches.length > 0 ? `${Math.min(findPos, matches.length - 1) + 1}/${matches.length}` : "0/0"}</span>}
           </span>
-          {outline.length > 0 && <button onClick={() => setInspectorTab("outline")}>{outline.length} {t("files.symbols")}</button>}
+          {outline.length > 0 && <span>{outline.length} {t("files.symbols")}</span>}
           {wrapLines && <span>{t("files.wrapped")}</span>}
           {usePlain && <span>{t("files.largeFileMode")}</span>}
         </div>

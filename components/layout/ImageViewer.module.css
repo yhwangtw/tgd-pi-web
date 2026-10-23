@@ -15,10 +15,13 @@
   color: var(--text-dim);
   background: var(--bg);
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .filePath {
   font-family: var(--font-mono);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .extension {
@@ -79,6 +82,7 @@
 }
 
 .image {
+  touch-action: none;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
@@ -86,6 +90,11 @@
 }
 
 .zoomReset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--control-sm);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-control-compact);
@@ -95,9 +104,16 @@
   cursor: pointer;
 }
 .zoomReset:hover { color: var(--text); }
+.zoomReset:disabled { opacity: 0.45; cursor: default; }
+.zoomControls { display: inline-flex; align-items: center; gap: var(--space-1); }
 
 :global(html[data-ui-style="trae"]) .root { background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .toolbar { min-height: 44px; padding: var(--space-2) var(--space-3); border-bottom-color: var(--trae-hairline); background: var(--trae-surface); }
 :global(html[data-ui-style="trae"]) .imageContainer { background-color: var(--trae-control); }
 :global(html[data-ui-style="trae"]) .image { border-radius: var(--radius-media); box-shadow: var(--trae-hover-shadow); }
 :global(html[data-ui-style="trae"]) .zoomReset { min-height: 28px; border-color: transparent; border-radius: var(--radius-control-prominent); background: var(--trae-control); }
+
+@media (pointer: coarse), (max-width: 700px) {
+  .zoomReset,
+  :global(html[data-ui-style="trae"]) .zoomReset { min-width: var(--control-touch); min-height: var(--control-touch); }
+}

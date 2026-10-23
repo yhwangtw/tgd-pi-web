@@ -196,7 +196,7 @@
 
 .status_running { color: var(--accent-text); }
 .status_waiting_for_input { color: var(--color-warning-text-strong); background: var(--color-warning-bg); }
-.status_completed { color: var(--color-success); }
+.status_completed { color: var(--color-success-text); }
 .status_failed { color: var(--color-error-text); background: var(--color-error-bg); }
 .status_skipped { color: var(--text-dim); }
 
@@ -241,7 +241,7 @@
 .field input[aria-invalid="true"],
 .field textarea[aria-invalid="true"],
 .field select[aria-invalid="true"] {
-  border-color: var(--color-error-border-strong);
+  border-color: var(--color-error-border);
   box-shadow: 0 0 0 2px var(--color-error-bg);
 }
 .monoInput { font-family: var(--font-mono) !important; font-size: var(--type-ui-size); }

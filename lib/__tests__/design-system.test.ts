@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { isProductIconSource, isVerifiedProviderArtwork, VENDORED_PROVIDER_ARTWORK } from "../../scripts/design-icon-policy.mjs";
 
 const ROOT = process.cwd();
 
@@ -19,7 +20,7 @@ const componentStyleFiles = [
 const componentSourceFiles = [
   ...filesBelow(join(ROOT, "components"), [".tsx"]),
   ...filesBelow(join(ROOT, "app"), [".tsx"]),
-];
+].filter(file => isProductIconSource(relative(ROOT, file)));
 
 describe("design system contracts", () => {
   it("defines the shared type, spacing, control, radius, and motion scales", () => {
@@ -43,6 +44,11 @@ describe("design system contracts", () => {
   it("keeps component colors palette-independent", () => {
     const failures = [...componentStyleFiles, ...componentSourceFiles].flatMap((file) => {
       const css = readFileSync(file, "utf8");
+      // Original provider brand colors belong to the verified MIT artwork,
+      // rather than the product palette. All other component colors stay bound
+      // to semantic tokens; editing artwork or attribution removes the waiver.
+      if (isVerifiedProviderArtwork(relative(ROOT, file), css,
+        readFileSync(join(ROOT, VENDORED_PROVIDER_ARTWORK.licenseFile), "utf8"))) return [];
       return css.split("\n").flatMap((line, index) =>
         /#[\da-f]{3,8}\b|rgba?\(/i.test(line)
           ? [`${relative(ROOT, file)}:${index + 1} ${line.trim()}`]

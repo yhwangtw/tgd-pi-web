@@ -262,7 +262,7 @@ API-Revisionen, Validierungsgrenzen und Warnungen nach erfolgreichem Speichern s
 Playwright wird absichtlich ad hoc installiert und nicht in `package.json` gespeichert:
 
 ```bash
-npm i -D --no-save @playwright/test
+npm i -D --no-save --package-lock=false @playwright/test@1.64.0
 npm run test:e2e
 ```
 

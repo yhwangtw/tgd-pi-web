@@ -48,11 +48,18 @@ export interface DurableExtensionHostOptions {
 }
 
 /** Durable entries projected through the real SDK SessionManager, with stable entry IDs. */
-export function durableExtensionEntries(entries: readonly EntryRecord[], cwd: string, sessionId: string): FileEntry[] {
+export function durableExtensionEntries(entries: readonly EntryRecord[], cwd: string, sessionId: string, continuation?: { parentId: string | null; prefix: string }): FileEntry[] {
   const output: FileEntry[] = [{ type: "session", version: 3, id: sessionId, cwd, timestamp: "1970-01-01T00:00:00.000Z" }];
-  let parentId: string | null = null;
-  const prefix = legacyArchive(entries) ? "durable:" : "";
-  for (const entry of entries) {
+  let parentId: string | null = continuation?.parentId ?? null;
+  const prefix = continuation?.prefix ?? (legacyArchive(entries) ? "durable:" : "");
+  const marker = entries.findLast(entry => entry.head !== undefined);
+  const edits = new Map(entries.filter(entry => !marker || entry.id >= marker.head!).flatMap(entry => (entry.edits ?? []).map(edit => [edit.target, edit] as const)));
+  for (const original of entries) {
+    const edit = edits.get(original.id);
+    const entry = edit ? { ...original, kind: "pi-web.edited-context", model: edit.action === "omit" ? [] : edit.messages } : original;
+    // A reset starts a new SDK branch. Earlier entries remain discoverable in
+    // getEntries/getTree, while getBranch/buildSessionProjection use the new head.
+    if (entry.head === entry.id && entry.kind !== LEGACY_CONTEXT && entry.kind !== "pi.compaction") parentId = null;
     if (entry.kind === LEGACY_CONTEXT) {
       const archive = entry.data as unknown as LegacyArchive;
       const boundary = legacyBoundary(entry, archive);
@@ -76,6 +83,10 @@ export function durableExtensionEntries(entries: readonly EntryRecord[], cwd: st
       output.push({ ...base, type: "compaction", summary, firstKeptEntryId: `${prefix}${entry.head ?? entry.id}`, tokensBefore: 0 });
       parentId = base.id;
       continue;
+    }
+    if (entry.head === entry.id && !entry.model?.length) {
+      output.push({ ...base, type: "custom", customType: entry.kind, data: entry.data });
+      parentId = base.id;
     }
     for (const [index, message] of (entry.model ?? []).entries()) {
       const id = index === 0 ? base.id : `${base.id}:${index}`;
@@ -108,9 +119,13 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
   runner.setUIContext(typeof options.ui === "function" ? options.ui(runner.getUIContext().theme) : options.ui, "rpc");
   let initialized = false;
   let closed = false;
+  let shuttingDown: Promise<void> | undefined;
   let pending = Promise.resolve();
   let commitEvents = Promise.resolve();
   let promptEvents = Promise.resolve();
+  let projectionUpdates = Promise.resolve();
+  let projectedEntries: EntryRecord[] = [];
+  let projectedFiles: FileEntry[] | undefined;
   let activeTools: string[] = [];
   let currentModel: ReturnType<typeof options.services.modelRuntime.getModel>;
   let thinking = "off";
@@ -123,14 +138,39 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
     void pending.catch(() => {});
   }
   async function flush() { await pending; }
-  async function refreshProjection() {
-    const entries: EntryRecord[] = [];
+  function refreshProjection(): Promise<void> {
+    // Different hooks can refresh concurrently. One append cursor and one SDK
+    // projection are published together, so an older scan cannot overwrite a
+    // newer branch or duplicate entries.
+    const result = projectionUpdates.then(updateProjection);
+    projectionUpdates = result.catch(() => {});
+    return result;
+  }
+  async function updateProjection() {
+    const additions: EntryRecord[] = [];
+    const newest = projectedEntries.at(-1)?.id;
     let cursor: Parameters<Conversation["entries"]>[2];
     do {
-      const page = await options.conversation().entries({}, 200, cursor, context);
-      entries.push(...page.items); cursor = page.next;
+      const page = await options.conversation().entries(newest === undefined ? {} : { minEntryId: newest }, 200, cursor, context);
+      additions.push(...page.items.filter(entry => newest === undefined || entry.id > newest)); cursor = page.next;
     } while (cursor !== undefined);
-    projection = SessionManager.inMemory(cwd, { id: options.sessionId }, durableExtensionEntries(entries.reverse(), cwd, options.sessionId));
+    if (!projectedFiles || additions.length) {
+      additions.sort((left, right) => left.id - right.id);
+      projectedEntries = [...projectedEntries, ...additions];
+      // The SDK has no public stable-ID append API. Keep converted immutable
+      // prefixes, rebuild its index only on a history change, and never mutate
+      // private SessionManager fields. Head/edit/migration entries require a full
+      // conversion because they can change earlier context or ID namespaces.
+      if (projectedFiles && additions.every(entry => entry.head === undefined && !entry.edits?.length && entry.kind !== LEGACY_CONTEXT)) {
+        const last = projectedFiles.at(-1);
+        const extra = durableExtensionEntries(additions, cwd, options.sessionId, {
+          parentId: last?.type !== "session" ? last?.id ?? null : null,
+          prefix: legacyArchive(projectedEntries) ? "durable:" : "",
+        });
+        projectedFiles = [...projectedFiles, ...extra.slice(1)];
+      } else projectedFiles = durableExtensionEntries(projectedEntries, cwd, options.sessionId);
+      projection = SessionManager.inMemory(cwd, { id: options.sessionId }, projectedFiles);
+    }
     const agent = await options.conversation().agent(context);
     activeTools = agent.tools.map(tool => tool.name);
     thinking = agent.thinkingLevel;
@@ -398,13 +438,21 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
     await flush(); refreshTools();
     return true;
   }
-  async function shutdown() {
-    if (closed) return;
-    await afterCommit();
-    await runner.emit({ type: "session_shutdown", reason: "quit" });
-    await flush();
-    closed = true;
-    runner.invalidate("Durable extension host closed");
+  function shutdown(): Promise<void> {
+    if (shuttingDown) return shuttingDown;
+    shuttingDown = (async () => {
+      try {
+        await promptEvents;
+        await afterCommit();
+        await runner.emit({ type: "session_shutdown", reason: "quit" });
+        await flush();
+      } finally {
+        closed = true;
+        runner.invalidate("Durable extension host closed");
+        options.registry.uninstall({ name });
+      }
+    })();
+    return shuttingDown;
   }
   return { name, get extension() { return extension(); }, runner, initialize, beforePrompt, afterCommit, handleCommand, shutdown, flush, refreshProjection, questionContext };
 }

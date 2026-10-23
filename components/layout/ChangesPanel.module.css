@@ -31,7 +31,7 @@
   padding: 0 var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--color-accent-bg);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: var(--text-xs);
   line-height: var(--leading-body);
 }
@@ -86,9 +86,9 @@
   font-weight: var(--weight-bold);
 }
 .statusM { color: var(--color-warning-text); }
-.statusA { color: var(--color-success); }
-.statusD { color: var(--color-error); }
-.statusR { color: var(--accent); }
+.statusA { color: var(--color-success-text); }
+.statusD { color: var(--color-error-text); }
+.statusR { color: var(--accent-text); }
 .statusU { color: var(--text-dim); }
 
 .path {
@@ -107,8 +107,8 @@
   gap: var(--space-1);
   font-size: var(--text-xs);
 }
-.add { color: var(--color-success); }
-.del { color: var(--color-error); }
+.add { color: var(--color-success-text); }
+.del { color: var(--color-error-text); }
 
 .empty {
   height: 100%;
@@ -276,7 +276,7 @@
   font-weight: var(--weight-semibold);
 }
 
-.restoreRevert { background: var(--color-accent-bg); color: var(--accent); }
+.restoreRevert { background: var(--color-accent-bg); color: var(--accent-text); }
 .restoreRemove { background: var(--color-error-bg); color: var(--color-error-text); }
 
 .restoreMore {
@@ -319,7 +319,7 @@
   flex-shrink: 0;
   color: var(--text-dim);
 }
-.discardBtn:hover { color: var(--color-error); background: var(--bg-hover); }
+.discardBtn:hover { color: var(--color-error-text); background: var(--bg-hover); }
 
 .commitBox {
   border-top: 1px solid var(--border);

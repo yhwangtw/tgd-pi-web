@@ -306,7 +306,7 @@
 .reportBody p { margin: 0; white-space: pre-wrap; }
 .reportBody strong { color: var(--text); }
 .reportBody ul { max-height: 110px; margin: 4px 0 0; padding-left: var(--space-4); overflow: auto; }
-.test_passed { color: var(--color-success); }
+.test_passed { color: var(--color-success-text); }
 .test_failed { color: var(--color-error-text); }
 .test_run { color: var(--text-dim); }
 .cardActions { margin-top: 8px; display: flex; gap: var(--space-1); flex-wrap: wrap; }
@@ -331,7 +331,7 @@
 .status_queued { color: var(--text-dim); }
 .status_running { color: var(--accent-text); }
 .status_waiting_for_input { color: var(--color-warning-text-strong); }
-.status_completed { color: var(--color-success); }
+.status_completed { color: var(--color-success-text); }
 .status_failed,
 .status_interrupted { color: var(--color-error-text); }
 .status_cancelled { color: var(--text-dim); }

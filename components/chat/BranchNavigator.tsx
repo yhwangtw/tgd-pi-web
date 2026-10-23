@@ -1,4 +1,5 @@
 "use client";
+import { useDismissiblePanel } from "@/hooks/useDismissiblePanel";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
@@ -24,6 +25,7 @@ interface Props {
   hasSession?: boolean;
   /** Keep the controlled dropdown mounted while another control owns its trigger. */
   hideTrigger?: boolean;
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 // Parent links avoid recursive traversal and quadratic path copies in long histories.
@@ -176,11 +178,13 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
   );
 }
 
-export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, containerRef, open: openProp, onToggle, hasSession, hideTrigger = false }: Props) {
+export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, containerRef, open: openProp, onToggle, hasSession, hideTrigger = false, returnFocusRef }: Props) {
   const { t } = useI18n();
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp !== undefined ? openProp : openInternal;
   const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closePanel = useCallback(() => { if (onToggle) onToggle(); else setOpenInternal(false); }, [onToggle]);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
@@ -210,6 +214,8 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
     };
   }, [open, inline, containerRef]);
 
+  useDismissiblePanel(open && (!inline || dropdownPos !== null), panelRef, closePanel, returnFocusRef ?? btnRef);
+
   const activePathIds = useMemo(
     () => open ? buildActivePath(tree, activeLeafId) : new Set<string>(),
     [tree, activeLeafId, open]
@@ -218,8 +224,9 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
   const handleSelect = useCallback((id: string) => {
     onLeafChange(id);
     if (onToggle) onToggle(); else setOpenInternal(false);
-    btnRef.current?.focus();
-  }, [onLeafChange, onToggle]);
+    const launcher = returnFocusRef?.current ?? btnRef.current;
+    (launcher?.matches("button") ? launcher : launcher?.querySelector<HTMLElement>("button"))?.focus();
+  }, [onLeafChange, onToggle, returnFocusRef]);
 
   const hasBranches = useMemo(() => hasSessionBranches(tree), [tree]);
   const noBranchReason = !hasSession
@@ -262,13 +269,12 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
           // Portalled to <body>: the top bar has a backdrop-filter, which traps
           // position:fixed children in a stacking context that paints *under*
           // the chat content (the tGD pipeline bar covered this dropdown).
-          <div className={styles.inlineDropdown} style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}>
+          <div ref={panelRef} tabIndex={-1} role="dialog" aria-label={t("topbar.branches")} className={styles.inlineDropdown} style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}>
             {hasContent && firstNode ? (
               <div className={styles.dropdownContent} onKeyDown={event => {
                 const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
                 const at = items.indexOf(document.activeElement as HTMLButtonElement);
-                if (event.key === "Escape") { event.preventDefault(); if (onToggle) onToggle(); else setOpenInternal(false); btnRef.current?.focus(); }
-                else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
                   event.preventDefault();
                   items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
                 }
@@ -301,6 +307,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
     <div className={styles.standaloneWrapper}>
       {/* Header toggle */}
       <button
+        ref={btnRef}
         onClick={() => setOpenInternal((v) => !v)}
         className={styles.standaloneHeaderButton}
       >
@@ -311,13 +318,12 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
 
       {/* Tree panel - overlay */}
       {open && (
-        <div className={styles.standaloneOverlay}>
+        <div ref={panelRef} tabIndex={-1} role="dialog" aria-label={t("topbar.branches")} className={styles.standaloneOverlay}>
           {hasContent && firstNode ? (
             <div className={styles.dropdownContent} onKeyDown={event => {
                 const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
                 const at = items.indexOf(document.activeElement as HTMLButtonElement);
-                if (event.key === "Escape") { event.preventDefault(); if (onToggle) onToggle(); else setOpenInternal(false); btnRef.current?.focus(); }
-                else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
                   event.preventDefault();
                   items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
                 }

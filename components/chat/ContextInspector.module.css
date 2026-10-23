@@ -3,7 +3,7 @@
 .tab, .tabActive { display: inline-flex; min-height: 30px; align-items: center; gap: var(--space-1); padding: 0 var(--space-2); border: 0; border-radius: var(--radius-control); cursor: pointer; font-size: var(--text-xs); white-space: nowrap; }
 .tab { background: transparent; color: var(--text-muted); }
 .tab:hover { background: var(--bg-hover); color: var(--text); }
-.tabActive { background: var(--bg-selected); color: var(--accent); font-weight: var(--weight-semibold); }
+.tabActive { background: var(--bg-selected); color: var(--accent-text); font-weight: var(--weight-semibold); }
 .tab span, .resourceMeta span { padding: var(--space-optical) var(--space-1); border-radius: var(--radius-pill); background: var(--bg-subtle); color: var(--text-dim); font-family: var(--font-ui); font-size: var(--text-2xs); }
 .refresh { width: 30px; height: 30px; margin-left: auto; flex: 0 0 auto; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer; font-size: var(--text-lg); }
 .refresh:hover { background: var(--bg-hover); color: var(--text); }

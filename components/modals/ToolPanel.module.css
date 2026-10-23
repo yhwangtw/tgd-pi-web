@@ -39,7 +39,7 @@
 .presetBtnActive {
   background: var(--bg);
   box-shadow: var(--color-shadow-dropdown);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: var(--weight-semibold);
 }
 

@@ -20,7 +20,7 @@
   padding: 0 var(--space-2);
   border-radius: var(--radius-control-compact);
   background: var(--color-accent-bg);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: var(--text-xs);
   line-height: var(--leading-body);
   text-transform: uppercase;
@@ -40,7 +40,7 @@
 .hunkNav { display: flex; align-items: center; gap: var(--space-1); margin-left: auto; }
 .hunkNav button { min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control-compact); background: var(--bg-hover); color: var(--text-muted); cursor: pointer; }
 .hunkNav span { padding: 0 var(--space-1); color: var(--text-dim); font-size: var(--text-2xs); }
-.hunkNav .reviewed { color: var(--color-success); border-color: var(--color-success-border); background: var(--color-success-bg); }
+.hunkNav .reviewed { color: var(--color-success-text); border-color: var(--color-success-border); background: var(--color-success-bg); }
 .hunkNav .revertHunk { color: var(--color-error-text); }
 
 .close {

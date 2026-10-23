@@ -26,16 +26,30 @@ let snapshot: AttentionSnapshot = {
 };
 let hydrated = false;
 let pendingLoad: Promise<void> | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 const listeners = new Set<() => void>();
 
 function emit(next: AttentionSnapshot): void {
+  if (next.items === snapshot.items && next.readIds === snapshot.readIds
+    && next.clearedIds === snapshot.clearedIds && next.loading === snapshot.loading
+    && next.error === snapshot.error && next.updatedAt === snapshot.updatedAt) return;
   snapshot = next;
   listeners.forEach((listener) => listener());
 }
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+  if (listeners.size === 1) {
+    pollTimer = setInterval(refreshVisible, POLL_MS);
+    document.addEventListener("visibilitychange", refreshVisible);
+  }
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size) return;
+    if (pollTimer !== null) clearInterval(pollTimer);
+    pollTimer = null;
+    document.removeEventListener("visibilitychange", refreshVisible);
+  };
 }
 
 function storedIds(key: string): Set<string> {
@@ -68,16 +82,22 @@ async function loadAttention(quiet = false): Promise<void> {
     .then(async (response) => {
       const body = await response.json() as Partial<AttentionResponse> & { error?: string };
       if (!response.ok || !Array.isArray(body.items)) throw new Error(body.error || `HTTP ${response.status}`);
-      emit({ ...snapshot, items: body.items, loading: false, error: null, updatedAt: body.serverTime ?? new Date().toISOString() });
+      const unchanged = JSON.stringify(body.items) === JSON.stringify(snapshot.items);
+      emit({ ...snapshot, items: unchanged ? snapshot.items : body.items, loading: false, error: null,
+        updatedAt: unchanged && snapshot.updatedAt ? snapshot.updatedAt : body.serverTime ?? new Date().toISOString() });
     })
     .catch((reason) => emit({ ...snapshot, loading: false, error: reason instanceof Error ? reason.message : String(reason) }))
     .finally(() => { pendingLoad = null; });
   return pendingLoad;
 }
 
+function refreshVisible(): void {
+  if (document.visibilityState !== "hidden") void loadAttention(true);
+}
+
 function markRead(ids: string[]): void {
   hydrateIds();
-  if (ids.length === 0) return;
+  if (ids.length === 0 || ids.every((id) => snapshot.readIds.has(id))) return;
   const next = new Set(snapshot.readIds);
   ids.forEach((id) => next.add(id));
   persistIds(STORAGE_KEY, next);
@@ -88,7 +108,7 @@ function clearCompleted(ids: string[]): void {
   hydrateIds();
   const completed = new Set(snapshot.items.filter((item) => item.status === "completed").map((item) => item.id));
   const eligible = ids.filter((id) => completed.has(id));
-  if (eligible.length === 0) return;
+  if (eligible.length === 0 || eligible.every((id) => snapshot.clearedIds.has(id))) return;
   const next = new Set(snapshot.clearedIds);
   eligible.forEach((id) => next.add(id));
   persistIds(CLEARED_STORAGE_KEY, next);
@@ -99,9 +119,7 @@ export function useAttentionCenter() {
   const current = useSyncExternalStore(subscribe, () => snapshot, () => snapshot);
 
   useEffect(() => {
-    void loadAttention();
-    const timer = window.setInterval(() => void loadAttention(true), POLL_MS);
-    return () => window.clearInterval(timer);
+    if (document.visibilityState !== "hidden") void loadAttention(snapshot.updatedAt !== null);
   }, []);
 
   const visibleItems = useMemo(

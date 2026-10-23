@@ -2,6 +2,7 @@
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { MoreHorizontal, AtSign, ChevronRight, LoaderCircle, Upload } from "lucide-react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
 import { encodeFilePathForApi, getRelativeFilePath, joinFilePath } from "@/lib/file-paths";
@@ -35,6 +36,7 @@ interface FileNode {
 }
 
 interface MenuTarget {
+  launcher?: HTMLElement;
   x: number;
   y: number;
   fullPath: string;
@@ -159,7 +161,7 @@ function TreeNode({
         onClick={handleClick}
         onContextMenu={(e) => {
           e.preventDefault();
-          onContextMenu({ x: e.clientX, y: e.clientY, fullPath: node.fullPath, relative, isDir: node.isDir });
+          onContextMenu({ x: e.clientX, y: e.clientY, fullPath: node.fullPath, relative, isDir: node.isDir, launcher: e.currentTarget });
         }}
         onMouseDown={(e) => (e.currentTarget as HTMLElement).focus()}
         className={`hover-bg hover-group ${styles.treeNode} ${!node.isDir && activePath === node.fullPath ? styles.treeNodeActive : ""}`}
@@ -207,11 +209,11 @@ function TreeNode({
             <LoaderCircle className={styles.loadingIcon} size={UI_ICON_SIZE.inline} aria-hidden="true" />
           )}
         </button>
-        {activePath === node.fullPath && <button type="button" className={styles.fileActions}
+        <button type="button" className={`${activePath === node.fullPath ? "" : "hover-reveal"} ${styles.fileActions}`}
           aria-label={`${t("files.moreActions")}: ${node.name}`} title={t("files.moreActions")}
-          onClick={event => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); onContextMenu({ x: rect.right, y: rect.bottom, fullPath: node.fullPath, relative, isDir: node.isDir }); }}>
+          onClick={event => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); onContextMenu({ x: rect.right, y: rect.bottom, fullPath: node.fullPath, relative, isDir: node.isDir, launcher: event.currentTarget }); }}>
           <MoreHorizontal size={UI_ICON_SIZE.compact} aria-hidden />
-        </button>}
+        </button>
         {onAtMention && !node.isDir && (
           <button
             type="button"
@@ -396,6 +398,22 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuAnchorRef = useRef<HTMLElement>(null);
+  const openMenu = useCallback((target: MenuTarget) => {
+    menuAnchorRef.current = target.launcher ?? containerRef.current;
+    setMenu(target);
+  }, []);
+  const dialogLauncherRef = useRef<HTMLElement | null>(null);
+  const openDialog = (request: FileOpRequest) => {
+    dialogLauncherRef.current = menuAnchorRef.current;
+    setDialog(request); setMenu(null);
+  };
+  const closeDialog = () => {
+    setDialog(null);
+    requestAnimationFrame(() => {
+      const launcher = dialogLauncherRef.current;
+      (launcher?.isConnected ? launcher : containerRef.current)?.focus();
+    });
+  };
   const closeMenu = useCallback(() => setMenu(null), []);
   usePopupMenuKeyboard(menu !== null, menuRef, menuAnchorRef, closeMenu);
   useEffect(() => {
@@ -491,7 +509,7 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
           // Right-click on empty space → root-level ops.
           if ((e.target as HTMLElement).closest("[data-fx-row]")) return;
           e.preventDefault();
-          setMenu({ x: e.clientX, y: e.clientY, fullPath: cwd, relative: "", isDir: true, rootArea: true });
+          openMenu({ x: e.clientX, y: e.clientY, fullPath: cwd, relative: "", isDir: true, rootArea: true, launcher: e.currentTarget });
         }}
       >
         {roots.map((node) => (
@@ -506,7 +524,7 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
             onToggleExpanded={handleToggleExpanded}
             refreshKey={treeRefresh}
             gitStatus={gitStatus}
-            onContextMenu={setMenu}
+            onContextMenu={openMenu}
             activePath={activeFilePath}
           />
         ))}
@@ -519,7 +537,7 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
       {menu && (() => {
         // New file/folder target: the dir itself, or the file's parent dir.
         const parentDir = menu.isDir ? menu.fullPath : menu.fullPath.slice(0, menu.fullPath.lastIndexOf("/")) || cwd;
-        return (
+        return createPortal(
         <div
           ref={menuRef}
           className={`glass ${styles.contextMenu}`}
@@ -527,10 +545,10 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
           onMouseDown={(e) => e.stopPropagation()}
           role="menu"
         >
-          <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { setDialog({ kind: "new-file", targetPath: parentDir, label: getRelativeFilePath(parentDir, cwd) || "/" }); setMenu(null); }}>
+          <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { openDialog({ kind: "new-file", targetPath: parentDir, label: getRelativeFilePath(parentDir, cwd) || "/" }); setMenu(null); }}>
             {t("explorer.newFile")}
           </button>
-          <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { setDialog({ kind: "new-folder", targetPath: parentDir, label: getRelativeFilePath(parentDir, cwd) || "/" }); setMenu(null); }}>
+          <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { openDialog({ kind: "new-folder", targetPath: parentDir, label: getRelativeFilePath(parentDir, cwd) || "/" }); setMenu(null); }}>
             {t("explorer.newFolder")}
           </button>
           <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { openUpload(parentDir); setMenu(null); }}>
@@ -538,12 +556,12 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
           </button>
           {!menu.rootArea && <div className={styles.menuSep} />}
           {!menu.rootArea && (
-            <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { setDialog({ kind: "rename", targetPath: menu.fullPath, label: menu.relative, currentName: menu.fullPath.split("/").pop(), isDir: menu.isDir }); setMenu(null); }}>
+            <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { openDialog({ kind: "rename", targetPath: menu.fullPath, label: menu.relative, currentName: menu.fullPath.split("/").pop(), isDir: menu.isDir }); setMenu(null); }}>
               {t("explorer.rename")}
             </button>
           )}
           {!menu.rootArea && (
-            <button type="button" role="menuitem" className={`${styles.menuItem} ${styles.menuItemDanger}`} onClick={() => { setDialog({ kind: "delete", targetPath: menu.fullPath, label: menu.relative, isDir: menu.isDir }); setMenu(null); }}>
+            <button type="button" role="menuitem" className={`${styles.menuItem} ${styles.menuItemDanger}`} onClick={() => { openDialog({ kind: "delete", targetPath: menu.fullPath, label: menu.relative, isDir: menu.isDir }); setMenu(null); }}>
               {t("explorer.delete")}
             </button>
           )}
@@ -579,12 +597,12 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onOpenD
               {t("explorer.download")}
             </a>
           )}
-        </div>
+        </div>, document.body
         );
       })()}
 
       {dialog && (
-        <FileOpsDialog req={dialog} onClose={() => setDialog(null)} onSubmit={runOp} />
+        <FileOpsDialog req={dialog} onClose={closeDialog} onSubmit={runOp} />
       )}
     </div>
   );

@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useId } from "react";
+import { createPortal } from "react-dom";
+import { X } from "lucide-react";
+import { useModalDialog } from "@/hooks/useModalDialog";
+import { IconButton } from "@/components/ui/IconButton";
 import { useI18n } from "@/lib/i18n";
 import s from "./AppShell.module.css";
 
@@ -8,25 +12,21 @@ import s from "./AppShell.module.css";
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const titleId = useId();
+  const { panelRef } = useModalDialog<HTMLDivElement>({ open: true, onClose });
+  if (typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div
+      data-dialog-root
       className={s.shortcutsOverlay}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("shortcuts.title")}
     >
-      <div className={s.shortcutsDialog}>
-        <h3 className={s.shortcutsTitle}>{t("shortcuts.title")}</h3>
+      <div ref={panelRef} className={s.shortcutsDialog} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
+        <header className={s.shortcutsHeader}>
+          <h3 id={titleId} className={s.shortcutsTitle}>{t("shortcuts.title")}</h3>
+          <IconButton label={t("common.close")} icon={<X />} onClick={onClose} />
+        </header>
         {([
           ["⌘K", t("shortcuts.palette")],
           ["⌘F", t("shortcuts.find")],
@@ -43,6 +43,6 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
           </div>
         ))}
       </div>
-    </div>
+    </div>, document.body,
   );
 }

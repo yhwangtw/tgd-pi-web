@@ -75,8 +75,15 @@ interface Host {
   services?: AgentSessionServices;
   models: HarnessOptions["models"];
   chats: Map<number, DurableChat>;
+  attaching: Map<number, Promise<DurableChat>>;
   release: () => Promise<void>;
   closed: boolean;
+  closing?: Promise<void>;
+  activeOperations: number;
+  lastUsed: number;
+  activityVersion: number;
+  restartReason?: "auth" | "mcp";
+  checking?: Promise<boolean>;
   policy: { compactionEnabled: boolean; retryEnabled: boolean };
   baseExtensions: ReturnType<Registry["snapshot"]> extends { installed(): infer T } ? T : never;
   refreshExecutionGuards(): void;
@@ -86,9 +93,98 @@ interface Host {
 declare global {
   var __piDurableHosts: Map<string, Host> | undefined;
   var __piDurableOpenings: Map<string, Promise<Host>> | undefined;
+  var __piDurableMaintenance: ReturnType<typeof setInterval> | undefined;
 }
 const hosts = () => globalThis.__piDurableHosts ??= new Map();
 const openings = () => globalThis.__piDurableOpenings ??= new Map();
+
+const HOST_IDLE_MS = 15 * 60_000;
+const MAINTENANCE_BATCH = 8;
+let maintenanceCursor = 0;
+async function withHostOperation<T>(host: Host, work: () => Promise<T>): Promise<T> {
+  if (host.closed) throw new Error("Session is closed");
+  host.activeOperations++; host.lastUsed = Date.now(); host.activityVersion++;
+  try { return await work(); }
+  finally {
+    host.activeOperations--; host.lastUsed = Date.now(); host.activityVersion++;
+    if (!host.activeOperations && host.restartReason) queueMicrotask(() => { void maintainHost(host, Date.now()).catch(() => {}); });
+  }
+}
+async function hostHasWork(host: Host, includeSubscribers: boolean): Promise<boolean> {
+  if (host.activeOperations || [...host.chats.values()].some(chat => chat.retainsHost(includeSubscribers))) return true;
+  // Persisted tasks cover owned children, sleeping/background tasks and work
+  // admitted before a crash, even when the cached LiveDoc has not caught up.
+  for (const status of ["pending", "running", "waiting", "completing"] as const) {
+    if ((await host.storage.scanTasks({ status }, 1, undefined, context)).items.length) return true;
+  }
+  for (const status of ["queued", "placed"] as const) {
+    if ((await host.storage.scanSubmissions({ status }, 1, undefined, context)).items.length) return true;
+  }
+  for (const chat of host.chats.values()) if (await chat.hasPendingHostState()) return true;
+  return !!host.activeOperations || [...host.chats.values()].some(chat => chat.retainsHost(includeSubscribers));
+}
+async function closeHost(host: Host, reason?: "auth" | "mcp"): Promise<void> {
+  if (host.closing) return host.closing;
+  if (host.closed) return;
+  host.closed = true;
+  host.closing = (async () => {
+    const results = await Promise.allSettled([...host.chats.values()].map(chat => chat.dispose("session_restart", reason)));
+    try { await host.harness.close(context); }
+    finally {
+      try { await host.release(); }
+      finally {
+        host.chats.clear(); host.attaching.clear();
+        if (hosts().get(host.group) === host) hosts().delete(host.group);
+        if (!hosts().size && globalThis.__piDurableMaintenance) {
+          clearInterval(globalThis.__piDurableMaintenance); globalThis.__piDurableMaintenance = undefined;
+        }
+      }
+    }
+    const failure = results.find(result => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
+  })();
+  return host.closing;
+}
+async function maintainHost(host: Host, now: number): Promise<boolean> {
+  if (host.checking) return host.checking;
+  if (host.closed || (!host.restartReason && (host.ephemeral || now - host.lastUsed < HOST_IDLE_MS))) return false;
+  const activityVersion = host.activityVersion;
+  const reason = host.restartReason;
+  host.checking = (async () => {
+    if (await hostHasWork(host, !reason)) return false;
+    // Admission and subscriber changes during the asynchronous reads win.
+    if (host.closed || host.activityVersion !== activityVersion || host.activeOperations) return false;
+    await closeHost(host, reason); return true;
+  })();
+  try { return await host.checking; } finally { host.checking = undefined; }
+}
+/** Bounded host maintenance; no task is cancelled or resumed by an idle sweep. */
+export async function evictIdleDurableHosts(now = Date.now()): Promise<number> {
+  const candidates = [...hosts().values()];
+  if (!candidates.length) return 0;
+  let evicted = 0;
+  const start = maintenanceCursor % candidates.length;
+  for (let index = 0; index < Math.min(MAINTENANCE_BATCH, candidates.length); index++) {
+    if (await maintainHost(candidates[(start + index) % candidates.length], now)) evicted++;
+  }
+  maintenanceCursor = (start + MAINTENANCE_BATCH) % candidates.length;
+  return evicted;
+}
+function startHostMaintenance() {
+  if (globalThis.__piDurableMaintenance) return;
+  globalThis.__piDurableMaintenance = setInterval(() => { void evictIdleDurableHosts().catch(() => {}); }, 60_000);
+  globalThis.__piDurableMaintenance.unref?.();
+}
+export async function invalidateDurableSessionsForAuthChange(): Promise<{ restarted: number; deferred: number }> {
+  let restarted = 0, deferred = 0;
+  for (const host of [...hosts().values()]) {
+    if (host.closed || !host.services) continue;
+    host.restartReason = "auth";
+    if (await maintainHost(host, Date.now())) restarted++;
+    else { deferred++; for (const chat of host.chats.values()) chat.notifyRestartDeferred("auth"); }
+  }
+  return { restarted, deferred };
+}
 
 async function importLegacy(tx: Parameters<Parameters<Conversation["commit"]>[0]>[0], id: ConversationId, archive: LegacyArchive) {
   const saved = legacyWorkflow(archive);
@@ -99,14 +195,12 @@ async function importLegacy(tx: Parameters<Parameters<Conversation["commit"]>[0]
 
 function nativeCodingTools(cwd: string): ToolRegistration[] {
   return [createReadTool, createBashTool, createEditTool, createWriteTool, createGrepTool, createFindTool, createLsTool]
-    .map(create => create(cwd)).map(tool => defineTool({
+    .map(factory => { const tool = factory(cwd); return defineTool({
       name: tool.name, description: tool.description, parameters: tool.parameters,
       ...(READ_ONLY.has(tool.name) ? { replay: "safe" as const } : {}),
       async execute(args, api, ctx) {
         // Use the child's configured cwd; never capture its parent's cwd for file work.
         const agent = await api.agent(ctx);
-        const factory = [createReadTool, createBashTool, createEditTool, createWriteTool, createGrepTool, createFindTool, createLsTool]
-          .find(create => create(cwd).name === tool.name)!;
         const actual = factory(agent.cwd ?? cwd);
         let prior = "";
         const result = await actual.execute(api.callId, args as never, ctx.abortSignal, update => {
@@ -117,7 +211,7 @@ function nativeCodingTools(cwd: string): ToolRegistration[] {
         });
         return { output: result.content, ...(result.details !== undefined ? { details: JSON.parse(JSON.stringify(result.details)) } : {}) };
       },
-    }));
+    }); });
 }
 
 async function openHost(options: DurableChatOptions): Promise<Host> {
@@ -125,10 +219,11 @@ async function openHost(options: DurableChatOptions): Promise<Host> {
   const directory = options.directory ?? durableSessionDirectory(group);
   if (!options.ephemeral) mkdirSync(directory, { recursive: true, mode: 0o700 });
   let harness: Harness | undefined;
+  let openedHost: Host | undefined;
   const release = options.ephemeral ? async () => {} : await lockfile.lock(directory, {
     realpath: true, stale: 10_000, update: 5_000,
     retries: { retries: 3, minTimeout: 5_000, maxTimeout: 5_000, factor: 1 },
-    onCompromised: () => { void harness?.close(context).catch(() => {}); },
+    onCompromised: () => { void (openedHost ? closeHost(openedHost) : harness?.close(context))?.catch(() => {}); },
   });
   let storage: Storage | undefined;
   let migrationPending = options.legacy !== undefined;
@@ -225,8 +320,9 @@ async function openHost(options: DurableChatOptions): Promise<Host> {
         get retry() { return { ...options.settings?.retry, enabled: policy.retryEnabled }; } },
     }, context);
     const host: Host = { group, directory, cwd: options.cwd, ephemeral: options.ephemeral === true, harness, storage, registry,
-      models, services, chats: new Map(), release, closed: false, policy, baseExtensions, refreshExecutionGuards,
+      models, services, chats: new Map(), attaching: new Map(), release, closed: false, activeOperations: 1, lastUsed: Date.now(), activityVersion: 0, policy, baseExtensions, refreshExecutionGuards,
       activateMigration: () => { migrationPending = false; }, migrationPending: () => migrationPending };
+    openedHost = host;
     const initialNames = namesForToolSelection(options.toolMode ?? inferToolSelectionMode(options.toolNames), options.toolNames);
     const initialTools = registry.snapshot().tools().map(({ tool }) => tool);
     const root = await harness.root(context, { agent: { cwd: options.cwd, model: { provider, modelId }, thinkingLevel: (thinkingLevel ?? "off") as ModelThinkingLevel, instructions,
@@ -257,14 +353,15 @@ async function openHost(options: DurableChatOptions): Promise<Host> {
         const conversation = await harness.conversation(item.id, context); if (conversation) await DurableChat.attach(host, conversation);
       }
     } while (cursor !== undefined);
+    host.activeOperations--; host.lastUsed = Date.now(); host.activityVersion++; startHostMaintenance();
     return host;
   } catch (error) {
-    const failedHost = hosts().get(group);
-    await Promise.allSettled([...(failedHost?.chats.values() ?? [])].map(chat => chat.getExtensionHost()?.shutdown()));
-    hosts().delete(group);
-    if (harness) await harness.close(context).catch(() => {});
-    else await storage?.close(context).catch(() => {});
-    await release();
+    if (openedHost) await closeHost(openedHost).catch(() => {});
+    else {
+      if (harness) await harness.close(context).catch(() => {});
+      else await storage?.close(context).catch(() => {});
+      await release();
+    }
     throw error;
   }
 }
@@ -272,12 +369,13 @@ async function openHost(options: DurableChatOptions): Promise<Host> {
 export async function createDurableChat(options: DurableChatOptions): Promise<DurableChat> {
   const host = await openHost(options);
   const root = host.chats.get(1);
-  if (!root) throw new Error("Root conversation was deleted; open a surviving branch by its session ID");
+  if (!root) { await closeHost(host); throw new Error("Root conversation was deleted; open a surviving branch by its session ID"); }
   return root;
 }
 export function getDurableChat(id: string): DurableChat | undefined {
   const identity = durableSessionIdentity(id);
   const chat = identity ? hosts().get(identity.group)?.chats.get(identity.conversation) : undefined;
+  if (chat?.isAlive()) chat.touchHost();
   const source = chat?.getProjection()?.info.sourceSessionId;
   return source && resolveMigratedSessionId(source) !== id ? undefined : chat;
 }
@@ -286,6 +384,7 @@ export async function openDurableChat(id: string, options?: DurableChatOptions):
   const identity = durableSessionIdentity(id);
   if (!identity) throw new Error("Invalid Durable session ID");
   let host = hosts().get(identity.group);
+  if (host?.closing) await host.closing;
   if (!host || host.closed) {
     let pending = openings().get(identity.group);
     if (!pending) {
@@ -295,6 +394,7 @@ export async function openDurableChat(id: string, options?: DurableChatOptions):
     }
     try { host = await pending; } finally { openings().delete(identity.group); }
   }
+  host.lastUsed = Date.now(); host.activityVersion++;
   const existing = host.chats.get(identity.conversation);
   if (existing) {
     const source = existing.getProjection().info.sourceSessionId;
@@ -329,6 +429,7 @@ export class DurableChat {
   private hostAbort = new AbortController();
   private projectionUpdates: Promise<void> = Promise.resolve();
   private queuedFollowUps: QueuedFollowUp[] = [];
+  private extensionActions = new Set<Promise<void>>();
   private constructor(private host: Host, readonly conversation: Conversation) {
     this.sessionId = durableSessionId(host.group, conversation.id);
     this.sessionFile = host.ephemeral ? "" : join(host.directory, "session.sqlite");
@@ -337,6 +438,13 @@ export class DurableChat {
   get harness(): Harness { return this.host.harness; }
   activateMigration(): void { this.host.activateMigration(); }
   static async attach(host: Host, conversation: Conversation): Promise<DurableChat> {
+    const pending = host.attaching.get(conversation.id);
+    if (pending) return pending;
+    const attached = withHostOperation(host, () => DurableChat.attachConversation(host, conversation));
+    host.attaching.set(conversation.id, attached);
+    try { return await attached; } finally { host.attaching.delete(conversation.id); }
+  }
+  private static async attachConversation(host: Host, conversation: Conversation): Promise<DurableChat> {
     const existing = host.chats.get(conversation.id); if (existing) return existing;
     const meta = await host.harness.snapshot(DurableSessionMeta, conversation.id, context);
     if (meta?.deleted) throw new Error("Session was deleted");
@@ -356,7 +464,46 @@ export class DurableChat {
     chat.watcher.start(events => chat.receiveEvents(events));
     return chat;
   }
-  isAlive(): boolean { return !this.host.closed && !this.projection?.deleted; }
+  isAlive(): boolean { return !this.host.closed && !this.disposed && !this.projection?.deleted; }
+  private disposed = false;
+  touchHost(): void { this.host.lastUsed = Date.now(); this.host.activityVersion++; }
+  retainsHost(subscribers: boolean): boolean {
+    return !!(this.bashAbort || this.bashRun?.running || (subscribers && (this.listeners.size || this.eventListeners.size)));
+  }
+  async hasPendingHostState(): Promise<boolean> {
+    const live = await this.readLive();
+    if (live?.run || live?.compactions?.length || Object.keys(live?.tools ?? {}).length) return true;
+    if ((await this.harness.snapshot(InboxDoc, this.conversation.id, context))?.items.length) return true;
+    return (await durableQuestionSnapshot(this.harness, this.conversation)).length > 0;
+  }
+  notifyRestartDeferred(reason: "auth" | "mcp"): void { this.emit({ type: "session_restart_deferred", reason }); }
+  async requestMcpRefresh(): Promise<{ reloaded: boolean; deferred: boolean }> {
+    this.host.restartReason ??= "mcp";
+    const reloaded = await maintainHost(this.host, Date.now());
+    if (!reloaded) this.notifyRestartDeferred("mcp");
+    return { reloaded, deferred: !reloaded };
+  }
+  /** Release only this chat's transient resources; durable state remains intact. */
+  async dispose(event: "session_closed" | "session_restart", reason?: "auth" | "mcp"): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true; this.runTiming.cancel(); this.hostAbort.abort(); this.bashAbort?.abort();
+    try {
+      const stopped = await Promise.allSettled([this.watcher?.stop()]);
+      const shutdown = await Promise.allSettled([this.extensionHost?.shutdown()]);
+      await Promise.allSettled([...this.extensionActions]);
+      const failure = [...stopped, ...shutdown].find(result => result.status === "rejected");
+      if (failure?.status === "rejected") throw failure.reason;
+    } finally {
+      try {
+        this.host.refreshExecutionGuards();
+        this.extensionUI.resetForSessionReplacement();
+        this.emit({ type: event, ...(reason ? { reason } : {}) });
+      } finally {
+        this.listeners.clear(); this.eventListeners.clear();
+        this.extensionHost = undefined; this.services = undefined;
+      }
+    }
+  }
   getServices() { return this.services; }
   getExtensionHost() { return this.extensionHost; }
   getRuntimeDiagnostics() { return { state: this.isAlive() ? "ready" as const : "disposed" as const, sessionId: this.sessionId,
@@ -371,6 +518,9 @@ export class DurableChat {
     return report;
   }
   async getContextReport() {
+    return withHostOperation(this.host, () => this.contextReport());
+  }
+  private async contextReport() {
     const agent = await this.conversation.agent(context);
     const all = agent.extensions.flatMap(extension => extension.tools ?? []);
     const active = agent.tools.map(tool => tool.name);
@@ -380,6 +530,9 @@ export class DurableChat {
       getAllTools: () => all.map(tool => ({ name: tool.name, description: tool.description })), getContextUsage: () => undefined });
   }
   async summarize(): Promise<{ name: string; skipped?: boolean }> {
+    return withHostOperation(this.host, () => this.summarizeConversation());
+  }
+  private async summarizeConversation(): Promise<{ name: string; skipped?: boolean }> {
     if (this.projection.info.name) return { name: this.projection.info.name, skipped: true };
     const ref = this.projection.agent.model;
     const model = ref ? this.host.models.getModel(ref.provider, ref.modelId) : undefined;
@@ -423,7 +576,7 @@ export class DurableChat {
     this.extensionHost = createDurableExtensionHost({ services: this.services, harness: () => this.harness, conversation: () => this.conversation,
       registry: this.host.registry, ui: theme => { this.extensionUI.setPiTheme(theme); return this.persistentUI(); }, sessionId: this.sessionId, systemPrompt: this.projection.agent.instructions ?? "",
       onError: error => this.extensionErrors.push({ type: "error", message: `${error.event}: ${error.error}`, path: error.extensionPath }),
-      actions: { setSessionName: name => { void this.rename(name); } },
+      actions: { setSessionName: name => { this.renameFromExtension(name); } },
       commandActions: { reload: () => this.reloadExtensions(), fork: async id => { const child = await this.fork(id, true); this.emit({ type: "session_replaced", previousSessionId: this.sessionId, newSessionId: child.sessionId, cwd: child.cwd, sessionFile: child.sessionFile }); return { cancelled: false }; } },
     });
     const base = this.host.baseExtensions;
@@ -434,13 +587,26 @@ export class DurableChat {
     await this.refresh();
   }
   async reloadExtensions(): Promise<void> {
-    if (this.live?.run || this.live?.compactions?.length) throw new Error("Wait for the current response before reloading extensions");
+    return withHostOperation(this.host, () => this.reloadExtensionResources());
+  }
+  private async reloadExtensionResources(): Promise<void> {
+    // Native MCP registrations are shared by every branch in this host.
+    const work = await this.harness.inspect(context);
+    if (work.tasks.length || work.submissions.length) throw new Error("Wait for the current response before reloading extensions");
+    for (const chat of this.host.chats.values()) {
+      if (chat.retainsHost(false) || await chat.hasPendingHostState()) throw new Error("Wait for the current response before reloading extensions");
+    }
+    if (this.host.services) {
+      const mcp = await createDurableMcpExtension(this.cwd);
+      this.host.registry.install(mcp);
+      this.host.baseExtensions = this.host.baseExtensions.map(extension => extension.name === mcp.name ? mcp : extension);
+    }
     await this.extensionHost?.shutdown();
     await this.services?.resourceLoader.reload();
     await this.initializeExtensions();
     this.emit(this.streamSnapshot());
   }
-  async resume(): Promise<void> { await flushDurableWorkflowCommand(this.conversation, this.harness); this.harness.resume(); }
+  async resume(): Promise<void> { await withHostOperation(this.host, async () => { await flushDurableWorkflowCommand(this.conversation, this.harness); this.harness.resume(); }); }
   markProviderRequest(): void { this.runTiming.mark("provider_request"); }
   private emit(event: Record<string, unknown>): void {
     this.runTiming.observe(event);
@@ -452,12 +618,16 @@ export class DurableChat {
     for (const listener of this.eventListeners) listener(event);
   }
   onEvent(listener: (event: Record<string, unknown>) => void): () => void {
+    if (!this.isAlive()) throw new Error("Session is closed");
+    this.touchHost();
     this.eventListeners.add(listener);
     for (const event of this.ui) listener(event as unknown as Record<string, unknown>);
     this.clearDeliveredEditor();
-    return () => { this.eventListeners.delete(listener); };
+    return () => { this.eventListeners.delete(listener); this.touchHost(); };
   }
   onStreamEvent(listener: (record: AgentStreamRecord) => void, cursor: string | null): () => void {
+    if (!this.isAlive()) throw new Error("Session is closed");
+    this.touchHost();
     const replay = this.eventLog.replay(cursor);
     this.listeners.add(listener);
     // The complete committed snapshot also reconciles queues and dialogs after lost events.
@@ -465,7 +635,7 @@ export class DurableChat {
     listener({ id: this.eventLog.cursor, type: "session_snapshot", data: JSON.stringify(this.streamSnapshot(replay.status)) });
     for (const event of this.ui) listener({ type: event.type, data: JSON.stringify(event) });
     this.clearDeliveredEditor();
-    return () => { this.listeners.delete(listener); };
+    return () => { this.listeners.delete(listener); this.touchHost(); };
   }
   private clearDeliveredEditor(): void {
     this.ui = this.ui.filter(item => !(item.type === "extension_ui_request" && item.method === "set_editor_text"));
@@ -477,6 +647,11 @@ export class DurableChat {
     return next;
   }
   private async receiveEvents(events: readonly AgentEvent[]): Promise<void> {
+    if (this.disposed || this.host.closed) return;
+    await withHostOperation(this.host, () => this.processEvents(events));
+    if (this.host.restartReason) queueMicrotask(() => { void maintainHost(this.host, Date.now()).catch(() => {}); });
+  }
+  private async processEvents(events: readonly AgentEvent[]): Promise<void> {
     if (events.some(event => ["snapshot", "entry_appended", "message_end", "agent_changed", "run_end", "compaction_end"].includes(event.type))) await this.refresh();
     else this.live = await this.readLive();
     for (const event of events) await this.forward(event);
@@ -722,8 +897,26 @@ export class DurableChat {
       this.emit({ type: "bash_end", errorMessage: message }); throw error;
     } finally { this.bashAbort = undefined; this.bashRun = null; }
   }
-  async rename(name: string): Promise<void> { await this.conversation.commit(async tx => { (await tx.doc(DurableSessionMeta, this.conversation.id)).name = name.trim(); }, context); await this.refresh(); }
+  async rename(name: string): Promise<void> { await withHostOperation(this.host, () => this.renameConversation(name)); }
+  private async renameConversation(name: string): Promise<void> {
+    await this.conversation.commit(async tx => { (await tx.doc(DurableSessionMeta, this.conversation.id)).name = name.trim(); }, context);
+    await this.refresh();
+  }
+  private renameFromExtension(name: string): void {
+    // session_shutdown/agent_end may save metadata after admission is sealed.
+    // Track the void extension API so cleanup joins it before closing SQLite.
+    const action = this.host.closed ? this.renameConversation(name) : this.rename(name);
+    this.extensionActions.add(action);
+    void action.catch(error => { this.extensionErrors.push({ type: "error", message: `setSessionName: ${String(error)}` }); })
+      .finally(() => this.extensionActions.delete(action));
+  }
   async remove(): Promise<void> {
+    try { await withHostOperation(this.host, () => this.removeConversation()); }
+    finally {
+      if (!this.host.closed && !this.host.chats.size && !(await hostHasWork(this.host, true))) await closeHost(this.host);
+    }
+  }
+  private async removeConversation(): Promise<void> {
     await this.send({ type: "abort" });
     await this.conversation.commit(async tx => { (await tx.doc(DurableSessionMeta, this.conversation.id)).deleted = true; }, context);
     const parent = this.projection.info.parentSessionId ?? "";
@@ -739,10 +932,13 @@ export class DurableChat {
       }
     } while (cursor !== undefined);
     await this.refresh();
-    this.emit({ type: "session_closed" });
-    await this.watcher.stop();
+    try { await this.dispose("session_closed"); }
+    finally { this.host.chats.delete(this.conversation.id); }
   }
   async fork(entryId?: string, before = false): Promise<DurableChat> {
+    return withHostOperation(this.host, () => this.forkConversation(entryId, before));
+  }
+  private async forkConversation(entryId?: string, before = false): Promise<DurableChat> {
     if (this.live?.run) throw new Error("Wait for the current response before branching");
     this.runTiming.cancel();
     const archive = legacyArchive(this.projection.entries);
@@ -776,6 +972,9 @@ export class DurableChat {
     return DurableChat.attach(this.host, child);
   }
   async send(command: Command): Promise<unknown> {
+    return withHostOperation(this.host, () => this.sendCommand(command));
+  }
+  private async sendCommand(command: Command): Promise<unknown> {
     if (!this.isAlive()) throw new Error("Session is closed");
     switch (command.type) {
       case "get_state": await this.refresh(); return this.getState();
@@ -877,13 +1076,5 @@ export class DurableChat {
     }
   }
   /** Stops this host without cancelling durable tasks; a later open can resume. */
-  async close(): Promise<void> {
-    if (this.host.closed) return;
-    for (const chat of this.host.chats.values()) { chat.runTiming.cancel(); chat.hostAbort.abort(); }
-    this.host.closed = true;
-    for (const chat of this.host.chats.values()) { await chat.watcher.stop(); chat.emit({ type: "session_restart" }); }
-    await this.harness.close(context);
-    await this.host.release();
-    hosts().delete(this.host.group);
-  }
+  async close(): Promise<void> { await closeHost(this.host); }
 }

@@ -66,6 +66,7 @@ interface NodeInfo {
   heightRatio: number;
   msg: AgentMessage | Partial<AgentMessage>;
   index: number;
+  messageIndex: number;
   /** Index among visible (user/assistant) messages — bookmark lookup key. */
   visIdx: number;
 }
@@ -78,7 +79,17 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [mouseYRatio, setMouseYRatio] = useState<number | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const draggingRef = useRef(false);
+  const draggingRef = useRef<{ id: number; element: HTMLDivElement; top: number; height: number; offset: number } | null>(null);
+  const previewCache = useRef(new WeakMap<object, string>());
+  const previewOf = (node: NodeInfo) => {
+    const message = allMessages[node.messageIndex] ?? node.msg;
+    if (message === streamingMessage) return getMessagePreview(message);
+    const cached = previewCache.current.get(message);
+    if (cached !== undefined) return cached;
+    const text = getMessagePreview(message);
+    previewCache.current.set(message, text);
+    return text;
+  };
   const containerRef = useRef<HTMLDivElement>(null);
 
   const allMessages = useMemo(
@@ -143,13 +154,14 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
           heightRatio: h / totalH,
           msg,
           index: newNodes.length,
+          messageIndex: i,
           visIdx,
         });
       }
     }
     setNodes((previous) => previous.length === newNodes.length && previous.every((node, index) => {
       const next = newNodes[index];
-      return node.msg === next.msg && node.visIdx === next.visIdx
+      return node.msg === next.msg && node.visIdx === next.visIdx && node.messageIndex === next.messageIndex
         && node.topRatio === next.topRatio && node.heightRatio === next.heightRatio;
     }) ? previous : newNodes);
   };
@@ -203,35 +215,32 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
     el.scrollTop = (clamped / (1 - viewportRatio)) * scrollable;
   }, [scrollContainer, viewportRatio]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!visible) return;
+  const finishDrag = useCallback(() => {
+    const drag = draggingRef.current;
+    draggingRef.current = null;
+    if (drag?.element.hasPointerCapture(drag.id)) drag.element.releasePointerCapture(drag.id);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("blur", finishDrag);
+    return () => { window.removeEventListener("blur", finishDrag); finishDrag(); };
+  }, [finishDrag]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!visible || e.button !== 0 || e.isPrimary === false || draggingRef.current) return;
     if ((e.target as HTMLElement).closest("button")) return;
 
-    draggingRef.current = true;
     const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.height <= 0) return;
     const clickRatio = (e.clientY - rect.top) / rect.height;
     const grabOffset = clickRatio - scrollRatio * (1 - viewportRatio);
     const insideBox = grabOffset >= 0 && grabOffset <= viewportRatio;
     const offset = insideBox ? grabOffset : viewportRatio / 2;
-
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    draggingRef.current = { id: e.pointerId, element: e.currentTarget, top: rect.top, height: rect.height, offset };
     scrollToMinimapRatio(clickRatio - offset);
-
-    const onMove = (ev: MouseEvent) => {
-      if (!draggingRef.current) return;
-      const r = (ev.clientY - rect.top) / rect.height;
-      scrollToMinimapRatio(r - offset);
-    };
-    const onUp = () => {
-      draggingRef.current = false;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
   }, [visible, viewportRatio, scrollRatio, scrollToMinimapRatio]);
-
-
-
 
   if (!visible) return null;
 
@@ -247,7 +256,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
   // One preview follows the pointer or keyboard focus. Rendering a preview for
   // every historical message obscures the transcript and grows the DOM needlessly.
   const previewNode = nodes[focusedIndex ?? nearestIndex ?? -1];
-  const preview = previewNode ? getMessagePreview(previewNode.msg) : "";
+  const preview = previewNode ? previewOf(previewNode) : "";
   const minimapHeight = containerRef.current?.clientHeight ?? 600;
   const previewTop = previewNode ? Math.max(0, Math.min(minimapHeight - 36, previewNode.topRatio * minimapHeight - 18)) : 0;
 
@@ -257,11 +266,19 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
       className={`hover-group ${styles.container}`}
       role="navigation"
       aria-label={t("chat.messageMap")}
-      onMouseDown={handleMouseDown}
-      onMouseLeave={() => { setMouseYRatio(null); }}
-      onMouseMove={(e) => {
+      onPointerDown={handlePointerDown}
+      onPointerUp={(e) => { if (draggingRef.current?.id === e.pointerId) finishDrag(); }}
+      onPointerCancel={(e) => { if (draggingRef.current?.id === e.pointerId) finishDrag(); }}
+      onLostPointerCapture={(e) => { if (draggingRef.current?.id === e.pointerId) finishDrag(); }}
+      onPointerLeave={() => { setMouseYRatio(null); }}
+      onPointerMove={(e) => {
+        const drag = draggingRef.current;
+        if (drag) {
+          if (drag.id === e.pointerId) scrollToMinimapRatio((e.clientY - drag.top) / drag.height - drag.offset);
+          return;
+        }
         const rect = e.currentTarget.getBoundingClientRect();
-        setMouseYRatio((e.clientY - rect.top) / rect.height);
+        if (rect.height > 0) setMouseYRatio((e.clientY - rect.top) / rect.height);
       }}
       style={{ width: MINIMAP_WIDTH }}
     >
@@ -276,6 +293,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
 
       {/* Message nodes */}
       {nodes.map((node) => {
+        const nodePreview = previewOf(node);
         const bookmarked = bookmarkedIndices?.has(node.visIdx) ?? false;
         const color = bookmarked
           ? { bg: "var(--color-warning-text-strong)", border: "var(--color-warning-text-strong)" }
@@ -293,9 +311,17 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
             className={styles.node}
             data-minimap-message-index={node.visIdx}
             style={{ top: `${dotTop}%` }}
-            aria-label={`${t(isUser ? "minimap.jumpUser" : "minimap.jumpAssistant").replace("{index}", String(node.visIdx + 1))}${getMessagePreview(node.msg) ? `: ${getMessagePreview(node.msg).replace(/\s+/g, " ").slice(0, 64)}` : ""}`}
+            aria-label={`${t(isUser ? "minimap.jumpUser" : "minimap.jumpAssistant").replace("{index}", String(node.visIdx + 1))}${nodePreview ? `: ${nodePreview.replace(/\s+/g, " ").slice(0, 64)}` : ""}`}
             onFocus={() => setFocusedIndex(node.index)}
             onBlur={() => setFocusedIndex(null)}
+            onKeyDown={(event) => {
+              const next = event.key === "ArrowDown" ? Math.min(node.index + 1, nodes.length - 1)
+                : event.key === "ArrowUp" ? Math.max(node.index - 1, 0)
+                : event.key === "Home" ? 0 : event.key === "End" ? nodes.length - 1 : null;
+              if (next === null) return;
+              event.preventDefault();
+              containerRef.current?.querySelectorAll<HTMLButtonElement>("button")[next]?.focus();
+            }}
             onClick={(event) => {
               event.stopPropagation();
               // Dense histories have overlapping hit areas. Pointer clicks

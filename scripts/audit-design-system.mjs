@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
+import { customPropertyDefinitions, undefinedVariableViolations, themePalettes, paletteContrastReport } from "./design-css-policy.mjs";
 import postcss from "postcss";
+import { iconSourceViolations, isProductIconSource, VENDORED_PROVIDER_ARTWORK } from "./design-icon-policy.mjs";
 
 const ROOTS = ["app", "components"];
 const SPACING_PROPERTIES = new Set([
@@ -21,13 +24,14 @@ function cssFiles(root) {
 function sourceFiles(root) {
   return fs.readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
     const target = path.join(root, entry.name);
-    if (entry.isDirectory()) return sourceFiles(target);
-    return entry.isFile() && entry.name.endsWith(".tsx") ? [target] : [];
+    if (entry.isDirectory()) return entry.name === "__tests__" || entry.name === "e2e" ? [] : sourceFiles(target);
+    return entry.isFile() && isProductIconSource(target) ? [target] : [];
   });
 }
 
-for (const file of ROOTS.flatMap(cssFiles)) {
-  const root = postcss.parse(fs.readFileSync(file, "utf8"), { from: file });
+const stylesheets = new Map(ROOTS.flatMap(cssFiles).map(file => [file, fs.readFileSync(file, "utf8")]));
+for (const [file, css] of stylesheets) {
+  const root = postcss.parse(css, { from: file });
   root.walkDecls((declaration) => {
     const selector = declaration.parent?.selector ?? "";
     const location = `${file}:${declaration.source?.start?.line ?? 0}`;
@@ -51,75 +55,30 @@ for (const file of ROOTS.flatMap(cssFiles)) {
   });
 }
 
-// Visible product icons come from the shared Lucide/Lobe libraries. Handwritten
-// SVGs drift in stroke, geometry, sizing, and accessibility behavior between
-// Original and TRAE, so keep this as a zero-baseline contract.
+// UI icons use the shared Lucide library. The one digest-locked provider
+// artwork copy retains its upstream SVGs and MIT attribution; all other product
+// SVGs remain subject to the zero-baseline handwritten-icon contract.
+const providerLicense = fs.existsSync(VENDORED_PROVIDER_ARTWORK.licenseFile)
+  ? fs.readFileSync(VENDORED_PROVIDER_ARTWORK.licenseFile, "utf8") : "";
 for (const file of ROOTS.flatMap(sourceFiles)) {
-  const source = fs.readFileSync(file, "utf8");
-  for (const match of source.matchAll(/<svg\b/g)) {
-    const line = source.slice(0, match.index).split("\n").length;
-    violations.push(`${file}:${line} use the shared icon library instead of handwritten SVG`);
-  }
+  violations.push(...iconSourceViolations(file, fs.readFileSync(file, "utf8"), providerLicense));
 }
 
 const globals = fs.readFileSync("app/globals.css", "utf8");
-const themeRules = new Map();
-postcss.parse(globals, { from: "app/globals.css" }).walkRules((rule) => {
-  if (!/^:root$|^html\.dark(?:\[data-skin="[^"]+"\])?$|^html\[data-skin="[^"]+"\]$/.test(rule.selector)) return;
-  const declarations = themeRules.get(rule.selector) ?? {};
-  rule.walkDecls((declaration) => { declarations[declaration.prop] = declaration.value; });
-  themeRules.set(rule.selector, declarations);
-});
-
-function luminance(hex) {
-  const channels = hex.match(/[\da-f]{2}/gi).map((channel) => {
-    const value = Number.parseInt(channel, 16) / 255;
-    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
-}
-
-function contrastRatio(first, second) {
-  const [lighter, darker] = [luminance(first), luminance(second)].sort((a, b) => b - a);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-// Small metadata, excerpts, and hints use these secondary colors on opaque surfaces.
-// Check every palette so a theme edit cannot silently reintroduce unreadable text.
-const surfaces = ["--bg", "--bg-panel", "--bg-hover", "--bg-selected", "--user-bg", "--assistant-bg", "--tool-bg", "--bg-elev-1", "--bg-elev-2"];
-const skins = ["", ...[...themeRules.keys()].flatMap((selector) => {
-  const match = selector.match(/^html\[data-skin="([^"]+)"\]$/);
-  return match ? [match[1]] : [];
-})];
-for (const skin of skins) {
-  for (const dark of [false, true]) {
-    const palette = {
-      ...themeRules.get(":root"),
-      ...(dark ? themeRules.get("html.dark") : {}),
-      ...(skin ? themeRules.get(`html[data-skin="${skin}"]`) : {}),
-      ...(skin && dark ? themeRules.get(`html.dark[data-skin="${skin}"]`) : {}),
-    };
-    for (const textRole of ["--text-muted", "--text-dim"]) {
-      const foreground = palette[textRole];
-      if (!/^#[\da-f]{6}$/i.test(foreground ?? "")) {
-        violations.push(`${skin || "terminal"}: ${textRole} cannot be checked; expected an opaque six-digit hex color`);
-        continue;
-      }
-      for (const surface of [...surfaces, ...(palette["--bg-panel-opaque"] ? ["--bg-panel-opaque"] : [])]) {
-        const background = palette[surface];
-        // Translucent Glass surfaces require rendered-background inspection.
-        if (!/^#[\da-f]{6}$/i.test(background ?? "")) {
-          if (skin !== "glass") violations.push(`${skin || "terminal"}: ${surface} cannot be checked; expected an opaque six-digit hex color`);
-          continue;
-        }
-        const ratio = contrastRatio(foreground, background);
-        if (ratio < 4.5) {
-          violations.push(`${skin || "terminal"}${dark ? " dark" : " light"}: ${textRole} on ${surface} is ${ratio.toFixed(2)}:1 (needs 4.5:1)`);
-        }
-      }
-    }
-  }
-}
+// Tailwind owns these theme definitions; read the installed import instead of
+// maintaining a broad prefix waiver. Radix owns only the precise Content value
+// used by ActionMenu (not arbitrary --radix-* properties in other components).
+const require = createRequire(import.meta.url);
+const externalDefinitions = customPropertyDefinitions(fs.readFileSync(require.resolve("tailwindcss/theme.css"), "utf8"));
+const runtimeDefinitions = new Map([["components/ui/ActionMenu.module.css", new Set(["--radix-dropdown-menu-content-available-height"])]]);
+// AppShell's phone container supplies this inherited layout measurement to
+// transcript action menus. A missing definition in its owner still fails.
+const shellDefinitions = customPropertyDefinitions(stylesheets.get("components/layout/AppShell.module.css"));
+const inheritedDefinitions = new Map(["components/chat/AssistantMessageView.module.css", "components/chat/UserMessageView.module.css"].map(file => [file,
+  new Set(shellDefinitions.has("--mobile-nav-height") ? ["--mobile-nav-height"] : [])]));
+violations.push(...undefinedVariableViolations(stylesheets, { externalDefinitions, runtimeDefinitions, inheritedDefinitions }));
+const contrast = paletteContrastReport(themePalettes(globals));
+violations.push(...contrast.violations);
 
 for (const token of [
   "--type-display-size", "--type-body-size", "--type-ui-size", "--type-meta-size",
@@ -134,4 +93,8 @@ if (violations.length) {
   console.error(violations.join("\n"));
   process.exit(1);
 }
-console.log("Design-system audit passed.");
+console.log(`Static design-system checks passed (${contrast.checks.length} measured contrast pairs).`);
+if (!contrast.complete) {
+  const palettes = [...new Set(contrast.unmeasured.map(item => item.split(":")[0]))];
+  console.warn(`Contrast coverage INCOMPLETE / NOT VERIFIED for ${palettes.join(", ")} (${contrast.unmeasured.length} translucent/unsupported pairs). Rendered backdrop evidence is required; this static audit does not certify them.`);
+}

@@ -97,7 +97,7 @@
 
 .roleBadgeUser {
   composes: roleBadge;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--color-accent-bg);
   border: 1px solid var(--color-accent-border);
 }
@@ -152,7 +152,7 @@
 
 .branchIconActive {
   composes: branchIcon;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .branchIconInactive {
@@ -193,7 +193,7 @@
 .inlineButtonOpen {
   composes: inlineButton;
   background: var(--color-accent-bg);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .inlineButtonClosed {
@@ -271,3 +271,16 @@
 button.nodeRow { width: 100%; border: 0; background: transparent; font: inherit; text-align: left; color: var(--text); }
 button.nodeRow:focus-visible { outline: 2px solid var(--color-accent-border-focus); outline-offset: -2px; background: var(--bg-hover); }
 @media (max-width: 700px), (pointer: coarse) { button.nodeRow { min-height: 44px; } }
+
+/* Compact desktop geometry must not shrink phone or coarse-pointer targets. */
+@media (max-width: 700px), (pointer: coarse) {
+  .nodeRow,
+  .inlineButton,
+  .standaloneHeaderButton,
+  :global(html[data-ui-style="trae"]) .nodeRow,
+  :global(html[data-ui-style="trae"]) .inlineButton,
+  :global(html[data-ui-style="trae"]) .standaloneHeaderButton {
+    min-height: var(--control-touch);
+    min-width: var(--control-touch);
+  }
+}

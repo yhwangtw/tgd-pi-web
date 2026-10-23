@@ -1,3 +1,4 @@
+import { invalidateDurableSessionsForAuthChange } from "@/lib/durable-chat";
 import { invalidateRpcSessionsForAuthChange } from "@/lib/rpc-manager";
 import { createPiModelRegistry } from "@/lib/pi-model-runtime";
 import { NextResponse } from "next/server";
@@ -40,6 +41,7 @@ export async function POST(req: Request, { params }: Params) {
       notify: () => {},
     });
     invalidateRpcSessionsForAuthChange();
+    await invalidateDurableSessionsForAuthChange();
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
@@ -53,6 +55,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     const { runtime } = await createPiModelRegistry();
     await runtime.logout(provider);
     invalidateRpcSessionsForAuthChange();
+    await invalidateDurableSessionsForAuthChange();
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

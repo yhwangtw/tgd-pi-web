@@ -563,3 +563,7 @@
 }
 
 @media (max-width: 700px), (pointer: coarse) { .actionButton { min-width: 44px; min-height: 44px; } }
+
+/* The attachment thumbnail is a keyboard-accessible preview launcher. */
+.imageButton { display: inline-flex; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; cursor: zoom-in; }
+.imageButton:focus-visible { outline: 2px solid var(--color-accent-border-focus); outline-offset: 2px; }
