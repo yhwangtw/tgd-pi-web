@@ -353,7 +353,7 @@ console.log(JSON.stringify(body));\n`);
     expect(outputs).toContain(`ci_sha=${f.base}\n`);
     expect(outputs).toContain("ci_run_id=80\n");
     expect(f.git(["rev-parse", "HEAD"])).toBe(target);
-  });
+  }, 15_000); // Includes a child process with its own 10s deadline plus Git setup.
   it.each([{ state: "failure" }, { expected: false }])("writes no successful outputs when verification fails %j", (options) => {
     const { result, outputs } = verifyFixture(options);
     expect(result.status).toBe(1);
