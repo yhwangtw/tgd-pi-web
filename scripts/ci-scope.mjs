@@ -2,12 +2,13 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { checkPRCI, command, ghJson, repositoryName, requireSha } from './release-policy.mjs';
+import { selectE2E } from './e2e-scope.mjs';
 
 export function classifyChanges(files, { manual = false, unknown = false } = {}) {
   if (manual || unknown || !files.length) return 'compatibility';
   const docs = file => /^(?:README(?:\.[\w-]+)?\.md|AGENTS\.md|LICENSE(?:\.md)?|docs\/.*\.(?:md|png|jpe?g|svg|webp))$/.test(file);
   if (files.every(docs)) return 'docs';
-  return files.some(file => /^(?:package(?:-lock)?\.json|\.github\/workflows\/|scripts\/(?:ci-|check-node|node-support|runtime-|serve\.|setup-|patch-pi|release-|staged-|update-|managed-)|setup\.sh|serve\.json|lib\/(?:node-|runtime-|agent-runtime))/.test(file))
+  return files.some(file => /^(?:package(?:-lock)?\.json|\.github\/workflows\/|scripts\/(?:ci-|e2e-|check-node|node-support|runtime-|serve\.|setup-|patch-pi|release-|staged-|update-|managed-)|setup\.sh|serve\.json|lib\/(?:node-|runtime-|agent-runtime))/.test(file))
     ? 'compatibility' : 'normal';
 }
 
@@ -57,9 +58,11 @@ export function main(argv = [], env = process.env) {
     try { verifyReuse(env.GITHUB_REPOSITORY, env.GITHUB_SHA); reuse = true; }
     catch (error) { console.log(`Running checks on main: ${error.message}`); }
   }
-  const outputs = { profile, reuse, ...matrices(profile) };
+  const e2e = selectE2E(diff?.files || [], profile);
+  const outputs = { profile, reuse, ...matrices(profile), e2e: e2e.mode, e2e_specs: e2e.specs };
   for (const [key, value] of Object.entries(outputs)) appendFileSync(env.GITHUB_OUTPUT, `${key}=${typeof value === 'object' ? JSON.stringify(value) : value}\n`);
   console.log(`CI coverage: ${profile}${reuse ? ' (verified PR reuse)' : ''}`);
+  console.log(`E2E coverage: ${e2e.mode}${e2e.specs.length ? ` (${e2e.specs.join(', ')})` : ''}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

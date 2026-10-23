@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { runReleasePipeline, selectReleaseRun, validatePipelinePlan, verifyPublicDeployment } from '../release-pipeline.mjs';
+import { runReleasePipeline, selectReleaseRun, validatePipelinePlan, verifyPublicAccess, verifyPublicDeployment } from '../release-pipeline.mjs';
 import { utcTag } from '../release-policy.mjs';
 import { runStagedDeployment } from '../staged-deployment.mjs';
 
@@ -38,6 +38,7 @@ async function fixture() {
     return { status: 'succeeded', identity };
   });
   const dependencies = { client, deploy, execute: vi.fn(), assertDeploymentSpace: vi.fn(), localIdentity: vi.fn(async () => identity),
+    verifyAccess: vi.fn(async () => ({ origin: plan.publicOrigin })),
     verifyPublic: vi.fn(async () => ({ origin: plan.publicOrigin, checks: ['running-identity', 'session-list'] })), wait: vi.fn(), log: vi.fn() };
   const options = { tag, sourceDir, execute: true, pollAttempts: 2, env: { NODE_ENV: 'test', PIWEB_RELEASE_PUBLIC_HEADERS_JSON: '{"Cookie":"private-fixture-cookie"}' } };
   const run = changes => runReleasePipeline(plan, { ...options, ...changes }, dependencies);
@@ -91,6 +92,34 @@ describe('resumable release and deployment', () => {
     expect((await f.run({ execute: false })).status).toBe('preflight');
     await expect(access(f.plan.stateDir)).rejects.toThrow();
     expect(f.client.dispatch).not.toHaveBeenCalled();
+    expect(f.dependencies.deploy).not.toHaveBeenCalled();
+    expect(f.dependencies.verifyAccess).toHaveBeenCalledWith(expect.objectContaining({ publicOrigin: f.plan.publicOrigin }), f.options.env);
+  });
+  it('fails authentication before publication, build, operation locks or receipt creation', async () => {
+    const f = await fixture();
+    f.dependencies.verifyAccess.mockRejectedValue(new Error('authenticate the exact hostname'));
+    await expect(f.run()).rejects.toThrow('authenticate');
+    expect(f.client.dispatch).not.toHaveBeenCalled();
+    expect(f.client.prepare).not.toHaveBeenCalled();
+    expect(f.dependencies.deploy).not.toHaveBeenCalled();
+    await expect(access(f.plan.stateDir)).rejects.toThrow();
+  });
+  it('still checks access in read-only preflight after deployment without restarting anything', async () => {
+    const f = await fixture();
+    await f.run();
+    f.dependencies.verifyAccess.mockRejectedValue(new Error('login expired'));
+    await expect(f.run({ execute: false })).rejects.toThrow('login expired');
+    expect(f.dependencies.deploy).toHaveBeenCalledTimes(1);
+    expect(f.client.dispatch).toHaveBeenCalledTimes(1);
+  });
+  it('rechecks authentication when resuming before deployment', async () => {
+    const f = await fixture();
+    f.client.run.mockReturnValue({ status: 'in_progress' });
+    await expect(f.run()).rejects.toThrow('pending');
+    f.dependencies.verifyAccess.mockRejectedValue(new Error('login expired'));
+    await expect(f.run()).rejects.toThrow('login expired');
+    expect(f.dependencies.verifyAccess).toHaveBeenCalledTimes(2);
+    expect(f.client.dispatch).toHaveBeenCalledTimes(1);
     expect(f.dependencies.deploy).not.toHaveBeenCalled();
   });
   it('publishes once, prepares the exact tag, deploys and verifies the public origin', async () => {
@@ -235,6 +264,25 @@ describe('resumable release and deployment', () => {
 });
 
 describe('public deployment readback', () => {
+  it('checks access to the old identity without requiring the not-yet-deployed version', async () => {
+    const f = await fixture();
+    const request = vi.fn(async () => ({ ok: true, json: async () => ({ ...f.identity,
+      build: { version: '2026.01.01', sourceSha: 'c'.repeat(40) } }) }));
+    const receipt = await verifyPublicAccess(f.plan, f.options.env, request);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls[0][0]).toBe('https://pi.example.test/api/runtime/identity');
+    expect(JSON.stringify(receipt)).not.toContain('private-fixture-cookie');
+  });
+  it('rejects login redirects, HTML and JSON login pages without exposing secrets', async () => {
+    const f = await fixture();
+    for (const request of [
+      vi.fn(async () => { throw new Error('redirect with private-fixture-cookie'); }),
+      vi.fn(async () => ({ ok: true, json: async () => { throw new Error('<html>login</html>'); } })),
+      vi.fn(async () => ({ ok: true, json: async () => ({ login: true }) })),
+    ]) {
+      await expect(verifyPublicAccess(f.plan, f.options.env, request)).rejects.toThrow('authenticate');
+    }
+  });
   it('checks the exact origin, running identity and sessions without retaining private content', async () => {
     const f = await fixture();
     const request = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => f.identity })

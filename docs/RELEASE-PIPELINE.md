@@ -5,7 +5,7 @@ configured [staged deployment adapter](./MANAGED-UPDATES.md) can opt into the
 whole pipeline through the same entrypoint:
 
 ```bash
-# Read-only: validate configuration and the exact main CI evidence.
+# Read-only: validate configuration, exact main CI evidence and public access.
 bash scripts/release.sh vYYYY.MM.DD --deploy /absolute/operator/release-plan.json
 
 # Publish, wait for publication, prepare the exact tag, stage, switch and verify.
@@ -117,6 +117,15 @@ in `PIWEB_RELEASE_PUBLIC_HEADERS_JSON` through the operator's private
 environment (for example, a valid Access service credential plus any required
 application session cookie). Do not put credentials in the plan, repository,
 arguments or logs. Redirects to login are failures, not successful checks.
+
+Before publication, candidate preparation or service changes, preflight requests
+the existing public identity with those same private headers. It rejects login
+redirects/HTML, invalid identity payloads and unreachable endpoints immediately.
+It accepts the currently running version; the new version does not exist yet.
+A browser login does not automatically supply credentials to this CLI check.
+Preflight is repeated on retries before deployment and is never stored as proof
+of final success. After cutover, exact running-build and session-list verification
+still run. A public-only resume uses those final checks without another restart.
 
 ## What is recorded and reused
 

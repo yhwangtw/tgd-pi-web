@@ -11,6 +11,15 @@ with `npm i -D --no-save @playwright/test`; a preinstalled browser can be select
 with `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`. E2E files are excluded from the
 normal TypeScript/lint scope so offline installations do not need Playwright.
 
+CI builds once, records `node scripts/e2e-build.mjs record`, then distributes
+`.next` (without mutable cache/trace) to four independent jobs. Each job uses
+`PI_E2E_REUSE_BUILD=1 npm run test:e2e -- --shard=N/4`; reuse fails on changed
+source, build bytes, Node/platform or build environment. Keep one worker per
+shard because specs share its store. On one machine, parallel shards additionally
+need separate checkouts/build copies and distinct `E2E_PORT` values. Never share
+`PI_E2E_RUN_ROOT` between shards. Local runs still build the full suite by default;
+`PI_E2E_SPECS_JSON` accepts an explicit existing spec array, with `[]` meaning all.
+
 Transcript rows use normal layout because scroll restoration, disclosures and
 the minimap measure their geometry. Do not add `content-visibility` to these rows:
 display locking conflicts with descendant measurement and changes scroll anchors.

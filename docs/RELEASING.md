@@ -17,6 +17,19 @@ CI chooses coverage from changed files:
   boundaries on Linux/macOS and both installation checks. Manual CI uses this
   complete compatibility profile.
 
+Browser tests run in four isolated CI jobs, each with its own fixture server and
+session store and one worker. The stable `E2E` check succeeds only when every
+selected shard passes. Build runs once on Linux/Node 22; shards download that
+workflow's artifact and verify source bytes, Node/platform, build environment and
+artifact hashes before reuse. This artifact is not a macOS production deployment.
+
+Known file-viewer and composer UI leaves run core navigation, chat/reconnection,
+Durable, appearance, responsive and design checks plus mapped feature specs.
+Changed specs also run alongside the core set. Shared/global UI, backend,
+dependencies, helpers, unknown paths/history, missing mapped specs and manual CI
+run the full suite. `scripts/e2e-scope.mjs` owns the explicit mapping; the scope job
+prints the selected files. Each shard retains its report and failure artifacts.
+
 Merge after the selected checks pass. CI on the exact merged `main` verifies
 whether the PR's latest successful attempt tested the identical Git tree. If so,
 it reuses those checks. If evidence is missing or the merge changed source, it

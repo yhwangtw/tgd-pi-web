@@ -107,27 +107,45 @@ async function localIdentity(plan, env) {
   return safeIdentity(await response.json());
 }
 
-export async function verifyPublicDeployment(plan, identity, env = process.env, request = fetch) {
+function publicReader(plan, env, request) {
   // Credentials are read at execution time, never stored in plan/state/logs.
   let headers;
   try { headers = JSON.parse(env.PIWEB_RELEASE_PUBLIC_HEADERS_JSON || '{}'); }
   catch { throw new Error('Invalid public request headers JSON'); }
   if (!headers || Array.isArray(headers) || typeof headers !== 'object'
     || Object.values(headers).some(value => typeof value !== 'string')) throw new Error('Invalid public request headers');
-  async function read(path) {
-    const response = await request(`${plan.publicOrigin}${path}`, {
-      headers, redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) throw new Error('Public deployment check failed (authenticate the exact hostname before resuming)');
-    return response.json();
+  return async path => {
+    try {
+      const response = await request(`${plan.publicOrigin}${path}`, {
+        headers, redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error('Public endpoint unavailable');
+      return await response.json();
+    } catch {
+      // Redirect/network/HTML errors must not print request headers or bodies.
+      throw new Error('Public access check failed: authenticate the exact hostname and verify connectivity before resuming');
+    }
+  };
+}
+
+export async function verifyPublicAccess(plan, env = process.env, request = fetch) {
+  const remote = await publicReader(plan, env, request)('/api/runtime/identity');
+  if (!Number.isSafeInteger(remote?.pid) || remote.pid <= 0 || !remote.startedAt
+    || !/^[a-f0-9]{40}$/.test(remote.build?.sourceSha || '') || !remote.build?.version) {
+    throw new Error('Public access preflight did not return a Pi Web identity; authenticate the exact hostname before publication');
   }
+  return { origin: plan.publicOrigin, checkedAt: new Date().toISOString() };
+}
+
+export async function verifyPublicDeployment(plan, identity, env = process.env, request = fetch) {
+  const read = publicReader(plan, env, request);
   const remote = await read('/api/runtime/identity');
-  if (remote.build?.sourceSha !== identity.build.sourceSha || remote.build?.version !== identity.build.version
+  if (remote?.build?.sourceSha !== identity.build.sourceSha || remote.build?.version !== identity.build.version
     || remote.build?.dirty !== false || remote.pid !== identity.pid || remote.startedAt !== identity.startedAt) {
     throw new Error('Public hostname is not serving the verified local build');
   }
   const sessions = await read('/api/sessions');
-  if (!Array.isArray(sessions.sessions)) throw new Error('Public session-list smoke check failed');
+  if (!Array.isArray(sessions?.sessions)) throw new Error('Public session-list smoke check failed');
   // Session content and cookies are intentionally never returned or persisted.
   return { origin: plan.publicOrigin, checkedAt: new Date().toISOString(), checks: ['running-identity', 'session-list'] };
 }
@@ -247,6 +265,12 @@ export async function runReleasePipeline(input, options = {}, dependencies = {})
   if (!state && client.release({ ...initial, tag })) throw new Error('Tag is already published; use its existing receipt or choose a new UTC sequence tag');
   if (!Number.isSafeInteger(options.pollAttempts ?? 180) || (options.pollAttempts ?? 180) < 1 || (options.pollAttempts ?? 180) > 180) {
     throw new Error('Publication wait must use between 1 and 180 attempts');
+  }
+  if (!options.execute || state?.deployment?.status !== 'done') {
+    // Fail before publication/build/cutover if the exact hostname cannot be
+    // authenticated. Recheck on every retry; browser cookies are not CLI headers.
+    await (dependencies.verifyAccess || verifyPublicAccess)(plan, env);
+    log('Public access preflight passed; final running-build verification remains required.');
   }
   if (!options.execute) {
     if (state) client.checkCI(state);

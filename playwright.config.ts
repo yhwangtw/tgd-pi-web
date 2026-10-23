@@ -3,6 +3,13 @@ import path from "path";
 import os from "os";
 import { mkdtempSync } from "fs";
 import { createFixtures } from "./e2e/fixtures";
+import { execFileSync } from "node:child_process";
+import { selectedTestMatch } from "./scripts/e2e-scope.mjs";
+
+// Reuse only an artifact from this exact source/platform/build environment.
+// Local runs still build by default; CI downloads one checked build per shard.
+const reuseBuild = process.env.PI_E2E_REUSE_BUILD === "1";
+if (reuseBuild) execFileSync(process.execPath, ["scripts/e2e-build.mjs", "verify"], { stdio: "inherit" });
 
 // Allocate a new fixture child for each invocation. Workers share the run root
 // through env; E2E_ROOT can select a parent but is never erased or reused.
@@ -25,13 +32,14 @@ process.env.E2E_PROJECT_CWD = path.join(E2E_ROOT, "demo-project");
 // before running the E2E suite locally.
 export default defineConfig({
   testDir: "./e2e",
+  testMatch: selectedTestMatch(process.env.PI_E2E_SPECS_JSON),
   globalSetup: "./e2e/global-setup",
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
   // Surface recurring failures early; successful runs still execute every test.
   maxFailures: process.env.CI ? 5 : 0,
-  workers: 1, // specs share one server + one session store
-  reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
+  workers: 1, // each CI shard has its own server/store; specs within it are serial
+  reporter: process.env.CI ? [["github"], ["list"], ["blob"]] : [["list"]],
   use: {
     baseURL: `http://localhost:${E2E_PORT}`,
     // Local containers with preinstalled browsers can point this at the
@@ -41,7 +49,7 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: `npm run build && npm run start -- -p ${E2E_PORT}`,
+    command: `${reuseBuild ? "" : "npm run build && "}npm run start -- -p ${E2E_PORT}`,
     port: E2E_PORT,
     timeout: 300_000,
     reuseExistingServer: false,
