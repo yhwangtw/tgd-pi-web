@@ -31,10 +31,15 @@ describe('shared CI E2E build', () => {
     cpSync(root, copy, { recursive: true });
     expect(verifyE2EBuild(copy, { CI: 'true' }).buildId).toBe('build-123');
   });
-  it.each(['source.ts', 'package-lock.json', '.next/app.js', '.next/BUILD_ID'])('refuses changed %s', file => {
+  it.each([
+    ['source.ts', 'source'],
+    ['package-lock.json', 'source'],
+    ['.next/app.js', 'build'],
+    ['.next/BUILD_ID', 'buildId, build'],
+  ])('refuses changed %s and identifies the mismatch', (file, fields) => {
     const root = fixture(); recordE2EBuild(root, {});
     writeFileSync(join(root, file), 'different');
-    expect(() => verifyE2EBuild(root, {})).toThrow('does not match');
+    expect(() => verifyE2EBuild(root, {})).toThrow(`differing fields: ${fields};`);
   });
   it('rejects changed build environment and Node/platform without storing environment values', () => {
     const root = fixture(); recordE2EBuild(root, { NEXT_PUBLIC_EXAMPLE: 'fixture-private-value' });
@@ -50,5 +55,28 @@ describe('shared CI E2E build', () => {
     expect(() => verifyE2EBuild(root, {})).toThrow();
     writeFileSync(join(root, '.next/BUILD_ID'), '');
     expect(() => recordE2EBuild(root, {})).toThrow('completed production build');
+  });
+  it('reports all mismatched fields without disclosing stored or current values', () => {
+    const root = fixture();
+    recordE2EBuild(root, { NEXT_PUBLIC_EXAMPLE: 'stored-private-value' });
+    writeFileSync(join(root, 'source.ts'), 'changed-private-source');
+    let message;
+    try { verifyE2EBuild(root, { NEXT_PUBLIC_EXAMPLE: 'current-private-value' }); }
+    catch (error) { message = error.message; }
+    expect(message).toContain('does not match');
+    expect(message).toContain('differing fields: source, environment;');
+    expect(message).not.toMatch(/stored-private-value|current-private-value|changed-private-source/);
+    const saved = JSON.parse(readFileSync(join(root, '.next/piweb-e2e-build.json'), 'utf8'));
+    expect(message).not.toContain(saved.source);
+    expect(message).not.toContain(saved.environment);
+  });
+  it('still rejects unknown or reordered manifest metadata', () => {
+    const root = fixture();
+    const saved = recordE2EBuild(root, {});
+    const path = join(root, '.next/piweb-e2e-build.json');
+    for (const value of [{ ...saved, extra: 'private-extra-value' }, Object.fromEntries(Object.entries(saved).reverse())]) {
+      writeFileSync(path, JSON.stringify(value));
+      expect(() => verifyE2EBuild(root, {})).toThrow('differing fields: manifest metadata;');
+    }
   });
 });

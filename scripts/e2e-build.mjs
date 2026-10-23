@@ -47,7 +47,10 @@ export function verifyE2EBuild(root = process.cwd(), env = process.env) {
   const saved = JSON.parse(readFileSync(join(root, '.next', manifest), 'utf8'));
   const actual = snapshot(root, env);
   if (JSON.stringify(saved) !== JSON.stringify(actual)) {
-    throw new Error('E2E build does not match this source, Node/platform, environment or artifact; rebuild instead of reusing it');
+    // Report only known field names, never source bytes or environment values.
+    // Keep the full comparison above so extra/reordered metadata still fails.
+    const fields = Object.keys(actual).filter(field => saved?.[field] !== actual[field]);
+    throw new Error(`E2E build does not match this source, Node/platform, environment or artifact; differing fields: ${fields.join(', ') || 'manifest metadata'}; rebuild instead of reusing it`);
   }
   return saved;
 }
