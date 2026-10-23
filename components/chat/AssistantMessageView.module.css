@@ -36,7 +36,7 @@
   max-width: min(220px, 42vw);
   overflow: hidden;
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -330,7 +330,7 @@
   background: var(--glass-bg);
   color: var(--text-muted);
   box-shadow: var(--color-shadow-popup);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   line-height: var(--leading-ui);

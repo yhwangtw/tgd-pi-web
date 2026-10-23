@@ -175,7 +175,7 @@
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-2xs);
   font-weight: var(--weight-semibold);
   line-height: var(--leading-tight);
@@ -197,6 +197,7 @@
 }
 
 .workspaceBranch {
+  font-family: var(--font-mono);
   max-width: 200px;
   flex: 0 1 auto;
   padding: var(--space-optical) var(--space-2);
@@ -211,6 +212,7 @@
 }
 
 .workspaceBranchNeutral {
+  font-family: var(--font-ui);
   background: var(--bg-elev-1);
   color: var(--text-dim);
 }
@@ -520,7 +522,7 @@
 
 /* ── Session stats ── */
 .sessionStats {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;

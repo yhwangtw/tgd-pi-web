@@ -116,7 +116,7 @@ export function ContextInspector({ sessionId, fallbackPrompt }: { sessionId: str
             </div>
             <dl className={styles.facts}>
               <div><dt>{t("context.model")}</dt><dd>{report?.model ? `${report.model.provider} / ${report.model.id}` : "—"}</dd></div>
-              <div><dt>{t("context.workspace")}</dt><dd title={report?.cwd}>{report?.cwd ?? "—"}</dd></div>
+              <div><dt>{t("context.workspace")}</dt><dd title={report?.cwd}><code>{report?.cwd ?? "—"}</code></dd></div>
               <div><dt>{t("context.projectTrust")}</dt><dd className={styles.trustValue}><span>{report?.projectTrusted ? t("context.trusted") : t("context.notTrusted")}</span><button type="button" disabled={!report || trustBusy} onClick={() => void toggleTrust()}>{report?.projectTrusted ? t("context.revokeTrust") : t("context.grantTrust")}</button></dd></div>
               <div><dt>{t("context.window")}</dt><dd>{report?.contextUsage?.contextWindow.toLocaleString() ?? "—"}</dd></div>
             </dl>

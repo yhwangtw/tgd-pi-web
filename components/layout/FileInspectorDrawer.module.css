@@ -61,3 +61,5 @@
 
 .header strong { font-size: var(--type-title-size); font-weight: var(--weight-semibold); }
 .groupLabel { font-family: var(--font-ui); font-size: var(--type-label-size); letter-spacing: var(--tracking-normal); text-transform: none; }
+
+.kind { font-family: var(--font-ui); }

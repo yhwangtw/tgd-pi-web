@@ -120,7 +120,7 @@ export function SearchPanel({ cwd, palette, focusSignal, onSelectSession, onSele
   return (
     <section className={styles.root} data-testid="unified-search">
       <div className={styles.header}>
-        <div className={`${styles.title} chrome-mono`}>{t("search.unifiedTitle")}</div>
+        <div className={styles.title}>{t("search.unifiedTitle")}</div>
         <div className={styles.inputRow}>
           <span className={styles.searchIcon} aria-hidden><Search size={UI_ICON_SIZE.compact} /></span>
           <input

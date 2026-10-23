@@ -207,7 +207,7 @@
   padding-top: var(--space-1);
   color: var(--text-dim);
   font-size: var(--text-xs);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   text-transform: uppercase;
   letter-spacing: var(--tracking-label);
 }

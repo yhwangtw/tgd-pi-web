@@ -126,14 +126,14 @@
   border-radius: var(--radius-pill);
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
 }
 
 .pendingCount {
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-2xs);
 }
 
@@ -298,7 +298,7 @@
 }
 
 .textInput { height: 36px; padding: 0 var(--space-2); }
-.editor { min-height: 112px; resize: vertical; padding: var(--space-2) var(--space-2); font-family: var(--font-mono); line-height: var(--leading-copy); }
+.editor { min-height: 112px; resize: vertical; padding: var(--space-2) var(--space-2); font-family: var(--font-ui); line-height: var(--leading-copy); }
 .textInput:focus,
 .editor:focus { border-color: var(--color-accent-border); box-shadow: 0 0 0 2px var(--color-accent-bg); }
 

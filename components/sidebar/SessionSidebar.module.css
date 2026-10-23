@@ -317,7 +317,8 @@
 .projectFilterText strong,
 .archiveFilter strong { overflow: hidden; font-size: var(--type-ui-size); font-weight: var(--weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
 .projectFilterText small,
-.archiveFilter small { overflow: hidden; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--type-meta-size); text-overflow: ellipsis; white-space: nowrap; }
+.archiveFilter small { overflow: hidden; color: var(--text-muted); font-family: var(--font-ui); font-size: var(--type-meta-size); text-overflow: ellipsis; white-space: nowrap; }
+.projectFilterText small[data-path="true"] { font-family: var(--font-mono); }
 .archiveCheck {
   display: grid;
   width: var(--control-xs);

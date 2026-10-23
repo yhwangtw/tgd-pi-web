@@ -4,7 +4,7 @@
 .titleRow strong { font-size: var(--text-sm); }
 .dismiss { width: 28px; height: 28px; margin-left: auto; border: 0; border-radius: var(--radius-control-compact); background: transparent; color: var(--text-dim); font-size: var(--text-lg); }
 .body p { display: -webkit-box; margin: 2px 0 6px; overflow: hidden; color: var(--text-muted); font-size: var(--text-xs); line-height: var(--leading-normal); -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.retryAfter { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); }
+.retryAfter { color: var(--text-muted); font-family: var(--font-ui); font-size: var(--text-2xs); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
 .primary { min-height: 32px; max-width: 100%; padding: var(--space-1) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-control-compact); background: var(--bg-elev-1); color: var(--text); font-size: var(--text-xs); overflow-wrap: anywhere; }
 .actions label { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-xs); }

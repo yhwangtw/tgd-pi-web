@@ -91,7 +91,7 @@
   font-size: var(--text-2xs);
   padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-pill);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   white-space: nowrap;
 }
 .countChip { border: 1px solid var(--border); color: var(--text-dim); }
@@ -234,3 +234,5 @@
   :global(html[data-ui-style="trae"]) .inputRow { margin: 8px; }
   :global(html[data-ui-style="trae"]) .row { min-height: 54px; }
 }
+
+.branchChip { font-family: var(--font-mono); }

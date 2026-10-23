@@ -228,7 +228,7 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
   return (
     <div className={s.container}>
       {confirmation}
-      <div className={`${s.header} chrome-mono`}>
+      <div className={s.header}>
         <GitBranch size={UI_ICON_SIZE.compact} aria-hidden="true" />
         <span className={s.branch} title={branch ?? undefined}>{branch ?? "—"}</span>
         <span className={s.count}>{files.length}</span>
@@ -318,7 +318,7 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
         <div className={s.snapSection}>
           <button
             type="button"
-            className={`${s.snapHeader} chrome-mono`}
+            className={s.snapHeader}
             onClick={() => setSnapsOpen((v) => !v)}
             aria-expanded={snapsOpen}
           >
@@ -333,7 +333,7 @@ export function ChangesPanel({ cwd, sessionId, refreshKey, onOpenDiff, selectedP
                   <div className={s.snapRow}>
                     <div className={s.snapMain}>
                       <span className={s.snapLabel} title={snap.label}>{snap.label}</span>
-                      <span className={`${s.snapMeta} chrome-mono`}>
+                      <span className={s.snapMeta}>
                         {snapTime(snap.ts)} · {t("changes.restoreAffected").replace("{count}", String(snap.impact.total))}
                       </span>
                     </div>

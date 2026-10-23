@@ -10,6 +10,33 @@
 - Read only the relevant sections of [development reference](docs/DEVELOPMENT.md).
   Architecture notes are reference material, not a checklist for every task.
 
+## Model delegation and ownership
+
+- The lead agent owns product judgment within the user's objective, task
+  decomposition, integration and final acceptance across this repository.
+  Delegate execution while retaining responsibility for the delivered result.
+- Prefer OpenCode Go 2 Muse 1.3
+  (`opencode-go-2/muse-spark-1.3-contributor`) and WorkBuddy DeepSeek v4.1 Flash
+  (`workbuddy-ai/deepseek-v4.1-flash`) through available authorized integrations.
+  These are priorities, not hard requirements; use other available models or
+  handle the work directly when fit, availability or verified quality warrants it.
+- Delegate bounded work when it adds value; handle small tasks directly and
+  parallelize independent tasks when worthwhile. Choose for quality and total
+  cost, including coordination and retries, rather than token count alone.
+- Give each delegate a concrete task, relevant source and dependencies, scope
+  boundaries and acceptance criteria. Request concise findings or patches;
+  preserve governing rules and context instead of sending the whole conversation
+  or trimming away dependencies that affect correctness.
+- The lead agent verifies evidence and reviews changes before integration,
+  using checks proportional to risk. A model response or NO_FINDINGS is not proof
+  of correctness; incomplete output and unsupported hypotheses are not accepted.
+  Retry only with a concrete adjustment; take over or change models when retries
+  stop adding value.
+- When reporting savings, include failed attempts and retries, distinguish
+  delegate usage from coordinator usage, and state any unmeasured overhead.
+  Delegation does not expand the user's authorization or existing budgets.
+
+
 ## Development
 
 - `npm run dev` starts on port 30141.

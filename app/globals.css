@@ -906,7 +906,12 @@ body {
 html[data-font-family="mono"] { --font-ui: var(--font-mono); }
 html[data-font-family="system"] { --font-ui: var(--font-system); }
 
-pre, code {
+/* UI text follows the selected family; technical content opts into mono. */
+:where(button, input, textarea, select) {
+  font-family: var(--font-ui);
+}
+
+pre, code, kbd, samp {
   font-family: var(--font-mono);
 }
 
@@ -1391,8 +1396,8 @@ span.linenumber {
   }
 }
 
-/* Terminal chrome: UI labels set in the code face. Message content stays
-   in Inter — mono is for the machine parts, sans for the conversation. */
+/* Technical identifiers and paths that are not rendered as code elements.
+   Ordinary panel headings and status labels use the inherited UI family. */
 .chrome-mono {
   font-family: var(--font-mono);
   letter-spacing: var(--tracking-subtle);

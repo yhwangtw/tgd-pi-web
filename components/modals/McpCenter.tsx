@@ -276,7 +276,7 @@ export function McpCenter({ cwd, sessionId }: Props) {
             {status.checkedAt && Number.isFinite(Date.parse(status.checkedAt)) && <p className={styles.notice}>{t("mcp.lastChecked")} <time dateTime={status.checkedAt}>{new Date(status.checkedAt).toLocaleString()}</time></p>}
             {status.error && <p className={styles.error}>{status.error}</p>}
             {status.catalogChanged && <p className={styles.notice}>{t("mcp.catalogChanged")}</p>}
-            {status.tools.length > 0 && <div className={styles.tools}>{status.tools.slice(0, 8).map((tool) => <span key={tool.name} title={tool.description}>{tool.title ?? tool.name}</span>)}{status.tools.length > 8 && <span>+{status.tools.length - 8}</span>}</div>}
+            {status.tools.length > 0 && <div className={styles.tools}>{status.tools.slice(0, 8).map((tool) => <span key={tool.name} title={tool.description}>{tool.title ?? <code>{tool.name}</code>}</span>)}{status.tools.length > 8 && <span>+{status.tools.length - 8}</span>}</div>}
             <div className={styles.actions}>
               <button type="button" disabled={!!busy} onClick={() => { setSelectedTemplateId(null); setDraftErrors({}); setFormFailure(null); setDraft(toDraft(server)); }}>{t("mcp.edit")}</button>
               <button type="button" disabled={!!busy} onClick={() => void prepareTest(server)}>{t("mcp.test")}</button>

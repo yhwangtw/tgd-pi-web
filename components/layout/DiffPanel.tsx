@@ -96,7 +96,7 @@ export function DiffPanel({ cwd, path, onClose, onAnnotate }: Props) {
   return (
     <div className={s.container}>
       {confirmation}
-      <div className={`${s.header} chrome-mono`}>
+      <div className={s.header}>
         <span className={s.badge}>diff</span>
         <span className={s.path} title={path}>{path}</span>
         {state.kind === "ready" && hunks.length > 0 && <div className={s.hunkNav}>

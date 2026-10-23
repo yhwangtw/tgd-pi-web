@@ -47,7 +47,7 @@
   padding: 0 var(--space-1);
   border-radius: var(--radius-pill);
   background: var(--color-warning-bg-strong);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
 }
 
 .clearButton,
@@ -97,7 +97,7 @@
   border-radius: var(--radius-pill);
   background: var(--bg);
   color: var(--text-dim);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-xs);
 }
 

@@ -34,7 +34,11 @@ This is progressive mounting, not a permanent 200-row cap after manual expansion
 Minimap geometry is cached between layout changes; scrolling only updates its
 viewport indicator, with observer work coalesced into animation frames. Scroll
 before visibility assertions for offscreen controls. UI text uses the Unicode
-ellipsis (`Message…`, `Filter files…`).
+ellipsis (`Message…`, `Filter files…`). UI labels, model/provider display names,
+status text and metadata follow `--font-ui` so the appearance preference applies
+consistently. Code, paths, commands and technical identifiers retain `--font-mono`;
+use `<code>` or a scoped rule for technical values inside mixed-content rows.
+Use `tabular-nums` for aligned UI counters without changing their text family.
 
 Floating `DialogShell` panels dismiss on a complete primary click/tap outside,
 including modeless panels whose overlay allows background interaction. Only the

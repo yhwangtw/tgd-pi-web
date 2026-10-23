@@ -84,7 +84,7 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
           <div className={s.runReport}>
             <button type="button" className={s.reportToggle} aria-expanded={reportOpen} onClick={() => setReportOpen((open) => !open)}>
               <span>{t("agents.report")}</span>
-              <span className="chrome-mono">
+              <span>
                 {run.report.changedFiles.length} {t("agents.files")} · {run.report.tests.length} {t("agents.tests")} · ${run.report.usage.cost.toFixed(3)}
               </span>
             </button>

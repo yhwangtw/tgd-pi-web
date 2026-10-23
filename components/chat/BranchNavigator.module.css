@@ -87,7 +87,7 @@
 /* Role badge */
 .roleBadge {
   font-size: var(--text-2xs);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   border-radius: var(--radius-pill);
   padding: 0 var(--space-1);
   margin-right: 5px;

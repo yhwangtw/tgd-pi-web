@@ -100,7 +100,7 @@
   align-items: flex-end;
   gap: var(--space-optical);
   flex-shrink: 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
 }
 
 .versionLabel {
@@ -267,7 +267,7 @@
   align-self: flex-start;
   min-height: var(--control-xs);
   margin: 3px 0 0 12px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-2xs);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-wide);

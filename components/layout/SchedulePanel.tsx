@@ -523,7 +523,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
   return (
     <div className={s.container} data-testid="schedule-panel">
       {scheduleEditor}
-      <div className={`${s.header} chrome-mono`}>
+      <div className={s.header}>
         <strong>{t("schedule.title")}</strong>
         <button className={s.newButton} type="button" onClick={() => openEditor(emptyDraft(defaultCwd))}>
           <Plus size={UI_ICON_SIZE.inline} aria-hidden />
@@ -567,7 +567,7 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
                       onClick={() => { setDeleteId(null); openEditor(scheduleDraft(schedule)); }}
                     />
                   </div>
-                  <div className={`${s.scheduleLine} chrome-mono`}>{scheduleSummary(schedule, (day) => t(WEEKDAY_KEYS[day]), t("schedule.daily"))}</div>
+                  <div className={`${s.scheduleLine} ${schedule.timing.kind === "cron" ? "chrome-mono" : ""}`}>{scheduleSummary(schedule, (day) => t(WEEKDAY_KEYS[day]), t("schedule.daily"))}</div>
                   <div className={s.path} title={schedule.cwd}>{schedule.cwd}</div>
                   <div className={s.nextLine}>
                     <span>{schedule.enabled && schedule.nextRunAt ? `${t("schedule.nextRun")} · ${formatRunTime(schedule.nextRunAt, schedule.timezone)}` : t("schedule.paused")}</span>
