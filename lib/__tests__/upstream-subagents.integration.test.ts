@@ -28,15 +28,25 @@ afterEach(async () => {
 });
 afterAll(() => rmSync(agentDir, { recursive: true, force: true }));
 
-async function fixture() {
+async function fixture(waitForParallelPair = false) {
   const cwd = mkdtempSync(join(tmpdir(), "pi-upstream-fixture-")); directories.push(cwd);
   mkdirSync(join(agentDir, "extensions/subagent"), { recursive: true });
   writeFileSync(join(agentDir, "extensions/subagent/config.json"), JSON.stringify({ toolActivation: "eager", asyncWidget: false }));
   const requests: string[] = [];
   let active = 0, peak = 0;
+  let releasePair!: () => void;
+  const pairReady = new Promise<void>(resolve => { releasePair = resolve; });
   const server = createServer(async (req, res) => {
     let body = ""; for await (const part of req) body += part;
     requests.push(body); active++; peak = Math.max(peak, active);
+    if (waitForParallelPair) {
+      // Wait for both children instead of assuming process startup overlaps an
+      // 80 ms model response on every CI runner. Serial execution still fails.
+      if (requests.length >= 2) releasePair();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([pairReady, new Promise<void>(resolve => { timer = setTimeout(resolve, 15_000); })]);
+      if (timer) clearTimeout(timer);
+    }
     await new Promise(resolve => setTimeout(resolve, body.includes("WAIT_FIXTURE") ? 1500 : 80));
     active--;
     res.writeHead(200, { "Content-Type": "text/event-stream" });
@@ -67,7 +77,7 @@ async function fixture() {
 
 describe("pinned upstream pi-subagents running through the real SDK", () => {
   it("loads real tools/RPC and runs foreground children in parallel with isolated sessions", async () => {
-    const f = await fixture();
+    const f = await fixture(true);
     expect(f.session.getActiveToolNames()).toContain("subagent");
     const ping = await f.host.client.request<{ capabilities: { asyncSpawn: boolean } }>("ping");
     expect(ping.capabilities.asyncSpawn).toBe(true);

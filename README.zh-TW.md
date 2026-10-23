@@ -203,16 +203,16 @@ parent/
 
 **可恢復背景任務（實驗性）：** **Agents → 新增任務 → 執行方式、模型與工具 → 重啟後接續** 仍使用另一個範圍較小的 runner，支援所選的檔案與命令工具，以及查看紀錄、取消和重新執行；不載入對話模式的 MCP、互動提問或工作流擴充。中斷的模型請求可能重送並產生用量；恢復執行不保證外部副作用只發生一次。見[背景任務說明](docs/DEVELOPMENT.md#durable-background-runs-experimental)。
 
-Subagent、Plan 與 Goal 由 Pi Web 維護，使用官方 Pi API：標準對話透過 Extension API，Durable 對話使用原生 task、document 與 hook。這些不是未修改的官方擴充套件；Pi SDK 升級時仍需驗證相容性。
+Subagent 直接載入社群 `pi-subagents` 套件，由 Pi Web 轉接執行環境；Plan 與 Goal 仍由 Pi Web 維護，使用官方 Pi API。這些與官方內建功能不同；SDK 或擴充升級時仍需驗證相容性。
 
 - 透過 SSE 即時串流，並在送出 prompt 前先建立事件連線。
 - 支援 prompt、steer、follow-up queue、retry、bash 與 context compaction。可在回覆途中編輯、排序或移除佇列訊息，保留附件與當前回覆；停止也能取消尚未完成的首次連線。
 - 使用 `!command` 直接執行 shell；使用 `!!command` 讓結果不進入模型 context。
 - 在 session 中途切換模型與 thinking level。
-- 標準對話的 Web runtime 內建第一方 `subagent` 工具，可把工作交給 scout、planner、worker 與 reviewer 的獨立對話，最多八項任務沿用現有 Agent 佇列執行；每個子對話都能在 Agent 面板檢查或取消。`tasks` 會平行執行獨立任務，包含 worker；實際同時執行數依 Agent 面板的共用併發上限（預設 3，可設 1–8）。子對話共用父對話的工作目錄，worker 應分配不同檔案；依賴前一步成果的任務，例如修改後再審查，使用 `chain` 依序執行。三種唯讀角色不提供 Shell。工具選擇須用 **繼承** 或在自訂工具中啟用 `subagent`；固定的核心工具預設組合不包含它。不需要全域 `pi` CLI。
-- **Goal 目標模式：** `/goal <目標>` 啟動對話專屬目標；`/goal --tokens 100k <目標>` 可加 token 預算。目標面板與 `/goal pause`、`/goal resume`、`/goal status`、`/goal budget 200k`、`/goal clear` 可控制執行。只有 Pi 完成當輪、沒有等待回答或排隊訊息時才續跑；自動續跑指令不會插入可見的聊天訊息。完成、受阻、模型錯誤、停止、預算用完、連續三次無工具且重複／空白的回覆時會停止。預設沒有固定續跑次數；可用 `/goal --runs 50 <目標>` 或 `/goal runs 50` 設定上限，`0` 表示不限。暫停讓當前回覆結束；停止按鈕也會中止當前執行。預算計算供應商回報的非快取輸入與輸出 token，每次模型回覆後檢查，單次回覆可能超過剩餘額度；子代理另用自己的上限。瀏覽器重連保留執行狀態；重新建立標準 runtime 或建立分支則先恢復成暫停。Durable 重啟依保存的狀態及[恢復語意](docs/DURABLE.md#storage-and-recovery)接續。
+- **Subagent 子代理：** 標準與 Durable 對話直接載入社群 [`pi-subagents`](https://github.com/nicobailon/pi-subagents) **0.81.0**，包含工具、生命週期、技能與提示捷徑。主代理可自行決定是否分派；單次／背景執行、平行工作流、追加指示與恢復使用上游實作。Pi Web 保留父對話以接收完成回報，Agents 面板顯示背景任務。工具選擇須用 **繼承** 或啟用 `subagent`；子代理不得擴大父代理的工具範圍。這是社群套件，並非官方 Pi 擴充；詳見[整合與相容性說明](docs/SUBAGENTS.md)。
+- **Goal 目標模式：** `/goal <目標>` 啟動對話專屬目標；`/goal --tokens 100k <目標>` 可加 token 預算。目標面板與 `/goal pause`、`/goal resume`、`/goal status`、`/goal budget 200k`、`/goal clear` 可控制執行。只有 Pi 完成當輪、沒有等待回答或排隊訊息時才續跑；自動續跑指令不會插入可見的聊天訊息。完成、受阻、模型錯誤、停止、預算用完、連續三次無工具且重複／空白的回覆時會停止。預設沒有固定續跑次數；可用 `/goal --runs 50 <目標>` 或 `/goal runs 50` 設定上限，`0` 表示不限。暫停讓當前回覆結束；停止按鈕也會中止當前執行。預算計算供應商回報的非快取輸入與輸出 token，每次模型回覆後檢查，單次回覆可能超過剩餘額度；子代理用量依所選執行引擎的計量與限制處理。瀏覽器重連保留執行狀態；重新建立標準 runtime 或建立分支則先恢復成暫停。Durable 重啟依保存的狀態及[恢復語意](docs/DURABLE.md#storage-and-recovery)接續。
 - **Plan 計畫模式：** `/plan <需求>` 限制工具進行探索，保存最多 30 個有序步驟。用計畫面板或 `/plan refine <調整>` 檢視、修改，再明確選擇 `/plan execute`。執行留在原對話，恢復先前工具，透過 `update_plan` 更新已驗證的進度，可同時標記多個獨立步驟進行中；一般 Markdown 摘要即可，結果卡片可選；`/plan cancel` 保留對話。完成的計畫提供「新增計畫」（`/plan new`）；取消輸入會保留原計畫。Goal／Plan 存在標準對話自訂紀錄或 Durable 原生 document 中，壓縮後仍保留；進入規劃會暫停 Goal。Shell 篩選用來防止常見誤寫，並非作業系統沙箱。
-- **Agents → 子代理執行上限** 可設定新任務的時間、回合與回報費用（預設無固定上限，`0` 表示不限，既有使用者設定保留）。時間與回合按代理計算，同次委派與重試共用費用上限。模型可分配較小預算，不能提高使用者上限。Worker 只繼承父代理已啟用的工具，包含 MCP／extensions；每項任務可再縮小工具範圍。接近上限會提示，可直接延長原任務。費用依供應商回報，不等於帳戶實際扣款；每次回覆後檢查，平行處理中的用量可能超過剩餘額度。
+- **Agents → 舊版子代理上限** 保留原執行方式的限制。若已保存正數上限，新擴充會顯示相容性原因並停止載入，因為上游無法等價執行原本的回合／時間／費用硬限制；不會自動清除設定。手動佇列的併發上限也只適用於手動任務。上游使用自己的設定與預算語意，詳見[相容性限制](docs/SUBAGENTS.md#scope-limits-and-recovery)。
 - 內建 `ask_user` 工具，並支援 Pi extension 的 `select`、`confirm`、`input`、`editor` 對話框、通知、狀態與文字 Widget；等待中的決定可跨斷線重連保留。
 - 設定改為可收合、不阻擋操作的面板，輸入框持續可用。快速切換對話與重新整理會保留草稿，同一瀏覽器分頁會記住閱讀位置；仍在執行的任務不會因為暫時沒輸出而被閒置回收。
 - 敏感操作的確認不再限時閱讀，仍只限使用一次並核對目標；內容變更、服務重啟或待確認快取已滿時，需重新確認。
@@ -362,7 +362,7 @@ Browser                    Next.js server             AgentSessionRuntime
   └─ GET /api/tgd/artifacts ────▶│ sibling tGD directory      │
 ```
 
-圖中為標準模式：唯讀歷史解析不會建立 `AgentSession`；送出訊息才建立 in-process wrapper，由 Pi 管理 session 替換。選用 Durable 的對話則由每個 SQLite 儲存庫的一個 harness 執行，分支與子代理各有自己的 conversation，事件沿用相同 Web 介面。列表、搜尋與匯出只讀保存的投影，不會恢復執行。詳見 [Durable 架構與限制](docs/DURABLE.md)。
+圖中為標準模式：唯讀歷史解析不會建立 `AgentSession`；送出訊息才建立 in-process wrapper，由 Pi 管理 session 替換。選用 Durable 的對話則由每個 SQLite 儲存庫的一個 harness 執行，分支各有自己的 conversation，上游子代理則由獨立 SDK 執行引擎管理，事件沿用相同 Web 介面。列表、搜尋與匯出只讀保存的投影，不會恢復執行。詳見 [Durable 架構與限制](docs/DURABLE.md)。
 
 ## 專案結構
 
