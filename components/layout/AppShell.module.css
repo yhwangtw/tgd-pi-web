@@ -970,7 +970,7 @@
 
 @media (max-width: 700px) {
   .container {
-    --mobile-nav-height: 54px;
+    --mobile-nav-height: max(54px, calc(10px + var(--control-touch) * var(--font-scale)));
     padding-bottom: calc(var(--safe-area-bottom) + var(--mobile-nav-height));
   }
 
@@ -1224,6 +1224,13 @@
 
   .mobileNavButton:focus-visible {
     outline-offset: -2px;
+  }
+
+  .mobileNavButton > span:last-child {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-align: center;
   }
 
   .mobileNavIcon {

@@ -53,7 +53,7 @@
 
 @media (max-width: 700px), (pointer: coarse) { .header button, .tab, .tabActive, .row, .commit, .fix, .symbolSearch button, .problemActions button, .noteForm button, .note > button { min-height: var(--control-touch); } .header button, .note > button:last-child { min-width: var(--control-touch); } .symbolSearch { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .symbolSearch input { grid-column: 1 / -1; min-height: var(--control-touch); font-size: var(--text-input-mobile); } .noteForm input, .noteForm textarea { min-height: var(--control-touch); font-size: var(--text-input-mobile); } }
 
-@container file-inspector (max-width: 300px) {
+@container file-inspector (max-width: 20em) {
   .noteForm { grid-template-columns: minmax(0, 1fr); }
   .noteForm input { width: min(100%, calc(6ch + var(--space-4))); }
 }

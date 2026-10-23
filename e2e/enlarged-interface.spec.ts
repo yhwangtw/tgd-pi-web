@@ -16,6 +16,15 @@ for (const style of ["original", "trae"]) {
       await expect(page.getByTestId("app-shell")).toHaveAttribute("data-hydrated", "true");
       if (width <= 700) await page.getByRole("button", { name: "Chat", exact: true }).click();
       await page.evaluate(() => document.documentElement.style.setProperty("--font-scale", "2"));
+      if (width <= 700) {
+        const clippedNavigation = await page.locator('nav[class*="mobileNav"] button > span:last-child').evaluateAll(labels => labels.flatMap(label => {
+          const bounds = label.getBoundingClientRect();
+          const button = label.parentElement!.getBoundingClientRect();
+          return bounds.left >= button.left && bounds.right <= button.right + 1 && bounds.bottom <= button.bottom + 1
+            && label.scrollWidth <= label.clientWidth + 1 ? [] : [label.textContent];
+        }));
+        expect(clippedNavigation, "Enlarged mobile navigation labels must wrap inside their own touch targets").toEqual([]);
+      }
       const composer = page.getByRole("textbox", { name: "Message…", exact: true });
       await composer.fill("Keep this enlarged-text draft");
       const controls = page.getByRole("button", { name: "More composer controls", exact: true });
@@ -48,6 +57,9 @@ for (const style of ["original", "trae"]) {
           formLeft: host.left, formRight: host.right, scroll: element.scrollHeight, client: element.clientHeight }];
       }));
       expect(clipped, `${style}/${width}: note fields and Add must remain inside the form without clipping; multiline notes may scroll`).toEqual([]);
+      const noteBounds = (await note.boundingBox())!;
+      const addBounds = (await inspector.getByRole("button", { name: "Add", exact: true }).boundingBox())!;
+      expect(addBounds.y, "With enlarged text, Notes should stack rather than squeeze the editor between Line and Add").toBeGreaterThanOrEqual(noteBounds.y + noteBounds.height - 1);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.screenshot({ path: test.info().outputPath(`enlarged-${style}-${width}.png`) });
     }
