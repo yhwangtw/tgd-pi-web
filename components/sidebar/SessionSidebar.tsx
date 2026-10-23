@@ -809,7 +809,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               <FolderGit2 size={UI_ICON_SIZE.control} aria-hidden />
               <span className={styles.projectFilterText}>
                 <strong>{selectedCwd ? getSessionProjectName(selectedCwd) : t("sidebar.noProject")}</strong>
-                <small>{selectedCwd ? shortenCwd(selectedCwd, cwdState.homeDir) : t("sidebar.selectProjectFirst")}</small>
+                <small data-path={!!selectedCwd}>{selectedCwd ? shortenCwd(selectedCwd, cwdState.homeDir) : t("sidebar.selectProjectFirst")}</small>
               </span>
               <ChevronRight size={UI_ICON_SIZE.control} aria-hidden />
             </button>

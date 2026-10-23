@@ -237,11 +237,12 @@
 
 .fileInfoPopover > span { color: var(--text-dim); }
 .fileInfoPopover > strong {
+  font-variant-numeric: tabular-nums;
   min-width: 0;
   justify-self: end;
   overflow: hidden;
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-weight: var(--weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;

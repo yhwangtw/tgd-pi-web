@@ -17,6 +17,7 @@
 }
 
 .branch {
+  font-family: var(--font-mono);
   flex: 1;
   min-width: 0;
   overflow: hidden;

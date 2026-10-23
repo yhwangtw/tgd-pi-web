@@ -163,8 +163,8 @@ export function SecurityActivityCenter() {
                 <strong className={styles.summary}>{entry.summary}</strong>
                 {entry.target && <code className={styles.target} title={entry.target}>{entry.target}</code>}
                 {(entry.cwd || entry.sessionId) && <div className={styles.context}>
-                  {entry.cwd && <span title={entry.cwd}>{entry.cwd}</span>}
-                  {entry.sessionId && <span>{t("securityActivity.session")} {entry.sessionId.slice(0, 8)}</span>}
+                  {entry.cwd && <code title={entry.cwd}>{entry.cwd}</code>}
+                  {entry.sessionId && <span>{t("securityActivity.session")} <code>{entry.sessionId.slice(0, 8)}</code></span>}
                 </div>}
                 {entry.details && Object.keys(entry.details).length > 0 && <details className={styles.details}>
                   <summary>{t("securityActivity.details")}</summary>

@@ -21,7 +21,7 @@
 .details { max-height: min(35dvh, 240px); overflow-y: auto; overscroll-behavior: contain; padding-top: var(--space-3); }
 .details p { margin: 0 0 var(--space-2); }
 .details dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
-.details dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); }
+.details dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-ui); }
 @media (max-width: 480px) {
   .bar { padding-inline: var(--space-3); }
   .hint { margin-left: auto; }

@@ -50,10 +50,10 @@ export function RuntimeIdentityBar() {
       {identity.environment === 'preview' && <p>{t('runtime.previewHint')}</p>}
       <dl>
         <dt>{t("runtime.version")}</dt><dd>{identity.build.version}</dd>
-        {identity.build.sourceSha && <><dt>{t('runtime.sourceRevision')}</dt><dd>{identity.build.sourceSha}</dd></>}
-        <dt>{t('runtime.modelsPath')}</dt><dd>{identity.modelsPath}</dd>
-        <dt>{t('runtime.agentPath')}</dt><dd>{identity.agentDir}</dd>
-        <dt>{t('runtime.sourcePath')}</dt><dd>{identity.cwd}</dd>
+        {identity.build.sourceSha && <><dt>{t('runtime.sourceRevision')}</dt><dd><code>{identity.build.sourceSha}</code></dd></>}
+        <dt>{t('runtime.modelsPath')}</dt><dd><code>{identity.modelsPath}</code></dd>
+        <dt>{t('runtime.agentPath')}</dt><dd><code>{identity.agentDir}</code></dd>
+        <dt>{t('runtime.sourcePath')}</dt><dd><code>{identity.cwd}</code></dd>
         <dt>{t('runtime.buildTime')}</dt><dd>{identity.build.builtAt || t('common.unknown')}</dd>
       </dl>
       {identity.build.dirty && <p>{t('runtime.dirtyHint')}</p>}

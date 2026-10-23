@@ -2,7 +2,7 @@
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-sm);
   color: var(--text-dim);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
 }
 
 .root {

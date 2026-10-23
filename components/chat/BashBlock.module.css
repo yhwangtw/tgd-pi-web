@@ -13,7 +13,7 @@
   padding: var(--space-2) var(--space-2);
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-sm);
 }
 
@@ -100,3 +100,5 @@
 :global(html[data-ui-style="trae"]) .badge,
 :global(html[data-ui-style="trae"]) .abortButton { border-radius: var(--radius-pill); }
 :global(html[data-ui-style="trae"]) .output { max-height: 360px; padding: var(--space-3) var(--space-3); }
+
+.command, .prompt { font-family: var(--font-mono); }

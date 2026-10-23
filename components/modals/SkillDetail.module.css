@@ -95,7 +95,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--text);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-xl);
   font-weight: var(--weight-semibold);
   text-overflow: ellipsis;

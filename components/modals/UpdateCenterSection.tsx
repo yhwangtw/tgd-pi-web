@@ -325,7 +325,7 @@ export function UpdateCenterSection() {
             {status.preflight.checks.map((check) => (
               <li key={check.id} data-state={check.state}>
                 <span className={styles.checkIcon}><CheckIcon state={check.state} /></span>
-                <span><strong>{t(CHECK_LABELS[check.id])}</strong><small>{formatCheckDetail(check, status, t)}</small></span>
+                <span><strong>{t(CHECK_LABELS[check.id])}</strong><small>{check.id === "source" && status.current.source === "git" ? <code>{formatCheckDetail(check, status, t)}</code> : formatCheckDetail(check, status, t)}</small></span>
               </li>
             ))}
           </ul>

@@ -154,7 +154,7 @@
 .entry[data-outcome="failure"] .entryMarker { background: var(--color-error); }
 .entryBody { min-width: 0; padding: var(--space-3); }
 .entryTop { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.entryTop time { flex-shrink: 0; color: var(--text-dim); font-family: var(--font-mono); font-size: var(--text-2xs); }
+.entryTop time { flex-shrink: 0; color: var(--text-dim); font-family: var(--font-ui); font-size: var(--text-2xs); }
 .badges { display: flex; min-width: 0; flex-wrap: wrap; gap: var(--space-1); }
 .category,
 .outcome {
@@ -180,8 +180,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.context { display: flex; min-width: 0; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); color: var(--text-dim); font-family: var(--font-mono); font-size: var(--text-2xs); }
-.context span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.context { display: flex; min-width: 0; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); color: var(--text-dim); font-family: var(--font-ui); font-size: var(--text-2xs); }
+.context > span, .context > code { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .details { margin-top: var(--space-2); color: var(--text-muted); font-size: var(--text-xs); }
 .details summary { width: fit-content; cursor: pointer; color: var(--text-dim); }
 .details pre { max-height: 220px; margin: var(--space-2) 0 0; overflow: auto; padding: var(--space-2); border-radius: var(--radius-control-compact); background: var(--bg-subtle); font-family: var(--font-mono); font-size: var(--text-2xs); line-height: var(--leading-copy); white-space: pre-wrap; word-break: break-word; }

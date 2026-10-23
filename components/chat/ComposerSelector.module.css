@@ -362,7 +362,7 @@
 
 .mobileModelCopy { display: grid; min-width: 0; gap: var(--space-1); }
 .mobileModelName { overflow: hidden; color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); text-overflow: ellipsis; white-space: nowrap; }
-.mobileModelMeta { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--space-1); color: var(--text-dim); font-family: var(--font-mono); font-size: var(--text-2xs); }
+.mobileModelMeta { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--space-1); color: var(--text-dim); font-family: var(--font-ui); font-size: var(--text-2xs); }
 .modelAvailable,
 .modelUnavailable { display: inline-flex; align-items: center; gap: var(--space-1); }
 .modelAvailable { color: var(--color-success-text); }

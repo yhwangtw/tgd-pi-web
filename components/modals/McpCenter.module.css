@@ -30,7 +30,7 @@
 .meta span[data-state="connected"] { color: var(--color-success-text); background: var(--color-success-bg); }
 .meta span[data-state="error"] { color: var(--color-error-text); background: var(--color-error-bg); }
 .tools { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.tools span { max-width: 180px; overflow: hidden; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); text-overflow: ellipsis; white-space: nowrap; }
+.tools span { max-width: 180px; overflow: hidden; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-muted); font-family: var(--font-ui); font-size: var(--text-2xs); text-overflow: ellipsis; white-space: nowrap; }
 .error { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-row); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--text-xs); line-height: var(--leading-copy); }
 .notice { margin: 0; color: var(--text-muted); font-size: var(--text-xs); line-height: var(--leading-copy); overflow-wrap: anywhere; }
 .loadError { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-error-border); border-radius: var(--radius-control); background: var(--color-error-bg); color: var(--color-error-text); font-size: var(--text-sm); }

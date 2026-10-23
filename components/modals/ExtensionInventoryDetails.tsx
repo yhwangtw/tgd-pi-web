@@ -150,7 +150,7 @@ export function ExtensionInventoryDetails({ report, onRunShortcut, shortcutBusy 
         </div>
         {report.providers.map((provider) => (
           <div key={provider.name} className={styles.row}>
-            <span className={styles.rowName}>{provider.displayName}</span>
+            <span className={`${styles.rowName} ${styles.displayName}`}>{provider.displayName}</span>
             <span className={styles.rowDesc} title={provider.error ?? provider.modelIds.join(", ")}>
               {provider.error ?? `${provider.availableModelCount}/${provider.modelCount} ${t("extensions.modelsAvailable")}`}
             </span>

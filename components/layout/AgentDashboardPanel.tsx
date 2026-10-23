@@ -179,7 +179,7 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
           }}
         />
       )}
-      <div className={`${s.header} chrome-mono`}>
+      <div className={s.header}>
         <strong>{t("agents.title")}</strong>
         <span className={`${s.daemonIndicator} ${error ? s.daemonOffline : ""}`}><i /><span>daemon</span></span>
         <button
@@ -274,7 +274,7 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
               <section className={s.group} key={root}>
                 <div className={s.groupHeader}>
                   <strong>{projectName(root)}</strong>
-                  <span className="chrome-mono">{projectRuns.length}</span>
+                  <span>{projectRuns.length}</span>
                 </div>
                 <div className={s.groupPath} title={root}>{root}</div>
                 <div className={s.runList}>

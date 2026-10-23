@@ -187,8 +187,8 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
                     <span className={styles.runtimeState}>{report.runtime.state}</span>
                   </div>
                   <dl className={styles.runtimeGrid}>
-                    <div><dt>{t("extensions.runtimeSession")}</dt><dd>{report.runtime.sessionId}</dd></div>
-                    <div><dt>{t("extensions.runtimeCwd")}</dt><dd>{report.runtime.cwd}</dd></div>
+                    <div><dt>{t("extensions.runtimeSession")}</dt><dd><code>{report.runtime.sessionId}</code></dd></div>
+                    <div><dt>{t("extensions.runtimeCwd")}</dt><dd><code>{report.runtime.cwd}</code></dd></div>
                     <div><dt>{t("extensions.runtimeClients")}</dt><dd>{report.runtime.connectedClients}</dd></div>
                     <div><dt>{t("extensions.runtimeReplacements")}</dt><dd>{report.runtime.replacementCount}</dd></div>
                   </dl>
@@ -211,7 +211,7 @@ export function ExtensionsConfig({ sessionId, cwd, onClose, onReload }: Props) {
                       <span className={`${styles.diagBadge} ${d.type === "error" ? styles.diagBadgeError : styles.diagBadgeWarning}`}>
                         {d.type}
                       </span>
-                      <span>{d.message}{d.path ? ` — ${d.path}` : ""}</span>
+                      <span>{d.message}{d.path && <> — <code>{d.path}</code></>}</span>
                     </div>
                   ))}
                 </div>

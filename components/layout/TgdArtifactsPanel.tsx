@@ -145,7 +145,7 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
 
   return (
     <div className={s.container}>
-      <div className={`${s.header} chrome-mono`}>
+      <div className={s.header}>
         <span className={s.brand}>tGD</span>
         <div className={s.viewToggle} role="tablist">
           <button type="button" role="tab" aria-selected={view === "artifacts"} onClick={() => pickView("artifacts")} className={view === "artifacts" ? s.viewTabActive : s.viewTab}>{t("tgd.viewArtifacts")}</button>

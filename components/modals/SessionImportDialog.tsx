@@ -128,8 +128,8 @@ export function SessionImportDialog({ sessionId, onClose, onImported }: Props) {
             <div className={styles.preview} data-testid="session-import-preview">
               <div className={styles.previewTitle}>{preview.name || preview.fileName}</div>
               <dl>
-                <div><dt>{t("sessionImport.sessionId")}</dt><dd>{preview.sessionId}</dd></div>
-                <div><dt>{t("sessionImport.cwd")}</dt><dd>{preview.cwd}</dd></div>
+                <div><dt>{t("sessionImport.sessionId")}</dt><dd><code>{preview.sessionId}</code></dd></div>
+                <div><dt>{t("sessionImport.cwd")}</dt><dd><code>{preview.cwd}</code></dd></div>
                 <div><dt>{t("sessionImport.messages")}</dt><dd>{preview.messageCount}</dd></div>
                 <div><dt>{t("sessionImport.size")}</dt><dd>{formatBytes(preview.size)}</dd></div>
               </dl>
