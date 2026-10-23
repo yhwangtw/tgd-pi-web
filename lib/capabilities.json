@@ -110,8 +110,8 @@
       "id": "embedded-subagents",
       "title": { "en": "Embedded subagents", "zh": "內嵌子代理" },
       "summary": {
-        "en": "Scout, planner, worker, and reviewer run through the Web agent supervisor without spawning a global Pi CLI.",
-        "zh": "Scout、planner、worker 與 reviewer 透過 Web Agent Supervisor 執行，不會啟動全域 Pi CLI。"
+        "en": "Community pi-subagents runs model-driven delegation through the Pi SDK in Standard and Durable conversations; no global Pi CLI is required.",
+        "zh": "社群 pi-subagents 透過 Pi SDK 在標準與 Durable 對話中提供模型自主分派，不需要全域 Pi CLI。"
       },
       "foundation": "pi-sdk",
       "webSupport": "adapted",
@@ -119,7 +119,7 @@
       "globalPiCliRequired": false,
       "backgroundServerRequired": false,
       "trust": "workspace",
-      "evidence": ["lib/subagent-extension.ts", "lib/agent-run-supervisor.ts"]
+      "evidence": ["lib/upstream-subagents.ts", "lib/upstream-subagent-runs.ts"]
     },
     {
       "id": "mcp",

@@ -14,6 +14,7 @@ export function AgentBudgetSettings({ limits, maxConcurrency, onSaved }: { limit
   return <details className={s.settings}>
     <summary>{t("agents.limits")}</summary>
     <p>{t("agents.limitsHint")}</p>
+    <p>{t("agents.concurrencyHint")}</p>
     <form key={JSON.stringify(current)} onSubmit={async (event) => {
       event.preventDefault();
       if (busy) return;

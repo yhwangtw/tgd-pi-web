@@ -1,3 +1,4 @@
+import { hasUpstreamSubagentWork } from "./upstream-subagents";
 import {
   createAgentSessionFromServices,
   createAgentSessionRuntime,
@@ -580,7 +581,7 @@ export class AgentSessionWrapper {
   private migrating = false;
   private admittedCommands = 0;
   migrationBusyReason(): string | undefined {
-    if (this.migrating || this.admittedCommands || this.isReplacementPending() || this.runActive || this.inner.isStreaming
+    if (hasUpstreamSubagentWork(this.sessionId) || this.migrating || this.admittedCommands || this.isReplacementPending() || this.runActive || this.inner.isStreaming
       || this.inner.isCompacting || this.inner.pendingMessageCount || this.compaction.state?.status === "running"
       || this.compactionQueue.length || this.flushingCompactionQueue || this.bashRunning || this.activeTools.size
       || this.webExtensionUI?.hasPendingDialogs()) return "The conversation has work or a question in progress; conversion will be retried when idle.";
@@ -607,7 +608,7 @@ export class AgentSessionWrapper {
     this.idleTimer = setTimeout(() => {
       // Silence is not idleness: a model/tool may be working without events.
       // Pending decisions also need to survive while the user works elsewhere.
-      if (this.runActive || this.inner.isStreaming || this.inner.isCompacting || this.compaction.state?.status === "running" || this.flushingCompactionQueue || this.bashRunning
+      if (hasUpstreamSubagentWork(this.sessionId) || this.runActive || this.inner.isStreaming || this.inner.isCompacting || this.compaction.state?.status === "running" || this.flushingCompactionQueue || this.bashRunning
         || this.webExtensionUI?.hasPendingDialogs()) {
         this.resetIdleTimer();
         return;
@@ -800,7 +801,7 @@ export class AgentSessionWrapper {
 
   private restartForAuthIfIdle(): boolean {
     if (!this._alive || !this.authRefreshPending) return false;
-    if (this.inner.isStreaming || this.inner.isCompacting || this.compaction.state?.status === "running" || this.flushingCompactionQueue || this.bashRunning) return false;
+    if (hasUpstreamSubagentWork(this.sessionId) || this.inner.isStreaming || this.inner.isCompacting || this.compaction.state?.status === "running" || this.flushingCompactionQueue || this.bashRunning) return false;
     this.authRefreshPending = false;
     this.emitEvent({ type: "session_restart", reason: "auth" });
     this.destroy();

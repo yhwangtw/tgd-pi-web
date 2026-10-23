@@ -17,7 +17,7 @@ import type { ExtensionProviderInfo } from "./extensions-info";
 import { appendPiWebOutputGuidance } from "./output-design";
 import { createPiModelRuntime } from "./pi-model-runtime";
 import { createMcpExtension } from "./mcp";
-import { createSubagentExtension } from "./subagent-extension";
+import { createUpstreamSubagentExtension, upstreamSubagentResources } from "./upstream-subagents";
 import { createPlanModeExtension } from "./plan-mode";
 import { createWorkflowExtension } from "./workflow-extension";
 import { createStructuredOutputExtension } from "./structured-output-extension";
@@ -233,13 +233,14 @@ export async function createTrackedAgentServices(cwd: string, observations?: {
     agentDir,
     modelRuntime,
     resourceLoaderOptions: {
+      ...upstreamSubagentResources(),
       extensionFactories: [
         ...(observations?.onBeforeProviderRequest ? [createRunTimingExtension(observations.onBeforeProviderRequest)] : []),
         createPlanModeExtension(),
         createWorkflowExtension(),
         createStructuredOutputExtension(),
         createMcpExtension(cwd),
-        createSubagentExtension(),
+        createUpstreamSubagentExtension(),
       ],
       // Pi Web keeps Markdown as the default output and exposes one readable
       // blockquote syntax for the few outcomes worth progressive enhancement.

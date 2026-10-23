@@ -1,3 +1,4 @@
+import { listUpstreamAgentRuns } from "@/lib/upstream-subagent-runs";
 import { ensureAgentRunSupervisor } from "@/lib/agent-run-supervisor";
 import { readAgentRunStore } from "@/lib/agent-run-store";
 import { listDurableChildRuns } from "@/lib/durable-session-store";
@@ -60,7 +61,11 @@ export async function GET(req: Request): Promise<Response> {
 
   const cwd = url.searchParams.get("cwd");
   const query = url.searchParams.get("q")?.trim().toLocaleLowerCase() ?? "";
-  const baseRuns = [...readAgentRunStore().runs, ...listDurableChildRuns()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).filter((run) => {
+  const upstream = await listUpstreamAgentRuns();
+  const store = readAgentRunStore();
+  const delegationBlockedBySavedLimits = [store.subagentLimits?.maxTurns, store.subagentLimits?.maxCostUsd, store.subagentLimits?.timeoutMs]
+    .some(value => typeof value === "number" && Number.isFinite(value) && value > 0);
+  const baseRuns = [...store.runs, ...listDurableChildRuns(), ...upstream.runs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).filter((run) => {
     if (cwd && run.cwd !== cwd) return false;
     if (!query) return true;
     return `${run.name}\n${run.cwd}\n${run.prompt}`.toLocaleLowerCase().includes(query);
@@ -77,8 +82,9 @@ export async function GET(req: Request): Promise<Response> {
   return Response.json({
     runs,
     counts,
+    upstreamStatus: { ...upstream.status, delegationBlockedBySavedLimits },
     maxConcurrency: supervisor.maxConcurrency,
-    subagentLimits: readAgentRunStore().subagentLimits,
+    subagentLimits: store.subagentLimits,
     serverTime: new Date().toISOString(),
     nextCursor: nextOffset < filtered.length ? encodeCursor(nextOffset) : null,
   }, {

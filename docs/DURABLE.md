@@ -61,15 +61,16 @@ edits are not merged into SQLite.
 | Chat and recovery | Streams through the existing SSE interface; saved submissions use stable request IDs, and reconnect snapshots rebuild the visible conversation |
 | Branches | Each branch has its own conversation identity inside the same harness/store; branching preserves its source history and pauses inherited workflow execution |
 | Goal and Plan | Persisted native documents and hooks handle progress, continuation, configured budgets, pause/stop and plan tool restrictions |
-| Subagents | Native child conversations/tasks support single, parallel and chain delegation, cancellation and saved results; parent tools and configured budgets constrain children. Native children appear in the Agents panel, where their conversation/activity can be opened or cancelled; retry them through the owning parent |
+| Subagents | Uses community `pi-subagents` 0.81.0 through the ExtensionRunner bridge. Upstream owns child execution and recovery; the Agents panel shows known background roots and can stop them. Historical native Durable children remain readable. See [Subagents](SUBAGENTS.md) |
 | MCP | Reuses Pi Web's connection manager and registration rules, including current configuration, schemas, output checks, timeout and cancellation; remote tools default to unsafe replay |
 | Questions | `ask_user`, `select`, `confirm`, `input` and `editor` save their pending state and answer receipts; duplicate identical answers are accepted, conflicting answers are rejected, and deadlines survive reopening |
 | Pi extensions | An ExtensionRunner bridge supports commands, prompt preparation, context/tool hooks, lifecycle events, custom entries and the existing Web UI adapter |
 | History tools | Session listing, context inspection, search, analytics, rename, delete, clone and Markdown/HTML export understand Durable sessions; export credential filtering also handles the HTML's encoded transcript |
 | Schedules | Saves the admitted run's prompt/model/tools and request ID; a restart reconnects unfinished work, including pending questions, with the original deadline |
 
-Goal, Plan and subagent integration remain Pi Web-maintained code using official
-Pi APIs. They are not unmodified official extension packages. Standard and
+Goal and Plan remain Pi Web-maintained code using official Pi APIs. New subagent
+execution uses the pinned community package with a Web host adapter; it is not an
+official Pi extension. Standard and
 Durable share Pi AI 1.3.0; `lib/durable-models.ts` uses the existing model
 configuration and authentication runtime.
 
@@ -84,9 +85,10 @@ Persistent conversations and scheduled runs use:
   <conversation>.json  derived read-only projection for the Web interface
 ```
 
-One harness owns a store at a time. Branches and children are conversations in
-that harness, rather than independent model loops forwarding messages through a
-second legacy AgentSession. A process lease prevents concurrent owners. Recovery
+One harness owns a store at a time. Branches and historical native children are
+conversations in that harness. New upstream children use their own SDK sessions
+and upstream background runner; their execution is not checkpointed by the
+parent Durable harness. A process lease prevents concurrent owners. Recovery
 of a crashed owner's lease can take several seconds.
 
 The Web uses `dw_<group>_<conversation>` identifiers for this path. Directories

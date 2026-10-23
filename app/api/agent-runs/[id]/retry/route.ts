@@ -1,3 +1,4 @@
+import { retryUpstreamAgentRun, isUpstreamAgentRunId, UpstreamAgentRunError } from "@/lib/upstream-subagent-runs";
 import {
   AgentRunConflictError,
   AgentRunNotFoundError,
@@ -19,10 +20,16 @@ export async function POST(
       return Response.json({ error: "JSON object is required" }, { status: 400 });
     }
     const { id } = await params;
+    if (isUpstreamAgentRunId(id)) {
+      const run = await retryUpstreamAgentRun(id);
+      return Response.json({ run }, { status: 202 });
+    }
     const run = ensureAgentRunSupervisor().retry(id);
     return Response.json({ run }, { status: 202 });
   } catch (error) {
-    const status = error instanceof AgentRunNotFoundError
+    const status = error instanceof UpstreamAgentRunError
+      ? error.status
+      : error instanceof AgentRunNotFoundError
       ? 404
       : error instanceof AgentRunConflictError ? 409
         : error instanceof SyntaxError ? 400 : 500;

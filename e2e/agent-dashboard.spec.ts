@@ -163,7 +163,7 @@ test("AC-4.3: dashboard remains usable at 320px without page overflow", async ({
 
 test("AC-4.5: concurrent slots can be changed from the dashboard", async ({ page }) => {
   await openDashboard(page, []);
-  const select = page.getByRole("combobox", { name: "Concurrent agent slots", exact: true });
+  const select = page.getByRole("combobox", { name: "Manual queue concurrent slots", exact: true });
   await expect(select).toHaveValue("3");
 
   const updateRequest = page.waitForRequest((request) => (

@@ -71,6 +71,7 @@
     "mermaid": "^11.16.1",
     "next": "^16.4.1",
     "parse5": "8.0.1",
+    "pi-subagents": "0.81.0",
     "postcss": "8.5.25",
     "proper-lockfile": "4.1.2",
     "react": "^19.2.7",
@@ -81,9 +82,9 @@
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "sprintf-js": "file:vendor/sprintf-js",
     "typebox": "^1.1.38",
-    "web-push": "^3.6.7",
-    "sprintf-js": "file:vendor/sprintf-js"
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

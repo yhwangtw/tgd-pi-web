@@ -203,6 +203,15 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
           </button>
         )}
       </div>
+      {agentRuns.data?.upstreamStatus && (
+        <p className={s.path} data-testid="upstream-run-scope">{t("agents.upstream.scope")}</p>
+      )}
+      {agentRuns.data?.upstreamStatus?.delegationBlockedBySavedLimits && (
+        <p className={s.runError} role="status" data-testid="upstream-run-limits-blocked">{t("agents.upstream.savedLimitsBlocked")}</p>
+      )}
+      {agentRuns.data?.upstreamStatus?.partial && (
+        <p className={s.runError} role="status" data-testid="upstream-run-partial">{t("agents.upstream.incomplete")}</p>
+      )}
       {compareOpen && comparedRuns.length >= 2 && (
         <section className={s.compareTray} aria-label={t("agents.compareResults")}>
           <div className={s.compareTrayHeader}>

@@ -25,8 +25,8 @@ export interface AgentRunWorkspace {
 }
 
 export interface AgentRunInput {
-  /** Opt-in official Pi Durable execution. Existing runs use the coding agent. */
-  engine?: "durable";
+  /** Durable is opt-in; upstream is a read-only projection, rejected by run creation. */
+  engine?: "durable" | "upstream";
   name: string;
   cwd: string;
   prompt: string;
@@ -50,6 +50,16 @@ export interface AgentRunReport {
 }
 
 export interface AgentRun extends AgentRunInput {
+  /** Parent chat that owns an upstream subagent; not a child transcript ID. */
+  parentSessionId?: string;
+  upstream?: {
+    asyncId: string;
+    state: UpstreamAgentRunState;
+    canStop: boolean;
+    canRetry: boolean;
+    statusStale?: boolean;
+    stopRequested?: boolean;
+  };
   /** Read-only dashboard projection of a child owned by a chat Harness. */
   durableConversation?: boolean;
   recoveryCount?: number;
@@ -87,7 +97,24 @@ export interface AgentRunCompletion {
   messages?: import("./types").AgentMessage[];
 }
 
+export type UpstreamAgentRunState = "queued" | "running" | "complete" | "failed" | "partial" | "paused" | "stopped" | "rejected";
+
+export interface UpstreamAgentRunStatus {
+  /** Persisted jobs in unopened sessions have not been discovered. */
+  scope: "active_and_cached_sessions";
+  activeHosts: number;
+  unavailableHosts: number;
+  inactiveHosts: number;
+  omittedHosts: number;
+  omittedRuns: number;
+  omittedChildren: number;
+  partial: boolean;
+  /** Existing explicit limits require compatibility handling before upstream delegation. */
+  delegationBlockedBySavedLimits?: boolean;
+}
+
 export interface AgentRunsResponse {
+  upstreamStatus?: UpstreamAgentRunStatus;
   subagentLimits?: AgentRunLimits;
   runs: AgentRun[];
   counts: Record<AgentRunStatus, number>;
