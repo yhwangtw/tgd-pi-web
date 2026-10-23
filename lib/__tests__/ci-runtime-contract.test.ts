@@ -22,7 +22,7 @@ describe("runtime and installation CI contract", () => {
     expect(smoke).toContain("run: node scripts/ci-install-smoke.mjs");
   });
   it("tests the PR head explicitly so release can compare its tree and cancels only superseded PR runs", () => {
-    for (const id of ["lint", "runtime-tests", "installation-smoke", "build", "e2e", "audit"]) {
+    for (const id of ["lint", "runtime-tests", "installation-smoke", "build", "e2e-shards", "audit"]) {
       expect(job(id)).toContain("ref: ${{ github.event.pull_request.head.sha || github.sha }}");
     }
     expect(workflow).toContain("group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}");
@@ -39,6 +39,9 @@ describe("runtime and installation CI contract", () => {
     expect(aggregate).toContain('test "$INSTALL_RESULT" = success');
     expect(aggregate).toContain('test "$REUSE_RESULT" = success');
     expect(job("e2e")).toContain("needs.scope.outputs.reuse != 'true'");
+    expect(job("e2e")).toContain("needs: [scope, build, e2e-shards]");
+    expect(job("e2e")).toContain('test "$BUILD_RESULT" = success');
+    expect(job("e2e")).toContain('test "$E2E_RESULT" = success');
     expect(job("reuse")).toContain("node scripts/ci-scope.mjs --verify-reuse");
   });
 });

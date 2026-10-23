@@ -12,7 +12,7 @@ describe('proportional CI coverage', () => {
     const full = matrices('compatibility');
     expect(full.runtime.include).toHaveLength(8);
     expect(full.install).toEqual(['ubuntu-latest', 'macos-latest']);
-    for (const file of ['package-lock.json', 'setup.sh', 'scripts/check-node-version.mjs', '.github/workflows/ci.yml']) expect(classifyChanges([file])).toBe('compatibility');
+    for (const file of ['package-lock.json', 'setup.sh', 'scripts/check-node-version.mjs', 'scripts/e2e-build.mjs', 'scripts/e2e-scope.mjs', '.github/workflows/ci.yml']) expect(classifyChanges([file])).toBe('compatibility');
   });
   it('runs full checks for manual requests, unknown history and empty diffs', () => {
     expect(classifyChanges(['README.md'], { manual: true })).toBe('compatibility');
