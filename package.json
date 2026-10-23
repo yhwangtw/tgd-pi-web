@@ -38,7 +38,7 @@
   "overrides": {
     "nanoid": "3.3.18",
     "mermaid": {
-      "dompurify": "3.4.16"
+      "dompurify": "3.4.17"
     },
     "jsdom": {
       "undici": "7.29.1"
