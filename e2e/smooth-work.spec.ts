@@ -126,7 +126,7 @@ test("subagent budgets are editable and persist without starting any run", async
   const before = await (await page.request.get("/api/agent-runs")).json();
   await page.getByRole("button", { name: "Agents", exact: true }).click();
   const dashboard = page.getByTestId("agent-dashboard");
-  await dashboard.getByText("Subagent budgets", { exact: true }).click();
+  await dashboard.getByText("Legacy child limits", { exact: true }).click();
   await dashboard.getByRole("spinbutton", { name: "Turns", exact: true }).fill("0");
   await dashboard.getByRole("spinbutton", { name: "Reported cost (US$)", exact: true }).fill("3.50");
   await dashboard.getByRole("spinbutton", { name: "Minutes", exact: true }).fill("45");
@@ -138,7 +138,7 @@ test("subagent budgets are editable and persist without starting any run", async
   expect(after.runs.map((run: { id: string }) => run.id)).toEqual(before.runs.map((run: { id: string }) => run.id));
   await page.reload();
   await page.getByRole("button", { name: "Agents", exact: true }).click();
-  await dashboard.getByText("Subagent budgets", { exact: true }).click();
+  await dashboard.getByText("Legacy child limits", { exact: true }).click();
   await expect(dashboard.getByRole("spinbutton", { name: "Turns", exact: true })).toHaveValue("0");
   await expect(dashboard.getByRole("spinbutton", { name: "Minutes", exact: true })).toHaveValue("45");
 });
