@@ -49,6 +49,39 @@ retention rather than pointing this cleaner at unrelated data.
 Preserve the previous plan file when enabling this option: existing receipts must
 resume with their original plan hash. The new plan applies to new deployments.
 
+## Candidate cache and preparation speed
+
+Operators can opt into bounded generated-cache cleanup with:
+
+```json
+"candidateCache": { "keep": 1 }
+```
+
+During `--execute`, cleanup runs under the shared update lock before the build-space
+check/publication, and again after successful public verification. Read-only preflight
+never removes anything. It keeps the newest eligible candidate cache and removes only
+`stageRoot/<tag>/.next/cache` from older completed releases whose source, build identity,
+public receipt and agent directory still match. Running, dirty, unknown, failed or
+unverified candidates, the current in-progress tag, and symlinks are skipped. Live
+`.next`, `node_modules`, previous-release backups, source, logs and sessions are untouched.
+Cache cleanup never lowers the free-space minimum; if space is still insufficient,
+publication/cutover stop. Cleanup errors after success are recorded and never roll back
+the healthy service. Keep the old plan for older receipts before enabling this option.
+This bounds candidate cache history; it does not reuse another release's installed
+packages or skip a clean install/build.
+
+For fixed-cwd APFS deployment adapters, prepare replacement artifacts before
+stopping production. After a successful **fresh** `cp -c -a` of `node_modules`,
+do not immediately run rsync over the same unchanged source/destination. Only
+an already-existing prepared copy needs the synchronization pass on retry. Keep
+copies independent (never hard links) and preserve previous-release backups.
+
+Build fingerprints still read all executable and dependency bytes, with eight bounded
+readers, deterministic per-file hashes, mode/link checks and observed-mutation rejection.
+Fingerprint schema 3 requires one rebuild for a schema 2 checkpoint on resume.
+Deployment receipts now record adapter/fingerprint durations (including failed attempts)
+in `timings`, so a slow build, copy, validation or restart can be identified separately.
+
 ## Operator plan
 
 Keep the plan and adapter outside application source, owned by the operator.

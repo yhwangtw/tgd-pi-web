@@ -22,7 +22,7 @@ async function record(path) {
     return JSON.parse(await readFile(path, 'utf8'));
   } catch (error) { if (error.code === 'ENOENT' || error instanceof SyntaxError) return null; throw error; }
 }
-function verified(receipt, plan) {
+export function isVerifiedRelease(receipt, plan) {
   return receipt?.phase === 'complete' && receipt.deployment?.status === 'done'
     && tagPattern.test(receipt.tag) && sha.test(receipt.deployment.identity?.build?.sourceSha || '')
     && receipt.deployment.identity.build.version === receipt.tag.slice(1)
@@ -46,7 +46,7 @@ export async function retainPreviousRelease(plan, identity, current, { dryRun = 
     const protectedPath = await realpath(path).catch(() => resolve(path));
     if (inside(root, protectedPath) || inside(protectedPath, root)) throw new Error('Retention root overlaps protected service data');
   }
-  if (!verified(current, plan) || identity.build?.dirty !== false || identity.cwd !== plan.liveDir
+  if (!isVerifiedRelease(current, plan) || identity.build?.dirty !== false || identity.cwd !== plan.liveDir
     || identity.build?.sourceSha !== current.deployment.identity.build.sourceSha
     || identity.build?.version !== current.tag.slice(1)
     || identity.agentDir !== current.deployment.identity.agentDir) throw new Error('Retention requires the verified currently running release');
@@ -74,7 +74,7 @@ export async function retainPreviousRelease(plan, identity, current, { dryRun = 
     const path = join(root, entry.name);
     const receipt = await record(join(plan.stateDir, `${match[2]}.json`));
     const old = await record(join(path, 'operator.json'));
-    if (!verified(receipt, plan) || receipt.tag !== match[2]
+    if (!isVerifiedRelease(receipt, plan) || receipt.tag !== match[2]
       || receipt.deployment.identity.agentDir !== identity.agentDir
       || Date.parse(receipt.public.checkedAt) >= Date.parse(current.public.checkedAt)
       || !sha.test(old?.previousSha || '') || old?.targetSha !== receipt.deployment.identity.build.sourceSha
