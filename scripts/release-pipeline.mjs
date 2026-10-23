@@ -10,6 +10,7 @@ import { assertCheckoutStopped } from './runtime-guard.mjs';
 import { finishUpdateOperation, patchUpdateOperation, reserveUpdateOperation } from './update-operation-store.mjs';
 import { assertDeploymentSpace } from './deployment-space.mjs';
 import { retainPreviousRelease } from './release-retention.mjs';
+import { pruneCandidateCaches, validateCandidateCache } from './deployment-cache.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const delay = milliseconds => new Promise(done => setTimeout(done, milliseconds));
@@ -40,6 +41,7 @@ export async function validatePipelinePlan(input, tag, sourceDir = root) {
   if (plan.retention && (plan.retention.keepPrevious !== 1 || !isAbsolute(plan.retention.backupRoot || ''))) {
     throw new Error('Retention requires an absolute backupRoot and keepPrevious: 1');
   }
+  validateCandidateCache(plan.candidateCache);
   const url = new URL(plan.publicOrigin);
   if (url.protocol !== 'https:' || url.origin !== plan.publicOrigin || url.username || url.password) throw new Error('publicOrigin must be an exact HTTPS origin without credentials or a path');
   validateStagedPlan({ ...plan, stageDir: join(plan.stageRoot, tag), expected: { version: tag.slice(1), sourceSha: '0'.repeat(40) } });
@@ -254,7 +256,7 @@ export async function runReleasePipeline(input, options = {}, dependencies = {})
   validateState();
   const space = dependencies.assertDeploymentSpace || assertDeploymentSpace;
   await space(plan, 'records');
-  if (state?.deployment?.status !== 'done') {
+  if (state?.deployment?.status !== 'done' && !(options.execute && plan.candidateCache)) {
     // Catch an impossible deployment before publishing or acquiring a lock.
     // Cached candidates defer the build-space check until artifact comparison.
     if (!state?.buildFingerprint) await space(plan, 'build');
@@ -281,9 +283,20 @@ export async function runReleasePipeline(input, options = {}, dependencies = {})
     state = await readRecord(statePath);
     validateState();
     if (!state && !initial) throw new Error('Release state disappeared; inspect it before resuming');
+    let cachePreparation;
+    if (plan.candidateCache && state?.deployment?.status !== 'done') {
+      // Clean only completed old candidates while holding the shared lock, before
+      // checking build headroom or publishing. Read-only preflight never prunes.
+      const current = await (dependencies.localIdentity || localIdentity)(plan, env);
+      try { cachePreparation = await (dependencies.pruneCaches || pruneCandidateCaches)(plan, current, { excludeTag: tag }); }
+      catch (error) { cachePreparation = { status: 'deferred', message: error.message }; }
+      if (!state?.buildFingerprint) await space(plan, 'build');
+      await space(plan, 'prepare');
+    }
     const resuming = Boolean(state);
     if (!state) state = { schema: 1, tag, planHash, ...initial, phase: 'release', createdAt: new Date().toISOString() };
     state.operationId = operation.id;
+    if (cachePreparation) state.cachePreparation = cachePreparation;
     const save = async () => { state.updatedAt = new Date().toISOString(); await writeRecord(statePath, state); };
     await save();
     if (resuming) client.checkCI(state); // New preflight already checked CI; resume only reads existing evidence.
@@ -345,6 +358,11 @@ export async function runReleasePipeline(input, options = {}, dependencies = {})
       try {
         const result = await (dependencies.deploy || runStagedDeployment)({ ...plan, stageDir, expected },
           { ...env, PIWEB_UPDATE_OPERATION_ROOT: plan.stateDir, PIWEB_UPDATE_OPERATION_ID: operation.id }, {
+          onTiming: async timing => {
+            state.timings = [...(state.timings || []).slice(-255), { ...timing, at: new Date().toISOString() }];
+            await save();
+            log(`Deployment ${timing.phase}: ${(timing.durationMs / 1000).toFixed(1)}s (${timing.status})`);
+          },
           checkpoint: { fingerprint: state.buildFingerprint, save: async value => { state.buildFingerprint = value; await save(); } },
           execute: async (phase, argv, cwd, phaseEnv) => {
             if (phase === 'stop') cutoverStarted = true;
@@ -380,6 +398,19 @@ export async function runReleasePipeline(input, options = {}, dependencies = {})
         // Cleanup must never restart or roll back a healthy deployed release.
         state.retention = { status: 'deferred', message: error.message };
         log('Release verified; old-build cleanup deferred. See the saved receipt.');
+      }
+      await save();
+    }
+    if (plan.candidateCache) {
+      try {
+        const current = await readLive();
+        if (current.pid !== identity.pid || current.startedAt !== identity.startedAt || current.agentDir !== identity.agentDir) {
+          throw new Error('Service changed after public verification; retained candidate caches');
+        }
+        state.candidateCache = await (dependencies.pruneCaches || pruneCandidateCaches)(plan, current);
+      } catch (error) {
+        state.candidateCache = { status: 'deferred', message: error.message };
+        log('Release verified; candidate-cache cleanup deferred. See the saved receipt.');
       }
       await save();
     }

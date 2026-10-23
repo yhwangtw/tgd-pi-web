@@ -91,7 +91,14 @@ export async function runStagedDeployment(input, env = process.env, dependencies
     PIWEB_ACCESS_PASSWORD: '', PIWEB_SESSION_SECRET: '', PIWEB_UPDATE_HEALTH_COOKIE: '',
   };
   const commonEnv = { ...env, PIWEB_STAGED_SOURCE_DIR: stageDir, PIWEB_LIVE_SOURCE_DIR: liveDir };
-  const step = (phase, stage = false) => exec(phase, plan.commands[phase], stage ? stageDir : liveDir, { ...(stage ? stageEnv : commonEnv), PIWEB_DEPLOY_PHASE: phase });
+  const measure = async (phase, action) => {
+    const started = performance.now();
+    let status = 'succeeded';
+    try { return await action(); }
+    catch (error) { status = 'failed'; throw error; }
+    finally { await dependencies.onTiming?.({ phase, status, durationMs: Math.round(performance.now() - started) }); }
+  };
+  const step = (phase, stage = false) => measure(phase, () => exec(phase, plan.commands[phase], stage ? stageDir : liveDir, { ...(stage ? stageEnv : commonEnv), PIWEB_DEPLOY_PHASE: phase }));
   const checkpoint = dependencies.checkpoint;
   const fingerprint = dependencies.fingerprint || deploymentFingerprint;
   // The per-run fixture directory changes on every invocation; it is not a
@@ -100,7 +107,7 @@ export async function runStagedDeployment(input, env = process.env, dependencies
   delete buildEnvironment.PI_CODING_AGENT_DIR;
   let reuseBuild = false;
   if (checkpoint?.fingerprint) {
-    try { reuseBuild = checkpoint.fingerprint === await fingerprint(plan, buildEnvironment); }
+    try { reuseBuild = checkpoint.fingerprint === await measure('fingerprint', () => fingerprint(plan, buildEnvironment)); }
     catch { /* Missing or changed artifacts require a fresh isolated build. */ }
   }
   let stageStarted = false;
@@ -122,7 +129,7 @@ export async function runStagedDeployment(input, env = process.env, dependencies
     }
     await rm(fixtureDir, { recursive: true, force: true });
   }
-  if (checkpoint) await checkpoint.save(await fingerprint(plan, buildEnvironment));
+  if (checkpoint) await checkpoint.save(await measure('fingerprint', () => fingerprint(plan, buildEnvironment)));
   // A successful build alone never authorizes a cutover: capture the current
   // process/build for rollback and verify candidate identity before touching it.
   const before = await read(plan.liveIdentityUrl, env);

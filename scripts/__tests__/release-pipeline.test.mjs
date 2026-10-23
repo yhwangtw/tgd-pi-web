@@ -146,6 +146,9 @@ describe('resumable release and deployment', () => {
     });
     expect((await f.run()).status).toBe('succeeded');
     expect(f.dependencies.execute.mock.calls.map(([phase]) => phase)).toEqual(['build', 'stageStart', 'stageStop', 'stop', 'switch', 'start']);
+    const timings = (await f.readState()).timings;
+    expect(timings.map(item => item.phase)).toEqual(['build', 'stageStart', 'stageStop', 'fingerprint', 'stop', 'switch', 'start']);
+    expect(timings.every(item => item.durationMs >= 0 && item.status === 'succeeded')).toBe(true);
     await expect(access(join(f.plan.stateDir, 'active.lock'))).rejects.toThrow();
   });
   it('rejects a fresh receipt for an already published tag and rejects invalid wait limits', async () => {
@@ -317,4 +320,30 @@ it('binds publication to its canonical workflow/tag and accepts recovery from la
     { display_title: 'Release v2026.09.25-1' }, { head_repository: { full_name: 'fork/project' } }]) {
     expect(selectReleaseRun([{ ...good, ...change }], state, 10)).toBeNull();
   }
+});
+
+it('prunes only under the update lock before space checks, and again only after public success', async () => {
+  const f = await fixture(); f.plan.candidateCache = { keep: 1 };
+  const order = [];
+  f.dependencies.assertDeploymentSpace.mockImplementation(async (_plan, phase) => { order.push(`space:${phase}`); });
+  f.dependencies.pruneCaches = vi.fn(async () => {
+    await expect(access(f.plan.stateDir)).resolves.toBeUndefined();
+    order.push('prune'); return { status: 'complete', removed: [] };
+  });
+  f.dependencies.verifyPublic.mockImplementation(async () => { order.push('public'); return { origin: f.plan.publicOrigin }; });
+  await f.run();
+  expect(order).toEqual(['space:records', 'prune', 'space:build', 'space:prepare', 'public', 'prune']);
+  expect(f.dependencies.pruneCaches.mock.calls[0][2]).toEqual({ excludeTag: f.tag });
+});
+it('does not clean candidates in read-only preflight, or after failed public verification', async () => {
+  const f = await fixture(); f.plan.candidateCache = { keep: 1 }; f.dependencies.pruneCaches = vi.fn(async () => ({ status: 'complete' }));
+  await f.run({ execute: false }); expect(f.dependencies.pruneCaches).not.toHaveBeenCalled();
+  f.dependencies.verifyPublic.mockRejectedValue(new Error('public unavailable'));
+  await expect(f.run()).rejects.toThrow('public unavailable'); expect(f.dependencies.pruneCaches).toHaveBeenCalledTimes(1);
+});
+it('still refuses insufficient space after bounded cleanup without publishing or deploying', async () => {
+  const f = await fixture(); f.plan.candidateCache = { keep: 1 }; f.dependencies.pruneCaches = vi.fn(async () => ({ status: 'complete' }));
+  f.dependencies.assertDeploymentSpace.mockImplementation(async (_plan, phase) => { if (phase === 'build') throw new Error('insufficient space'); });
+  await expect(f.run()).rejects.toThrow('insufficient space');
+  expect(f.client.dispatch).not.toHaveBeenCalled(); expect(f.dependencies.deploy).not.toHaveBeenCalled();
 });

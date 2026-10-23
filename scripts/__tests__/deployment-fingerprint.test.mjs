@@ -64,3 +64,26 @@ it('reuses a build after service-only repairs, but invalidates changed build ada
   expect(changedBuild).not.toBe(first);
   expect(await deploymentFingerprint({ ...plan, commands: { ...plan.commands, build: [...plan.commands.build, '--new-option'] } }, {})).not.toBe(changedBuild);
 });
+
+it('hashes same-size edits despite restored mtimes, modes and internal link targets', async () => {
+  const { chmod, utimes, stat } = await import('node:fs/promises');
+  const { stageDir, plan } = await fixture();
+  const path = join(stageDir, 'node_modules/dependency.js');
+  const info = await stat(path), first = await deploymentFingerprint(plan, {});
+  await writeFile(path, 'modified dependency'); await utimes(path, info.atime, info.mtime);
+  const edited = await deploymentFingerprint(plan, {}); expect(edited).not.toBe(first);
+  await chmod(path, 0o755); const mode = await deploymentFingerprint(plan, {}); expect(mode).not.toBe(edited);
+  const link = join(stageDir, 'node_modules/link'); await symlink('dependency.js', link);
+  const linked = await deploymentFingerprint(plan, {}); await rm(link); await symlink('../.next/server.js', link);
+  expect(await deploymentFingerprint(plan, {})).not.toBe(linked);
+});
+it('is deterministic with many small and streamed files regardless of creation order', async () => {
+  const { stageDir, plan } = await fixture();
+  const files = Array.from({ length: 30 }, (_, i) => `file-${i}`);
+  for (const name of files) await writeFile(join(stageDir, 'node_modules', name), Buffer.alloc(name === 'file-0' ? 1024 * 1024 + 1 : 1024, 7));
+  const first = await deploymentFingerprint(plan, {});
+  for (const name of files.reverse()) {
+    const path = join(stageDir, 'node_modules', name), bytes = await readFile(path); await rm(path); await writeFile(path, bytes);
+  }
+  expect(await deploymentFingerprint(plan, {})).toBe(first);
+});
