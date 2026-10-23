@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { readFile } from "node:fs/promises";
+import { mkdirSync, writeFileSync, renameSync } from "node:fs";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import {
@@ -30,7 +31,7 @@ const ExtensionDoc = defineDoc({
 });
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const LEGACY_BUILTINS = new Set(["<inline:Plan Mode>", "<inline:pi-web-workflow>", "<inline:Structured Output>", "<inline:pi-web-mcp>", "<inline:pi-web-subagent>"]);
-const READ_METHODS = new Set(["getCwd", "getSessionDir", "getSessionId", "getSessionFile", "getLeafId", "getLeafEntry", "getEntry", "getLabel", "getBranch", "buildContextEntries", "buildSessionProjection", "getHeader", "getEntries", "getTree", "getSessionName"]);
+const READ_METHODS = new Set(["getCwd", "getSessionDir", "getSessionId", "getSessionFile", "getLeafId", "getLeafEntry", "getEntry", "getLabel", "getBranch", "buildContextEntries", "buildSessionContext", "buildSessionProjection", "getHeader", "getEntries", "getTree", "getSessionName"]);
 
 export interface DurableExtensionHostOptions {
   /** Must be freshly created for this conversation: extension factories share their runtime bindings. */
@@ -107,8 +108,29 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
   const extensions = bundle.extensions.filter(extension => !LEGACY_BUILTINS.has(extension.path));
   const local = new AsyncLocalStorage<{ api?: HookApi | ToolExecutionApi; signal?: AbortSignal; event: string; key: string; appendIndex: number; dialogIndex: number }>();
   let projection = SessionManager.inMemory(cwd, { id: options.sessionId });
+  // An export, never a second source of truth. Upstream forks/read-only context
+  // profiles use Pi JSONL; Durable remains the sole writer of conversation state.
+  const snapshotDir = join(options.services.agentDir, "web-extension-snapshots", createHash("sha256").update(options.sessionId).digest("hex"));
+  const snapshotPath = join(snapshotDir, "parent.jsonl");
+  const needsSnapshot = extensions.some(item => item.path === "<inline:pi-subagents>");
+  let snapshotDirty = true;
+  function sessionSnapshot(): string | undefined {
+    if (!needsSnapshot) return undefined;
+    if (snapshotDirty) {
+      mkdirSync(snapshotDir, { recursive: true, mode: 0o700 });
+      const temporary = `${snapshotPath}.${randomUUID()}.tmp`;
+      writeFileSync(temporary, (projectedFiles ?? [projection.getHeader()]).map(entry => JSON.stringify(entry)).join("\n") + "\n", { mode: 0o600 });
+      renameSync(temporary, snapshotPath);
+      snapshotDirty = false;
+    }
+    return snapshotPath;
+  }
   const projectionProxy = new Proxy(projection, {
     get(_target, key) {
+      if (key === "getSessionFile") return sessionSnapshot;
+      if (key === "getSessionDir" && needsSnapshot) return () => snapshotDir;
+      if (!Reflect.has(projection, key)) return undefined; // Optional SDK capabilities must remain feature-detectable.
+      if (key === "_rewriteFile") return undefined; // Optional upstream export helper; this host owns persistence.
       if (typeof key === "string" && !READ_METHODS.has(key)) throw new Error(`SessionManager.${key} is read-only in Durable extensions; use pi.appendEntry or the host session API.`);
       const value = Reflect.get(projection, key, projection);
       return typeof value === "function" ? value.bind(projection) : value;
@@ -170,6 +192,7 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
         projectedFiles = [...projectedFiles, ...extra.slice(1)];
       } else projectedFiles = durableExtensionEntries(projectedEntries, cwd, options.sessionId);
       projection = SessionManager.inMemory(cwd, { id: options.sessionId }, projectedFiles);
+      snapshotDirty = true;
     }
     const agent = await options.conversation().agent(context);
     activeTools = agent.tools.map(tool => tool.name);
@@ -248,6 +271,8 @@ export function createDurableExtensionHost(options: DurableExtensionHostOptions)
     const tools: ToolRegistration[] = runner.getAllRegisteredTools().map(({ definition }) => defineTool({
       name: definition.name, description: definition.description, parameters: definition.parameters,
       executionMode: definition.executionMode, prepareArguments: definition.prepareArguments,
+      callers: definition.exposure === "model-only" ? ["model"] : undefined,
+      structuredOutputSchema: definition.outputSchema,
       async execute(args, api, callContext) {
         if (api.conversationId !== conversationId) throw new Error("Extension tool belongs to another conversation. Initialize its own extension host first.");
         await refreshProjection();

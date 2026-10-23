@@ -1,3 +1,4 @@
+import { createUpstreamSubagentExtension, hasUpstreamSubagentWork, upstreamSubagentResources } from "./upstream-subagents";
 import { chmodSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -236,7 +237,8 @@ async function openHost(options: DurableChatOptions): Promise<Host> {
     let instructions = "Complete the user's request accurately. Use the available tools and report verified results.";
     if (!models) {
       const runtime = await createPiModelRuntime();
-      services = await createAgentSessionServices({ cwd: options.cwd, modelRuntime: runtime });
+      services = await createAgentSessionServices({ cwd: options.cwd, modelRuntime: runtime,
+        resourceLoaderOptions: { ...upstreamSubagentResources(), extensionFactories: [createUpstreamSubagentExtension()] } });
       models = durableModels(runtime);
       const settings = services.settingsManager;
       provider ??= settings.getDefaultProvider();
@@ -267,7 +269,10 @@ async function openHost(options: DurableChatOptions): Promise<Host> {
       sessionId: id => durableSessionId(group, id),
       onChild: async child => { await host.chats.get(child.conversationId)?.refresh(); },
       beforeChild: async id => { const conversation = await harness!.conversation(id as ConversationId, context); if (conversation) await DurableChat.attach(host, conversation); } });
-    registry.install(subagents);
+    // Preserve legacy child documents/guards for existing runs; production tool
+    // execution is owned by the upstream SDK extension. Offline harness fixtures
+    // without SDK services retain the native adapter.
+    if (!services) registry.install(subagents);
     if (!options.models) registry.install(await createDurableMcpExtension(options.cwd));
     // Hooks are advisory upstream. Associate each immutable request message with
     // the decision, then enforce it synchronously at the actual provider boundary.
@@ -468,7 +473,7 @@ export class DurableChat {
   private disposed = false;
   touchHost(): void { this.host.lastUsed = Date.now(); this.host.activityVersion++; }
   retainsHost(subscribers: boolean): boolean {
-    return !!(this.bashAbort || this.bashRun?.running || (subscribers && (this.listeners.size || this.eventListeners.size)));
+    return hasUpstreamSubagentWork(this.sessionId) || !!(this.bashAbort || this.bashRun?.running || (subscribers && (this.listeners.size || this.eventListeners.size)));
   }
   async hasPendingHostState(): Promise<boolean> {
     const live = await this.readLive();
@@ -571,7 +576,8 @@ export class DurableChat {
   }
   private async initializeExtensions(): Promise<void> {
     if (!this.host.services) return;
-    this.services = this.conversation.id === 1 ? this.host.services : await createAgentSessionServices({ cwd: this.cwd, modelRuntime: this.host.services.modelRuntime });
+    this.services = this.conversation.id === 1 ? this.host.services : await createAgentSessionServices({ cwd: this.cwd, modelRuntime: this.host.services.modelRuntime,
+      resourceLoaderOptions: { ...upstreamSubagentResources(), extensionFactories: [createUpstreamSubagentExtension()] } });
     initializeWebTheme(this.services.settingsManager);
     this.extensionHost = createDurableExtensionHost({ services: this.services, harness: () => this.harness, conversation: () => this.conversation,
       registry: this.host.registry, ui: theme => { this.extensionUI.setPiTheme(theme); return this.persistentUI(); }, sessionId: this.sessionId, systemPrompt: this.projection.agent.instructions ?? "",

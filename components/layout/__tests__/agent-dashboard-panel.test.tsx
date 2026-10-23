@@ -52,7 +52,7 @@ describe("AgentDashboardPanel", () => {
       await Promise.resolve();
     });
 
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Concurrent agent slots"]');
+    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Manual queue concurrent slots"]');
     expect(select).not.toBeNull();
     expect(select!.value).toBe("3");
     expect([...select!.options].map((option) => option.value)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);

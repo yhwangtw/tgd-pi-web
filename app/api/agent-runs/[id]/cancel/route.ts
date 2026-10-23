@@ -1,3 +1,4 @@
+import { cancelUpstreamAgentRun, isUpstreamAgentRunId, UpstreamAgentRunError } from "@/lib/upstream-subagent-runs";
 import {
   AgentRunNotFoundError,
   ensureAgentRunSupervisor,
@@ -20,6 +21,10 @@ export async function POST(
       return Response.json({ error: "JSON object is required" }, { status: 400 });
     }
     const { id } = await params;
+    if (isUpstreamAgentRunId(id)) {
+      const run = await cancelUpstreamAgentRun(id);
+      return Response.json({ run }, { status: 202 });
+    }
     if (isDurableSessionId(id)) {
       if (!readDurableProjection(id)?.agentRun) return Response.json({ error: "Run not found" }, { status: 404 });
       const chat = await openDurableChat(id); await chat.send({ type: "abort" });
@@ -28,7 +33,9 @@ export async function POST(
     const run = await ensureAgentRunSupervisor().cancel(id);
     return Response.json({ run });
   } catch (error) {
-    const status = error instanceof AgentRunNotFoundError
+    const status = error instanceof UpstreamAgentRunError
+      ? error.status
+      : error instanceof AgentRunNotFoundError
       ? 404
       : error instanceof SyntaxError ? 400 : 500;
     return Response.json({

@@ -10,6 +10,15 @@ import {
 const theme = {} as ExtensionUIContext["theme"];
 
 describe("WebExtensionUIBridge", () => {
+  it("does not render upstream job protocol frames as composer text", () => {
+    const events: WebExtensionUIEvent[] = [];
+    const bridge = new WebExtensionUIBridge({ theme, emit: event => events.push(event) });
+    bridge.setWidget("subagent-async", ["PI_SUBAGENT_ASYNC_JSON:{\"runs\":[]}"]);
+    expect(bridge.snapshot()).not.toEqual(expect.arrayContaining([expect.objectContaining({ widgetKey: "subagent-async" })]));
+    expect(events.at(-1)).toMatchObject({ method: "setWidget", widgetKey: "subagent-async", widgetLines: undefined });
+    bridge.setWidget("ordinary", ["Readable status"]);
+    expect(bridge.snapshot()).toEqual(expect.arrayContaining([expect.objectContaining({ widgetKey: "ordinary", widgetLines: ["Readable status"] })]));
+  });
   it("exposes bound own methods for Pi's shallow UI prompt wrapper", () => {
     const events: WebExtensionUIEvent[] = [];
     const bridge = new WebExtensionUIBridge({ theme, emit: (event) => events.push(event) });

@@ -112,19 +112,15 @@ the tool change; busy or queued work must settle first. Switching tools alone
 keeps an executing plan's progress. A preset-only Plan with no saved prior tools
 exits to the default tools; an explicitly saved empty selection remains empty.
 
-Subagents default to no artificial time/turn/cost cap (`0`). Saved user budgets
-remain authoritative. The model can allocate smaller per-task `limits` and narrow
-`tools`; it cannot raise configured caps or enable a tool absent from its parent.
-Workers inherit active parent tools, including MCP/extensions, except `subagent`.
-Custom agent frontmatter can set `inheritTools: true`, or name tools explicitly.
-Read-only built-ins retain their inspection-only selection. Every delegated run
-uses an exact custom tool selection so runtime defaults cannot add tools back.
-
-A configured cost cap is shared by one single/parallel/chain invocation, including
-retries and later chain steps. It is checked after reported assistant usage;
-already-running responses can exceed the remaining budget, especially in parallel.
-Unreported provider cost cannot be enforced. A user extending a running member
-also extends its shared cost cap; model-supplied allocations cannot do so.
+Standard and Durable chat use the pinned community `pi-subagents` extension.
+`lib/upstream-subagents.ts` loads the full factory and packaged resources, connects
+its RPC client and session-liveness protocol, and registers upstream capability
+ceilings from the active parent tools. `lib/upstream-subagent-runs.ts` projects
+upstream status into existing Agents cards; it does not schedule or execute jobs.
+The old supervisor remains for manually started background tasks and historical
+runs. Its queue concurrency and legacy budget controls do not configure upstream.
+Existing positive legacy subagent limits block adoption explicitly rather than
+being silently discarded. See [SUBAGENTS.md](SUBAGENTS.md).
 
 ## Architecture
 
@@ -135,8 +131,9 @@ The [pre-integration audit](DURABLE-INTEGRATION-AUDIT.md) remains historical evi
 its migration checklist does not describe the implementation status today.
 
 `POST /api/agent/new` selects the native path only for `engine: "durable"`.
-`lib/durable-chat.ts` owns one official Harness per store; branches and native
-subagents use conversations in that harness. `lib/durable-session-store.ts`
+`lib/durable-chat.ts` owns one official Harness per store; branches and historical native
+children use conversations in that harness. New delegated work uses the upstream
+SDK extension, including in Durable parents. `lib/durable-session-store.ts`
 projects saved entries for the existing session, search, analytics and export APIs.
 Read-only history endpoints do not call `resume()`. SSE reconnect and the schedule
 runner can resume unfinished work. An ephemeral chat uses MemoryStorage.

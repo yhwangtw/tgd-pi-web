@@ -408,6 +408,9 @@ export class WebExtensionUIBridge implements ExtensionUIContext {
     // Component factories require a terminal renderer and are intentionally
     // ignored in Web/RPC mode. String widgets map cleanly to browser UI.
     if (typeof content === "function") return;
+    // Upstream's RPC widget is a machine-readable transport frame. Jobs are
+    // rendered by the Agents panel; never print the JSON above the composer.
+    if (key === "subagent-async" && content?.some(line => line.startsWith("PI_SUBAGENT_ASYNC_JSON:"))) content = undefined;
     const event = {
       type: "extension_ui_request",
       id: randomUUID(),

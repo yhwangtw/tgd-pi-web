@@ -22,6 +22,12 @@ const STATUS_KEYS: Record<AgentRun["status"], MsgKey> = {
   interrupted: "agents.status.interrupted",
 };
 
+const UPSTREAM_STATUS_KEYS: Record<NonNullable<AgentRun["upstream"]>["state"], MsgKey> = {
+  queued: "agents.status.queued", running: "agents.status.running", complete: "agents.status.completed",
+  failed: "agents.status.failed", partial: "agents.upstream.partialRun", paused: "agents.upstream.paused",
+  stopped: "agents.status.cancelled", rejected: "agents.upstream.rejected",
+};
+
 interface Props {
   run: AgentRun;
   busy: boolean;
@@ -39,6 +45,10 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const active = run.status === "queued" || ACTIVE_AGENT_RUN_STATUSES.has(run.status);
   const terminal = TERMINAL_AGENT_RUN_STATUSES.has(run.status);
+  const upstream = run.engine === "upstream";
+  const canCancel = upstream ? run.upstream?.canStop === true : active;
+  const canRetry = terminal && !run.durableConversation && (!upstream || run.upstream?.canRetry === true);
+  const statusKey = upstream && run.upstream ? UPSTREAM_STATUS_KEYS[run.upstream.state] : STATUS_KEYS[run.status];
   const repair = run.status === "failed" || run.status === "interrupted";
   const time = new Intl.DateTimeFormat(locale === "zh" ? "zh-TW" : "en", {
     month: "short",
@@ -62,18 +72,22 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
         )}
         <span className={`${s.statusDot} ${s[`status_${run.status}`]}`} aria-hidden="true" />
         <strong className={s.cardTitle}>{run.name}</strong>
+        {upstream && <span className={s.subagentBadge}>{t("agents.upstream.badge")}</span>}
         {run.engine === "durable" && <span className={s.subagentBadge}>{t("agents.durableBadge")}</span>}
-        {run.trigger === "subagent" && <span className={s.subagentBadge}>{t("agents.subagent")}</span>}
+        {!upstream && run.trigger === "subagent" && <span className={s.subagentBadge}>{t("agents.subagent")}</span>}
         {run.workspace?.branch && <span className={`${s.branch} chrome-mono`}>{run.workspace.branch}</span>}
       </div>
       <div className={s.cardMeta}>
-        <span className={`${s.statusBadge} ${s[`status_${run.status}`]}`}>{t(STATUS_KEYS[run.status])}</span>
+        <span className={`${s.statusBadge} ${s[`status_${run.status}`]}`}>{t(statusKey)}</span>
         <time dateTime={run.startedAt ?? run.createdAt}>{time}</time>
       </div>
       <div className={s.cardDetails}>
-        <p className={s.promptPreview}>{run.prompt}</p>
+        <p className={s.promptPreview}>{upstream ? t("agents.upstream.description") : run.prompt}</p>
+        {run.upstream?.statusStale && <p role="status">{t("agents.upstream.stale")}</p>}
+        {run.upstream?.stopRequested && <p role="status">{t("agents.upstream.stopping")}</p>}
         <details className={s.runDetails}>
           <summary>{t("ui.technicalDetails")}</summary>
+          {upstream && <span>{t("agents.upstream.parentWorkspace")}</span>}
           <div className={`${s.path} chrome-mono`}>{run.cwd}</div>
           {run.error && <div className={s.runError}>{run.error}</div>}
         </details>
@@ -98,18 +112,21 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
       </div>
       <div className={s.cardActions}>
         {run.engine === "durable" && <button type="button" onClick={() => setTranscriptOpen(true)}>{t("agents.openTranscript")}</button>}
-        {!run.durableConversation && ACTIVE_AGENT_RUN_STATUSES.has(run.status) && onExtend && <button type="button" disabled={busy} onClick={() => onExtend(run)}>{t("agents.extend")}</button>}
+        {!upstream && !run.durableConversation && ACTIVE_AGENT_RUN_STATUSES.has(run.status) && onExtend && <button type="button" disabled={busy} onClick={() => onExtend(run)}>{t("agents.extend")}</button>}
+        {upstream && run.parentSessionId && (
+          <button type="button" onClick={() => void onOpenSession(run.parentSessionId as string)}>{t("agents.upstream.openParent")}</button>
+        )}
         {run.sessionId && (
           <button type="button" onClick={() => void onOpenSession(run.sessionId as string)}>
             {t("agents.openSession")}
           </button>
         )}
-        {active && (
+        {canCancel && (
           <button type="button" disabled={busy} onClick={() => onCancel(run)} className={s.dangerTextButton}>
             {t("agents.cancel")}
           </button>
         )}
-        {terminal && !run.durableConversation && (
+        {canRetry && (
           <button type="button" className={repair ? s.repairButton : undefined} disabled={busy} onClick={() => onRetry(run)}>
             {t("agents.retry")}
           </button>
