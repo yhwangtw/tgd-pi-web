@@ -258,15 +258,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # @playwright/test is deliberately not a devDependency: its transitive
-      # postinstall downloads browser binaries, which breaks offline/Nexus
-      # installs at the company. CI installs it ad hoc without touching
-      # package.json / package-lock.json.
-      - name: Install Playwright (not in package.json — offline installs)
-        run: npm i -D --no-save --package-lock=false @playwright/test@1.64.0
+      # Keep optional E2E tooling out of offline/Nexus application installs.
+      # A separate prefix also avoids npm re-resolving the installed app graph
+      # (npm 10 can fail there with a null edgesOut). Match locked playwright-core.
+      - name: Install isolated Playwright
+        run: |
+          playwright_dir="$RUNNER_TEMP/piweb-playwright"
+          npm install --prefix "$playwright_dir" --no-save --package-lock=false --no-audit --no-fund @playwright/test@1.64.0
+          echo "NODE_PATH=$playwright_dir/node_modules" >> "$GITHUB_ENV"
+          echo "PIWEB_PLAYWRIGHT_CLI=$playwright_dir/node_modules/@playwright/test/cli.js" >> "$GITHUB_ENV"
 
       - name: Install Playwright chromium
-        run: npx playwright install --with-deps --only-shell chromium
+        run: node "$PIWEB_PLAYWRIGHT_CLI" install --with-deps --only-shell chromium
 
       - name: Download the build from this workflow run
         uses: actions/download-artifact@v8
@@ -279,7 +282,7 @@ jobs:
 
       - name: Run E2E shard (${{ needs.scope.outputs.e2e }})
         id: e2e
-        run: npm run test:e2e -- --shard=${{ matrix.shard }}/4
+        run: node "$PIWEB_PLAYWRIGHT_CLI" test --shard=${{ matrix.shard }}/4
         env:
           CI: true
           PI_E2E_REUSE_BUILD: '1'
