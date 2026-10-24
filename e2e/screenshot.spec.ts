@@ -66,6 +66,15 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
     await dialog.getByRole("button", { name: "Retake", exact: true }).click();
     await expect(dialog.getByRole("img")).toBeVisible();
     await selectArea();
+    // captureStream video may round RGB during color-space conversion. Compare
+    // the crop exactly against the decoded preview, not the pre-video paint.
+    const sourceCorner = await dialog.getByRole("img").evaluate(async (image: HTMLImageElement) => {
+      await image.decode();
+      const canvas = document.createElement("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d")!; context.drawImage(image, 0, 0);
+      return [...context.getImageData(image.naturalWidth / 4 + 2, image.naturalHeight / 4 + 2, 1, 1).data];
+    });
+    expect(sourceCorner[2] - sourceCorner[1], "The selected source region must be the blue fixture patch").toBeGreaterThan(80);
     await dialog.getByRole("button", { name: "Attach selection", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Remove image", exact: true })).toBeVisible();
@@ -76,7 +85,7 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
       const canvas = document.createElement("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
       const context = canvas.getContext("2d")!; context.drawImage(image, 0, 0);
       return { width: image.naturalWidth, height: image.naturalHeight, corner: [...context.getImageData(2, 2, 1, 1).data] };
-    })).toEqual({ width: 640, height: 360, corner: [17, 68, 187, 255] });
+    })).toEqual({ width: 640, height: 360, corner: sourceCorner });
     await expect(composer.locator("textarea")).toHaveValue("inspect this screenshot");
     await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await expect.poll(() => stopped(page)).toBe(true);
