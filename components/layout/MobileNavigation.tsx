@@ -57,6 +57,7 @@ function NavButton({ active, icon, label, onClick, expanded, buttonRef }: NavBut
       type="button"
       className={`${s.mobileNavButton} ${active ? s.mobileNavButtonActive : ""}`}
       onClick={onClick}
+      onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" })}
       aria-current={active ? "page" : undefined}
       aria-expanded={expanded}
     >
