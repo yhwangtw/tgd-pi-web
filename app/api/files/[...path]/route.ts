@@ -84,10 +84,11 @@ function handleMeta(filePath: string, stat: fs.Stats): Response {
   const documentMime = getDocumentMime(filePath);
   return NextResponse.json({
     size: stat.size,
+    revision: [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(":"),
     language: getLanguage(filePath),
     mime: imageMime || audioMime || videoMime || documentMime || "text/plain",
     previewKind: documentPreviewKind(filePath),
-  });
+  }, { headers: { "Cache-Control": "no-store" } });
 }
 
 async function handlePreview(filePath: string, stat: fs.Stats, allowedRoots: Set<string>): Promise<Response> {

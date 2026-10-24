@@ -9,9 +9,9 @@ import { Minus, Plus, RotateCcw } from "lucide-react";
 import { formatSize } from "./file-viewer-utils";
 import styles from "./ImageViewer.module.css";
 
-export function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
+export function ImageViewer({ filePath, cwd, visible = true }: { filePath: string; cwd?: string; visible?: boolean }) {
   const { t } = useI18n();
-  const { watching, refreshTrigger } = useFileWatch(filePath);
+  const { watching, refreshTrigger } = useFileWatch(filePath, visible);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);

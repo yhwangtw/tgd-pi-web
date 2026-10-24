@@ -5,8 +5,8 @@ import { encodeFilePathForApi, getFileName, getRelativeFilePath } from "@/lib/fi
 import { useFileWatch } from "@/hooks/useFileWatch";
 import { formatSize, formatDuration } from "./file-viewer-utils";
 
-export function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
-  const { watching, refreshTrigger } = useFileWatch(filePath);
+export function AudioViewer({ filePath, cwd, visible = true }: { filePath: string; cwd?: string; visible?: boolean }) {
+  const { watching, refreshTrigger } = useFileWatch(filePath, visible);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);

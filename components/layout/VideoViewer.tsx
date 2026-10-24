@@ -7,9 +7,9 @@ import { useI18n } from "@/lib/i18n";
 import { formatDuration, formatSize, getFileExt } from "./file-viewer-utils";
 import styles from "./MediaViewer.module.css";
 
-export function VideoViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
+export function VideoViewer({ filePath, cwd, visible = true }: { filePath: string; cwd?: string; visible?: boolean }) {
   const { t } = useI18n();
-  const { watching, refreshTrigger } = useFileWatch(filePath);
+  const { watching, refreshTrigger } = useFileWatch(filePath, visible);
   const [duration, setDuration] = useState<number | null>(null);
   const [dimensions, setDimensions] = useState<string>("");
   const [size, setSize] = useState<number | null>(null);

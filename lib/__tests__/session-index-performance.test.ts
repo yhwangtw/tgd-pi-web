@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listAllSessions } from "../session-reader";
 import { durableSessionDirectory, durableSessionId, listDurableChildRuns, listDurableSessions, readDurableProjection, saveDurableProjection, type DurableSessionProjection } from "../durable-session-store";
 import { publishSessionMigration } from "../session-migrations";
 
-const activity = vi.hoisted(() => ({ root: "", active: 0, peak: 0, legacyReads: 0, legacyStats: 0, projectionReads: 0, indexReads: 0, failIndexWrite: false, replacementProjection: "" }));
+const activity = vi.hoisted(() => ({ root: "", active: 0, peak: 0, legacyReads: 0, legacyStats: 0, projectionReads: 0, indexReads: 0, migrationReads: 0, failMigrationEnumeration: false, failIndexWrite: false, replacementProjection: "" }));
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return { ...actual, readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
+    if (String(args[0]).startsWith(`${activity.root}/session-migrations/`)) activity.migrationReads++;
     if (String(args[0]).startsWith(`${activity.root}/durable-sessions/`)) {
       if (/\/[1-9][0-9]*\.json$/.test(String(args[0]))) activity.projectionReads++;
       if (String(args[0]).endsWith(".index.json")) activity.indexReads++;
@@ -42,6 +43,12 @@ vi.mock("fs/promises", async (importOriginal) => {
     } finally { activity.active--; }
   }
   return { ...actual,
+    readdir: (...args: Parameters<typeof actual.readdir>) => {
+      if (activity.failMigrationEnumeration && String(args[0]) === `${activity.root}/session-migrations`) {
+        return Promise.reject(Object.assign(new Error("Synthetic directory read failure"), { code: "EACCES" }));
+      }
+      return actual.readdir(...args);
+    },
     stat: (...args: Parameters<typeof actual.stat>) => {
       if (String(args[0]).startsWith(`${activity.root}/sessions/`)) activity.legacyStats++;
       return tracked(args[0], () => actual.stat(...args));
@@ -65,12 +72,12 @@ function projection(conversation = 1): DurableSessionProjection {
     agentRun: { id, name: "Child", cwd: "/fixture", prompt: "fixture", toolNames: [], trigger: "subagent", status: "completed", createdAt: new Date(0).toISOString(), report: { summary: "fixture", changedFiles: [], tests: [], tools: [], usage: { inputTokens: 0, outputTokens: 0, cost: 0 }, durationMs: 1 } },
   };
 }
-function legacySession(index: number): string {
+function legacySession(index: number, parentSession?: string): string {
   const directory = join(root, "sessions", "fixture");
   mkdirSync(directory, { recursive: true });
   const path = join(directory, `${index}.jsonl`);
   writeFileSync(path, [
-    { type: "session", version: 3, id: `fixture-${index}`, timestamp: new Date(0).toISOString(), cwd: "/fixture" },
+    { type: "session", version: 3, id: `fixture-${index}`, timestamp: new Date(0).toISOString(), cwd: "/fixture", ...(parentSession ? { parentSession } : {}) },
     { type: "message", id: "m1", parentId: null, timestamp: new Date(index + 1).toISOString(), message: { role: "user", content: `Message ${index}`, timestamp: index + 1 } },
   ].map(value => JSON.stringify(value)).join("\n"));
   return path;
@@ -79,7 +86,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "pi-index-perf-"));
   previous = process.env.PI_CODING_AGENT_DIR;
   process.env.PI_CODING_AGENT_DIR = root;
-  Object.assign(activity, { root, active: 0, peak: 0, legacyReads: 0, legacyStats: 0, projectionReads: 0, indexReads: 0, failIndexWrite: false, replacementProjection: "" });
+  Object.assign(activity, { root, active: 0, peak: 0, legacyReads: 0, legacyStats: 0, projectionReads: 0, indexReads: 0, migrationReads: 0, failMigrationEnumeration: false, failIndexWrite: false, replacementProjection: "" });
   globalThis.__piSessionInfoCache = undefined;
   globalThis.__piSessionPathCache = undefined;
   globalThis.__piSessionListings = undefined;
@@ -204,6 +211,7 @@ describe("legacy session listing work limits", () => {
     expect(activity.peak).toBeLessThanOrEqual(32);
     expect(activity.legacyReads).toBe(96);
     expect(activity.legacyStats).toBe(96);
+    expect(activity.migrationReads).toBe(0);
     first[0].name = "caller mutation";
     expect(second[0].name).toBeUndefined();
     expect(activity.active).toBe(0);
@@ -211,9 +219,74 @@ describe("legacy session listing work limits", () => {
     await listAllSessions();
     expect(activity.legacyReads).toBe(96);
     expect(activity.legacyStats).toBe(192);
+    expect(activity.migrationReads).toBe(0);
     const file = legacySession(0);
     writeFileSync(file, readFileSync(file, "utf8") + "\n" + JSON.stringify({ type: "message", id: "m2", parentId: "m1", timestamp: new Date(1000).toISOString(), message: { role: "user", content: "Fresh", timestamp: 1000 } }));
     expect((await listAllSessions()).find(info => info.id === "fixture-0")?.messageCount).toBe(2);
     expect(activity.legacyReads).toBe(97);
+  });
+
+  it("rechecks migration receipts and parent aliases on warm scans, including deleted Durable targets", async () => {
+    const sourcePath = legacySession(0);
+    legacySession(1, sourcePath);
+    const first = projection();
+    first.info.sourceSessionId = "fixture-0";
+    saveDurableProjection(durableSessionDirectory(group), 1, first);
+    expect((await listAllSessions()).map(info => info.id)).toEqual(["fixture-1", "fixture-0"]);
+    const receipt = { version: 1 as const, sourceId: "fixture-0", sessionId: first.info.id, sourcePath, sourceHash: "fixture", migratedAt: new Date(0).toISOString() };
+    publishSessionMigration(receipt);
+    const migrated = await listAllSessions();
+    expect(migrated.map(info => info.id).sort()).toEqual(["fixture-1", first.info.id].sort());
+    expect(migrated.find(info => info.id === "fixture-1")?.parentSessionId).toBe(first.info.id);
+    const second = projection(2);
+    second.info.sourceSessionId = "fixture-0";
+    saveDurableProjection(durableSessionDirectory(group), 2, second);
+    publishSessionMigration({ ...receipt, sessionId: second.info.id });
+    const redirected = await listAllSessions();
+    expect(redirected.map(info => info.id).sort()).toEqual(["fixture-1", second.info.id].sort());
+    expect(redirected.find(info => info.id === "fixture-1")?.parentSessionId).toBe(second.info.id);
+    saveDurableProjection(durableSessionDirectory(group), 2, { ...second, deleted: true });
+    const deleted = await listAllSessions();
+    expect(deleted.map(info => info.id)).toEqual(["fixture-1"]);
+    expect(deleted[0].parentSessionId).toBe(second.info.id);
+    expect(activity.legacyReads).toBe(2);
+  });
+
+  it("validates receipts rather than trusting directory filenames and preserves lookup on enumeration failure", async () => {
+    const sourcePath = legacySession(0);
+    const saved = projection();
+    saveDurableProjection(durableSessionDirectory(group), 1, saved);
+    publishSessionMigration({ version: 1, sourceId: "fixture-0", sessionId: saved.info.id, sourcePath, sourceHash: "fixture", migratedAt: new Date(0).toISOString() });
+    activity.failMigrationEnumeration = true;
+    expect((await listAllSessions()).map(info => info.id)).toEqual([saved.info.id]);
+    expect(activity.migrationReads).toBe(1);
+    activity.failMigrationEnumeration = false;
+    const { migrationDirectory, migrationKey } = await import("../session-migrations");
+    const receiptPath = join(migrationDirectory(), `${migrationKey("fixture-0")}.json`);
+    writeFileSync(receiptPath, "{invalid");
+    expect((await listAllSessions()).map(info => info.id).sort()).toEqual(["fixture-0", saved.info.id].sort());
+    rmSync(receiptPath);
+    writeFileSync(join(migrationDirectory(), `${migrationKey("fixture-0")}.standard`), "1");
+    const reads = activity.migrationReads;
+    expect(await listAllSessions()).toHaveLength(2);
+    expect(activity.migrationReads).toBe(reads);
+  });
+
+  it("invalidates same-size external replacements even when their original mtime is preserved", async () => {
+    const path = legacySession(0);
+    const timestamp = 1_700_000_000;
+    utimesSync(path, timestamp, timestamp);
+    const before = statSync(path);
+    expect((await listAllSessions())[0].firstMessage).toBe("Message 0");
+    const replacement = `${path}.replacement`;
+    writeFileSync(replacement, readFileSync(path, "utf8").replace("Message 0", "Changed 0"));
+    utimesSync(replacement, timestamp, timestamp);
+    renameSync(replacement, path);
+    expect(statSync(path)).toMatchObject({ size: before.size, mtimeMs: before.mtimeMs });
+    expect((await listAllSessions())[0].firstMessage).toBe("Changed 0");
+    expect(activity.legacyReads).toBe(2);
+    rmSync(path);
+    expect(await listAllSessions()).toEqual([]);
+    expect(globalThis.__piSessionInfoCache?.has(path)).toBe(false);
   });
 });

@@ -571,6 +571,14 @@ the watched HTML revision changes; manual reload refreshes asset-only changes.
 Loading completes on the iframe's load event, with cancellation and a 15-second
 timeout. Missing/unsupported assets are reported without hiding the document.
 
+File previews pause monitoring while their panel or browser tab is hidden and
+reconcile on return. HTTP/2 and HTTP/3 retain SSE file-change delivery. HTTP/1
+(or an unknown navigation protocol) polls only a no-store metadata revision
+once a second, with one bounded request at a time. This leaves normal request
+slots available when several conversations also hold agent event streams;
+file contents reload only after change. The revision includes inode and ctime,
+so equal-size writes and replacements preserving mtime still invalidate it.
+
 Generation timing is measured only for fully observed live replies and saved
 in `pi-generation-metrics-v1` in browser storage (500 records, 90 days). Keys
 include session/model/timestamp and a content fingerprint; response text is

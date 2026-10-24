@@ -9,8 +9,13 @@
 .containerExpanded {
   position: fixed;
   inset: 0;
+  height: 100dvh;
   z-index: 300;
-  padding: var(--space-4);
+  padding: calc(var(--safe-area-top) + var(--space-4))
+    calc(var(--safe-area-right) + var(--space-4))
+    calc(var(--safe-area-bottom) + var(--space-4))
+    calc(var(--safe-area-left) + var(--space-4));
+  overflow-y: auto;
   background: var(--bg);
 }
 
@@ -39,7 +44,11 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
+
+.innerWrapperExpanded > :not(.inputWrapperExpanded) { flex-shrink: 0; }
 
 .expandedHeader {
   display: flex;
@@ -355,8 +364,13 @@
 
 .inputWrapperExpanded {
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: calc(var(--control-touch) + var(--space-4));
   align-items: flex-end;
+}
+
+.inputWrapperExpanded .inputRow {
+  height: 100%;
+  min-height: 0;
 }
 
 /* Textarea */
@@ -385,8 +399,11 @@
 }
 
 .textareaExpanded {
-  max-height: none;
-  min-height: 320px;
+  /* The inline draft height must not force a landscape/keyboard viewport
+     taller. The editor fills the available row and scrolls its own text. */
+  height: 100% !important;
+  max-height: 100%;
+  min-height: var(--control-touch);
   align-self: stretch;
 }
 
@@ -642,12 +659,20 @@
 }
 
 @media (min-width: 701px) {
+  .bottomBarRightMobileOpen:not(.bottomBarRightStreaming) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-8) * 6)), 1fr));
+    gap: var(--space-1) var(--space-4);
+    padding-top: var(--space-3);
+  }
+
   .bottomBarRightMobileOpen .mobileLabeledControl {
-    display: inline-flex;
+    display: flex;
     min-width: 0;
     align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-2);
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
     border-radius: var(--radius-control);
     background: transparent;
   }
@@ -658,9 +683,19 @@
 
   .bottomBarRightMobileOpen .mobileControlLabel {
     display: inline;
+    min-width: 0;
     color: var(--text-muted);
     font-size: var(--text-xs);
     line-height: var(--leading-snug);
+  }
+
+  .bottomBarRightMobileOpen .mobileLabeledControl > button,
+  .bottomBarRightMobileOpen .mobileLabeledControl > div { flex-shrink: 0; }
+
+  .bottomBarRightMobileOpen .scrollModeControl > div {
+    margin-inline: 0;
+    padding-inline: 0;
+    border-inline: 0;
   }
 }
 
@@ -963,7 +998,10 @@
   }
 
   .containerExpanded {
-    padding: var(--space-3);
+    padding: calc(var(--safe-area-top) + var(--space-3))
+      calc(var(--safe-area-right) + var(--space-3))
+      calc(var(--safe-area-bottom) + var(--space-3))
+      calc(var(--safe-area-left) + var(--space-3));
   }
 
   .expandedHeader > div {
@@ -976,7 +1014,7 @@
   }
 
   .textareaExpanded {
-    min-height: 220px;
+    min-height: var(--control-touch);
   }
 
   .inputWrapper {
@@ -998,7 +1036,7 @@
   }
 
   .textareaExpanded {
-    max-height: none;
+    max-height: 100%;
     padding-top: var(--space-1);
   }
 
@@ -1378,6 +1416,13 @@
   padding-right: var(--component-composer-action-gutter);
 }
 
+:global(html[data-ui-style="trae"]) .containerExpanded {
+  padding: calc(var(--safe-area-top) + var(--space-4))
+    calc(var(--safe-area-right) + var(--space-4))
+    calc(var(--safe-area-bottom) + var(--space-4))
+    calc(var(--safe-area-left) + var(--space-4));
+}
+
 :global(html[data-ui-style="trae"]) .innerWrapper:not(.innerWrapperExpanded) {
   padding: var(--space-2);
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
@@ -1484,6 +1529,13 @@
     padding: var(--space-1) var(--space-3) var(--space-2);
   }
 
+  :global(html[data-ui-style="trae"]) .containerExpanded {
+    padding: calc(var(--safe-area-top) + var(--space-3))
+      calc(var(--safe-area-right) + var(--space-3))
+      calc(var(--safe-area-bottom) + var(--space-3))
+      calc(var(--safe-area-left) + var(--space-3));
+  }
+
   :global(html[data-ui-style="trae"]) .innerWrapper:not(.innerWrapperExpanded) {
     padding: var(--space-2);
     border-radius: var(--radius-composer);
@@ -1498,6 +1550,10 @@
     min-height: 44px;
     max-height: min(32dvh, 170px);
     padding: var(--space-2) 0;
+  }
+
+  :global(html[data-ui-style="trae"]) .textareaExpanded {
+    max-height: 100%;
   }
 
   :global(html[data-ui-style="trae"]) .sendButton,
