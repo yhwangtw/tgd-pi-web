@@ -33,6 +33,23 @@
   margin: 0 auto;
 }
 
+/* A single surface contains the draft and its quiet action row. */
+.innerWrapper:not(.innerWrapperExpanded) {
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-composer);
+  background: var(--bg-elev-1);
+  box-shadow: var(--color-shadow-input);
+  transition: border-color var(--motion-normal) var(--ease-standard), box-shadow var(--motion-normal) var(--ease-standard);
+}
+
+.innerWrapper:not(.innerWrapperExpanded):has(.textarea:focus) {
+  border-color: var(--color-accent-border-focus);
+  box-shadow: var(--color-shadow-input), var(--color-focus-ring);
+}
+
+.innerWrapper:not(.innerWrapperExpanded):has(.inputWrapperStreaming) { border-color: var(--color-warning-border-strong); }
+
 .innerWrapperWide {
   max-width: 1040px;
 }
@@ -124,7 +141,7 @@
   margin-bottom: 6px;
   overflow: hidden;
   border: 1px solid var(--color-accent-border-subtle);
-  border-left: 3px solid var(--accent);
+  border-left: 1px solid var(--accent);
   border-radius: var(--radius-row);
   background: var(--color-accent-bg-subtle);
 }
@@ -328,10 +345,10 @@
   gap: var(--space-2);
   align-items: center;
   position: relative;
-  background: var(--bg-elev-1);
+  background: transparent;
   border-radius: var(--radius-composer);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-  box-shadow: var(--surface-highlight), var(--color-shadow-input);
+  box-shadow: none;
   transition:
     border-color var(--motion-normal) var(--ease-standard),
     background var(--motion-normal) var(--ease-standard),
@@ -340,18 +357,16 @@
 
 .inputWrapperNormal {
   composes: inputWrapper;
-  border: 1px solid var(--border);
-}
-.inputWrapperNormal:has(.textarea:focus) {
-  border-color: var(--color-accent-border-focus);
-  box-shadow: var(--surface-highlight), var(--color-shadow-input), var(--color-focus-ring);
+  border: 1px solid transparent;
 }
 
 .inputWrapperStreaming {
   composes: inputWrapper;
-  border: 1px solid var(--color-warning-border-strong);
-  box-shadow: var(--surface-highlight), var(--color-shadow-input);
+  border: 1px solid transparent;
+  box-shadow: none;
 }
+
+.innerWrapperExpanded .inputWrapperStreaming { border-color: var(--color-warning-border-strong); }
 
 .inputRow {
   display: flex;
@@ -531,7 +546,8 @@
 /* Bottom bar */
 .bottomBar {
   position: relative;
-  margin-top: 8px;
+  margin-top: 0;
+  padding: var(--space-1) var(--space-2);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -562,7 +578,12 @@
   border: 0;
   background: transparent;
   font-size: var(--text-sm);
+  border-radius: var(--radius-control);
+  padding-inline: var(--space-2);
+  transition: color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
 }
+
+.modelControl > button:hover:not(:disabled) { background: var(--bg-hover); }
 
 .sendModeSwitch {
   display: inline-flex;
@@ -740,7 +761,7 @@
 }
 .mobileToolsButton:hover { color: var(--text); background: var(--bg-hover); }
 .mobileToolsButtonActive {
-  border-color: var(--color-accent-border);
+  border-color: transparent;
   color: var(--accent-text);
   background: var(--color-accent-bg);
 }
@@ -1423,20 +1444,6 @@
     calc(var(--safe-area-left) + var(--space-4));
 }
 
-:global(html[data-ui-style="trae"]) .innerWrapper:not(.innerWrapperExpanded) {
-  padding: var(--space-2);
-  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  border-radius: var(--radius-composer);
-  background: var(--bg-elev-1);
-  box-shadow: var(--surface-highlight), var(--color-shadow-input);
-  transition: border-color var(--motion-normal) var(--ease-standard), box-shadow var(--motion-normal) var(--ease-standard);
-}
-
-:global(html[data-ui-style="trae"]) .innerWrapper:not(.innerWrapperExpanded):has(.textarea:focus) {
-  border-color: var(--color-accent-border-focus);
-  box-shadow: var(--surface-highlight), var(--color-shadow-input), var(--color-focus-ring);
-}
-
 :global(html[data-ui-style="trae"]) .inputWrapper {
   gap: var(--space-2);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
@@ -1507,7 +1514,7 @@
 :global(html[data-ui-style="trae"]) .bottomBarLeft button,
 :global(html[data-ui-style="trae"]) .mobileToolsButton,
 :global(html[data-ui-style="trae"]) .expandButton {
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
 }
 
 :global(html[data-ui-style="trae"]) .attachButton {
@@ -1594,4 +1601,13 @@
 
 @media (max-width: 700px), (pointer: coarse) {
   .imageRemoveButton > svg { width: var(--component-icon-button-glyph-default); height: var(--component-icon-button-glyph-default); }
+}
+
+/* Attachments arrive once; ongoing streaming and text stay still. */
+@media (prefers-reduced-motion: no-preference) {
+  .imagePreviewItem { animation: attachment-arrive var(--motion-normal) var(--ease-standard); }
+}
+@keyframes attachment-arrive {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
 }

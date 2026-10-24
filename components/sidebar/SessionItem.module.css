@@ -13,8 +13,8 @@
   outline: none;
 }
 
-.item:has(.sessionTitleSelected) {
-  box-shadow: inset 3px 0 0 var(--accent);
+.item[aria-selected="true"] {
+  box-shadow: inset 0 0 0 1px var(--color-accent-border);
 }
 
 @media (min-width: 701px) {
@@ -28,7 +28,9 @@
 
 /* Keyboard-focused row (roving focus from the list's arrow-key nav) */
 .item:focus-visible {
-  box-shadow: inset 0 0 0 1.5px var(--color-accent-border-focus-strong);
+  outline: 2px solid var(--accent-text);
+  outline-offset: -2px;
+  box-shadow: none;
 }
 
 /* Two stable lines: conversation title/time, then quiet context and excerpt. */
@@ -62,19 +64,18 @@
   color: var(--text);
 }
 .sessionTitleDefault {
-  font-weight: var(--weight-regular);
-}
-.sessionTitleSelected {
   font-weight: var(--weight-medium);
 }
-.sessionTitleUnread { font-weight: var(--weight-bold, 700); }
+.sessionTitleSelected {
+  font-weight: var(--weight-semibold);
+}
+.sessionTitleUnread { font-weight: var(--weight-semibold); }
 .unreadDot {
-  width: 9px;
-  height: 9px;
+  width: var(--space-2);
+  height: var(--space-2);
   border-radius: var(--radius-pill);
   flex-shrink: 0;
   background: var(--accent-text);
-  outline: 2px solid var(--bg-panel);
 }
 
 .titleActions {
@@ -84,7 +85,7 @@
   flex-shrink: 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.12s;
+  transition: opacity var(--motion-fast) var(--ease-standard);
 }
 /* Reveal actions on row hover OR when context menu is open */
 .item:hover .titleActions,
@@ -94,7 +95,7 @@
   pointer-events: auto;
 }
 /* Keep the single entry point discoverable for the selected conversation. */
-.item:has(.sessionTitleSelected) .titleActions {
+.item[aria-selected="true"] .titleActions {
   opacity: 1;
   pointer-events: auto;
 }
@@ -111,7 +112,8 @@
   border: none;
   color: var(--text-dim);
   cursor: pointer;
-  transition: transform var(--motion-spatial-duration, 0.15s), color 0.12s;
+  line-height: var(--leading-none);
+  transition: transform var(--motion-spatial-duration, var(--motion-fast)) var(--ease-standard), color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
   border-radius: var(--radius-control-compact);
 }
 .collapseToggle:hover {
@@ -138,7 +140,8 @@
   cursor: pointer;
   flex-shrink: 0;
   border-radius: var(--radius-control-compact);
-  transition: background 0.1s, color 0.1s;
+  line-height: var(--leading-none);
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
 }
 .overflowButton:hover {
   background: var(--bg-hover);
@@ -153,6 +156,10 @@
 .metaTime {
   flex-shrink: 0;
   white-space: nowrap;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-leading);
   font-variant-numeric: tabular-nums;
 }
 
@@ -166,7 +173,7 @@
   max-width: 38%;
   flex: 0 0 auto;
   overflow: hidden;
-  color: var(--text-muted);
+  color: var(--text-dim);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -185,7 +192,7 @@
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  color: var(--text-dim);
+  color: var(--text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -211,8 +218,6 @@
 .attentionStatus span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attentionStatus[data-status="failed"] { color: var(--color-error-text); }
 .attentionStatus + .workspaceMeta { max-width: 24%; }
-
-.metaTime { color: var(--text-dim); font-family: var(--font-ui); font-size: var(--text-2xs); }
 
 .tagChip {
   display: inline-flex;
@@ -412,22 +417,6 @@
   margin: 2px 9px;
   padding: var(--space-2) var(--space-2);
   border-radius: var(--radius-row);
-}
-
-:global(html[data-ui-style="trae"]) .item:has(.sessionTitleSelected) {
-  background: var(--bg-elev-1);
-  box-shadow: none;
-}
-
-:global(html[data-ui-style="trae"]) .item:has(.sessionTitleSelected)::before {
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  left: 0;
-  width: 3px;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  content: "";
 }
 
 @media (max-width: 700px) {
