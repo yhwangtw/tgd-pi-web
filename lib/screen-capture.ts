@@ -83,9 +83,10 @@ export function captureScreenshot(signal: AbortSignal): Promise<Screenshot> {
         document.body.appendChild(video);
         video.srcObject = source;
         video.addEventListener("error", failed, { once: true });
-        // Prefer a decoded frame, rather than metadata that can produce a blank PNG.
+        // Both signals require decoded pixels. Hidden/minimal capture videos
+        // can receive loadeddata while compositor frame callbacks are deferred.
+        video.addEventListener("loadeddata", draw);
         if (typeof video.requestVideoFrameCallback === "function") frame = video.requestVideoFrameCallback(draw);
-        else video.addEventListener("loadeddata", draw);
         timer = setTimeout(() => finish(new DOMException("No frame received", "TimeoutError")), 10_000);
         void video.play().then(() => { if (frame === undefined) draw(); }, failed);
       } catch (error) { finish(error instanceof Error ? error : new Error("Screen capture failed")); }

@@ -2,8 +2,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 const session = "aaaa1111-2222-3333-4444-555566667777";
 
-async function installCapture(page: Page, support = true) {
-  await page.addInitScript(supported => {
+async function installCapture(page: Page, support = true, deferFrameCallback = false) {
+  await page.addInitScript(({supported, deferFrameCallback}) => {
+    if (deferFrameCallback) {
+      // A real decoded video still supplies loadeddata when its compositor
+      // callback is deferred. Keep the frame/crop assertions unchanged.
+      Object.defineProperty(HTMLVideoElement.prototype, "requestVideoFrameCallback", { configurable: true, value: () => 0 });
+      Object.defineProperty(HTMLVideoElement.prototype, "cancelVideoFrameCallback", { configurable: true, value: () => {} });
+    }
     const probe = { calls: 0, streams: [] as MediaStream[], options: null as unknown };
     Object.assign(window, { screenshotProbe: probe });
     Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {
@@ -25,7 +31,7 @@ async function installCapture(page: Page, support = true) {
         return stream;
       } : undefined,
     });
-  }, support);
+  }, { supported: support, deferFrameCallback });
 }
 const stopped = (page: Page) => page.evaluate(() => {
   const probe = (window as unknown as { screenshotProbe: { streams: MediaStream[] } }).screenshotProbe;
@@ -36,7 +42,7 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
   test(`${style} ${width}: captures a real video frame, stops sharing and confirms an attachment`, async ({ page }, info) => {
     await page.addInitScript(style => { localStorage.setItem("pi-ui-style", style); localStorage.setItem("pi-locale", "en"); }, style);
     await page.setViewportSize({ width, height: 900 });
-    await installCapture(page);
+    await installCapture(page, true, style === "trae" && width === 1440);
     await page.goto(`/?session=${session}`);
     const composer = page.getByTestId("composer-shell");
     await composer.locator("textarea").fill("inspect this screenshot");

@@ -1197,7 +1197,6 @@
        keyboard focus reveals each destination without covering the chat. */
     grid-template-columns: repeat(5, minmax(max-content, 1fr));
     column-gap: var(--space-2);
-    scroll-snap-type: x proximity;
     height: calc(var(--mobile-nav-height) + var(--safe-area-bottom));
     padding: var(--space-1) var(--space-1) var(--safe-area-bottom);
     overflow-x: auto;
@@ -1211,7 +1210,6 @@
   }
 
   .mobileNavButton {
-    scroll-snap-align: start;
     display: flex;
     min-width: var(--control-touch);
     min-height: 46px;
