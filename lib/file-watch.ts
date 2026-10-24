@@ -1,5 +1,9 @@
 import fs from "node:fs";
 
+export function fileWatchRevision(stat: fs.Stats): string {
+  return [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(":");
+}
+
 /** The stream owns its watcher on every termination path. */
 export function watchFileResponse(filePath: string, signal: AbortSignal): Response {
   let watcher: fs.FSWatcher | undefined;
@@ -32,11 +36,11 @@ export function watchFileResponse(filePath: string, signal: AbortSignal): Respon
           if (closed) return;
           try {
             const stat = fs.statSync(filePath);
-            send("change", { mtime: stat.mtime.toISOString(), size: stat.size });
-          } catch { send("change", { mtime: new Date().toISOString(), size: 0 }); }
+            send("change", { mtime: stat.mtime.toISOString(), size: stat.size, revision: fileWatchRevision(stat) });
+          } catch { send("change", { mtime: new Date().toISOString(), size: 0, revision: "missing" }); }
         });
         watcher.on("error", stop);
-        send("connected", { filePath });
+        send("connected", { filePath, revision: fileWatchRevision(fs.statSync(filePath)) });
       } catch { send("error", { message: "Failed to watch file" }); stop(); }
     },
     cancel() { if (!closed) { closed = true; cleanup(); } },

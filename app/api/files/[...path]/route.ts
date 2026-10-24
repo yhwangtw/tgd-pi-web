@@ -27,7 +27,7 @@ import { previewContentSecurityPolicy } from "@/lib/preview-policy";
 import { FileOperationError } from "@/lib/versioned-file";
 import { FileSaveConflict, readEditableFile, saveEditableFile } from "@/lib/file-editor";
 import { readTextPrefix } from "@/lib/text-prefix";
-import { watchFileResponse } from "@/lib/file-watch";
+import { fileWatchRevision, watchFileResponse } from "@/lib/file-watch";
 import { coalesceFileRead } from "@/lib/file-read-coalescing";
 import { validateEntryName } from "@/lib/file-name";
 import { textPreviewLimit } from "@/lib/preview-limits";
@@ -84,7 +84,7 @@ function handleMeta(filePath: string, stat: fs.Stats): Response {
   const documentMime = getDocumentMime(filePath);
   return NextResponse.json({
     size: stat.size,
-    revision: [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(":"),
+    revision: fileWatchRevision(stat),
     language: getLanguage(filePath),
     mime: imageMime || audioMime || videoMime || documentMime || "text/plain",
     previewKind: documentPreviewKind(filePath),

@@ -12,8 +12,7 @@ import { encodeFilePathForApi } from "@/lib/file-paths";
  *
  * @param filePath - Absolute path of the file to watch.
  * @returns `{ watching, refreshTrigger }` — `watching` is true while the
- *          SSE connection is live; `refreshTrigger` increments on each
- *          change event (use as a useEffect dependency).
+ *          monitor is healthy; `refreshTrigger` advances after observed edits.
  */
 export function useFileWatch(filePath: string, enabled = true): {
   watching: boolean;
@@ -23,6 +22,8 @@ export function useFileWatch(filePath: string, enabled = true): {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const pathRef = useRef<string | null>(null);
   const startedRef = useRef(false);
+  const revisionRef = useRef<string | null>(null);
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -32,20 +33,27 @@ export function useFileWatch(filePath: string, enabled = true): {
     let source: EventSource | null = null;
     let request: AbortController | null = null;
     let requestTimeout: ReturnType<typeof setTimeout> | null = null;
-    let revision: string | null = null;
     setWatching(false);
     if (pathRef.current !== filePath) {
       pathRef.current = filePath;
       startedRef.current = false;
+      revisionRef.current = null;
+      dirtyRef.current = false;
       setRefreshTrigger(0);
     }
     const encoded = encodeFilePathForApi(filePath);
     const notify = () => {
-      if (!active || refreshTimer !== null) return;
+      if (!active) return;
+      dirtyRef.current = true;
+      if (refreshTimer !== null) return;
       refreshTimer = setTimeout(() => {
         refreshTimer = null;
-        if (active) setRefreshTrigger((n) => n + 1);
+        if (active) { dirtyRef.current = false; setRefreshTrigger((n) => n + 1); }
       }, 100);
+    };
+    const observeRevision = (next: string) => {
+      if (revisionRef.current !== null && revisionRef.current !== next) notify();
+      revisionRef.current = next;
     };
     const stop = () => {
       generation++;
@@ -65,14 +73,35 @@ export function useFileWatch(filePath: string, enabled = true): {
       if (!enabled || document.visibilityState === "hidden") return;
       const current = generation;
       const isCurrent = () => active && generation === current;
-      if (startedRef.current) notify(); // Backfill edits made while hidden.
+      const resumed = startedRef.current;
+      // An edit queued just before hiding must survive timer cancellation.
+      if (dirtyRef.current) notify();
       startedRef.current = true;
       const protocol = (performance.getEntriesByType?.("navigation")[0] as PerformanceNavigationTiming | undefined)?.nextHopProtocol;
       if (protocol === "h2" || protocol?.startsWith("h3")) {
         const es = new EventSource(`/api/files/${encoded}?type=watch`);
         source = es;
-        es.addEventListener("connected", () => { if (isCurrent()) setWatching(true); });
-        es.addEventListener("change", () => { if (isCurrent()) notify(); });
+        let connected = false;
+        const eventRevision = (event: Event): string | undefined => {
+          try {
+            const value = JSON.parse((event as MessageEvent).data).revision;
+            return typeof value === "string" ? value : undefined;
+          } catch { return undefined; }
+        };
+        es.addEventListener("connected", (event) => {
+          if (!isCurrent()) return;
+          const revision = eventRevision(event);
+          if (revision !== undefined) observeRevision(revision);
+          else if (resumed || connected) notify(); // Compatibility with older servers.
+          connected = true;
+          setWatching(true);
+        });
+        es.addEventListener("change", (event) => {
+          if (!isCurrent()) return;
+          const revision = eventRevision(event);
+          if (revision !== undefined) observeRevision(revision);
+          notify();
+        });
         es.addEventListener("error", () => { if (isCurrent()) setWatching(false); });
         es.onerror = () => { if (isCurrent()) setWatching(false); };
         return;
@@ -87,14 +116,13 @@ export function useFileWatch(filePath: string, enabled = true): {
           if (!isCurrent()) return;
           if (!response.ok) {
             const missing = `http:${response.status}`;
-            if (revision !== missing) { revision = missing; notify(); }
+            if (revisionRef.current !== missing) { revisionRef.current = missing; notify(); }
             throw new Error(missing);
           }
           const data = await response.json() as { revision?: string };
           if (!isCurrent()) return;
           if (typeof data.revision !== "string") throw new Error("Invalid file revision");
-          if (revision !== null && revision !== data.revision) notify();
-          revision = data.revision;
+          observeRevision(data.revision);
           setWatching(true);
         } catch {
           if (isCurrent()) setWatching(false);

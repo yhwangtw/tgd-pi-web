@@ -7,12 +7,12 @@ import { useFileWatch } from "../useFileWatch";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 class FakeEventSource {
   static sources: FakeEventSource[] = [];
-  listeners = new Map<string, (() => void)[]>();
+  listeners = new Map<string, ((event: { data?: string }) => void)[]>();
   close = vi.fn();
   onerror: (() => void) | null = null;
   constructor(readonly url: string) { FakeEventSource.sources.push(this); }
-  addEventListener(type: string, listener: () => void) { this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]); }
-  emit(type: string) { this.listeners.get(type)?.forEach(listener => listener()); }
+  addEventListener(type: string, listener: (event: { data?: string }) => void) { this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]); }
+  emit(type: string, revision?: string) { this.listeners.get(type)?.forEach(listener => listener({ data: revision ? JSON.stringify({ revision }) : undefined })); }
 }
 let root: Root;
 let host: HTMLDivElement;
@@ -86,6 +86,7 @@ it("releases a hidden panel's stream, backfills on reopen and ignores late event
   await act(async () => { first.emit("change"); vi.advanceTimersByTime(200); });
   expect(state).toEqual({ watching: false, refreshTrigger: 0 });
   await act(async () => root.render(<Harness />));
+  await act(async () => FakeEventSource.sources[1].emit("connected"));
   await act(async () => vi.advanceTimersByTime(100));
   expect(state.refreshTrigger).toBe(1);
   expect(FakeEventSource.sources).toHaveLength(2);
@@ -104,7 +105,7 @@ it("stops background metadata work and reconciles edits when the document become
   await act(async () => { visibility = "visible"; document.dispatchEvent(new Event("visibilitychange")); });
   await act(async () => vi.advanceTimersByTimeAsync(100));
   expect(fetcher).toHaveBeenCalledTimes(2);
-  expect(state).toEqual({ watching: true, refreshTrigger: 1 });
+  expect(state).toEqual({ watching: true, refreshTrigger: 0 });
 });
 
 it("delivers bounded updates during continuous writes and cancels stale path notifications", async () => {
@@ -128,4 +129,39 @@ it("delivers bounded updates during continuous writes and cancels stale path not
   root = createRoot(host);
   expect(vi.getTimerCount()).toBe(0);
   expect(current.close).toHaveBeenCalledOnce();
+});
+
+it("retains HTTP/1 revisions across panel suspension and only refreshes edits made while hidden", async () => {
+  vi.mocked(performance.getEntriesByType).mockReturnValue([]);
+  let revision = "original";
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => ({ ok: true, json: async () => ({ revision }) })));
+  await act(async () => root.render(<Harness />));
+  await act(async () => root.render(<Harness enabled={false} />));
+  await act(async () => root.render(<Harness />));
+  await act(async () => vi.advanceTimersByTimeAsync(100));
+  expect(state.refreshTrigger).toBe(0);
+  await act(async () => root.render(<Harness enabled={false} />));
+  revision = "edited";
+  await act(async () => root.render(<Harness />));
+  await act(async () => vi.advanceTimersByTimeAsync(100));
+  expect(state.refreshTrigger).toBe(1);
+});
+
+it("reconciles HTTP/2 revision handshakes without reloading unchanged media or losing queued edits", async () => {
+  await act(async () => root.render(<Harness />));
+  await act(async () => FakeEventSource.sources[0].emit("connected", "original"));
+  await act(async () => root.render(<Harness enabled={false} />));
+  await act(async () => root.render(<Harness />));
+  await act(async () => FakeEventSource.sources[1].emit("connected", "original"));
+  await act(async () => vi.advanceTimersByTimeAsync(100));
+  expect(state.refreshTrigger).toBe(0);
+  await act(async () => FakeEventSource.sources[1].emit("change", "changed"));
+  await act(async () => root.render(<Harness enabled={false} />));
+  await act(async () => root.render(<Harness />));
+  await act(async () => FakeEventSource.sources[2].emit("connected", "changed"));
+  await act(async () => vi.advanceTimersByTimeAsync(100));
+  expect(state.refreshTrigger).toBe(1);
+  await act(async () => { FakeEventSource.sources[2].emit("error"); FakeEventSource.sources[2].emit("connected", "newer"); });
+  await act(async () => vi.advanceTimersByTimeAsync(100));
+  expect(state.refreshTrigger).toBe(2);
 });

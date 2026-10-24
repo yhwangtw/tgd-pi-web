@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { readFileSync, writeFileSync, statSync, utimesSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, statSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 
 const SESSION = "ffff1111-2222-3333-4444-555566667777";
@@ -58,9 +58,52 @@ test("metadata monitoring follows equal-size edits and reconciles a hidden file 
     utimesSync(target, stat.atime, stat.mtime); // Timestamp/size alone must not hide an edit.
     await expect.poll(async () => page.request.get(meta).then(response => response.json()).then(data => data.revision)).not.toBe(revision);
     await expect(panel.locator("pre").first()).toContainText(changed.trim(), { timeout: 4_000 });
-    await page.getByRole("button", { name: /^(Hide file panel|Back to chat)$/ }).click();
+    await page.locator(".right-panel-open").getByRole("button", { name: /^(Hide file panel|Back to chat)$/ }).click();
     writeFileSync(target, original);
     await page.getByRole("button", { name: "Show file panel", exact: true }).click();
     await expect(panel.locator("pre").first()).toContainText(original.trim(), { timeout: 4_000 });
   } finally { writeFileSync(target, original); utimesSync(target, stat.atime, stat.mtime); }
+});
+
+test("3200 persisted conversations remain complete through the API and a bounded sidebar", async ({ page, request }) => {
+  test.setTimeout(90_000);
+  const root = process.env.E2E_ROOT;
+  if (!root || process.env.PI_E2E_FIXTURES_READY !== root) throw new Error("Generated isolated store required");
+  const cwd = process.env.E2E_PROJECT_CWD!;
+  const before = await request.get("/api/sessions").then(response => response.json());
+  const directory = mkdtempSync(join(root, "agent", "sessions", "volume-"));
+  const samples = [];
+  try {
+    for (let index = 0; index < 3200; index++) {
+      const id = `99999999-1111-4444-8888-${String(index).padStart(12, "0")}`;
+      const timestamp = new Date(Date.UTC(2026, 9, 20) + index * 1000).toISOString();
+      const rows = [
+        { type: "session", version: 3, id, cwd, timestamp },
+        { type: "session_info", id: "name", parentId: null, timestamp, name: `Performance conversation ${index}` },
+        { type: "message", id: "question", parentId: "name", timestamp, message: { role: "user", content: `Synthetic question ${index}`, timestamp: Date.parse(timestamp) } },
+        { type: "message", id: "answer", parentId: "question", timestamp, message: { role: "assistant", content: `Synthetic answer ${index}`, timestamp: Date.parse(timestamp), provider: "fixture", model: "fixture", stopReason: "stop" } },
+      ];
+      writeFileSync(join(directory, `${id}.jsonl`), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
+    }
+    for (const state of ["cold", "warm"]) {
+      const at = performance.now(); const response = await request.get("/api/sessions");
+      expect(response.status()).toBe(200);
+      const data = await response.json();
+      samples.push({ state, elapsedMs: performance.now() - at, sessions: data.sessions.length, bytes: (await response.body()).byteLength });
+      expect(data.sessions).toHaveLength(before.sessions.length + 3200);
+      expect(data.sessions.filter((item: { id: string }) => item.id.startsWith("99999999-1111-4444-8888-")).length).toBe(3200);
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(() => { localStorage.setItem("pi-locale", "en"); localStorage.setItem("pi-session-scope", "all"); });
+    await page.goto(`/?session=${SESSION}`);
+    await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeVisible();
+    const grid = page.getByRole("grid", { name: "Sessions", exact: true });
+    await expect(grid).toBeVisible();
+    const mounted = await grid.locator("[data-session-row]").count();
+    expect(mounted).toBeGreaterThan(0);
+    expect(mounted).toBeLessThan(100);
+    await page.getByRole("textbox", { name: "Search conversations", exact: true }).fill("Performance conversation 3199");
+    await expect(grid.getByRole("row", { name: "Performance conversation 3199", exact: true })).toBeVisible();
+    await test.info().attach("session-volume", { body: JSON.stringify({ samples, mountedRows: mounted }), contentType: "application/json" });
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import { EventEmitter } from "node:events";
 import { join } from "node:path";
@@ -9,12 +9,14 @@ import { trimToUtf8Boundary } from "../text-prefix";
 
 afterEach(() => vi.restoreAllMocks());
 describe("file watcher ownership", () => {
+  beforeEach(() => vi.spyOn(fs, "statSync").mockReturnValue({ dev: 1, ino: 2, size: 3, mtimeMs: 4, ctimeMs: 5, mtime: new Date(4) } as fs.Stats));
   it("closes once on abort, including repeat abort and subsequent cancellation", async () => {
     const watcher = Object.assign(new EventEmitter(), { close: vi.fn() });
     vi.spyOn(fs, "watch").mockReturnValue(watcher as unknown as fs.FSWatcher);
     const abort = new AbortController();
     const response = watchFileResponse("/isolated.txt", abort.signal);
-    const reader = response.body!.getReader(); await reader.read();
+    const reader = response.body!.getReader(); const initial = await reader.read();
+    expect(new TextDecoder().decode(initial.value)).toContain('"revision":"1:2:3:4:5"');
     abort.abort(); abort.abort(); await reader.cancel();
     expect(watcher.close).toHaveBeenCalledTimes(1);
   });
