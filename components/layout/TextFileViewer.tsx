@@ -92,7 +92,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
     pendingGotoLineKeyRef.current = openNavigationKey;
     pendingGotoLineRef.current = gotoLineProp;
   }
-  const { watching, refreshTrigger } = useFileWatch(filePath);
+  const { watching, refreshTrigger } = useFileWatch(filePath, visible);
 
   const stopRestoringView = useCallback(() => {
     if (restoreMonitorRef.current) {

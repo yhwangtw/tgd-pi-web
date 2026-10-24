@@ -88,16 +88,16 @@ export function formatDuration(seconds: number): string {
 
 export function FileViewer({ filePath, visible, cwd, gotoLine, gotoNonce, onSendToAgent, sessionId, initialMode, initialViewState, onViewStateChange, onNavigationConsumed }: Props) {
   if (isImagePath(filePath)) {
-    return <ImageViewer filePath={filePath} cwd={cwd} />;
+    return <ImageViewer filePath={filePath} cwd={cwd} visible={visible} />;
   }
   if (isAudioPath(filePath)) {
-    return <AudioViewer filePath={filePath} cwd={cwd} />;
+    return <AudioViewer filePath={filePath} cwd={cwd} visible={visible} />;
   }
   if (isVideoPath(filePath)) {
-    return <VideoViewer filePath={filePath} cwd={cwd} />;
+    return <VideoViewer filePath={filePath} cwd={cwd} visible={visible} />;
   }
   if (isDocumentPreviewPath(filePath)) {
-    return <DocumentViewer filePath={filePath} cwd={cwd} />;
+    return <DocumentViewer filePath={filePath} cwd={cwd} visible={visible} />;
   }
   if (isBinaryPath(filePath)) {
     return <BinaryViewer filePath={filePath} cwd={cwd} />;

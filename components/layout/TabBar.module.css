@@ -20,11 +20,11 @@
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
-  /* A native scrollbar steals height from the fixed toolbar and creates a
+  /* A native scrollbar steals height from the toolbar and creates a
      second scrollbar. Tabs still scroll by trackpad, touch and keyboard. */
   scrollbar-width: none;
   flex: 1 1 0;
-  height: 36px;
+  min-height: var(--control-md);
 }
 
 .tabBar::-webkit-scrollbar { display: none; }
@@ -35,18 +35,20 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: 36px;
+  min-height: var(--control-md);
+  padding-block: var(--space-1);
   padding-left: var(--space-2);
   padding-right: calc(var(--file-tab-close-size) + var(--space-2));
   border-right: 1px solid var(--border);
   cursor: pointer;
   font-size: var(--text-sm);
+  line-height: var(--leading-ui);
   white-space: nowrap;
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
   user-select: none;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
 }
 
 .tabActive {
@@ -58,7 +60,7 @@
   display: flex;
   flex: 1;
   min-width: 0;
-  height: 100%;
+  align-self: stretch;
   align-items: center;
   gap: var(--space-1);
   padding: 0;
@@ -159,6 +161,7 @@
   padding: var(--space-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-menu);
+  background: var(--bg-elev-2);
   box-shadow: var(--color-shadow-modal);
   display: flex;
   flex-direction: column;
@@ -178,15 +181,15 @@
 .tabMenuItem:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; background: var(--bg-hover); color: var(--text); }
 
 :global(html[data-ui-style="trae"]) .tabBar {
-  height: 36px;
+  min-height: var(--control-md);
   align-items: center;
   gap: var(--space-1);
   padding: 0 var(--space-2);
   background: var(--trae-canvas);
 }
 :global(html[data-ui-style="trae"]) .tab {
-  height: 30px;
-  padding: 0 calc(var(--file-tab-close-size) + var(--space-2)) 0 var(--space-2);
+  min-height: 30px;
+  padding: var(--space-optical) calc(var(--file-tab-close-size) + var(--space-2)) var(--space-optical) var(--space-2);
   border: 0;
   border-radius: var(--radius-control);
 }
@@ -200,13 +203,15 @@
   :global(html[data-ui-style="trae"]) .tabBar {
     --file-tab-min-width: 132px;
     --file-tab-close-size: var(--control-touch);
-    height: var(--control-touch);
+    min-height: var(--control-touch);
   }
 
   .tab,
   :global(html[data-ui-style="trae"]) .tab {
-    height: var(--control-touch);
+    min-height: var(--control-touch);
   }
+
+  .tabSelect { min-height: var(--control-touch); }
 
   .tabMenuItem {
     min-height: var(--control-touch);

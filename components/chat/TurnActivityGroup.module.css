@@ -3,6 +3,12 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--bg-elev-1);
+  box-shadow: var(--color-shadow-control);
+  transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.root:not(.rootError):hover {
+  border-color: var(--border-strong);
 }
 
 .rootError {
@@ -54,11 +60,13 @@
 }
 
 .outcomeSuccess {
+  border: 1px solid var(--color-success-border);
   background: var(--color-success-bg);
   color: var(--color-success-text);
 }
 
 .outcomeError {
+  border: 1px solid var(--color-warning-border);
   background: var(--color-warning-bg);
   color: var(--color-warning-text);
 }
@@ -113,7 +121,8 @@
   .summary { min-height: var(--control-touch); }
 }
 
-:global(html[data-ui-style="trae"]) .root { border-color: transparent; border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .root { border-color: var(--trae-hairline); border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .root:not(.rootError):hover { border-color: var(--color-accent-border); box-shadow: var(--color-shadow-control-hover); }
 :global(html[data-ui-style="trae"]) .rootError { border-color: var(--color-warning-border); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .summary { min-height: 38px; padding: var(--space-2) var(--space-3); }
 :global(html[data-ui-style="trae"]) .body { gap: var(--space-2); padding: var(--space-2); border-top-color: var(--trae-hairline); background: var(--trae-canvas); }

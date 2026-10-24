@@ -1,19 +1,18 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { encodeFilePathForApi, getFileName, getRelativeFilePath } from "@/lib/file-paths";
+import { useFileWatch } from "@/hooks/useFileWatch";
 import { useI18n } from "@/lib/i18n";
 import { formatSize, getFileExt, DOCX_PREVIEW_MAX_BYTES } from "./file-viewer-utils";
 import { DownloadLink } from "./FileViewer";
 import styles from "./DocumentViewer.module.css";
 
-export function DocumentViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
+export function DocumentViewer({ filePath, cwd, visible = true }: { filePath: string; cwd?: string; visible?: boolean }) {
   const { t } = useI18n();
-  const [watching, setWatching] = useState(false);
-  const [bust, setBust] = useState(0);
+  const { watching, refreshTrigger: bust } = useFileWatch(filePath, visible);
   const [size, setSize] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
 
   const ext = getFileExt(filePath);
   const encoded = encodeFilePathForApi(filePath);
@@ -23,55 +22,22 @@ export function DocumentViewer({ filePath, cwd }: { filePath: string; cwd?: stri
     : `/api/files/${encoded}?type=preview${bust ? `&v=${bust}` : ""}`;
 
   useEffect(() => {
-    setBust(0);
+    const controller = new AbortController();
     setSize(null);
     setError(null);
-    setWatching(false);
-
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-
-    fetch(`/api/files/${encoded}?type=meta`)
-      .then((r) => r.json())
-      .then((d: { size?: number; error?: string }) => {
-        if (d.error) setError(d.error);
-        if (typeof d.size === "number") {
-          setSize(d.size);
-          if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
-            setError(t("files.docxTooLarge"));
-          }
+    fetch(`/api/files/${encoded}?type=meta`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json() as { size?: number; error?: string };
+        if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+        if (controller.signal.aborted) return;
+        if (typeof data.size === "number") {
+          setSize(data.size);
+          if (!isPdf && data.size > DOCX_PREVIEW_MAX_BYTES) setError(t("files.docxTooLarge"));
         }
       })
-      .catch((e) => setError(String(e)));
-
-    const es = new EventSource(`/api/files/${encoded}?type=watch`);
-    esRef.current = es;
-
-    es.addEventListener("connected", () => setWatching(true));
-    es.addEventListener("change", (e) => {
-      try {
-        const d = JSON.parse((e as MessageEvent).data) as { size?: number };
-        if (typeof d.size === "number") {
-          setSize(d.size);
-          if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
-            setError(t("files.docxTooLarge"));
-            return;
-          }
-        }
-      } catch { /* ignore */ }
-      setError(null);
-      setBust((b) => b + 1);
-    });
-    es.addEventListener("error", () => setWatching(false));
-    es.onerror = () => setWatching(false);
-
-    return () => {
-      es.close();
-      esRef.current = null;
-    };
-  }, [encoded, isPdf, t]);
+      .catch((error) => { if (!controller.signal.aborted) setError(String(error)); });
+    return () => controller.abort();
+  }, [encoded, isPdf, t, bust]);
 
   const iframeClass = `${styles.iframe} ${isPdf ? styles.iframePdf : styles.iframeDocx}`;
 

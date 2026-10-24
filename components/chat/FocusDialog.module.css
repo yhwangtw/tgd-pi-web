@@ -25,6 +25,7 @@
 
 .header {
   display: flex;
+  flex-wrap: wrap;
   min-height: 48px;
   align-items: center;
   justify-content: space-between;
@@ -36,6 +37,7 @@
 
 .title {
   min-width: 0;
+  flex: 1 1 180px;
   overflow: hidden;
   color: var(--text);
   font-family: var(--font-ui);
@@ -45,35 +47,48 @@
   white-space: nowrap;
 }
 
-.actions { display: flex; flex: 0 0 auto; align-items: center; gap: var(--space-2); }
+.actions { display: flex; min-width: 0; max-width: 100%; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-left: auto; }
+.actions > * { max-width: 100%; }
 
 .actions button {
-  min-height: 34px;
-  padding: 0 var(--space-2);
+  min-height: var(--control-md);
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--bg-panel);
   color: var(--text-muted);
   cursor: pointer;
   font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
 }
 
-.actions button:hover { background: var(--bg-hover); color: var(--text); }
-.actions .close { display: grid; width: 36px; padding: 0; place-items: center; }
+.actions button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+.actions button[aria-pressed="true"] { border-color: var(--color-accent-border); background: var(--color-accent-bg); color: var(--accent-text); }
+.actions button:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+.actions button:disabled { cursor: not-allowed; }
+.actions .close { display: grid; width: var(--control-md); flex: 0 0 auto; padding: 0; place-items: center; }
 .content { min-width: 0; min-height: 0; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; }
 
 @media (max-width: 700px) {
   .overlay { padding: 0; }
   .panel { width: 100%; height: 100%; border: 0; border-radius: 0; }
   .header { min-height: 52px; padding-left: var(--space-2); }
-  .actions button { min-height: 40px; }
-  .actions .close { width: 40px; }
+  .actions button { min-height: var(--control-touch); }
+  .actions .close { width: var(--control-touch); }
 }
 
 :global(html[data-ui-style="trae"]) .overlay { background: var(--trae-overlay); }
 :global(html[data-ui-style="trae"]) .panel { border-color: var(--trae-hairline); border-radius: var(--radius-dialog); background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .header { min-height: 56px; padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4); border-bottom-color: var(--trae-hairline); background: var(--trae-surface); }
 :global(html[data-ui-style="trae"]) .actions button { border-color: transparent; border-radius: var(--radius-control); background: var(--trae-control); }
+:global(html[data-ui-style="trae"]) .actions button:hover:not(:disabled) { background: var(--bg-hover); }
+:global(html[data-ui-style="trae"]) .actions button[aria-pressed="true"] { border-color: var(--color-accent-border); background: var(--color-accent-bg); }
+
+@media (pointer: coarse) {
+  .actions button { min-height: var(--control-touch); }
+  .actions .close { width: var(--control-touch); }
+}
 
 @media (max-width: 700px) {
   :global(html[data-ui-style="trae"]) .panel { border: 0; border-radius: 0; }

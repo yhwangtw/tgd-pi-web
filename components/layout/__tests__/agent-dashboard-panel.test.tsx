@@ -80,11 +80,14 @@ describe("AgentDashboardPanel", () => {
     await act(async () => root?.render(<AgentDashboardPanel defaultCwd="/fixture" onOpenSession={vi.fn()} />));
     expect(container.textContent).toContain("Completed fixture");
     const active = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "0Active")!;
+    expect(active.getAttribute("aria-pressed")).toBe("false");
     await act(async () => active.click());
+    expect(active.getAttribute("aria-pressed")).toBe("true");
     expect(container.textContent).toContain("No matching runs");
     expect(container.textContent).not.toContain("No background runs yet");
     const clear = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Clear filters")!;
     await act(async () => clear.click());
+    expect(active.getAttribute("aria-pressed")).toBe("false");
     expect(container.textContent).toContain("Completed fixture");
     expect(container.textContent).not.toContain("No matching runs");
   });

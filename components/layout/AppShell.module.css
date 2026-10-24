@@ -970,7 +970,7 @@
 
 @media (max-width: 700px) {
   .container {
-    --mobile-nav-height: 54px;
+    --mobile-nav-height: max(54px, calc(10px + var(--control-touch) * var(--font-scale)));
     padding-bottom: calc(var(--safe-area-bottom) + var(--mobile-nav-height));
   }
 
@@ -1191,9 +1191,15 @@
     bottom: 0;
     z-index: 350;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    /* Preserve whole labels when text is enlarged. Only this strip scrolls;
+       keyboard focus reveals each destination without covering the chat. */
+    grid-template-columns: repeat(5, minmax(max-content, 1fr));
     height: calc(var(--mobile-nav-height) + var(--safe-area-bottom));
     padding: var(--space-1) var(--space-1) var(--safe-area-bottom);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: var(--space-1);
+    scrollbar-width: thin;
     border-top: 1px solid var(--border);
     background: var(--glass-bg);
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
@@ -1202,7 +1208,7 @@
 
   .mobileNavButton {
     display: flex;
-    min-width: 0;
+    min-width: var(--control-touch);
     min-height: 46px;
     flex-direction: column;
     align-items: center;
@@ -1224,6 +1230,13 @@
 
   .mobileNavButton:focus-visible {
     outline-offset: -2px;
+  }
+
+  .mobileNavButton > span:last-child {
+    min-width: 0;
+    max-width: 100%;
+    white-space: nowrap;
+    text-align: center;
   }
 
   .mobileNavIcon {

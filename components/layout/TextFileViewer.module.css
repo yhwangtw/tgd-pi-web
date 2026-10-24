@@ -6,6 +6,9 @@
   justify-content: center;
   color: var(--text-muted);
   font-size: var(--text-md);
+  padding: var(--space-4);
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .errorState {
@@ -15,6 +18,9 @@
   justify-content: center;
   color: var(--color-error-text);
   font-size: var(--text-md);
+  padding: var(--space-4);
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .previewLoading {
@@ -41,7 +47,7 @@
 .statusBar {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   align-items: center;
   gap: var(--space-2);
   min-height: 38px;
@@ -71,18 +77,19 @@
 
 .askPi {
   min-height: 28px;
-  padding: 0 var(--space-3);
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-muted);
   font-size: var(--text-xs);
+  line-height: var(--leading-ui);
   font-weight: var(--weight-semibold);
   cursor: pointer;
 }
 
 .moreWrap { position: relative; display: flex; align-items: center; flex: 0 0 auto; }
-.moreButton { min-width: 30px; min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); cursor: pointer; }
+.moreButton { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; min-height: 28px; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); cursor: pointer; }
 
 .sourceTools {
   min-height: 38px;
@@ -99,7 +106,7 @@
   font-size: var(--text-xs);
 }
 .sourceTools > * { flex-shrink: 0; white-space: nowrap; }
-.sourceTools button { min-height: 28px; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-control-compact); background: transparent; color: var(--color-accent); cursor: pointer; }
+.sourceTools button { min-height: var(--control-sm); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-control-compact); background: transparent; color: var(--color-accent); font: inherit; cursor: pointer; }
 .sourceTools button:hover { background: var(--bg-hover); }
 
 .selectionBar {
@@ -118,7 +125,7 @@
 }
 .selectionBar::-webkit-scrollbar { display: none; }
 .selectionBar strong { flex: 0 0 auto; color: var(--color-accent); font-family: var(--font-mono); }
-.selectionBar button { flex: 0 0 auto; min-height: 30px; padding: 0 var(--space-2); border: 1px solid var(--color-accent-border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text); cursor: pointer; }
+.selectionBar button { flex: 0 0 auto; min-height: var(--control-sm); padding: var(--space-1) var(--space-2); border: 1px solid var(--color-accent-border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text); font: inherit; cursor: pointer; }
 .selectionBar .selectionClose { margin-left: auto; min-width: 30px; padding: 0; font-size: var(--text-lg); }
 
 .fileSummary {
@@ -139,8 +146,8 @@
   gap: var(--space-1);
 }
 
-.fileActions > button { flex: 0 0 auto; white-space: nowrap; }
-.fileActions .toggleGroup button { white-space: nowrap; }
+.fileActions > button { flex: 0 0 auto; max-width: 100%; overflow-wrap: anywhere; }
+.fileActions .toggleGroup button { min-width: 0; overflow-wrap: anywhere; }
 
 /* Partial-preview banner for files above the preview cap */
 .truncatedNotice {
@@ -165,12 +172,15 @@
 .filePath {
   flex: 1 1 auto;
   min-width: 0;
-  display: flex;
+  display: block;
   align-items: center;
   overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono);
 }
+
+.filePath:has(.filePathStart) { display: flex; }
 
 .filePathStart {
   min-width: 0;
@@ -215,6 +225,7 @@
 .fileInfo > summary::-webkit-details-marker { display: none; }
 .fileInfo > summary:hover,
 .fileInfo[open] > summary { background: var(--bg-hover); color: var(--text); }
+.fileInfo > summary:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -2px; }
 
 .fileInfoPopover {
   position: fixed;
@@ -224,7 +235,7 @@
   box-sizing: border-box;
   display: grid;
   width: 220px;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-2) var(--space-3);
   padding: var(--space-3);
   border: 1px solid var(--border);
@@ -233,6 +244,7 @@
   box-shadow: var(--color-shadow-popup);
   font-family: var(--font-ui);
   font-size: var(--text-xs);
+  line-height: var(--leading-ui);
 }
 
 .fileInfoPopover > span { color: var(--text-dim); }
@@ -240,12 +252,11 @@
   font-variant-numeric: tabular-nums;
   min-width: 0;
   justify-self: end;
-  overflow: hidden;
   color: var(--text-muted);
   font-family: var(--font-ui);
   font-weight: var(--weight-medium);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: end;
+  overflow-wrap: anywhere;
 }
 
 .language {
@@ -292,6 +303,8 @@
 .toggleGroup {
   display: flex;
   flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
   border-radius: var(--radius-control-compact);
   overflow: hidden;
   border: 1px solid var(--border);
@@ -301,6 +314,7 @@
 .toggleButton {
   padding: var(--space-optical) var(--space-2);
   font-size: var(--text-xs);
+  line-height: var(--leading-ui);
   cursor: pointer;
 }
 
@@ -390,10 +404,11 @@
 }
 
 .findInput {
-  width: 110px;
+  width: max(110px, 10ch);
   padding: var(--space-optical) var(--space-2);
   font-size: var(--type-ui-size);
   font-family: var(--font-ui);
+  line-height: var(--leading-ui);
   border: 1px solid var(--border);
   border-radius: var(--radius-control-compact);
   background: var(--bg);
@@ -501,15 +516,17 @@
 
   .fileSummary { gap: var(--space-2); }
   .fileMeta { gap: var(--space-2); }
-  .findInput { width: 92px; font-family: var(--font-ui); font-size: var(--type-ui-size); }
+  .findInput { width: max(92px, 8ch); font-family: var(--font-ui); font-size: var(--type-ui-size); }
   .markdownPreview,
   :global(html[data-ui-style="trae"]) .markdownPreview { padding: var(--space-4); }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 700px), (pointer: coarse) {
   .fileActions button,
   .findInput,
   .fileInfo > summary,
+  .sourceTools button,
+  .selectionBar button,
   :global(html[data-ui-style="trae"]) .fileActions button,
   :global(html[data-ui-style="trae"]) .findInput {
     min-height: var(--control-touch);
@@ -525,6 +542,9 @@
   .sourceTools { min-height: var(--control-touch); overflow-x: auto; scrollbar-width: none; }
   .sourceTools::-webkit-scrollbar { display: none; }
   .selectionBar { min-height: var(--control-touch); }
+  .selectionBar .selectionClose { min-width: var(--control-touch); }
+  .findInput,
+  :global(html[data-ui-style="trae"]) .findInput { font-size: var(--text-input-mobile); }
 }
 
 .selectionBar .selectionClose { display: inline-grid; place-items: center; flex-shrink: 0; }

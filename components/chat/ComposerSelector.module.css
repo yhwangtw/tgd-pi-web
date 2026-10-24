@@ -50,7 +50,7 @@
 }
 
 .catalogAction:hover:not(:disabled) { background: var(--bg-hover); }
-.catalogAction:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.catalogAction:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
 .catalogAction:disabled { color: var(--text-muted); cursor: not-allowed; }
 
 .mobileModelSelect[aria-disabled="true"] {
@@ -100,7 +100,7 @@
   .iconTrigger { width: var(--control-touch); height: var(--control-touch); }
 }
 
-.trigger:hover,
+.trigger:hover:not(:disabled, [aria-disabled="true"]),
 .triggerOpen {
   background: var(--bg-hover);
   color: var(--text);
@@ -112,6 +112,11 @@
 
 .trigger:disabled {
   cursor: not-allowed;
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
 }
 
 .triggerLabel {
@@ -136,6 +141,7 @@
 .panel {
   z-index: 500;
   min-width: 180px;
+  max-width: calc(100vw - var(--space-4));
   overflow: hidden auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-control-prominent);
@@ -186,6 +192,11 @@
   color: var(--text);
 }
 
+.toolCheckRow:has(input:focus-visible) {
+  outline: 2px solid var(--accent-text);
+  outline-offset: -2px;
+}
+
 .toolCheckRow input {
   margin-top: var(--space-1);
   accent-color: var(--accent);
@@ -199,9 +210,8 @@
 
 .toolCheckCopy .description {
   margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  line-height: var(--leading-snug);
 }
 
 .panelFixed {
@@ -223,6 +233,7 @@
 
 .option {
   display: flex;
+  min-width: 0;
   width: 100%;
   min-height: var(--control-md);
   align-items: center;
@@ -235,16 +246,16 @@
   font-size: var(--text-sm);
   font-weight: var(--weight-regular);
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
 }
 
-.option:hover {
+.option:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--bg-hover);
   color: var(--text);
 }
 
 .option:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: -2px;
 }
 
@@ -252,6 +263,10 @@
   background: var(--bg-selected);
   color: var(--text);
   font-weight: var(--weight-semibold);
+}
+
+.optionActive:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--bg-selected);
 }
 
 .modelPanel {
@@ -299,6 +314,10 @@
 }
 
 .modelSheetSearch input::placeholder { color: var(--text-dim); }
+.modelSheetSearch:focus-within {
+  outline: 2px solid var(--accent-text);
+  outline-offset: -2px;
+}
 
 .mobileModelSection {
   padding: var(--space-3) var(--space-4) 0;
@@ -348,9 +367,10 @@
   text-align: left;
 }
 
-.mobileModelSelect:hover { background: var(--bg-hover); }
+.mobileModelSelect:hover:not(:disabled, [aria-disabled="true"]) { background: var(--bg-hover); }
+.mobileModelRowActive .mobileModelSelect:hover:not(:disabled, [aria-disabled="true"]) { background: var(--bg-selected); }
 .mobileModelSelect:focus-visible,
-.mobileModelPin:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mobileModelPin:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -2px; }
 
 .mobileModelLeading {
   display: grid;
@@ -394,6 +414,13 @@
 .optionLabel {
   min-width: 0;
   flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.option > .description {
+  max-width: 58%;
+  overflow-wrap: anywhere;
+  line-height: var(--leading-snug);
 }
 
 .originalLabel {
@@ -435,6 +462,7 @@
 
   .panelInline .description {
     margin: 0;
+    max-width: none;
     line-height: var(--leading-snug);
   }
 

@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -18,21 +19,31 @@
 
 .tree {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding-top: var(--space-1);
 }
 
 .empty {
   height: 100%;
+  box-sizing: border-box;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
+  padding: var(--space-4);
   color: var(--text-dim);
   font-size: var(--text-sm);
+  line-height: var(--leading-copy);
+  text-align: center;
+  overflow-wrap: anywhere;
 }
+
+.empty > svg { flex-shrink: 0; }
 
 :global(html[data-ui-style="trae"]) .container { background: var(--trae-canvas); }
 :global(html[data-ui-style="trae"]) .header {

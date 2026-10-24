@@ -134,6 +134,8 @@
 /* done — accent tint with a check */
 .done {
   color: var(--accent-text);
+  background: var(--color-accent-bg-subtle);
+  border-color: var(--color-accent-border-subtle);
 }
 .done:hover {
   background: var(--color-accent-bg);
@@ -144,6 +146,7 @@
   color: var(--color-accent-fg);
   background: var(--color-accent);
   border-color: var(--color-accent);
+  box-shadow: var(--surface-highlight), var(--color-shadow-accent);
 }
 .current:hover {
   filter: brightness(1.05);

@@ -234,13 +234,13 @@ export function AgentDashboardPanel({ defaultCwd, onOpenSession, onCompareSessio
         </section>
       )}
       <div className={s.summary} aria-label={t("agents.runSummary")}>
-        <button type="button" className={filter === "active" ? s.summaryActive : ""} onClick={() => setFilter(filter === "active" ? "all" : "active")}>
+        <button type="button" aria-pressed={filter === "active"} className={filter === "active" ? s.summaryActive : ""} onClick={() => setFilter(filter === "active" ? "all" : "active")}>
           <strong>{activeCount}</strong><span>{t("agents.active")}</span>
         </button>
-        <button type="button" className={filter === "queued" ? s.summaryActive : ""} onClick={() => setFilter(filter === "queued" ? "all" : "queued")}>
+        <button type="button" aria-pressed={filter === "queued"} className={filter === "queued" ? s.summaryActive : ""} onClick={() => setFilter(filter === "queued" ? "all" : "queued")}>
           <strong>{queuedCount}</strong><span>{t("agents.queued")}</span>
         </button>
-        <button type="button" className={filter === "done" ? s.summaryActive : ""} onClick={() => setFilter(filter === "done" ? "all" : "done")}>
+        <button type="button" aria-pressed={filter === "done"} className={filter === "done" ? s.summaryActive : ""} onClick={() => setFilter(filter === "done" ? "all" : "done")}>
           <strong>{doneCount}</strong><span>{t("agents.done")}</span>
         </button>
         <label className={s.concurrencyControl}>

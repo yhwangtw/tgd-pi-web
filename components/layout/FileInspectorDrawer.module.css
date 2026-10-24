@@ -1,21 +1,21 @@
-.drawer { width: min(340px, 46%); min-width: 250px; max-width: 100%; min-height: 0; height: 100%; flex-shrink: 0; overflow: hidden; display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--bg-panel); box-shadow: var(--color-shadow-card); z-index: 3; }
-.header { flex-shrink: 0; min-height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-2) 0 var(--space-3); color: var(--text); }
-.header button { flex-shrink: 0; width: 30px; height: 30px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font-size: var(--text-xl); cursor: pointer; }
+.drawer { width: min(340px, 46%); min-width: 250px; max-width: 100%; min-height: 0; height: 100%; flex-shrink: 0; overflow: hidden; display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--bg-panel); box-shadow: var(--color-shadow-card); z-index: 3; container-type: inline-size; container-name: file-inspector; }
+.header { flex-shrink: 0; min-height: var(--control-lg); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3); color: var(--text); }
+.header button { flex-shrink: 0; width: var(--control-sm); min-height: var(--control-sm); border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font-size: var(--text-xl); cursor: pointer; }
 .header button:hover { background: var(--bg-hover); color: var(--text); }
-.tabs { flex-shrink: 0; min-width: 0; display: flex; gap: var(--space-optical); padding: 0 var(--space-2) var(--space-2); overflow-x: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+.tabs { flex-shrink: 0; min-width: 0; display: flex; gap: var(--space-optical); padding: 0 var(--space-2) var(--space-2); overflow-x: auto; overscroll-behavior-x: contain; border-bottom: 1px solid var(--border); scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
-.tab, .tabActive { flex-shrink: 0; white-space: nowrap; min-height: 30px; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-control-compact); background: transparent; color: var(--text-dim); font-size: var(--text-xs); cursor: pointer; }
+.tab, .tabActive { flex-shrink: 0; white-space: nowrap; min-height: var(--control-sm); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-control-compact); background: transparent; color: var(--text-dim); font-size: var(--text-xs); line-height: var(--leading-ui); cursor: pointer; }
 .tabActive { background: var(--bg-selected); color: var(--text); font-weight: var(--weight-semibold); }
 .body { flex: 1; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere; }
 .symbolSearch { padding: var(--space-2); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-1); border-bottom: 1px solid var(--border); }
-.symbolSearch input { grid-column: 1 / -1; min-width: 0; height: 30px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text); font: inherit; font-size: var(--type-ui-size); }
-.symbolSearch button { min-height: 30px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--type-label-size); cursor: pointer; }
+.symbolSearch input { grid-column: 1 / -1; min-width: 0; min-height: var(--control-sm); padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text); font: inherit; font-size: var(--type-ui-size); line-height: var(--leading-ui); }
+.symbolSearch button { min-height: var(--control-sm); padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--type-label-size); line-height: var(--leading-ui); overflow-wrap: anywhere; cursor: pointer; }
 .symbolSearch button:disabled { opacity: .4; cursor: default; }
 .symbolResult { width: 100%; padding: var(--space-2) var(--space-2); display: grid; gap: var(--space-optical); border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
 .symbolResult:hover { background: var(--bg-hover); }
-.symbolResult span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-label-size); }
+.symbolResult span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-label-size); }
 .list { display: flex; flex-direction: column; padding: var(--space-2); }
-.row, .commit { width: 100%; min-height: 34px; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-row); background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
+.row, .commit { width: 100%; min-width: 0; min-height: 34px; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-row); background: transparent; color: var(--text-muted); text-align: left; font-size: var(--type-label-size); line-height: var(--leading-ui); cursor: pointer; }
 .row:hover, .commit:hover { background: var(--bg-hover); color: var(--text); }
 .kind, .sha { flex: 0 0 auto; color: var(--color-accent); font: var(--text-2xs) var(--font-mono); text-transform: uppercase; }
 .label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -26,17 +26,17 @@
 .problem { margin: 3px 0; border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; }
 .problemsPane { min-height: 100%; }
 .problemActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-2); border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: var(--type-label-size); }
-.problemActions button { min-height: 30px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-hover); color: var(--text-muted); cursor: pointer; }
+.problemActions button { min-height: var(--control-sm); padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-hover); color: var(--text-muted); font: inherit; cursor: pointer; }
 .problemMain { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-2); border: 0; background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
 .problemError { color: var(--color-error-text); }.problemWarning { color: var(--color-warning-text); }
-.fix { width: 100%; min-height: 30px; border: 0; border-top: 1px solid var(--border); background: var(--bg-hover); color: var(--color-accent); cursor: pointer; }
+.fix { width: 100%; min-height: var(--control-sm); padding: var(--space-1) var(--space-2); border: 0; border-top: 1px solid var(--border); background: var(--bg-hover); color: var(--color-accent); font-size: var(--type-label-size); cursor: pointer; }
 .empty, .error { padding: var(--space-6) var(--space-4); color: var(--text-dim); text-align: center; }
 .error { color: var(--color-error-text); }
 .notes { padding: var(--space-2); }
-.noteForm { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: var(--space-2); }
+.noteForm { display: grid; grid-template-columns: calc(4ch + var(--space-4)) minmax(0, 1fr) auto; align-items: start; gap: var(--space-2); }
 .noteForm textarea { resize: vertical; max-height: 180px; }
-.noteForm input, .noteForm textarea { min-width: 0; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text); }
-.noteForm button, .note > button { border: 0; border-radius: var(--radius-control); background: var(--bg-selected); color: var(--text); cursor: pointer; }
+.noteForm input, .noteForm textarea { min-width: 0; min-height: var(--control-sm); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev-1); color: var(--text); font: inherit; font-size: var(--type-ui-size); line-height: var(--leading-ui); }
+.noteForm button, .note > button { min-height: var(--control-sm); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-control); background: var(--bg-selected); color: var(--text); font-size: var(--type-label-size); cursor: pointer; }
 .note { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-2); align-items: start; margin-top: 8px; padding: var(--space-2); border-radius: var(--radius-card); background: var(--bg-elev-1); color: var(--text-muted); }
 .problemMain > span, .note > span { min-width: 0; overflow-wrap: anywhere; }
 .note > button { padding: var(--space-1) var(--space-2); }
@@ -51,7 +51,12 @@
   .header, .tab, .tabActive, .row, .commit, .fix { min-height: var(--control-touch); }
 }
 
-@media (max-width: 700px), (pointer: coarse) { .header button, .tab, .tabActive, .symbolSearch button { min-height: 44px; } .header button { width: 44px; } .symbolSearch { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .symbolSearch input { grid-column: 1 / -1; min-height: 44px; font-size: var(--text-input-mobile); } }
+@media (max-width: 700px), (pointer: coarse) { .header button, .tab, .tabActive, .row, .commit, .fix, .symbolSearch button, .problemActions button, .noteForm button, .note > button { min-height: var(--control-touch); } .header button, .note > button:last-child { min-width: var(--control-touch); } .symbolSearch { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .symbolSearch input { grid-column: 1 / -1; min-height: var(--control-touch); font-size: var(--text-input-mobile); } .noteForm input, .noteForm textarea { min-height: var(--control-touch); font-size: var(--text-input-mobile); } }
+
+@container file-inspector (max-width: 20em) {
+  .noteForm { grid-template-columns: minmax(0, 1fr); }
+  .noteForm input { width: min(100%, calc(6ch + var(--space-4))); }
+}
 
 @media (max-width: 700px) and (max-height: 500px) {
   .drawer { height: 100%; border-radius: 0; }
@@ -59,7 +64,7 @@
 
 .header button, .note > button:last-child { display: inline-grid; place-items: center; }
 
-.header strong { font-size: var(--type-title-size); font-weight: var(--weight-semibold); }
+.header strong { min-width: 0; font-size: var(--type-title-size); font-weight: var(--weight-semibold); line-height: var(--leading-ui); overflow-wrap: anywhere; }
 .groupLabel { font-family: var(--font-ui); font-size: var(--type-label-size); letter-spacing: var(--tracking-normal); text-transform: none; }
 
 .kind { font-family: var(--font-ui); }

@@ -1,5 +1,11 @@
 .downloadLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  box-sizing: border-box;
+  min-height: var(--control-xs);
+  max-width: 100%;
   padding: var(--space-optical) var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-control-compact);
@@ -8,6 +14,7 @@
   font-size: var(--text-xs);
   line-height: var(--leading-ui);
   text-decoration: none;
+  overflow-wrap: anywhere;
   transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
 }
 
@@ -17,10 +24,8 @@
   color: var(--text);
 }
 
-@media (pointer: coarse) {
+@media (max-width: 700px), (pointer: coarse) {
   .downloadLink {
-    display: inline-flex;
     min-height: var(--control-touch);
-    align-items: center;
   }
 }

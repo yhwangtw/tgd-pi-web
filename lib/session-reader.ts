@@ -1,7 +1,7 @@
 import { readSessionHeader } from "./session-header";
 import { assistantFailure } from "./session-error-summary";
 export { readSessionHeader } from "./session-header";
-import { resolveMigratedSessionId } from "./session-migrations";
+import { migrationDirectory, migrationKey, resolveMigratedSessionId } from "./session-migrations";
 import { getAgentDir, migrateSessionEntries, parseSessionEntries } from "@earendil-works/pi-coding-agent";
 import type { SessionEntry, SessionHeader, SessionInfo, SessionTreeNode } from "./types";
 import { readFileSync } from "fs";
@@ -43,7 +43,9 @@ interface RawSessionInfo {
 
 interface SessionInfoCacheEntry {
   mtimeMs: number;
+  ctimeMs: number;
   size: number;
+  ino: number;
   // null = file exists but is not a valid session (skip without re-parsing)
   info: RawSessionInfo | null;
 }
@@ -56,6 +58,28 @@ declare global {
 function getInfoCache(): Map<string, SessionInfoCacheEntry> {
   if (!globalThis.__piSessionInfoCache) globalThis.__piSessionInfoCache = new Map();
   return globalThis.__piSessionInfoCache;
+}
+
+async function listingMigrationResolver(): Promise<(id: string) => string> {
+  let receipts: Set<string>;
+  try {
+    receipts = new Set((await readdir(migrationDirectory())).filter(file => file.endsWith(".json")));
+  } catch (error) {
+    // No directory means no published aliases. Other failures preserve the
+    // existing per-receipt lookup rather than assuming an unreadable index is empty.
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? id => id : resolveMigratedSessionId;
+  }
+  if (!receipts.size) return id => id;
+  const resolved = new Map<string, string>();
+  return id => {
+    if (!receipts.has(`${migrationKey(id)}.json`)) return id;
+    let target = resolved.get(id);
+    if (target === undefined) {
+      target = resolveMigratedSessionId(id);
+      resolved.set(id, target);
+    }
+    return target;
+  };
 }
 
 function extractText(content: unknown): string {
@@ -191,12 +215,12 @@ async function scanAllSessions(sessionsDir: string): Promise<SessionInfo[]> {
       }
       seen.add(filePath);
       const cached = cache.get(filePath);
-      if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
+      if (cached && cached.mtimeMs === st.mtimeMs && cached.ctimeMs === st.ctimeMs && cached.size === st.size && cached.ino === st.ino) {
         if (cached.info) infos.push(cached.info);
         continue;
       }
       const info = await parseSessionFile(filePath, st.mtimeMs);
-      cache.set(filePath, { mtimeMs: st.mtimeMs, size: st.size, info });
+      cache.set(filePath, { mtimeMs: st.mtimeMs, ctimeMs: st.ctimeMs, size: st.size, ino: st.ino, info });
       if (info) infos.push(info);
     }
   }));
@@ -230,7 +254,11 @@ async function scanAllSessions(sessionsDir: string): Promise<SessionInfo[]> {
       parentSessionId: info.parentSessionPath ? pathToId.get(info.parentSessionPath) : undefined,
     };
   });
-  return [...legacy.filter(info => resolveMigratedSessionId(info.id) === info.id), ...durable].map(info => ({ ...info, parentSessionId: info.parentSessionId ? resolveMigratedSessionId(info.parentSessionId) : undefined })).sort((a, b) => Date.parse(b.modified) - Date.parse(a.modified));
+  // Re-enumerate on every scan: migrations can be published without changing a
+  // JSONL file. Avoid thousands of synchronous missing-receipt reads in archives
+  // that have few or no migrations, while retaining authoritative receipt validation.
+  const resolveMigration = await listingMigrationResolver();
+  return [...legacy.filter(info => resolveMigration(info.id) === info.id), ...durable].map(info => ({ ...info, parentSessionId: info.parentSessionId ? resolveMigration(info.parentSessionId) : undefined })).sort((a, b) => Date.parse(b.modified) - Date.parse(a.modified));
 }
 
 // ============================================================================
