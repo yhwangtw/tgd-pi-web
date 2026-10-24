@@ -78,8 +78,12 @@ for (const style of ["original", "trae"]) {
     await page.screenshot({ path: test.info().outputPath(`preview-desktop-${style}.png`) });
   });
 
-  test(`${style}: HTML preview fits phones, tablet breakpoints and short viewports`, async ({ browser, baseURL }) => {
+  test(`${style}: HTML preview fits phones, tablet breakpoints and short viewports`, async ({ browser, request, baseURL }) => {
     test.setTimeout(120_000);
+    // Exercise the extension status/widgets that exist in a real live session,
+    // including when this spec runs alone rather than after other UI workflows.
+    const activation = await request.post(`/api/agent/${SESSION}`, { data: { type: "get_state" } });
+    expect(activation.ok()).toBe(true);
     const context = await browser.newContext({ hasTouch: true, baseURL });
     const page = await context.newPage();
     const errors: string[] = [];
@@ -88,6 +92,8 @@ for (const style of ["original", "trae"]) {
     for (const width of [320, 390, 700, 701, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: width === 700 ? 430 : 800 });
       await session(page);
+      const transcript = page.locator("[data-transcript-scroll]");
+      expect(await transcript.evaluate(element => element.clientHeight), "The composer must leave a usable transcript viewport").toBeGreaterThanOrEqual(44);
       await page.getByRole("link", { name: "查看成果", exact: true }).tap();
       const panel = page.locator(".right-panel-open");
       await expect(page.frameLocator('iframe[title="HTML preview"]').getByRole("heading", { name: "Linked HTML preview" })).toBeVisible();

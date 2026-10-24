@@ -1385,7 +1385,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       ) : (
         <TgdPipeline phases={tgdPhases} statusOf={phaseStatusOf} onRun={runPhase} onHide={hidePipeline} feature={currentFeature?.name ?? null} active={activeTgdRun} />
       )}
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className={`${styles.transcriptFrame} relative flex flex-1 overflow-hidden`}>
         {findOpen && (
           <div className={`${styles.findBar} glass absolute right-4 top-2 z-20 flex items-center gap-1 rounded-lg border px-2 py-1 shadow-[var(--color-shadow-dropdown)]`}>
             <select

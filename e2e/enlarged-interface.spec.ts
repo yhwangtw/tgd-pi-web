@@ -34,6 +34,18 @@ for (const style of ["original", "trae"]) {
         : page.getByRole("region", { name: "Composer controls", exact: true });
       await expect(controlsPanel).toBeVisible();
       expect(await controlsPanel.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      const collisions = await controlsPanel.locator('[class*="mobileLabeledControl"]').evaluateAll(elements => elements.flatMap(element => {
+        const label = element.querySelector('[class*="mobileControlLabel"]');
+        const control = label?.nextElementSibling;
+        if (!label || !control || !label.getClientRects().length) return [];
+        const range = document.createRange();
+        range.selectNodeContents(label);
+        const bounds = control.getBoundingClientRect();
+        const overlap = [...range.getClientRects()].some(ink => ink.left < bounds.right - 1 && ink.right > bounds.left + 1
+          && ink.top < bounds.bottom - 1 && ink.bottom > bounds.top + 1);
+        return overlap ? [label.textContent] : [];
+      }));
+      expect(collisions, "Enlarged setting labels must not overlap their controls").toEqual([]);
       if (width <= 700) await page.keyboard.press("Escape"); else await controls.click();
       await expect(composer).toHaveValue("Keep this enlarged-text draft");
       await page.getByRole("link", { name: "查看程式", exact: true }).click();

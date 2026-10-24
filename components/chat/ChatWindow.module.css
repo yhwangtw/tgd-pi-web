@@ -324,6 +324,18 @@
   overflow-anchor: none;
 }
 
+.transcriptFrame { min-height: var(--control-touch); }
+
+.composerDock {
+  /* Keep a real transcript viewport even when extension widgets fill a short
+     screen. The dock may scroll, but must never sit over message hit targets. */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 70%;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
 .transcript {
   width: 100%;
   max-width: 780px;
