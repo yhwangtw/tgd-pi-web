@@ -336,6 +336,12 @@
   overscroll-behavior-y: contain;
 }
 
+.composerDock:has([data-composer-editing][aria-modal="true"]) {
+  /* The mobile dock has its own stacking context. Its full-screen editor must
+     rise with it, above the app header and navigation. */
+  z-index: 390;
+}
+
 .transcript {
   width: 100%;
   max-width: 780px;

@@ -108,12 +108,19 @@ for (const style of ["original", "trae"] as const) {
     await page.getByRole("button", { name: "More composer controls", exact: true }).click();
     await page.getByRole("button", { name: "Expand composer", exact: true }).click();
     const editor = page.getByRole("textbox", { name: "Message…", exact: true });
-    for (const viewport of [{ width: 390, height: 320 }, { width: 667, height: 320 }, { width: 390, height: 740 }]) {
+    for (const viewport of [{ width: 390, height: 320 }, { width: 667, height: 320 }, { width: 1440, height: 900 }, { width: 390, height: 740 }]) {
       // These are layout viewport resizes, not a physical iOS/Android keyboard.
       await page.setViewportSize(viewport);
       await expectContained(page, editor);
       await expectContained(page, page.getByRole("button", { name: "Send", exact: true }));
       await expectContained(page, page.getByRole("button", { name: "Collapse composer", exact: true }));
+      const editorDialog = page.getByRole("dialog", { name: "Expanded composer", exact: true });
+      const covered = await editorDialog.evaluate(element => {
+        const points = [16, window.innerWidth / 2, window.innerWidth - 16]
+          .flatMap(x => [48, 88].map(y => ({ x, y })));
+        return points.filter(({ x, y }) => !element.contains(document.elementFromPoint(x, y)));
+      });
+      expect(covered, "App header/navigation must not cover the expanded editor's hit surface").toEqual([]);
       await expect(editor).toBeEditable();
       await expect(editor).toHaveValue(draft);
       expect(await editor.evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(44);
