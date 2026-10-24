@@ -27,7 +27,8 @@
   border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
   padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-pill);
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -37,7 +38,7 @@
 .mobileSummary {
   display: flex;
   min-width: 0;
-  height: 30px;
+  min-height: 30px;
   flex: 0 1 auto;
   align-items: center;
   gap: var(--space-2);
@@ -51,9 +52,11 @@
 }
 .mobileSummary:hover { background: var(--bg-hover); }
 .mobileCurrent { display: flex; min-width: 0; align-items: baseline; gap: var(--space-2); }
-.mobileCurrentLabel { color: var(--accent-text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.mobileCurrentLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent-text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .mobileFeature { display: none; }
 .mobileProgress {
+  flex: 0 0 auto;
+  white-space: nowrap;
   color: var(--text-dim);
   font-family: var(--font-ui);
   font-size: var(--text-2xs);
@@ -172,7 +175,7 @@
 
 @media (min-width: 701px) {
   :global(html[data-density="compact"]) .bar { padding-top: var(--space-optical); padding-bottom: var(--space-optical); }
-  :global(html[data-density="compact"]) .mobileSummary { height: 26px; }
+  :global(html[data-density="compact"]) .mobileSummary { min-height: 26px; }
   :global(html[data-density="compact"]) .hide { width: 26px; height: 26px; }
 }
 

@@ -847,7 +847,7 @@
   align-items: center;
   flex-shrink: 0;
   background: var(--bg-panel);
-  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 -1px var(--border-subtle);
   height: auto;
   min-height: 36px;
   padding-left: var(--space-3);
@@ -856,6 +856,8 @@
 .rightPanelTabBarInner {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-self: stretch;
   overflow: hidden;
 }
 
@@ -1194,6 +1196,7 @@
     /* Preserve whole labels when text is enlarged. Only this strip scrolls;
        keyboard focus reveals each destination without covering the chat. */
     grid-template-columns: repeat(5, minmax(max-content, 1fr));
+    column-gap: var(--space-2);
     height: calc(var(--mobile-nav-height) + var(--safe-area-bottom));
     padding: var(--space-1) var(--space-1) var(--safe-area-bottom);
     overflow-x: auto;
@@ -1755,7 +1758,7 @@
   .workspaceIdentity { max-width: 60%; }
   .workspaceBranch { max-width: 100px; }
 }
-.filePanelControl { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
+.filePanelControl { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer; transition: color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard); }
 .filePanelControl:hover { color: var(--text); background: var(--bg-hover); }
 .filePanelControl:focus-visible, .mobileFilePanelClose:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 @media (min-width: 701px) {

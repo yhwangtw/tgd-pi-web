@@ -45,7 +45,7 @@
   font-weight: var(--weight-medium);
   letter-spacing: var(--tracking-tight);
   flex-shrink: 0;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
 }
 .newSessionButtonEnabled {
   color: var(--text-muted);
@@ -67,7 +67,7 @@
   border-radius: var(--radius-control);
   padding: 0;
   flex-shrink: 0;
-  transition: background 0.3s, color 0.3s, border-color 0.3s;
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
 }
 .refreshButtonDefault {
   background: var(--bg-hover);
@@ -121,6 +121,7 @@
   color: var(--text);
   font: inherit;
   font-size: var(--text-sm);
+  transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
 }
 
 .sessionSearchInput::placeholder {
@@ -160,7 +161,7 @@
   gap: var(--space-optical);
   padding: var(--space-optical);
   border-radius: var(--radius-control);
-  background: var(--bg-subtle);
+  background: transparent;
 }
 
 .sessionScopeButton {
@@ -176,6 +177,7 @@
   font-weight: var(--weight-medium);
   line-height: var(--leading-ui);
   white-space: normal;
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
 }
 
 .sessionScopeButton:hover:not(:disabled) {
@@ -188,9 +190,8 @@
 }
 
 .sessionScopeButtonActive {
-  background: var(--bg-elev-1);
+  background: var(--bg-selected);
   color: var(--text);
-  box-shadow: var(--color-shadow-card);
 }
 
 /* Sort-mode cycle button (clock → A-Z → bars) */
@@ -252,8 +253,9 @@
 
 /* Non-default sort mode gets a subtle "filter active" tint */
 .sortButtonActive {
-  color: var(--color-accent);
-  border-color: var(--color-accent-border-focus-strong);
+  background: var(--color-accent-bg);
+  color: var(--accent-text);
+  border-color: var(--color-accent-border);
 }
 
 .filterButton {
@@ -272,7 +274,7 @@
 }
 
 .filterButton:hover { background: var(--bg-hover); color: var(--text); }
-.filterButtonActive { border-color: var(--color-accent-border-focus-strong); color: var(--color-accent); }
+.filterButtonActive { border-color: var(--color-accent-border); background: var(--color-accent-bg); color: var(--accent-text); }
 .filterCount {
   position: absolute;
   top: calc(-1 * var(--space-optical));
@@ -303,9 +305,9 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-row);
+  background: transparent;
   color: var(--text);
   cursor: pointer;
   text-align: left;
@@ -605,7 +607,7 @@
   border: 0;
   border-radius: var(--radius-pill);
   background: var(--bg-elev-1);
-  box-shadow: var(--color-shadow-card);
+  box-shadow: var(--color-shadow-control);
 }
 
 :global(html[data-ui-style="trae"]) .sessionToolbar {
@@ -613,15 +615,13 @@
   padding-bottom: var(--space-2);
 }
 
-:global(html[data-ui-style="trae"]) .sessionSearchInput,
-:global(html[data-ui-style="trae"]) .sessionScope {
+:global(html[data-ui-style="trae"]) .sessionSearchInput {
   border-color: transparent;
   background: var(--trae-control);
 }
 
 :global(html[data-ui-style="trae"]) .sessionScopeButtonActive {
-  background: var(--trae-surface-solid);
-  box-shadow: var(--trae-card-shadow);
+  background: var(--trae-control);
 }
 
 :global(html[data-ui-style="trae"]) .groupHeader {

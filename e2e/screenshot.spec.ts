@@ -2,8 +2,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 const session = "aaaa1111-2222-3333-4444-555566667777";
 
-async function installCapture(page: Page, support = true) {
-  await page.addInitScript(supported => {
+async function installCapture(page: Page, support = true, deferFrameCallback = false) {
+  await page.addInitScript(({supported, deferFrameCallback}) => {
+    if (deferFrameCallback) {
+      // A real decoded video still supplies loadeddata when its compositor
+      // callback is deferred. Keep the frame/crop assertions unchanged.
+      Object.defineProperty(HTMLVideoElement.prototype, "requestVideoFrameCallback", { configurable: true, value: () => 0 });
+      Object.defineProperty(HTMLVideoElement.prototype, "cancelVideoFrameCallback", { configurable: true, value: () => {} });
+    }
     const probe = { calls: 0, streams: [] as MediaStream[], options: null as unknown };
     Object.assign(window, { screenshotProbe: probe });
     Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {
@@ -25,7 +31,7 @@ async function installCapture(page: Page, support = true) {
         return stream;
       } : undefined,
     });
-  }, support);
+  }, { supported: support, deferFrameCallback });
 }
 const stopped = (page: Page) => page.evaluate(() => {
   const probe = (window as unknown as { screenshotProbe: { streams: MediaStream[] } }).screenshotProbe;
@@ -36,7 +42,7 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
   test(`${style} ${width}: captures a real video frame, stops sharing and confirms an attachment`, async ({ page }, info) => {
     await page.addInitScript(style => { localStorage.setItem("pi-ui-style", style); localStorage.setItem("pi-locale", "en"); }, style);
     await page.setViewportSize({ width, height: 900 });
-    await installCapture(page);
+    await installCapture(page, true, style === "trae" && width === 1440);
     await page.goto(`/?session=${session}`);
     const composer = page.getByTestId("composer-shell");
     await composer.locator("textarea").fill("inspect this screenshot");
@@ -66,6 +72,15 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
     await dialog.getByRole("button", { name: "Retake", exact: true }).click();
     await expect(dialog.getByRole("img")).toBeVisible();
     await selectArea();
+    // captureStream video may round RGB during color-space conversion. Compare
+    // the crop exactly against the decoded preview, not the pre-video paint.
+    const sourceCorner = await dialog.getByRole("img").evaluate(async (image: HTMLImageElement) => {
+      await image.decode();
+      const canvas = document.createElement("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d")!; context.drawImage(image, 0, 0);
+      return [...context.getImageData(image.naturalWidth / 4 + 2, image.naturalHeight / 4 + 2, 1, 1).data];
+    });
+    expect(sourceCorner[2] - sourceCorner[1], "The selected source region must be the blue fixture patch").toBeGreaterThan(80);
     await dialog.getByRole("button", { name: "Attach selection", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Remove image", exact: true })).toBeVisible();
@@ -76,7 +91,7 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
       const canvas = document.createElement("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
       const context = canvas.getContext("2d")!; context.drawImage(image, 0, 0);
       return { width: image.naturalWidth, height: image.naturalHeight, corner: [...context.getImageData(2, 2, 1, 1).data] };
-    })).toEqual({ width: 640, height: 360, corner: [17, 68, 187, 255] });
+    })).toEqual({ width: 640, height: 360, corner: sourceCorner });
     await expect(composer.locator("textarea")).toHaveValue("inspect this screenshot");
     await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await expect.poll(() => stopped(page)).toBe(true);

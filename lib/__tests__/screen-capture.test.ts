@@ -61,6 +61,20 @@ describe("one-frame screen capture", () => {
     expect(track.stop).toHaveBeenCalled();
     expect(HTMLCanvasElement.prototype.toDataURL).not.toHaveBeenCalled();
   });
+  it("captures decoded loadeddata when a compositor frame callback is deferred", async () => {
+    ready = 0;
+    const result = captureScreenshot(new AbortController().signal); await flush();
+    const video = document.querySelector("video")!;
+    ready = 1; video.dispatchEvent(new Event("loadeddata"));
+    expect(HTMLCanvasElement.prototype.toDataURL).not.toHaveBeenCalled();
+    ready = 2; video.dispatchEvent(new Event("loadeddata"));
+    await expect(result).resolves.toEqual({ dataUrl: png, width: 2560, height: 1280 });
+    expect(HTMLVideoElement.prototype.cancelVideoFrameCallback).toHaveBeenCalledWith(1);
+    frame!();
+    expect(HTMLCanvasElement.prototype.toDataURL).toHaveBeenCalledTimes(1);
+    expect(track.stop).toHaveBeenCalled();
+    expect(document.querySelector("video")).toBeNull();
+  });
   it.each(["abort", "ended"])("cleans up when %s arrives before a frame", async mode => {
     const controller = new AbortController(); const result = captureScreenshot(controller.signal);
     await flush();

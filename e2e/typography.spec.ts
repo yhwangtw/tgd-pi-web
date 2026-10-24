@@ -18,7 +18,9 @@ for (const [style, width, dark] of [["original", 1440, false], ["trae", 1440, tr
       const data = await response.json();
       if (data.context?.messages) data.context.messages = data.context.messages.map((message: { role: string }) =>
         message.role === "assistant" ? { ...message, provider: "anthropic", model: "claude-sonnet-5" } : message);
-      await route.fulfill({ response, json: data });
+      // This tests historical footer typography. An already-live runtime from
+      // another spec has its own unaugmented messages and SSE snapshot.
+      await route.fulfill({ response, json: { ...data, agentState: { running: false } } });
     });
     await page.goto(SESSION);
     await expect(page.getByTestId("app-shell")).toHaveAttribute("data-hydrated", "true");

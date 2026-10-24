@@ -172,3 +172,32 @@ test("welcome text stops typing and blinking when the preference changes", async
   await expect(welcome).toHaveText("ready when you are.");
   await expect(welcome.locator('[aria-hidden="true"]')).toHaveCount(0);
 });
+
+for (const style of ["original", "trae"]) {
+  test(`${style}: reduced-motion Send stays still during a real pointer press`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.addInitScript(style => {
+      localStorage.setItem("pi-ui-style", style);
+      localStorage.setItem("pi-locale", "en");
+    }, style);
+    await page.goto(MAIN);
+    const input = page.getByRole("textbox", { name: "Message…", exact: true });
+    await input.fill("Unsent draft for reduced-motion verification");
+    const send = page.getByRole("button", { name: "Send", exact: true });
+    await expect(send).toBeEnabled();
+    const before = await send.boundingBox();
+    await send.hover();
+    await page.mouse.down();
+    try {
+      expect(await send.evaluate(element => getComputedStyle(element).transform)).toBe("none");
+      const pressed = await send.boundingBox();
+      expect(Math.abs(pressed!.width - before!.width)).toBeLessThan(0.5);
+      expect(Math.abs(pressed!.height - before!.height)).toBeLessThan(0.5);
+    } finally {
+      // Release outside the control: this is a motion check, not a prompt.
+      await page.mouse.move(0, 0);
+      await page.mouse.up();
+    }
+    await expect(input).toHaveValue("Unsent draft for reduced-motion verification");
+  });
+}

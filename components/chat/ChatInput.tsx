@@ -1129,9 +1129,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
               disabled={isSubmitting || uploadsPending || (!value.trim() && !attachedImages.length)}
               aria-label={t("input.send")}
               className={(value.trim() || attachedImages.length) && !isSubmitting && !uploadsPending ? styles.sendButtonActive : styles.sendButtonDisabled}
-              onMouseDown={(e) => { if (value.trim() || attachedImages.length) e.currentTarget.style.transform = "scale(0.97)"; }}
-              onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
             >
               <ArrowRight size={UI_ICON_SIZE.compact} aria-hidden="true" />
               <span className={styles.actionLabel}>{t("input.send")}</span>
