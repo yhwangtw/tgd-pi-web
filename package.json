@@ -23,7 +23,7 @@
     "start": "node scripts/serve.mjs start",
     "scheduler:watch": "node scripts/schedule-watchdog.mjs",
     "lint": "eslint .",
-    "postinstall": "node scripts/patch-pi-brace-expansion.mjs",
+    "postinstall": "node scripts/patch-pi-brace-expansion.mjs && node scripts/patch-undici-runtime.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "audit:production": "node scripts/audit-production.mjs",
@@ -53,7 +53,7 @@
     "ip-address": "10.7.3",
     "sprintf-js": "$sprintf-js",
     "katex": "$katex",
-    "undici@8": "8.12.2"
+    "undici@8": "8.12.3"
   },
   "dependencies": {
     "@earendil-works/chord": "1.3.0",
