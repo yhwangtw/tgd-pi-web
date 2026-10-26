@@ -20,8 +20,9 @@ type OutputFixture = {
 // Drive the real EventSource and message reducer over loopback SSE. The fixture
 // never starts an agent or contacts a provider; only browser output is under test.
 const test = base.extend<{ output: OutputFixture }>({
-  output: async ({ page, baseURL }, use) => {
+  output: async ({ page, baseURL }, runFixture) => {
     if (!baseURL || !["localhost", "127.0.0.1"].includes(new URL(baseURL).hostname)) throw new Error("Requires a local fixture server");
+    await page.addInitScript(() => localStorage.setItem("pi-composer-hints", "off"));
     let running = true;
     let messages: Record<string, unknown>[] = [{ role: "user", content: "Scroll regression fixture", timestamp: 1 }];
     const streams = new Set<ServerResponse>();
@@ -61,7 +62,7 @@ const test = base.extend<{ output: OutputFixture }>({
     });
     await page.route(new RegExp(`/api/agent/${SESSION}/events(?:\\?|$)`), route => route.continue({ url: streamURL }));
     try {
-      await use({
+      await runFixture({
         open: async (mode = "smart") => {
           await page.addInitScript((value) => localStorage.setItem("pi-scroll-follow-mode", value), mode);
           await page.goto(`/?session=${SESSION}`);

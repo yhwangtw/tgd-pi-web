@@ -6,6 +6,7 @@ for (const style of ["original", "trae"] as const) {
   for (const width of [1440, 390, 320]) {
     test(`${style} ${width}px: ask_user is non-modal, deferrable, and answers once`, async ({ page, context, baseURL }, testInfo) => {
       const token = `${style}-${width}`;
+      await page.addInitScript(() => localStorage.setItem("pi-composer-hints", "off"));
       const forbidden: string[] = [];
       const responses: Record<string, unknown>[] = [];
       const fixtureUrl = new URL(baseURL!);

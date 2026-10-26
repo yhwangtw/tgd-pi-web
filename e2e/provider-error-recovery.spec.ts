@@ -17,6 +17,7 @@ async function installFailure(page: Page, rejected = false) {
   const failed = { role: "assistant", provider, model: modelId, content: [], stopReason: "error", errorMessage: error, timestamp: 1_780_000_000_000 };
   const messages = [{ role: "user", content: "Hello", timestamp: 1_780_000_000_000 }, failed];
   const forbidden: string[] = [];
+  await page.addInitScript(() => localStorage.setItem("pi-composer-hints", "off"));
   let thinkingLevel = "low";
   // No user data, credentials, or real provider request is used by this spec.
   await page.route((url) => url.pathname.startsWith("/api/"), async (route) => {

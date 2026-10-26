@@ -7,6 +7,7 @@ const model = { provider: "anthropic", id: "claude-sonnet-5" };
 const test = base.extend<{ streamingNetworkSafety: void }>({
   streamingNetworkSafety: [async ({ page }, use) => {
     const forbidden: string[] = [];
+    await page.addInitScript(() => localStorage.setItem("pi-composer-hints", "off"));
     await page.route((url) => url.pathname.startsWith("/api/"), async (route) => {
       const request = route.request();
       const pathname = new URL(request.url()).pathname;

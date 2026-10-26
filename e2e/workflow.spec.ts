@@ -5,7 +5,7 @@ test.use({ hasTouch: true });
 
 for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft and remain usable at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 1000 });
-  await page.addInitScript(() => localStorage.setItem("pi-locale", "en"));
+  await page.addInitScript(() => { localStorage.setItem("pi-locale", "en"); localStorage.setItem("pi-composer-hints", "off"); });
   const commands: Record<string, unknown>[] = [];
   const forbidden: string[] = [];
   // running means the runtime exists; isStreaming alone tracks response work.
