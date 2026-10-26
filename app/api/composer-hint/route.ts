@@ -28,8 +28,8 @@ export async function POST(req: Request) {
     }
     const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     if (!isComposerHintRequest(body)) return NextResponse.json({ hint: null }, { status: 400, headers });
-    const hint = await generateComposerHint(body, req.signal);
-    return NextResponse.json({ hint }, { headers });
+    const result = await generateComposerHint(body, req.signal);
+    return NextResponse.json(result, { headers });
   } catch { return NextResponse.json({ hint: null }, { status: 400, headers }); }
   finally { reader.releaseLock(); }
 }

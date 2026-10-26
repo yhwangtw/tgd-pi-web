@@ -1083,6 +1083,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onFollowUp={agentRunning ? handleFollowUp : undefined}
       isStreaming={agentRunning}
       hintMessages={hintMessages}
+      hintTurnKey={entryIds.at(-1) ?? `${messages.length}:${messages.at(-1)?.timestamp ?? ""}`}
       model={displayModelValue}
       modelNames={modelNames}
       modelList={modelList}

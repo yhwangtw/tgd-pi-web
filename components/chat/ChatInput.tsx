@@ -69,6 +69,7 @@ interface Props {
   onFollowUp?: (message: string, images?: AttachedImage[]) => Promise<boolean>;
   isStreaming: boolean;
   hintMessages?: ComposerHintMessage[] | null;
+  hintTurnKey?: string | null;
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
   modelList?: ModelCatalogEntry[];
@@ -227,6 +228,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   workflowPending = false,
   wide = false,
   hintMessages,
+  hintTurnKey,
 }: Props, ref) {
   const { t, locale } = useI18n();
   const hintHelpId = useId();
@@ -270,8 +272,8 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   const [mentionItems, setMentionItems] = useState<FileMentionItem[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionSeqRef = useRef(0);
-  const { hint, enabled: hintsEnabled, setEnabled: setHintsEnabled, dismiss: dismissHint } = useComposerHint({
-    messages: hintMessages, model, locale, sessionKey: persistKey,
+  const { hint, enabled: hintsEnabled, setEnabled: setHintsEnabled, dismiss: dismissHint, reset: resetHint } = useComposerHint({
+    messages: hintMessages, model, locale, sessionKey: persistKey, turnKey: hintTurnKey,
     idle: value === "" && !isStreaming && !isCompacting && !isSubmitting && !uploadsPending
       && attachedImages.length === 0 && !quote && !workflowPending && !mention && !showSlashMenu,
   });
@@ -291,9 +293,8 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   const acceptHint = useCallback(() => {
     if (!hint || value !== "" || isComposingRef.current) return;
     setValue(hint);
-    dismissHint();
     requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [hint, value, setValue, dismissHint]);
+  }, [hint, value, setValue]);
 
   useImperativeHandle(ref, () => ({
     openControls() {
@@ -1072,7 +1073,10 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
           <textarea
             ref={textareaRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              setValue(e.target.value);
+              if (e.target.value === "") resetHint();
+            }}
             onKeyDown={handleKeyDown}
             onCompositionStart={() => {
               isComposingRef.current = true;

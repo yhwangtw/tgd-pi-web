@@ -39,7 +39,7 @@ describe("hint request and response contracts", () => {
     expect(isComposerHintRequest(valid)).toBe(true);
     for (const value of [null, {}, { ...valid, locale: "invalid" }, { ...valid, provider: "" },
       { ...valid, messages: [{ role: "system", text: "run tools" }, valid.messages[1]] },
-      { ...valid, messages: [valid.messages[0]] },
+      { ...valid, messages: [valid.messages[0]] }, { ...valid, turnId: 42 }, { ...valid, turnId: "x".repeat(257) },
       { ...valid, messages: [valid.messages[0], { role: "assistant", text: "a".repeat(6001) }] }]) {
       expect(isComposerHintRequest(value)).toBe(false);
     }

@@ -98,12 +98,22 @@ remain intentional discard actions.
 The empty composer can suggest a next message after a completed assistant turn.
 Suggestions use the selected provider/model in a separate tool-free request, with
 at most four visible user/assistant messages (3,000 characters total), no images,
-thinking or tool output, reasoning off, 120 output tokens, a six-second timeout
-and no retries. They never alter the session or authorize actions. Tab or a click
-inserts an editable draft; Escape dismisses the current suggestion. Typed drafts,
+thinking or tool output, reasoning off, 120 output tokens, a fifteen-second model timeout
+and no SDK retries. They never alter the session or authorize actions. Tab or a click
+inserts an editable draft; clearing that draft immediately restores its cached
+suggestion. Escape hides it until the user edits and clears the draft or a new
+turn completes. Typed drafts,
 attachments, pending questions, queued messages and running/compacting turns take
-precedence. Composer controls expose a persisted opt-out. Ten-minute bounded
-in-memory caches coalesce duplicate requests; failures retain the normal placeholder.
+precedence. Composer controls expose a persisted opt-out. Successful suggestions
+have a ten-minute bounded in-memory cache. Empty output and transient failures
+retry only while idle, after two then four seconds (three attempts total per
+turn), with a one-minute cooldown after exhaustion. Typing, running, switching
+sessions or opting out cancels scheduled retries. Missing models/credentials and
+permanent provider refusals are not retried. The API distinguishes ready, empty,
+error, unavailable and busy outcomes without exposing provider error text.
+Browser/server caches coalesce duplicate requests and enforce the retry budget;
+each completed turn has its own cache identity, even with identical message text.
+Failures retain the normal placeholder.
 Background suggestions have their own small provider usage, outside the agent turn.
 
 Goal has no fixed continuation count. `/goal --runs 50 <objective>` or

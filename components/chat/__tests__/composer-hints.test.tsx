@@ -93,4 +93,21 @@ describe("contextual composer suggestions", () => {
     await type("Keep chatting"); await key("Enter");
     expect(onSend).toHaveBeenCalledWith("Keep chatting", undefined);
   });
+  it("restores an accepted suggestion as soon as its draft is cleared without another model request", async () => {
+    await render(); await settle();
+    await key("Tab");
+    expect(textarea().value).toBe("Test the preview on mobile");
+    await type("");
+    expect(hint()?.textContent).toContain("Test the preview on mobile");
+    await settle(); expect(hintRequest).toHaveBeenCalledTimes(1);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+  it("dismisses with Escape until the user edits and clears a draft, then restores the cached suggestion", async () => {
+    await render(); await settle();
+    await key("Escape"); await settle();
+    expect(hint()).toBeNull(); expect(hintRequest).toHaveBeenCalledTimes(1);
+    await type("An edited draft"); await type("");
+    expect(hint()?.textContent).toContain("Test the preview on mobile");
+    expect(onSend).not.toHaveBeenCalled();
+  });
 });
