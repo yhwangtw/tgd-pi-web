@@ -1,13 +1,37 @@
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
-const harness = vi.hoisted(() => ({ get: vi.fn(), send: vi.fn(), resolve: vi.fn(), start: vi.fn(), open: vi.fn() }));
+const harness = vi.hoisted(() => ({ get: vi.fn(), send: vi.fn(), resolve: vi.fn(), start: vi.fn(), open: vi.fn(), alias: vi.fn(async (id: string) => id) }));
 vi.mock("@/lib/rpc-manager", () => ({ getRpcSession: harness.get, startRpcSession: harness.start }));
 vi.mock("@/lib/session-reader", () => ({ resolveSessionPath: harness.resolve }));
-vi.mock("@/lib/durable-migration", () => ({ waitForSessionMigration: async (id: string) => id, migrateLegacySession: vi.fn() }));
-vi.mock("@/lib/durable-chat", () => ({ getDurableChat: vi.fn(), openDurableChat: vi.fn() }));
-vi.mock("@/lib/durable-session-store", () => ({ isDurableSessionId: () => false, readDurableProjection: vi.fn() }));
+vi.mock("@/lib/session-migrations", () => ({ waitForSessionMigration: harness.alias }));
 vi.mock("@earendil-works/pi-coding-agent", () => ({ SessionManager: { open: harness.open } }));
 import { POST } from "../../app/api/agent/[id]/route";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  harness.alias.mockImplementation(async (id: string) => id);
+});
+
+it.each(["standard", "dw_00000000-0000-0000-0000-000000000000_1"])("sends prompts directly to the existing SDK session %s", async id => {
+  harness.get.mockReturnValue({ isAlive: () => true, send: harness.send });
+  harness.send.mockResolvedValue({ ok: true });
+  const response = await POST(new Request(`http://localhost/api/agent/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "prompt", message: "hello" }) }), { params: Promise.resolve({ id }) });
+  expect(await response.json()).toEqual({ success: true, data: { ok: true } });
+  expect(harness.get).toHaveBeenCalledWith(id);
+  expect(harness.send).toHaveBeenCalledWith({ type: "prompt", message: "hello" });
+  expect(harness.resolve).not.toHaveBeenCalled();
+  expect(harness.start).not.toHaveBeenCalled();
+});
+
+it("routes old aliases to their SDK session without starting a conversion", async () => {
+  harness.alias.mockResolvedValue("dw_00000000-0000-0000-0000-000000000000_1");
+  harness.get.mockReturnValue({ isAlive: () => true, send: harness.send });
+  harness.send.mockResolvedValue(null);
+  const response = await POST(new Request("http://localhost/api/agent/old", { method: "POST", body: JSON.stringify({ type: "prompt", message: "continue" }) }), { params: Promise.resolve({ id: "old" }) });
+  expect(response.status).toBe(200);
+  expect(harness.get).toHaveBeenCalledWith("dw_00000000-0000-0000-0000-000000000000_1");
+  expect(harness.start).not.toHaveBeenCalled();
+});
 
 it("deduplicates fork retries before looking up or reopening the replaced runtime", async () => {
   const request = () => new Request("http://localhost/api/agent/old", {

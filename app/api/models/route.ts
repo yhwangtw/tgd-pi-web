@@ -1,11 +1,8 @@
 import { resolveMigratedSessionId } from "@/lib/session-migrations";
 import { stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
-import { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { createTrackedAgentServices } from "@/lib/pi-runtime";
-import { getDurableChat } from "@/lib/durable-chat";
-import { isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 import {
   buildModelCatalog,
   resolveModelCatalogCwd,
@@ -16,14 +13,6 @@ import {
 export const dynamic = "force-dynamic";
 
 async function activeSessionSource(sessionId: string): Promise<ModelCatalogSource | null> {
-  if (isDurableSessionId(sessionId)) {
-    const chat = getDurableChat(sessionId);
-    const services = chat?.isAlive() ? chat.getServices() : undefined;
-    if (!services) return null;
-    const registry = new ModelRegistry(services.modelRuntime);
-    await registry.refresh();
-    return { registry, settings: services.settingsManager, diagnostics: services.diagnostics };
-  }
   const session = getRpcSession(sessionId);
   if (!session?.isAlive() || !session.modelRegistry) return null;
   await session.refreshModels();
@@ -74,10 +63,6 @@ async function catalogResponse(sessionId: string | null, cwd: string): Promise<R
 }
 
 async function storedSessionCwd(sessionId: string): Promise<string | null> {
-  if (isDurableSessionId(sessionId)) {
-    const chat = getDurableChat(sessionId);
-    return chat?.isAlive() ? chat.cwd : readDurableProjection(sessionId)?.info.cwd ?? null;
-  }
   const active = getRpcSession(sessionId);
   if (active?.isAlive()) return active.cwd;
   const { readSessionCwd, resolveSessionPath } = await import("@/lib/session-reader");

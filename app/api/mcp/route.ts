@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { redactedErrorMessage } from "@/lib/redaction";
 import { deleteMcpServer, getMcpStatuses, McpConfigurationError, readMcpServers, refreshMcpServer, saveMcpServer, testMcpServer, validateMcpServer, type McpServerConfig } from "@/lib/mcp";
 import { getRpcSession } from "@/lib/rpc-manager";
-import { getDurableChat } from "@/lib/durable-chat";
 import { consumeSensitiveAction, prepareSensitiveAction } from "@/lib/sensitive-action-confirmation";
 import { recordSecurityActivity, type SecurityActivityOutcome } from "@/lib/security-activity";
 import { requestIsSameOrigin } from "@/lib/access-gate";
@@ -32,11 +31,6 @@ function visibleForCwd(server: McpServerConfig, cwd?: string): boolean {
 
 async function reloadSession(sessionId?: string): Promise<{ reloaded: boolean; deferred: boolean; reloadWarning?: string }> {
   if (!sessionId) return { reloaded: false, deferred: false };
-  const durable = getDurableChat(sessionId);
-  if (durable?.isAlive()) {
-    try { return await durable.requestMcpRefresh(); }
-    catch (error) { return { reloaded: false, deferred: false, reloadWarning: `MCP configuration was saved, but Extensions could not be reloaded: ${redactedErrorMessage(error)}` }; }
-  }
   const session = getRpcSession(sessionId);
   if (!session?.isAlive()) return { reloaded: false, deferred: false };
   if (session.inner.isStreaming || session.inner.isCompacting) return { reloaded: false, deferred: true };

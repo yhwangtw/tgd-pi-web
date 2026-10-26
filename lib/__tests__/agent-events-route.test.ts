@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const harness = vi.hoisted(() => ({ subscribe: vi.fn(), unsubscribe: vi.fn(), get: vi.fn(), durable: vi.fn(), resume: vi.fn(), start: vi.fn(), resolve: vi.fn() }));
+const harness = vi.hoisted(() => ({ subscribe: vi.fn(), unsubscribe: vi.fn(), get: vi.fn(), resume: vi.fn(), start: vi.fn(), resolve: vi.fn(), alias: vi.fn(async (id: string) => id) }));
 vi.mock("@/lib/rpc-manager", () => ({ getRpcSession: harness.get, getResumableRpcSession: harness.resume, startRpcSession: harness.start }));
 vi.mock("@/lib/session-reader", () => ({ resolveSessionPath: harness.resolve }));
-vi.mock("@/lib/durable-chat", () => ({ getDurableChat: harness.durable, openDurableChat: vi.fn() }));
+vi.mock("@/lib/session-migrations", () => ({ waitForSessionMigration: harness.alias }));
 import { GET } from "../../app/api/agent/[id]/events/route";
 import { decodeSessionData, encodeSessionData } from "../session-tree-wire";
 import type { SessionTreeNode } from "../types";
@@ -13,7 +13,8 @@ import { AgentStreamDecoder } from "../agent-stream-wire";
 describe("agent events HTTP replay transport", () => {
   beforeEach(() => {
     vi.useFakeTimers(); harness.subscribe.mockReset(); harness.unsubscribe.mockReset();
-    harness.resume.mockReset(); harness.start.mockReset(); harness.resolve.mockReset(); harness.durable.mockReset();
+    harness.resume.mockReset(); harness.start.mockReset(); harness.resolve.mockReset();
+    harness.alias.mockImplementation(async (id: string) => id);
     harness.get.mockReturnValue({ isAlive: () => true, onStreamEvent: harness.subscribe });
     harness.subscribe.mockImplementation((listener) => {
       listener({ id: "epoch:3", data: JSON.stringify({ type: "message_end", message: "complete" }) });
@@ -36,6 +37,20 @@ describe("agent events HTTP replay transport", () => {
     await reader.cancel();
     expect(harness.unsubscribe).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("announces the SDK identity when an old bookmark resolves to a converted session", async () => {
+    const id = "dw_00000000-0000-0000-0000-000000000000_1";
+    harness.alias.mockResolvedValue(id);
+    harness.get.mockReturnValue({ sessionId: id, cwd: "/fixture", sessionFile: "/fixture/session.jsonl", isAlive: () => true, onStreamEvent: harness.subscribe });
+    const response = await GET(new Request("http://localhost/api/agent/old/events"), { params: Promise.resolve({ id: "old" }) });
+    expect(harness.get).toHaveBeenCalledWith(id);
+    expect(harness.start).not.toHaveBeenCalled();
+    const reader = response.body!.getReader();
+    await reader.read();
+    const replacement = new TextDecoder().decode((await reader.read()).value);
+    expect(replacement).toContain(`"previousSessionId":"old","newSessionId":"${id}","migrated":true`);
+    await reader.cancel();
   });
 
   it("routes typed frames without parsing their full payload and still closes terminal streams", async () => {
@@ -105,7 +120,7 @@ describe("agent events HTTP replay transport", () => {
     await reader.cancel(); expect(harness.unsubscribe).toHaveBeenCalledOnce();
   });
 
-  it.each(["standard", "durable"])("negotiates exact incremental updates for %s, preserving cursor replay and full snapshots", async engine => {
+  it.each(["one", "dw_00000000-0000-0000-0000-000000000000_1"])("negotiates exact incremental SDK updates for %s, preserving cursor replay and full snapshots", async sid => {
     const log = new AgentEventLog("delta");
     const update = (text: string) => ({ type: "message_update", message: { role: "assistant", content: [{ type: "text", text }] } });
     const first = log.append(update("x".repeat(4000)));
@@ -117,8 +132,6 @@ describe("agent events HTTP replay transport", () => {
     const end = log.append({ type: "message_end", message: update("complete").message });
     let deliver!: (record: AgentStreamRecord) => void;
     harness.subscribe.mockImplementation(listener => { deliver = listener; for (const record of [second, third, snapshot]) listener(record); return harness.unsubscribe; });
-    const sid = engine === "durable" ? "dw_00000000-0000-0000-0000-000000000000_1" : "one";
-    if (engine === "durable") harness.durable.mockReturnValue({ sessionId: sid, isAlive: () => true, resume: async () => {}, onStreamEvent: harness.subscribe });
     const response = await GET(new Request(`http://localhost/api/agent/${sid}/events?tree=flat-v2&stream=delta-v1&cursor=${encodeURIComponent(first.id!)}`), { params: Promise.resolve({ id: sid }) });
     deliver(fourth); deliver(fifth); deliver(end);
     const reader = response.body!.getReader(); await reader.read();
@@ -133,6 +146,8 @@ describe("agent events HTTP replay transport", () => {
       expect(decoder.decode(JSON.parse(data), data, original.id!)).toEqual(JSON.parse(original.data));
     }
     expect(types).toEqual(["message_update", "message_update_delta", "session_snapshot", "message_update", "message_update_delta", "message_end"]);
+    expect(harness.get).toHaveBeenCalledWith(sid);
+    expect(harness.resume).toHaveBeenCalledWith(sid, first.id);
     expect(harness.subscribe).toHaveBeenCalledWith(expect.any(Function), first.id);
     await reader.cancel();
     expect(harness.unsubscribe).toHaveBeenCalledOnce();

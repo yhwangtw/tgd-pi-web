@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-// Keep real navigation, streaming/reconnection and Durable coverage in every
+// Keep real navigation, streaming/reconnection coverage in every
 // focused run. Anything outside the explicitly mapped UI leaves runs all specs.
-export const CORE_SPECS = ['chat', 'nav', 'session-reconnect', 'durable-chat', 'appearance', 'responsive', 'design-audit', 'js-budget']
+export const CORE_SPECS = ['chat', 'nav', 'session-reconnect', 'appearance', 'responsive', 'design-audit', 'js-budget']
   .map(name => `e2e/${name}.spec.ts`);
 const fileSpecs = ['file-browser-layout', 'file-review-focus', 'file-links', 'file-edit-safety',
   'file-response-safety', 'viewer', 'diff-review', 'audit-refinements', 'ui-audit-fixes'];

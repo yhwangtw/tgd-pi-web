@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { DefaultPackageManager, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getRpcSession } from "@/lib/rpc-manager";
-import { getDurableChat } from "@/lib/durable-chat";
-import { waitForSessionMigration } from "@/lib/durable-migration";
-import { isDurableSessionId } from "@/lib/durable-session-store";
+import { waitForSessionMigration } from "@/lib/session-migrations";
 import { consumePreparedPackageMutation, preparePackageMutation, type PackageMutationAction } from "@/lib/package-confirmation";
 import {
   buildPackageMutationPreview,
@@ -32,11 +30,9 @@ function assertSameOrigin(req: Request): void {
 
 async function managerForSession(sessionId: string) {
   const id = await waitForSessionMigration(sessionId);
-  const durable = isDurableSessionId(id) ? getDurableChat(id) : undefined;
-  const standard = isDurableSessionId(id) ? undefined : getRpcSession(id);
-  const session = durable ?? standard;
+  const session = getRpcSession(id);
   if (!session?.isAlive()) throw new Error("Open an active session before managing packages");
-  const settingsManager = durable?.getServices()?.settingsManager ?? standard?.inner.settingsManager;
+  const settingsManager = session.inner.settingsManager;
   if (!settingsManager) throw new Error("Session resources are not ready; reopen the session before managing packages");
   return {
     session,

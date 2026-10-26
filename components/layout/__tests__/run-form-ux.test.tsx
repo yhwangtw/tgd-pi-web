@@ -62,3 +62,24 @@ for (const mode of ["agent", "schedule"] as const) describe(`${mode} project mod
     expect(modelField().textContent).not.toContain("Model B");
   });
 });
+
+it("creates a background SDK run with interactive tools and no execution mode flag", async () => {
+  const created = vi.fn();
+  const run = { id: "sdk-run", name: "Review project", cwd: "/fixture/a", prompt: "Review project files", toolNames: ["read", "grep", "find", "ls", "ask_user"], trigger: "manual", status: "queued", createdAt: "2026-10-26T00:00:00Z" };
+  const fetchOther = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((url, init) => url === "/api/agent-runs" ? Promise.resolve(json({ run })) : fetchOther(url, init));
+  await act(async () => root.render(<AgentRunForm defaultCwd="/fixture/a" onCancel={vi.fn()} onCreated={created} />));
+  expect(document.querySelector('select[aria-label="Execution mode"]')).toBeNull();
+  await fill(document.querySelector<HTMLInputElement>('input[maxlength="100"]')!, "Review project");
+  const prompt = document.querySelector<HTMLTextAreaElement>("textarea")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(prompt, "Review project files");
+    prompt.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => document.querySelector<HTMLFormElement>('[data-testid="agent-run-editor"]')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  const call = vi.mocked(fetch).mock.calls.find(([url]) => url === "/api/agent-runs");
+  const payload = JSON.parse(String(call?.[1]?.body));
+  expect(payload).toMatchObject({ name: "Review project", cwd: "/fixture/a", prompt: "Review project files", toolNames: ["read", "grep", "find", "ls", "ask_user"] });
+  expect(payload).not.toHaveProperty("engine");
+  expect(created).toHaveBeenCalledWith(run);
+});

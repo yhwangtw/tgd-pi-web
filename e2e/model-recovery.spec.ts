@@ -24,7 +24,12 @@ function deferred() {
 const test = base.extend<{ modelNetworkSafety: void }>({
   modelNetworkSafety: [async ({ page }, use) => {
     const forbidden: string[] = [];
-    await page.addInitScript(() => localStorage.setItem("pi-locale", "en"));
+    await page.addInitScript(() => {
+      localStorage.setItem("pi-locale", "en");
+      // This read-only catalog suite forbids all inference, including idle hints.
+      // Contextual suggestions have their own focused browser coverage.
+      localStorage.setItem("pi-composer-hints", "off");
+    });
     // No prompt, connection test, credential write, or session mutation may
     // reach the fixture server. Even an accidental click cannot call a model.
     await page.route((url) => url.pathname.startsWith("/api/"), async (route) => {
@@ -71,9 +76,11 @@ const test = base.extend<{ modelNetworkSafety: void }>({
   }, { auto: true }],
 });
 
-async function openMain(page: Page, composerName = "Message…") {
+async function openMain(page: Page, composerPlaceholder?: string) {
   await page.goto(`/?session=${MAIN_ID}`);
-  await expect(page.getByRole("textbox", { name: composerName })).toBeVisible({ timeout: 20_000 });
+  const composer = page.getByRole("textbox", { name: "Message…", exact: true });
+  await expect(composer).toBeVisible({ timeout: 20_000 });
+  if (composerPlaceholder) await expect(composer).toHaveAttribute("placeholder", composerPlaceholder);
 }
 
 function trigger(page: Page) { return page.getByTestId("model-selector-trigger"); }

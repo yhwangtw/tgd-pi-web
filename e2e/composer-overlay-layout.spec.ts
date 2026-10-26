@@ -7,6 +7,8 @@ const MODEL_API = /\/api\/models(?:\?|$)/;
 const test = base.extend<{ layoutNetworkSafety: void }>({
   layoutNetworkSafety: [async ({ page }, use) => {
     const forbidden: string[] = [];
+    // Background suggestions have their own tests; layout actions must remain model-free.
+    await page.addInitScript(() => localStorage.setItem("pi-composer-hints", "off"));
     await page.route((url) => url.pathname.startsWith("/api/"), async (route) => {
       const request = route.request();
       const pathname = new URL(request.url()).pathname;

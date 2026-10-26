@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ stream: vi.fn(), append: vi.fn(), name: vi.fn() }));
-vi.mock("@/lib/durable-migration", () => ({ waitForSessionMigration: async (id: string) => id }));
-vi.mock("@/lib/durable-chat", () => ({ openDurableChat: vi.fn() }));
-vi.mock("@/lib/durable-session-store", () => ({ isDurableSessionId: () => false }));
+vi.mock("@/lib/session-migrations", () => ({ waitForSessionMigration: async (id: string) => id }));
 vi.mock("@/lib/session-reader", () => ({ readSessionCwd: vi.fn() }));
 vi.mock("@/lib/rpc-manager", () => ({ getRpcSession: () => ({ isAlive: () => true, modelRegistry: { find: () => ({ id: "model", provider: "test" }) }, inner: {
   model: { id: "model", provider: "test" }, sessionManager: { getSessionName: mocks.name, appendSessionInfo: mocks.append },

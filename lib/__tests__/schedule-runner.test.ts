@@ -41,6 +41,16 @@ beforeEach(() => {
 });
 
 describe("ScheduleRunner", () => {
+  it("does not attach or replay persisted active runs on startup", () => {
+    harness.store.schedules[0].enabled = false;
+    harness.store.runs.push({ id: "interrupted", scheduleId: "schedule-1", scheduleName: "Review", trigger: "manual",
+      scheduledFor: "2026-07-24T09:00:00.000Z", startedAt: "2026-07-24T09:00:00.000Z", status: "waiting_for_input", sessionId: "historical-session" });
+    const runner = new ScheduleRunner();
+    runner.start();
+    expect(harness.startRpcSession).not.toHaveBeenCalled();
+    runner.dispose();
+  });
+
   it("tracks ask_user as waiting and completes the same normal Pi session", async () => {
     const eventSink: {
       listener?: (event: { type: string; [key: string]: unknown }) => void;

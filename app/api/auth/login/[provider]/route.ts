@@ -1,5 +1,4 @@
 import { OAuthWebBridge, submitOAuthWebInput, type OAuthWebEvent } from "@/lib/oauth-web-bridge";
-import { invalidateDurableSessionsForAuthChange } from "@/lib/durable-chat";
 import { invalidateRpcSessionsForAuthChange } from "@/lib/rpc-manager";
 import { createPiModelRuntime } from "@/lib/pi-model-runtime";
 
@@ -67,7 +66,6 @@ export async function GET(
         bridge = new OAuthWebBridge(provider, send, abort.signal);
         await runtime.login(provider, "oauth", bridge.interaction);
         invalidateRpcSessionsForAuthChange();
-        await invalidateDurableSessionsForAuthChange();
         send({ type: "success" });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

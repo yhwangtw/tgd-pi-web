@@ -14,6 +14,8 @@ export interface CompactionLiveState {
   compactionQueue?: QueuedFollowUp[];
 }
 
+const isTransientResult = (status?: string) => status === "completed" || status === "skipped" || status === "cancelled";
+
 export function useSessionCompaction(
   sessionIdRef: RefObject<string | null>,
   setIsCompacting: (running: boolean) => void,
@@ -47,9 +49,9 @@ export function useSessionCompaction(
     const alreadyShown = hasCompactionNoticeReceipt(sessionIdRef.current, state.id, state.status);
     const stillVisible = current?.id === state.id && current.status === state.status;
     if (state.status === "running" || !alreadyShown || stillVisible) {
-      // Record success on first display, not only at timeout: switching away
+      // Record neutral results on first display, not only at timeout: switching away
       // during these five seconds must not make the same notice new again.
-      if (state.status === "completed" && !alreadyShown) rememberCompactionNotice(sessionIdRef.current, state.id, state.status);
+      if (isTransientResult(state.status) && !alreadyShown) rememberCompactionNotice(sessionIdRef.current, state.id, state.status);
       update(state);
     } else if (current?.id === state.id) {
       // Another view may already have shown the result. Clear our running /
@@ -73,7 +75,21 @@ export function useSessionCompaction(
     if (!state || !mounted.current) return;
     if (state.compactionQueue) setQueue(state.compactionQueue);
     if (state.compaction) accept(state.compaction);
-    else if (state.isCompacting) update({ id: "native", status: "running", reason: "auto", startedAt: Date.now() });
+    else if (state.isCompacting) {
+      const current = viewRef.current;
+      // A legacy snapshot has no operation identity. Retain the richer event /
+      // command state instead of resetting its identity and start time each poll.
+      if (current?.status !== "running") update(current?.status === "checking" || current?.status === "unknown"
+        ? { ...current, status: "running" }
+        : { id: `native-${Date.now()}`, status: "running", reason: "auto", startedAt: Date.now() });
+    } else if (state.isCompacting === false && !starting.current) {
+      const current = viewRef.current;
+      if (current?.status === "running" || current?.status === "checking") {
+        // An authoritative idle snapshot ends the spinner, but cannot tell us
+        // whether a lost operation completed, failed, or was interrupted.
+        update({ ...current, status: "unknown" });
+      }
+    }
   }, [accept, update]);
 
   const check = useCallback(async () => {
@@ -173,10 +189,10 @@ export function useSessionCompaction(
   const activeId = view?.id;
   const activeStatus = view?.status;
   useEffect(() => {
-    if (!activeId || activeStatus !== "completed") return;
+    if (!activeId || !isTransientResult(activeStatus)) return;
     const sid = sessionIdRef.current;
     const timer = setTimeout(() => {
-      if (sid === sessionIdRef.current && viewRef.current?.id === activeId && viewRef.current.status === "completed") dismiss();
+      if (sid === sessionIdRef.current && viewRef.current?.id === activeId && viewRef.current.status === activeStatus) dismiss();
     }, 5000);
     return () => clearTimeout(timer);
   }, [activeId, activeStatus, dismiss, sessionIdRef]);

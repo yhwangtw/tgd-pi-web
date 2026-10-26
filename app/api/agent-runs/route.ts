@@ -1,7 +1,6 @@
 import { listUpstreamAgentRuns } from "@/lib/upstream-subagent-runs";
 import { ensureAgentRunSupervisor } from "@/lib/agent-run-supervisor";
 import { readAgentRunStore } from "@/lib/agent-run-store";
-import { listDurableChildRuns } from "@/lib/durable-session-store";
 import type { AgentRunStatus } from "@/lib/agent-run-types";
 import {
   AgentRunValidationError,
@@ -65,7 +64,7 @@ export async function GET(req: Request): Promise<Response> {
   const store = readAgentRunStore();
   const delegationBlockedBySavedLimits = [store.subagentLimits?.maxTurns, store.subagentLimits?.maxCostUsd, store.subagentLimits?.timeoutMs]
     .some(value => typeof value === "number" && Number.isFinite(value) && value > 0);
-  const baseRuns = [...store.runs, ...listDurableChildRuns(), ...upstream.runs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).filter((run) => {
+  const baseRuns = [...store.runs, ...upstream.runs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).filter((run) => {
     if (cwd && run.cwd !== cwd) return false;
     if (!query) return true;
     return `${run.name}\n${run.cwd}\n${run.prompt}`.toLocaleLowerCase().includes(query);

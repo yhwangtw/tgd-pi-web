@@ -85,7 +85,7 @@ async function send(page: Page, profile: "short" | "long", runId: string) {
     outputHash: createHash("sha256").update(text).digest("hex") };
 }
 
-for (const engine of ["legacy", "durable"] as const) for (const profile of ["short", "long"] as const) {
+for (const engine of ["sdk"] as const) for (const profile of ["short", "long"] as const) {
   test(`${engine} ${profile}: offline first DOM and completion`, async ({ page, browser }, info) => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));

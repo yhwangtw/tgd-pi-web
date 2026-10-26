@@ -1,6 +1,6 @@
-# Pi Durable 全面接入前盤點
+# Pi Durable 接入前歷史盤點（已退役）
 
-> 歷史盤點：下文保留接入前的調查、測試數字與待辦，不代表目前仍未接入。後續實作的使用方式、支援範圍及限制請看 [Durable 使用與限制](DURABLE.md) 和[目前架構](DEVELOPMENT.md#durable-conversations-and-schedules-preview)。這份盤點與後續文件都不是部署完成證明。
+> **已退役／歷史文件：** Pi Durable 執行路徑已移除；目前聊天、背景任務與排程使用 Pi SDK。下文保留 2026-10-04 接入前的調查、測試數字、設計建議與待辦，不代表現行功能或後續實作承諾。原實作與測試的連結固定到退役前版本；現有資料請參閱[離線封存轉換](DURABLE.md#offline-archive-conversion)，現行架構請看 [DEVELOPMENT.md](DEVELOPMENT.md#sdk-execution-and-retired-durable-archives)。本文件不是部署完成證明。
 
 日期：2026-10-04。範圍為目前 Pi Web、官方 Pi Durable 1.0.0，以及本機已安裝的 OpenViking 0.4.5 擴充。這份文件是本次調查的證據與接入設計，不新增專案發版規則。
 
@@ -29,12 +29,12 @@ Durable 的原生能力可以支援聊天、父子任務與持久狀態；缺口
 
 新增試驗：
 
-- [`durable-chat-audit.test.ts`](../lib/__tests__/durable-chat-audit.test.ts)：6 項。串流 delta 與中途 snapshot、steer／follow-up／withdraw、分支模型與歷史、reset、compact、佇列恢復。
-- [`durable-subagents-audit.test.ts`](../lib/__tests__/durable-subagents-audit.test.ts)：3 項。真並行、父子取消、重開後同 child／task／requestId 接續。
-- [`durable-state-audit.test.ts`](../lib/__tests__/durable-state-audit.test.ts)：3 項。等待回答與一次性 receipt、Goal／Plan 狀態及延續 hook、模型中斷後重用記憶注入 memo。
-- [`durable-mcp-audit.test.ts`](../lib/__tests__/durable-mcp-audit.test.ts)：4 項。真 stdio 呼叫、取消通知、未知副作用不自動重送、output schema 錯誤交回模型。
+- [`durable-chat-audit.test.ts`](https://github.com/yhwangtw/tgd-pi-web/blob/fecbc84867c74f81b4423331698d476e56ad3aed/lib/__tests__/durable-chat-audit.test.ts)：6 項。串流 delta 與中途 snapshot、steer／follow-up／withdraw、分支模型與歷史、reset、compact、佇列恢復。
+- [`durable-subagents-audit.test.ts`](https://github.com/yhwangtw/tgd-pi-web/blob/fecbc84867c74f81b4423331698d476e56ad3aed/lib/__tests__/durable-subagents-audit.test.ts)：3 項。真並行、父子取消、重開後同 child／task／requestId 接續。
+- [`durable-state-audit.test.ts`](https://github.com/yhwangtw/tgd-pi-web/blob/fecbc84867c74f81b4423331698d476e56ad3aed/lib/__tests__/durable-state-audit.test.ts)：3 項。等待回答與一次性 receipt、Goal／Plan 狀態及延續 hook、模型中斷後重用記憶注入 memo。
+- [`durable-mcp-audit.test.ts`](https://github.com/yhwangtw/tgd-pi-web/blob/fecbc84867c74f81b4423331698d476e56ad3aed/lib/__tests__/durable-mcp-audit.test.ts)：4 項。真 stdio 呼叫、取消通知、未知副作用不自動重送、output schema 錯誤交回模型。
 
-上述恢復試驗以真實 close／reopen 為主。既有 [`durable-agent-run.test.ts`](../lib/__tests__/durable-agent-run.test.ts) 另有獨立程序 SIGKILL 的非安全工具試驗；不能將它稱為父子任務、提問或 OpenViking 的 SIGKILL 證據。
+上述恢復試驗以真實 close／reopen 為主。既有 [`durable-agent-run.test.ts`](https://github.com/yhwangtw/tgd-pi-web/blob/fecbc84867c74f81b4423331698d476e56ad3aed/lib/__tests__/durable-agent-run.test.ts) 另有獨立程序 SIGKILL 的非安全工具試驗；不能將它稱為父子任務、提問或 OpenViking 的 SIGKILL 證據。
 
 ## 逐功能盤點
 
@@ -103,7 +103,7 @@ WebRuntimeAdapter 應暴露 Web 真正需要的窄介面：state／snapshot／co
 - [`lib/agent-client.ts`](../lib/agent-client.ts)：目前 fork 才附加 Idempotency-Key。
 - [`lib/web-extension-ui.ts`](../lib/web-extension-ui.ts)：目前 pending、answer receipts 與顯示狀態為記憶體 Map。
 - [`lib/workflow-extension.ts`](../lib/workflow-extension.ts)、[`lib/subagent-extension.ts`](../lib/subagent-extension.ts)、[`lib/mcp.ts`](../lib/mcp.ts)：各功能現有契約。
-- [`lib/durable-agent-run.ts`](../lib/durable-agent-run.ts)、[`lib/durable-models.ts`](../lib/durable-models.ts)：第一階段背景任務與模型橋接。
+- [`lib/durable-agent-run.ts`](https://github.com/yhwangtw/tgd-pi-web/blob/fecbc84867c74f81b4423331698d476e56ad3aed/lib/durable-agent-run.ts)、[`lib/durable-models.ts`](https://github.com/yhwangtw/tgd-pi-web/blob/fecbc84867c74f81b4423331698d476e56ad3aed/lib/durable-models.ts)：第一階段背景任務與模型橋接。
 - [官方 Pi Durable 說明](https://earendil.com/posts/pi-durable/)：experimental 定位、task checkpoint、storage ownership、extensions 與子任務設計。
 - [官方 Pi 原始碼](https://github.com/earendil-works/pi)：本次以已鎖定安裝的 `@earendil-works/pi-durable@1.0.0` README、型別及實際執行為 API 證據，沒有將移動中的 main 當作已安裝版本。
 

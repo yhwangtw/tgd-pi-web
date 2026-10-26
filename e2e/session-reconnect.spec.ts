@@ -133,7 +133,7 @@ async function reconnectRelay(baseURL: string) {
 type Relay = Awaited<ReturnType<typeof reconnectRelay>>;
 
 const test = base.extend<{ relay: Relay }>({
-  relay: async ({ baseURL, context }, use) => {
+  relay: async ({ baseURL, context }, runFixture) => {
     if (!baseURL || !process.env.E2E_ROOT || !process.env.E2E_PROJECT_CWD) throw new Error("Generated fixture environment is required");
     const relay = await reconnectRelay(baseURL);
     const external: string[] = [];
@@ -146,13 +146,14 @@ const test = base.extend<{ relay: Relay }>({
     });
     await context.addInitScript(() => {
       localStorage.setItem("pi-locale", "en");
+      localStorage.setItem("pi-composer-hints", "off");
       const probe: Probe = { online: 0, offline: 0, visibility: [] };
       Object.assign(window, { __reconnectProbe: probe });
       window.addEventListener("online", () => { probe.online++; });
       window.addEventListener("offline", () => { probe.offline++; });
       document.addEventListener("visibilitychange", () => { probe.visibility.push(document.visibilityState); });
     });
-    try { await use(relay); }
+    try { await runFixture(relay); }
     finally {
       await relay.close();
       expect(relay.forbidden, "No accidental non-fixture prompt may reach the agent").toEqual([]);
@@ -181,7 +182,7 @@ function nativeBrowserExecutable() {
 }
 
 const nativeVisibilityTest = test.extend({
-  context: async ({ playwright }, use) => {
+  context: async ({ playwright }, runFixture) => {
     const executable = nativeBrowserExecutable();
     const profile = await mkdtemp(join(tmpdir(), "piweb-native-visibility-"));
     const child = spawn(executable, [
@@ -209,7 +210,7 @@ const nativeVisibilityTest = test.extend({
         child.once("exit", () => finish(new Error("Native fixture browser exited before connecting")));
       });
       browser = await playwright.chromium.connectOverCDP(endpoint, { noDefaults: true });
-      await use(browser.contexts()[0]);
+      await runFixture(browser.contexts()[0]);
     } finally {
       await browser?.close().catch(() => {});
       child.kill("SIGTERM");

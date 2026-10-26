@@ -10,7 +10,6 @@ vi.mock("@earendil-works/pi-coding-agent", async actual => ({
   DefaultResourceLoader: class { constructor(options: unknown) { state.loaderOptions(options); } async reload() {} getSkills() { return { skills: state.skills, diagnostics: [] }; } },
 }));
 vi.mock("../rpc-manager", () => ({ getRpcSession: () => ({ isAlive: () => true, cwd: state.sessionCwd, inner: { settingsManager: { isProjectTrusted: () => state.trusted } } }) }));
-vi.mock("../durable-chat", () => ({ getDurableChat: () => undefined }));
 vi.mock("child_process", () => ({ execFile: (...args: unknown[]) => {
   state.executions(...args.slice(0, -1));
   (args.at(-1) as (err: unknown, result: unknown) => void)(null, { stdout: "[]", stderr: "" });

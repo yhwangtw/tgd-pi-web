@@ -1,10 +1,9 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo, useImperativeHandle, forwardRef, memo, KeyboardEvent, type ReactNode, type RefObject } from "react";
+import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo, useImperativeHandle, useId, forwardRef, memo, KeyboardEvent, type ReactNode, type RefObject } from "react";
 import {
   ArrowRight,
-  History,
   LogOut,
   Ghost,
   FileText,
@@ -14,6 +13,7 @@ import {
   RefreshCw,
   Shrink,
   SlidersHorizontal,
+  Sparkles,
   Square,
   Upload,
   Volume2,
@@ -46,6 +46,9 @@ import type { ModelCatalogEntry } from "@/lib/model-catalog-types";
 import type { ModelCatalogDiagnostic, ModelCatalogStatus } from "@/hooks/use-model-catalog";
 import { ScreenshotButton } from "./ScreenshotButton";
 import { DialogShell } from "@/components/ui/DialogShell";
+import { useComposerHint } from "@/hooks/useComposerHint";
+import type { ComposerHintContext } from "@/lib/composer-hint-context";
+import type { ComposerHintMessage } from "@/lib/composer-hints";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -65,6 +68,9 @@ interface Props {
   onSteer?: (message: string, images?: AttachedImage[]) => Promise<boolean>;
   onFollowUp?: (message: string, images?: AttachedImage[]) => Promise<boolean>;
   isStreaming: boolean;
+  hintMessages?: ComposerHintMessage[] | null;
+  hintContext?: ComposerHintContext;
+  hintTurnKey?: string | null;
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
   modelList?: ModelCatalogEntry[];
@@ -95,8 +101,6 @@ interface Props {
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   ephemeral?: boolean;
   onEphemeralChange?: (enabled: boolean) => void;
-  durable?: boolean;
-  onDurableChange?: (enabled: boolean) => void;
   soundEnabled?: boolean;
   onSoundToggle?: () => void;
   /** Project cwd — enables the `@file` mention autocomplete. */
@@ -211,7 +215,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   ephemeral = false, onEphemeralChange,
-  durable = false, onDurableChange,
   soundEnabled, onSoundToggle,
   cwd,
   persistKey,
@@ -222,8 +225,12 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   workflowControls,
   workflowPending = false,
   wide = false,
+  hintMessages,
+  hintContext,
+  hintTurnKey,
 }: Props, ref) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const hintHelpId = useId();
   const { prompts } = usePrompts();
   const slashItems = useMemo(() => buildSlashItems(prompts), [prompts]);
   const [value, setValue] = useComposerDraft(persistKey ?? null);
@@ -264,6 +271,11 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   const [mentionItems, setMentionItems] = useState<FileMentionItem[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionSeqRef = useRef(0);
+  const { hint, enabled: hintsEnabled, setEnabled: setHintsEnabled, dismiss: dismissHint, reset: resetHint } = useComposerHint({
+    messages: hintMessages, context: hintContext, model, locale, sessionKey: persistKey, turnKey: hintTurnKey,
+    idle: value === "" && !isStreaming && !isCompacting && !isSubmitting && !uploadsPending
+      && attachedImages.length === 0 && !quote && !workflowPending && !mention && !showSlashMenu,
+  });
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -277,6 +289,11 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   const controlsBeforeExpandRef = useRef(false);
   const expandedRef = useRef(expanded);
   expandedRef.current = expanded;
+  const acceptHint = useCallback(() => {
+    if (!hint || value !== "" || isComposingRef.current) return;
+    setValue(hint);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [hint, value, setValue]);
 
   useImperativeHandle(ref, () => ({
     openControls() {
@@ -706,6 +723,11 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
         }
       }
 
+      if (hint && !isComposing && !recentlyComposed && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (e.key === "Tab") { e.preventDefault(); acceptHint(); return; }
+        if (e.key === "Escape") { e.preventDefault(); dismissHint(); return; }
+      }
+
       // Esc-Esc while a run is streaming aborts it (CLI muscle memory).
       // Two presses within 600ms — a single Esc only arms it (and shows a
       // hint), so stray Escapes can't kill a run. Open menus consumed their
@@ -769,7 +791,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
         }
       }
     },
-    [isStreaming, isCompacting, onAbortCompaction, onSteer, onFollowUp, sendQueued, handleSend, showSlashMenu, slashFilter, slashSelectedIndex, slashItems, value, mention, mentionItems, mentionIndex, applyMention, onAbort, t, expanded, streamingSendMode, setValue]
+    [isStreaming, isCompacting, onAbortCompaction, onSteer, onFollowUp, sendQueued, handleSend, showSlashMenu, slashFilter, slashSelectedIndex, slashItems, value, mention, mentionItems, mentionIndex, applyMention, onAbort, t, expanded, streamingSendMode, setValue, hint, acceptHint, dismissHint]
   );
 
   const handleInput = useCallback(() => {
@@ -1046,10 +1068,14 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
           data-testid="composer-shell"
         >
           <div className={styles.inputRow} data-testid="composer-input-row">
+          <div className={styles.draftArea}>
           <textarea
             ref={textareaRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              setValue(e.target.value);
+              if (e.target.value === "") resetHint();
+            }}
             onKeyDown={handleKeyDown}
             onCompositionStart={() => {
               isComposingRef.current = true;
@@ -1062,16 +1088,31 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
             onPaste={handlePaste}
             readOnly={isSubmitting}
             aria-busy={isSubmitting}
+            aria-label={t("input.message")}
+            aria-describedby={hint ? hintHelpId : undefined}
+            aria-keyshortcuts={hint ? "Tab" : undefined}
             placeholder={
               isCompacting ? t("compact.placeholder")
               : isStreaming && (onSteer || onFollowUp)
                 ? t(streamingSendMode === "steer" ? "input.steerPlaceholder" : "input.followUpPlaceholder")
                 : isStreaming ? t("input.agentRunning")
-                : t("input.message")
+                : hint ? "" : t("input.message")
             }
             rows={1}
             className={expanded ? `${styles.textarea} ${styles.textareaExpanded}` : styles.textarea}
           />
+          {hint && (
+            <>
+            <span id={hintHelpId} className="sr-only">{t("input.hintHelp")}</span>
+            <button type="button" className={styles.hintOverlay} onClick={acceptHint}
+              aria-label={`${t("input.useHint")}: ${hint}`} title={t("input.hintHelp")}
+              data-testid="composer-hint">
+              <span className={styles.hintText}>{hint}</span>
+              <kbd className={styles.hintShortcut} aria-hidden="true">{t("input.hintTab")}</kbd>
+            </button>
+            </>
+          )}
+          </div>
 
           {/* @file mention menu */}
           <FileMentionMenu
@@ -1268,6 +1309,15 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
               />
             </div>
             <div className={styles.mobileLabeledControl}>
+              <span className={styles.mobileControlLabel}>{t("input.contextHints")}</span>
+              <button type="button" className={styles.expandButton} aria-pressed={hintsEnabled}
+                aria-label={t("input.contextHints")} title={t("input.contextHintsHelp")}
+                onClick={() => setHintsEnabled(!hintsEnabled)}>
+                <Sparkles size={UI_ICON_SIZE.control} aria-hidden="true" />
+                <span className={styles.mobileControlValue}>{t(hintsEnabled ? "input.hintsOn" : "input.hintsOff")}</span>
+              </button>
+            </div>
+            <div className={styles.mobileLabeledControl}>
               <span className={styles.mobileControlLabel}>{t("input.tools")}</span>
               <ToolPresetSelector
                 toolPreset={toolPreset}
@@ -1297,16 +1347,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
               <span className={styles.mobileControlLabel}>{t("input.scrollMode")}</span>
               <ScrollFollowSelector iconOnly={!isMobileViewport} />
             </div>
-
-            {!isStreaming && onDurableChange && (
-              <div className={styles.mobileLabeledControl}>
-                <span className={styles.mobileControlLabel}>{t("input.sessionEngine")}</span>
-                <button type="button" onClick={() => onDurableChange(!durable)} aria-label={t(durable ? "input.durable" : "input.standard")} aria-pressed={durable} className={durable ? styles.autoCompactButtonOn : styles.autoCompactButtonOff} title={`${t(durable ? "input.durable" : "input.standard")} — ${t("input.durableHint")}`}>
-                  <History size={UI_ICON_SIZE.control} aria-hidden="true" />
-                  <span className={styles.mobileControlValue}>{t(durable ? "input.durable" : "input.standard")}</span>
-                </button>
-              </div>
-            )}
 
             {!isStreaming && onEphemeralChange && (
               <div className={styles.mobileLabeledControl}>

@@ -25,6 +25,8 @@ import { markSessionRead } from "@/lib/session-read-state";
 import { motionScrollBehavior, prefersReducedMotion } from "@/lib/motion";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle, type MessageQuote } from "./ChatInput";
+import { composerHintMessages } from "@/lib/composer-hints";
+import { buildComposerHintContext } from "@/lib/composer-hint-context";
 import { ExtensionUIPanel, ExtensionWidgets, PendingQuestionNotice, WorkflowToolbar } from "./ExtensionUIPanel";
 import { useWorkflowVisibility } from "@/hooks/use-workflow-visibility";
 import { useWorkflowCommand } from "@/hooks/use-workflow-command";
@@ -164,7 +166,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     loading, error, runtimeFailure, messages, entryIds, streamState, getGenerationMetrics,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
-    retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, durableNewSession, setDurableNewSession, contextUsage, forkingEntryId,
+    retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
     compactionStatus, compactionQueue, handleCheckCompaction, handleDismissCompaction, handleClearCompactionQueue, handleRetryCompaction,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,
@@ -1070,6 +1072,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const exitPlanFromComposer = useCallback(() => runWorkflowCommand("/plan exit"), [runWorkflowCommand]);
   const clearComposerQuote = useCallback(() => setMessageQuoteState(null), []);
   const workflowControls = useMemo(() => <WorkflowToolbar state={extensionUIState} workflowVisibility={workflowVisibility} />, [extensionUIState, workflowVisibility]);
+  const hintMessages = useMemo(() => loading || agentRunning || isCompacting || pendingQuestion || queuedFollowUps.length > 0
+    ? null : composerHintMessages(messages), [messages, loading, agentRunning, isCompacting, pendingQuestion, queuedFollowUps.length]);
+  const hintContext = useMemo(() => hintMessages ? buildComposerHintContext(messages, extensionUIState, toolPreset === "plan") : undefined,
+    [hintMessages, messages, extensionUIState, toolPreset]);
 
   const chatInputElement = (
     <ChatInput
@@ -1079,6 +1085,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onSteer={agentRunning ? handleSteer : undefined}
       onFollowUp={agentRunning ? handleFollowUp : undefined}
       isStreaming={agentRunning}
+      hintMessages={hintMessages}
+      hintContext={hintContext}
+      hintTurnKey={entryIds.at(-1) ?? `${messages.length}:${messages.at(-1)?.timestamp ?? ""}`}
       model={displayModelValue}
       modelNames={modelNames}
       modelList={modelList}
@@ -1109,8 +1118,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       retryInfo={retryInfo}
       ephemeral={ephemeralNewSession}
       onEphemeralChange={isNew ? setEphemeralNewSession : undefined}
-      durable={isNew ? durableNewSession : session?.engine === "durable" || session?.id.startsWith("dw_")}
-      onDurableChange={isNew ? setDurableNewSession : undefined}
       soundEnabled={soundEnabled}
       onSoundToggle={onSoundToggle}
       cwd={tgdCwd}

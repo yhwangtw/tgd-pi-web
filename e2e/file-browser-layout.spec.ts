@@ -7,6 +7,7 @@ const SESSION = "ffff1111-2222-3333-4444-555566667777";
 const test = base.extend<{ fileLayoutSafety: void }>({
   fileLayoutSafety: [async ({ page }, use) => {
     const forbidden: string[] = [];
+    await page.addInitScript(() => localStorage.setItem("pi-composer-hints", "off"));
     await page.route((url) => url.pathname.startsWith("/api/"), async (route) => {
       const request = route.request();
       const pathname = new URL(request.url()).pathname;

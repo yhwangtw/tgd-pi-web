@@ -5,11 +5,6 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createAgentSessionServices, createAgentSessionFromServices, initTheme, ModelRuntime, SessionManager, SettingsManager, type AgentSession } from "@earendil-works/pi-coding-agent";
 import { createUpstreamSubagentExtension, listUpstreamSubagentHosts, hasUpstreamSubagentWork } from "../upstream-subagents";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { MemoryStorage } from "@earendil-works/pi-durable/storage/memory";
-import { createRegistry, Harness } from "@earendil-works/pi-durable";
-import { createDurableExtensionHost } from "../durable-extension-host";
-import { durableModels } from "../durable-models";
 import { bindWebExtensions } from "../pi-runtime";
 import { toEnumerableExtensionUIContext, WebExtensionUIBridge } from "../web-extension-ui";
 
@@ -53,10 +48,10 @@ async function fixture(waitForParallelPair = false) {
     const chunk = (delta: object, finish: string | null = null) => `data: ${JSON.stringify({ id: "fixture", object: "chat.completion.chunk", created: 1, model: "offline", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
     const input = JSON.parse(body);
     if (body.includes("PARENT_DELEGATE") && input.tools?.some((tool: { function?: { name?: string } }) => tool.function?.name === "subagent") && !input.messages.some((message: { role: string }) => message.role === "tool")) {
-      res.end(chunk({ role: "assistant", tool_calls: [{ index: 0, id: "fixture-call", type: "function", function: { name: "subagent", arguments: JSON.stringify({ agent: "worker", task: "DURABLE_CHILD", async: false, context: "fresh", model: "fixture/offline" }) } }] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n");
+      res.end(chunk({ role: "assistant", tool_calls: [{ index: 0, id: "fixture-call", type: "function", function: { name: "subagent", arguments: JSON.stringify({ agent: "worker", task: "SDK_CHILD", async: false, context: "fresh", model: "fixture/offline" }) } }] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n");
     } else res.end(chunk({ role: "assistant", content: "CHILD_DONE" }) + chunk({}, "stop") + "data: [DONE]\n\n");
   });
-  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve)); servers.push(server);
+  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); }); servers.push(server);
   const address = server.address(); if (!address || typeof address === "string") throw new Error("No local fixture port");
   writeFileSync(join(agentDir, "models.json"), JSON.stringify({ providers: { fixture: { baseUrl: `http://127.0.0.1:${address.port}/v1`, api: "openai-completions", apiKey: "local-test-only", models: [{ id: "offline", name: "Offline", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32768, maxTokens: 4096 }] } } }));
   const modelRuntime = await ModelRuntime.create({ authPath: join(agentDir, "auth.json"), modelsPath: join(agentDir, "models.json"), refreshOnCreate: false, allowModelNetwork: false });
@@ -126,40 +121,19 @@ describe("pinned upstream pi-subagents running through the real SDK", () => {
     await expect(f.host.client.request("status")).resolves.toBeDefined();
   }, 60_000);
 
-  it("lets a Durable model call the actual upstream tool and exports usable parent context", async () => {
+  it("lets the SDK parent delegate through the actual upstream tool and export usable fork context", async () => {
     const f = await fixture();
-    const services = await createAgentSessionServices({ cwd: f.cwd, agentDir, modelRuntime: f.modelRuntime, settingsManager: SettingsManager.inMemory(), resourceLoaderOptions: { noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, extensionFactories: [createUpstreamSubagentExtension()] } });
-    const context = BACKGROUND_CONTEXT;
-    const registry = createRegistry();
-    const harness = await Harness.open(new MemoryStorage(), { models: durableModels(f.modelRuntime), registry, settings: { extensions: [], compaction: { enabled: false }, retry: { enabled: false } } }, context);
-    const conversation = await harness.root(context, { agent: { model: { provider: "fixture", modelId: "offline" } } });
-    const errors: unknown[] = [];
-    const bridge = createDurableExtensionHost({ services, harness: () => harness, conversation: () => conversation, registry,
-      ui: toEnumerableExtensionUIContext(new WebExtensionUIBridge({ theme: f.session.extensionRunner.getUIContext().theme })),
-      sessionId: "durable-fixture", systemPrompt: "Use subagent when helpful.", isTrusted: () => true, onError: e => errors.push(e) });
-    try {
-      await conversation.configure({ extensions: [bridge.extension] }, context);
-      await bridge.initialize();
-      expect(errors).toEqual([]);
-      await bridge.beforePrompt("PARENT_DELEGATE");
-      const submitted = await conversation.submit({ type: "input", content: "PARENT_DELEGATE" }, context);
-      expect((await submitted.wait(context)).status).toBe("done");
-      await bridge.afterCommit();
-      const entries = (await conversation.entries({}, 100, undefined, context)).items;
-      const toolResult = entries.flatMap(entry => entry.model ?? []).find(message => message.role === "toolResult");
-      expect(toolResult, JSON.stringify(entries)).toMatchObject({ role: "toolResult", isError: false });
-      expect(JSON.stringify(toolResult)).toContain("CHILD_DONE");
-      const host = listUpstreamSubagentHosts().find(item => item.sessionId === "durable-fixture")!;
-      const ping = await host.client.request<{ session: { sessionFile: string } }>("ping");
-      expect(readFileSync(ping.session.sessionFile, "utf8")).toContain("PARENT_DELEGATE");
-      expect(SessionManager.open(ping.session.sessionFile).getSessionId()).toBe("durable-fixture");
-      const definition = bridge.runner.getAllRegisteredTools().find(item => item.definition.name === "subagent")!.definition;
-      const forked = await definition.execute("fork-fixture", { agent: "worker", task: "FORK_FIXTURE", async: false, context: "fork", model: "fixture/offline" }, new AbortController().signal, undefined, bridge.runner.createToolContext("fork-fixture", new AbortController().signal));
-      expect(forked.isError, JSON.stringify(forked)).not.toBe(true);
-      expect(f.requests.at(-1)).toContain("PARENT_DELEGATE");
-      expect(f.requests.at(-1)).toContain("FORK_FIXTURE");
-      expect(errors).toEqual([]);
-    } finally { await bridge.shutdown(); await harness.close(context); }
+    await f.session.prompt("PARENT_DELEGATE");
+    const toolResult = f.session.messages.find(message => message.role === "toolResult");
+    expect(toolResult, JSON.stringify(f.session.messages)).toMatchObject({ role: "toolResult", isError: false });
+    expect(JSON.stringify(toolResult)).toContain("CHILD_DONE");
+    const ping = await f.host.client.request<{ session: { sessionFile: string } }>("ping");
+    expect(readFileSync(ping.session.sessionFile, "utf8")).toContain("PARENT_DELEGATE");
+    expect(SessionManager.open(ping.session.sessionFile).getSessionId()).toBe(f.session.sessionId);
+    const forked = await f.call({ agent: "worker", task: "FORK_FIXTURE", async: false, context: "fork", model: "fixture/offline" });
+    expect(forked.isError, JSON.stringify(forked)).not.toBe(true);
+    expect(f.requests.at(-1)).toContain("PARENT_DELEGATE");
+    expect(f.requests.at(-1)).toContain("FORK_FIXTURE");
+    expect(f.errors).toEqual([]);
   }, 60_000);
-
 });

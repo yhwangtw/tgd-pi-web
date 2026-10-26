@@ -4,9 +4,8 @@ import type { AgentRunLimits } from "../agent-run-types";
 const harness = vi.hoisted(() => ({
   hosts: [] as Array<{ sessionId: string; cwd: string; client: { request: ReturnType<typeof vi.fn> } }>,
   limits: undefined as AgentRunLimits | undefined,
-  cancel: vi.fn(), retry: vi.fn(), abort: vi.fn(),
+  cancel: vi.fn(), retry: vi.fn(),
   manual: [{ id: "manual", name: "Manual", cwd: "/work", prompt: "Review", toolNames: [], status: "queued", trigger: "manual", createdAt: "2026-10-20T00:00:00Z" }],
-  durable: [{ id: "durable", engine: "durable", name: "Durable", cwd: "/work", prompt: "Review", toolNames: [], status: "completed", trigger: "manual", createdAt: "2026-10-21T00:00:00Z" }],
 }));
 vi.mock("@/lib/upstream-subagents", () => ({ listUpstreamSubagentHosts: () => harness.hosts }));
 vi.mock("@/lib/agent-run-supervisor", () => ({
@@ -15,11 +14,6 @@ vi.mock("@/lib/agent-run-supervisor", () => ({
   AgentRunConflictError: class extends Error {},
 }));
 vi.mock("@/lib/agent-run-store", () => ({ readAgentRunStore: () => ({ runs: harness.manual, subagentLimits: harness.limits }) }));
-vi.mock("@/lib/durable-session-store", () => ({
-  listDurableChildRuns: () => harness.durable, isDurableSessionId: (id: string) => id === "durable-chat",
-  readDurableProjection: () => ({ agentRun: harness.durable[0] }),
-}));
-vi.mock("@/lib/durable-chat", () => ({ openDurableChat: async () => ({ send: harness.abort, getProjection: () => ({ agentRun: harness.durable[0] }) }) }));
 
 function status(state = "running", id = "async-1", extras: Record<string, unknown> = {}) {
   return {
@@ -48,7 +42,7 @@ beforeEach(() => {
   vi.resetModules();
   harness.hosts = [];
   harness.limits = undefined;
-  harness.cancel.mockReset(); harness.retry.mockReset(); harness.abort.mockReset();
+  harness.cancel.mockReset(); harness.retry.mockReset();
 });
 
 describe("upstream background run projection", () => {
@@ -170,14 +164,14 @@ describe("agent run API integration", () => {
     }
   });
 
-  it("lists upstream alongside manual and legacy Durable runs and preserves filtering", async () => {
+  it("lists upstream alongside SDK background runs and preserves filtering", async () => {
     host();
     const { GET } = await import("../../app/api/agent-runs/route");
     const response = await GET(new Request("http://localhost/api/agent-runs"));
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.runs.map((run: { id: string }) => run.id)).toEqual([expect.stringMatching(/^upstream_/), "durable", "manual"]);
-    expect(body.counts).toMatchObject({ running: 1, completed: 1, queued: 1 });
+    expect(body.runs.map((run: { id: string }) => run.id)).toEqual([expect.stringMatching(/^upstream_/), "manual"]);
+    expect(body.counts).toMatchObject({ running: 1, completed: 0, queued: 1 });
     expect(body.upstreamStatus.scope).toBe("active_and_cached_sessions");
     const filtered = await GET(new Request("http://localhost/api/agent-runs?status=running&q=Reviewer&cwd=/work"));
     expect((await filtered.json()).runs).toHaveLength(1);
@@ -195,7 +189,7 @@ describe("agent run API integration", () => {
     expect(harness.cancel).not.toHaveBeenCalled();
   });
 
-  it("returns a conflict for unsupported upstream retry and preserves manual cancel/retry plus Durable abort", async () => {
+  it("returns a conflict for unsupported upstream retry and preserves SDK cancel/retry", async () => {
     host("parent-1", status("complete"));
     const { upstreamAgentRunId } = await import("../upstream-subagent-runs");
     const cancel = (await import("../../app/api/agent-runs/[id]/cancel/route")).POST;
@@ -206,9 +200,7 @@ describe("agent run API integration", () => {
     harness.cancel.mockResolvedValue(harness.manual[0]); harness.retry.mockReturnValue(harness.manual[0]);
     expect((await cancel(mutation(), { params: Promise.resolve({ id: "manual" }) })).status).toBe(200);
     expect((await retry(mutation(), { params: Promise.resolve({ id: "manual" }) })).status).toBe(202);
-    expect((await cancel(mutation(), { params: Promise.resolve({ id: "durable-chat" }) })).status).toBe(200);
     expect(harness.cancel).toHaveBeenCalledWith("manual");
     expect(harness.retry).toHaveBeenCalledWith("manual");
-    expect(harness.abort).toHaveBeenCalledWith({ type: "abort" });
   });
 });

@@ -29,6 +29,9 @@ async function fixture(page: Page, initialOutcome = "running") {
       if (path === `/api/agent/${SESSION}`) return route.fulfill({ json: { running: true, state: state() } });
       return route.continue();
     }
+    // Idle suggestions can run while a completed notice expires. Keep this
+    // unrelated model request deterministic and inside the browser fixture.
+    if (path === "/api/composer-hint") return route.fulfill({ json: { hint: null, status: "empty", retryable: false, retryAfterMs: 0 } });
     const command = request.postDataJSON();
     if (path === "/api/worktrees" && Array.isArray(command?.cwds)) return route.continue();
     if (path.endsWith("/summarize")) return route.fulfill({ json: {} });
@@ -52,7 +55,7 @@ async function fixture(page: Page, initialOutcome = "running") {
     await route.fulfill({ response, json: { ...data, context: { ...data.context, model: { provider: "fixture", modelId: "model" } }, agentState: { running: true, state: state() } } });
   });
   await page.route(new RegExp(`/api/agent/${SESSION}/events(?:\\?|$)`), route => route.fulfill({ contentType: "text/event-stream", body: `retry: 60000\ndata: ${JSON.stringify({ type: "session_snapshot", sessionId: SESSION, state: state() })}\n\n` }));
-  return { commands, forbidden, finish(status: string) { if (job) job = { ...job, status, ...(status === "failed" ? { error: "429 rate limit; provider detail should stay collapsed" } : { result: { tokensBefore: 30000, estimatedTokensAfter: 9000 } }) }; } };
+  return { commands, forbidden, loseJob() { job = null; }, finish(status: string) { if (job) job = { ...job, status, ...(status === "failed" ? { error: "429 rate limit; provider detail should stay collapsed" } : { result: { tokensBefore: 30000, estimatedTokensAfter: 9000 } }) }; } };
 }
 
 for (const style of ["original", "trae"]) for (const width of [320, 390, 1440]) {
@@ -130,6 +133,40 @@ test("success expires once, survives reload, and a new compaction still announce
   const requests = backend.commands.filter(command => command.type === "compact");
   expect(requests).toHaveLength(2);
   expect(requests[0].requestId).not.toBe(requests[1].requestId);
+  expect(backend.forbidden).toEqual([]);
+});
+
+for (const outcome of ["skipped", "cancelled"]) {
+  test(`${outcome} expires and does not return after reload`, async ({ page }) => {
+    const backend = await fixture(page, outcome);
+    await page.goto(`/?session=${SESSION}`);
+    await enterMessage(page, "/compact neutral result");
+    const status = page.getByTestId("compaction-status");
+    await expect(status).toHaveAttribute("data-state", outcome);
+    await expect(status).toHaveCount(0, { timeout: 8000 });
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeEditable();
+    await expect(status).toHaveCount(0);
+    expect(backend.commands.filter(command => command.type === "compact")).toHaveLength(1);
+    expect(backend.forbidden).toEqual([]);
+  });
+}
+
+test("lost operation stops processing without losing a draft or automatically retrying", async ({ page }) => {
+  const backend = await fixture(page);
+  await page.goto(`/?session=${SESSION}`);
+  await enterMessage(page, "/compact keep decisions");
+  const status = page.getByTestId("compaction-status");
+  await expect(status).toHaveAttribute("data-state", "running");
+  const input = page.getByRole("textbox", { name: "Message…", exact: true });
+  await input.fill("unfinished draft");
+  backend.loseJob();
+  await expect(status).toHaveAttribute("data-state", "unknown", { timeout: 6000 });
+  await expect(page.getByTestId("model-selector-trigger")).toBeEnabled();
+  await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toHaveValue("unfinished draft");
+  await status.getByRole("button", { name: "Dismiss compaction status" }).click();
+  await expect(status).toHaveCount(0);
+  expect(backend.commands.filter(command => command.type === "compact")).toHaveLength(1);
   expect(backend.forbidden).toEqual([]);
 });
 

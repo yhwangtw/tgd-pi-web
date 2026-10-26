@@ -35,22 +35,28 @@ afterEach(() => {
 });
 
 describe("agent-run-store", () => {
-  it("requeues only active opt-in Durable runs and preserves budgets and cancellation", () => {
+  it("retains legacy runs but interrupts queued and active work without replay", () => {
     const path = fixturePath();
     const startedAt = "2026-07-26T01:01:00.000Z";
-    writeAgentRunStore({ version: 1, runs: [
-      { ...run("running", "durable"), engine: "durable", startedAt, limits: { maxCostUsd: 2 }, progress: { turns: 3, costUsd: 1 } },
+    writeFileSync(path, JSON.stringify({ version: 1, runs: [
+      { ...run("running", "legacy"), engine: "durable", startedAt, limits: { maxCostUsd: 2 }, progress: { turns: 3, costUsd: 1 } },
+      { ...run("queued", "queued-legacy"), engine: "durable" },
       { ...run("cancelled", "cancelled"), engine: "durable" },
-      { ...run("completed", "done"), engine: "durable" },
-      run("running", "standard"),
-    ] }, path);
-    reconcileInterruptedAgentRuns(path);
+      { ...run("completed", "done"), engine: "durable", sessionId: "old-session" },
+      run("running", "sdk"),
+    ] }));
+    // Reads are safe even before the startup reconciler runs.
+    expect(readAgentRunStore(path).runs.find(item => item.id === "queued-legacy")?.status).toBe("interrupted");
+    expect(reconcileInterruptedAgentRuns(path, new Date("2026-07-26T02:00:00.000Z"))).toBe(3);
     expect(readAgentRunStore(path).runs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "durable", status: "queued", recoveryCount: 1, startedAt, progress: { turns: 3, costUsd: 1 }, limits: { maxCostUsd: 2 } }),
+      expect.objectContaining({ id: "legacy", status: "interrupted", startedAt, progress: { turns: 3, costUsd: 1 }, limits: { maxCostUsd: 2 }, error: expect.stringContaining("will not resume automatically") }),
+      expect.objectContaining({ id: "queued-legacy", status: "interrupted" }),
       expect.objectContaining({ id: "cancelled", status: "cancelled" }),
-      expect.objectContaining({ id: "done", status: "completed" }),
-      expect.objectContaining({ id: "standard", status: "interrupted" }),
+      expect.objectContaining({ id: "done", status: "completed", sessionId: "old-session" }),
+      expect.objectContaining({ id: "sdk", status: "interrupted" }),
     ]));
+    expect(JSON.parse(readFileSync(path, "utf8")).runs.every((item: Record<string, unknown>) => item.engine === undefined)).toBe(true);
+    expect(reconcileInterruptedAgentRuns(path)).toBe(0);
   });
   it("AC-1.1: round-trips daemon runs through an atomic private JSON file", () => {
     const path = fixturePath();

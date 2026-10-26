@@ -10,7 +10,7 @@ describe("queue event compatibility", () => {
     expect(consumed).toEqual([first[2]]);
     expect(moveQueuedFollowUp(first, first[1].id, -1)).toBe(first);
   });
-  it("validates Durable items and ignores malformed frames without dropping existing work", () => {
+  it("validates structured queue items and ignores malformed frames without dropping existing work", () => {
     const previous = [{ id: "a", message: "queued", images: [{ data: "data", mimeType: "image/png" }] }];
     expect(normalizeQueuedFollowUps({ items: [{ id: "a", message: "edited" }, null, 3] }, previous)).toMatchObject([{ id: "a", message: "edited", images: previous[0].images }]);
     expect(normalizeQueuedFollowUps({}, previous)).toBe(previous);

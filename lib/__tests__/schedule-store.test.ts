@@ -47,17 +47,23 @@ afterEach(() => {
 });
 
 describe("schedule-store", () => {
-  it("preserves a durable run's immutable execution and question state across restart while failing legacy work", () => {
+  it("keeps legacy history and execution settings but fails active work without replay", () => {
     const path = fixturePath();
     const original = schedule();
-    const durable: ScheduleRun = { ...run("waiting_for_input"), id: "durable-run", engine: "durable", sessionId: "durable-session",
+    const legacy = { ...run("waiting_for_input"), id: "legacy-run", engine: "durable", sessionId: "legacy-session",
       execution: { cwd: original.cwd, prompt: original.prompt, toolNames: ["read", "ask_user"] } };
-    writeScheduleStore({ version: 1, schedules: [{ ...original, engine: "durable", prompt: "Edited later" }], runs: [durable, run("running")] }, path);
-    expect(reconcileInterruptedRuns(path)).toBe(1);
+    writeFileSync(path, JSON.stringify({ version: 1, schedules: [{ ...original, engine: "durable", prompt: "Edited later" }], runs: [legacy, run("running"), { ...legacy, id: "done", status: "completed" }] }));
+    expect(readScheduleStore(path).runs[0]).toMatchObject({ status: "failed", error: expect.stringContaining("will not resume automatically") });
+    expect(reconcileInterruptedRuns(path)).toBe(2);
     const saved = readScheduleStore(path);
-    expect(saved.runs[0]).toEqual(durable);
-    expect(saved.schedules[0].engine).toBe("durable");
+    expect(saved.runs).toHaveLength(3);
+    expect(saved.runs[0]).toMatchObject({ id: "legacy-run", status: "failed", execution: legacy.execution, sessionId: "legacy-session" });
+    expect(saved.runs[0]).not.toHaveProperty("engine");
+    expect(saved.schedules[0]).not.toHaveProperty("engine");
+    expect(saved.schedules[0].prompt).toBe("Edited later");
     expect(saved.runs[1].status).toBe("failed");
+    expect(saved.runs[2].status).toBe("completed");
+    expect(reconcileInterruptedRuns(path)).toBe(0);
   });
   it("round-trips schedules through an atomic JSON file", () => {
     const path = fixturePath();

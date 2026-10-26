@@ -45,7 +45,6 @@ registerHooks({
   },
 });
 const { listAllSessions } = await import(pathToFileURL(join(project, 'lib/session-reader.ts')).href);
-const { durableSessionDirectory, durableSessionId, saveDurableProjection } = await import(pathToFileURL(join(project, 'lib/durable-session-store.ts')).href);
 const { publishSessionMigration } = await import(pathToFileURL(join(project, 'lib/session-migrations.ts')).href);
 const operations = {};
 const original = [];
@@ -55,7 +54,7 @@ for (const [target, names] of [[fs, ['readFileSync', 'statSync', 'readdirSync']]
     original.push(() => { target[name] = method; });
     target[name] = function(path, ...rest) {
       if (String(path).startsWith(fixture + '/')) {
-        const kind = String(path).startsWith(join(fixture, 'session-migrations')) ? 'migration' : String(path).startsWith(join(fixture, 'durable-sessions')) ? 'durable' : 'legacy';
+        const kind = String(path).startsWith(join(fixture, 'session-migrations')) ? 'alias' : 'sdk';
         const key = `${kind}.${name}`;
         operations[key] = (operations[key] ?? 0) + 1;
       }
@@ -66,28 +65,17 @@ for (const [target, names] of [[fs, ['readFileSync', 'statSync', 'readdirSync']]
 syncBuiltinESMExports();
 const iso = n => new Date(1_700_000_000_000 + n).toISOString();
 const payload = 'Synthetic offline session. '.repeat(12);
-const legacyPath = i => join(fixture, 'sessions', `project-${i % 80}`, `${i}.jsonl`);
-function createLegacy(i, extra = '') {
-  const path = legacyPath(i);
+const sdkPath = i => join(fixture, 'sessions', `project-${i % 80}`, `${i}.jsonl`);
+function createSdk(i, extra = '', id = `sdk-${i}`) {
+  const path = sdkPath(i);
   fs.mkdirSync(dirname(path), { recursive: true });
-  const entries = [{ type: 'session', version: 3, id: `legacy-${i}`, cwd: `/fixture/project-${i % 80}`, timestamp: iso(i) }];
+  const entries = [{ type: 'session', version: 3, id, cwd: `/fixture/project-${i % 80}`, timestamp: iso(i) }];
   for (let m = 0; m < 24; m++) entries.push({ type: 'message', id: `m${m}`, parentId: m ? `m${m - 1}` : null,
     timestamp: iso(i * 100 + m), message: { role: m % 2 ? 'assistant' : 'user', content: `${payload}${i}/${m}${extra}`, timestamp: 1_700_000_000_000 + i * 100 + m } });
   fs.writeFileSync(path, entries.map(entry => JSON.stringify(entry)).join('\n') + '\n');
 }
-const groupFor = i => `00000000-0000-4000-8000-${String(i % 64).padStart(12, '0')}`;
-function createDurable(i) {
-  const group = groupFor(i);
-  const conversation = Math.floor(i / 64) + 1;
-  const id = durableSessionId(group, conversation);
-  const entries = Array.from({ length: 24 }, (_, m) => ({ id: m + 1, kind: 'messages', model: [{ role: m % 2 ? 'assistant' : 'user', content: `${payload}${i}/${m}`, timestamp: 1_700_000_000_000 + i * 100 + m }] }));
-  saveDurableProjection(durableSessionDirectory(group), conversation, { version: 1, deleted: false,
-    info: { id, path: `durable://${id}`, cwd: `/fixture/project-${i % 80}`, created: iso(i), modified: iso(i * 100 + 23), messageCount: 24, firstMessage: `${payload}${i}/0`, lastMessage: `${payload}${i}/23`, lastMessageId: '24' },
-    entries, agent: {}, context: { messages: entries.flatMap(entry => entry.model), entryIds: entries.map(entry => String(entry.id)), model: null, thinkingLevel: 'off' } });
-  return id;
-}
 function clearCaches() {
-  for (const key of ['__piSessionInfoCache', '__piSessionPathCache', '__piSessionListings', '__piDurableSessionIndex']) globalThis[key] = undefined;
+  for (const key of ['__piSessionInfoCache', '__piSessionPathCache', '__piSessionListings']) globalThis[key] = undefined;
 }
 const median = values => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
 async function sample(expected, repetitions, cold) {
@@ -112,26 +100,25 @@ async function sample(expected, repetitions, cold) {
 }
 const results = [];
 try {
-  const mixedLegacy = Math.floor(count * 3 / 4);
-  for (const [name, legacyCount, durableCount, migrated] of [['legacy', count, 0, false], ['durable', 0, count, false], ['mixed-migrated', mixedLegacy, count - mixedLegacy, true]]) {
+  for (const [name, aliasCount] of [['sdk', 0], ['sdk-aliased', Math.min(100, Math.floor(count / 4))]]) {
     fs.rmSync(join(fixture, 'sessions'), { recursive: true, force: true });
-    fs.rmSync(join(fixture, 'durable-sessions'), { recursive: true, force: true });
     fs.rmSync(join(fixture, 'session-migrations'), { recursive: true, force: true });
     clearCaches();
-    for (let i = 0; i < legacyCount; i++) createLegacy(i);
-    const durableIds = Array.from({ length: durableCount }, (_, i) => createDurable(i));
-    const aliases = migrated ? Math.min(100, legacyCount, durableCount) : 0;
-    for (let i = 0; i < aliases; i++) publishSessionMigration({ version: 1, sourceId: `legacy-${i}`, sessionId: durableIds[i], sourcePath: legacyPath(i), sourceHash: 'synthetic', migratedAt: iso(0) });
-    const expected = legacyCount + durableCount - aliases;
+    for (let i = 0; i < count; i++) createSdk(i);
+    for (let i = 0; i < aliasCount; i++) {
+      // Historical IDs are ordinary SDK session headers after conversion.
+      const sessionId = `dw_saved_${i}`;
+      createSdk(count - aliasCount + i, '', sessionId);
+      publishSessionMigration({ version: 1, sourceId: `sdk-${i}`, sessionId, sourcePath: sdkPath(i), sourceHash: 'synthetic', migratedAt: iso(0) });
+    }
+    const expected = count - aliasCount;
     const cold = await sample(expected, 5, true);
     const warm = await sample(expected, 7, false);
-    let changed;
-    if (legacyCount) {
-      createLegacy(legacyCount - 1, ' externally updated');
-      changed = await sample(expected, 1, false);
-      assert.ok((await listAllSessions()).find(info => info.id === `legacy-${legacyCount - 1}`).lastMessage.endsWith(' externally updated'));
-    }
-    results.push({ name, legacy: legacyCount, durable: durableCount, migrated: aliases, returned: expected, cold, warm, ...(changed ? { changed } : {}) });
+    const changeIndex = aliasCount;
+    createSdk(changeIndex, ' externally updated');
+    const changed = await sample(expected, 1, false);
+    assert.ok((await listAllSessions()).find(info => info.id === `sdk-${changeIndex}`).lastMessage.endsWith(' externally updated'));
+    results.push({ name, sdk: count, aliases: aliasCount, returned: expected, cold, warm, changed });
   }
   console.log(JSON.stringify({ node: process.version, revision, fixture: 'synthetic-only; OS page cache not cleared; 24 messages per session; full response', count, results }, null, 2));
 } finally {

@@ -137,6 +137,10 @@ for (const style of ["original", "trae"]) {
 
 test("session grid keeps row selection and independent menus accessible, including no results", async ({ page }) => {
   await preferences(page);
+  // Other cases in this shard create sessions. Freeze this test's list so a
+  // background refresh cannot reorder rows between Home/End and the assertion.
+  const sessions = await (await page.request.get("/api/sessions")).json();
+  await page.route(url => url.pathname === "/api/sessions", route => route.fulfill({ json: sessions }));
   await main(page);
   const grid = page.getByRole("grid", { name: "對話紀錄", exact: true });
   await expect(grid).toBeVisible();
@@ -157,6 +161,30 @@ test("session grid keeps row selection and independent menus accessible, includi
   await page.getByRole("textbox", { name: "搜尋對話", exact: true }).fill("no-matching-audit-session-xyzz");
   await expect(page.getByRole("status").filter({ hasText: "找不到符合" })).toBeVisible();
   await accessible(page, ["aria-required-parent", "aria-required-children", "nested-interactive"]);
+});
+
+test("virtualized session grid focuses offscreen destinations with End and Home", async ({ page }) => {
+  await preferences(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const data = await (await page.request.get("/api/sessions")).json();
+  const source = data.sessions.find((session: { id: string }) => session.id === SID);
+  expect(source).toBeTruthy();
+  const extra = Array.from({ length: 60 }, (_, index) => ({ ...source,
+    id: `22222222-2222-4222-8222-${String(index).padStart(12, "0")}`,
+    name: `Keyboard fixture ${index}`, modified: "2026-10-26T00:00:00Z",
+  }));
+  const sessions = { ...data, sessions: [...data.sessions, ...extra] };
+  await page.route(url => url.pathname === "/api/sessions", route => route.fulfill({ json: sessions }));
+  await main(page);
+  const grid = page.getByRole("grid", { name: "對話紀錄", exact: true });
+  const window = grid.locator("[data-total-session-rows]");
+  await expect(window).toHaveAttribute("data-total-session-rows", String(sessions.sessions.length));
+  expect(await grid.getByRole("row").count()).toBeLessThan(sessions.sessions.length);
+  await grid.focus();
+  await page.keyboard.press("End");
+  await expect(grid.locator(`[data-session-order="${sessions.sessions.length - 1}"]`)).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(grid.locator('[data-session-order="0"]')).toBeFocused();
 });
 
 for (const theme of ["light", "dark"]) test(`${theme}: custom provider fields and delete controls are accessible`, async ({ page }) => {

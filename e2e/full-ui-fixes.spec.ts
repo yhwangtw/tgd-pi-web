@@ -16,19 +16,19 @@ test.beforeEach(async ({ context, baseURL }) => {
     return route.continue();
   });
 });
-async function create(page: Page, engine: "legacy" | "durable", toolNames: string[] = []) {
-  const response = await page.request.post("/api/agent/new", { data: { cwd: process.env.E2E_PROJECT_CWD, engine, deferPrompt: true, provider: PROVIDER, modelId: "deterministic", type: "prompt", message: "", toolNames } });
+async function create(page: Page, toolNames: string[] = []) {
+  const response = await page.request.post("/api/agent/new", { data: { cwd: process.env.E2E_PROJECT_CWD, deferPrompt: true, provider: PROVIDER, modelId: "deterministic", type: "prompt", message: "", toolNames } });
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()).sessionId as string;
 }
-for (const engine of ["legacy", "durable"] as const) test(`${engine}: queue edits, reorder, remove, clear and reconnect preserve the active reply`, async ({ page }, info) => {
-  const id = await create(page, engine);
+test("queue edits, reorder, remove, clear and reconnect preserve the active reply", async ({ page }, info) => {
+  const id = await create(page);
   await page.goto(`/?session=${id}`);
   const input = page.locator("textarea").last();
   await expect(input).toBeVisible();
-  await input.fill(`E2E_RECONNECT:delayed:queue-fix-${engine}`);
+  await input.fill(`E2E_RECONNECT:delayed:queue-fix`);
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture progress queue-fix-${engine}.` })).toBeVisible();
+  await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture progress queue-fix.` })).toBeVisible();
   const queue = page.getByRole("region", { name: "Queued follow-ups", exact: true });
   const add = async (token: string) => {
     await page.getByRole("group", { name: "Message delivery mode" }).getByRole("button", { name: "Follow-up", exact: true }).click();
@@ -36,32 +36,32 @@ for (const engine of ["legacy", "durable"] as const) test(`${engine}: queue edit
     await page.getByRole("button", { name: "Queue until the current run finishes (Command+Enter)", exact: true }).click();
     await expect(queue).toContainText(token);
   };
-  await add(`queue-first-${engine}`); await add(`queue-second-${engine}`);
+  await add(`queue-first`); await add(`queue-second`);
   await queue.getByRole("button", { name: "Move earlier", exact: true }).nth(1).click();
-  await expect(queue.locator("li").first()).toContainText(`queue-second-${engine}`);
+  await expect(queue.locator("li").first()).toContainText(`queue-second`);
   await queue.getByRole("button", { name: "Edit queued follow-up", exact: true }).first().click();
-  await queue.getByRole("textbox", { name: "Edit queued follow-up" }).fill(`E2E_RECONNECT:complete:queue-edited-${engine}`);
+  await queue.getByRole("textbox", { name: "Edit queued follow-up" }).fill(`E2E_RECONNECT:complete:queue-edited`);
   await queue.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(queue.locator("li").first()).toContainText(`queue-edited-${engine}`);
+  await expect(queue.locator("li").first()).toContainText(`queue-edited`);
   await queue.getByRole("button", { name: "Remove queued follow-up", exact: true }).last().click();
   await expect(queue.locator("li")).toHaveCount(1);
   await queue.getByRole("button", { name: "Cancel all", exact: true }).click();
   await expect(queue).toHaveCount(0);
-  await add(`queue-survivor-${engine}`);
+  await add(`queue-survivor`);
   await page.reload();
-  await expect(queue).toContainText(`queue-survivor-${engine}`);
-  await page.screenshot({ path: info.outputPath(`queue-${engine}.png`) });
-  await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture completed queue-survivor-${engine}.` })).toHaveCount(1, { timeout: 45_000 });
+  await expect(queue).toContainText(`queue-survivor`);
+  await page.screenshot({ path: info.outputPath(`queue.png`) });
+  await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture completed queue-survivor.` })).toHaveCount(1, { timeout: 45_000 });
   await expect(queue).toHaveCount(0);
   const response = await page.request.get(`/api/sessions/${id}/context`);
   const data = await response.json();
   const text = JSON.stringify(data.context.messages);
-  expect(text).not.toContain(`Fixture completed queue-first-${engine}.`);
-  expect(text).not.toContain(`Fixture completed queue-edited-${engine}.`);
+  expect(text).not.toContain(`Fixture completed queue-first.`);
+  expect(text).not.toContain(`Fixture completed queue-edited.`);
 });
 
 test("Stop during slow initial snapshot preserves the draft and never starts a prompt", async ({ page }) => {
-  const id = await create(page, "legacy");
+  const id = await create(page);
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
   await page.route(`**/api/agent/${id}/events*`, async route => { await gate; await route.continue(); });
@@ -127,7 +127,7 @@ for (const width of [390, 1440]) test(`Original unread and mobile control sizes 
 });
 
 for (const partial of [false, true]) test(`Pi subagent ${partial ? "partial failure" : "parallel success"} reaches the transcript and work log`, async ({ page }, info) => {
-  const id = await create(page, "legacy", ["subagent"]);
+  const id = await create(page, ["subagent"]);
   const token = `${partial ? "partial" : "success"}-audit-${id}`;
   await page.goto(`/?session=${id}`);
   // Observe the real upstream foreground lifecycle; these children do not
@@ -233,23 +233,24 @@ test("Schedule delete confirmation has a cancel exit and resets on edit", async 
   expect(mutations).toEqual([]);
 });
 
-for (const engine of ["legacy", "durable"] as const) test(`${engine}: Steer remains usable during a reply`, async ({ page }) => {
-  const id = await create(page, engine);
+test("Steer remains usable during a reply", async ({ page }) => {
+  const id = await create(page);
   await page.goto(`/?session=${id}`);
   const input = page.locator("textarea").last();
-  await input.fill(`E2E_RECONNECT:delayed:steer-before-${engine}`);
+  await input.fill(`E2E_RECONNECT:delayed:steer-before`);
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture progress steer-before-${engine}.` })).toBeVisible();
+  await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture progress steer-before.` })).toBeVisible();
   await page.getByRole("group", { name: "Message delivery mode" }).getByRole("button", { name: "Steer", exact: true }).click();
-  await input.fill(`E2E_RECONNECT:complete:steer-after-${engine}`);
+  await input.fill(`E2E_RECONNECT:complete:steer-after`);
   await page.getByRole("button", { name: "Interrupt the current run and inject now (Option+Enter)", exact: true }).click();
-  await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture completed steer-after-${engine}.` })).toHaveCount(1, { timeout: 20_000 });
+  await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture completed steer-after.` })).toHaveCount(1, { timeout: 20_000 });
   await expect(page.getByRole("button", { name: "Send", exact: true })).toBeVisible();
 });
 
 for (const width of [390, 1440]) test(`${width}: selected file actions are visible, keyboard usable and stay inside the viewport`, async ({ page }) => {
   await page.setViewportSize({ width, height: 844 });
   await page.goto(MAIN);
+  await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeVisible();
   const files = page.getByRole("button", { name: /^(Explorer|Files)$/ }).first();
   await files.click();
   await page.getByRole("treeitem", { name: "README.md", exact: true }).click();

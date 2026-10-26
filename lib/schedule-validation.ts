@@ -57,7 +57,7 @@ function timingFromUnknown(value: unknown): ScheduleTiming {
 export async function validateScheduleInput(value: unknown): Promise<ScheduleInput> {
   if (!value || typeof value !== "object") throw new ScheduleValidationError("JSON object is required");
   const input = value as Record<string, unknown>;
-  if (input.engine !== undefined && input.engine !== "standard" && input.engine !== "durable") {
+  if (input.engine !== undefined) {
     throw new ScheduleValidationError("Unsupported execution mode");
   }
   const name = requiredString(input.name, "name", 100);
@@ -117,7 +117,6 @@ export async function validateScheduleInput(value: unknown): Promise<ScheduleInp
     name,
     cwd,
     prompt,
-    engine: input.engine === "durable" ? "durable" : undefined,
     timing,
     timezone,
     enabled: input.enabled ?? true,

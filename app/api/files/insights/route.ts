@@ -4,8 +4,6 @@ import { promisify } from "util";
 import { resolve, relative, sep } from "path";
 import { realpath, stat } from "fs/promises";
 import { getRpcSession } from "@/lib/rpc-manager";
-import { getDurableChat } from "@/lib/durable-chat";
-import { isDurableSessionId } from "@/lib/durable-session-store";
 import { resolveMigratedSessionId } from "@/lib/session-migrations";
 import { confinedFile, FileOperationError } from "@/lib/versioned-file";
 import { resolveSearchRoot } from "@/lib/search-files";
@@ -46,11 +44,9 @@ async function validate(cwd: string | null, requestedPath: string | null) {
 async function trustedSession(cwd: string, requestedId: string | null): Promise<boolean> {
   if (!requestedId) return false;
   const id = resolveMigratedSessionId(requestedId);
-  const session = isDurableSessionId(id) ? getDurableChat(id) : getRpcSession(id);
+  const session = getRpcSession(id);
   if (!session?.isAlive()) return false;
-  const trusted = "getServices" in session
-    ? session.getServices()?.settingsManager.isProjectTrusted()
-    : session.inner.settingsManager.isProjectTrusted();
+  const trusted = session.inner.settingsManager.isProjectTrusted();
   if (!trusted) return false;
   try { return await realpath(session.cwd) === cwd; } catch { return false; }
 }

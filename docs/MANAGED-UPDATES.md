@@ -25,7 +25,22 @@ or a changed `package.json` is not evidence that production changed.
 The running identity is compiled into the application, not inferred from the
 checkout after an update. `/api/runtime/identity` supplies the running build;
 Update Center separately labels the disk source. No credentials or helper argv
-are stored in the durable operation results.
+are stored in the persisted operation results.
+
+## Retired Pi Durable data
+
+Pi Durable execution is no longer part of the runtime. Existing update operation
+receipts remain persistent; their storage is independent of conversation
+execution. A normal managed source update does not convert session archives.
+
+If the service used Pi Durable, prepare a separate agent directory with the
+[offline archive converter](DURABLE.md#offline-archive-conversion) before cutover.
+Back up the original agent directory and stop every writer before executing
+conversion. The converter makes no model calls, retains original data and keeps
+old `dw_` IDs as ordinary SDK session IDs. Interrupted runs remain recorded and
+do not replay automatically. Data-directory selection and any later cutover
+remain an explicit operator action; retain the source and matching old runtime
+for rollback.
 
 ## Required operator configuration
 
@@ -36,7 +51,7 @@ are stored in the durable operation results.
 | `PIWEB_ROLLBACK_COMMAND_JSON` | Absolute JSON argv for an operator-owned staged rollback helper. |
 | `PIWEB_UPDATE_PROTOCOL` | Must be `staged-v1` for update and rollback. This is an operator declaration, not automatic adapter installation. |
 | `PIWEB_UPDATE_HEALTH_URL` | Loopback HTTP(S) URL with exact path `/api/runtime/identity`; no credentials, query, fragment, or redirects. |
-| `PIWEB_UPDATE_OPERATION_DIR` | Optional private durable directory **outside source**; defaults to `<agent-dir>/updates/operations`. Every instance managing the same service must share it. |
+| `PIWEB_UPDATE_OPERATION_DIR` | Optional private persistent directory **outside source**; defaults to `<agent-dir>/updates/operations`. Every instance managing the same service must share it. |
 
 The helper receives `PIWEB_UPDATE_ACTION`, `PIWEB_UPDATE_TARGET_TAG`,
 `PIWEB_UPDATE_BACKUP_ID`, `PIWEB_UPDATE_BACKUP_PATH`,
@@ -169,7 +184,7 @@ maintenance decision after no active/recovery lock references them.
 
 ## Acceptance evidence and limits
 
-Fixture tests cover concurrent reservations, durable reload, lost response,
+Fixture tests cover concurrent reservations, persisted-result reload, lost response,
 old/wrong/dirty build rejection, orphan/interrupted locks, isolated stage-first
 ordering, stage-stop failure, and verified rollback. Setup tests use fake
 Git/npm commands and a disposable timer process to prove a running checkout is

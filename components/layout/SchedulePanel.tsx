@@ -36,7 +36,6 @@ interface Draft {
   name: string;
   cwd: string;
   prompt: string;
-  engine: "standard" | "durable";
   kind: ScheduleKind;
   date: string;
   time: string;
@@ -92,7 +91,6 @@ function emptyDraft(cwd: string | null): Draft {
     name: "",
     cwd: cwd ?? "",
     prompt: "",
-    engine: "standard",
     kind: "daily",
     date: initial.date,
     time: initial.time,
@@ -128,7 +126,6 @@ function scheduleDraft(schedule: AgentSchedule): Draft {
     name: schedule.name,
     cwd: schedule.cwd,
     prompt: schedule.prompt,
-    engine: schedule.engine ?? "standard",
     kind: schedule.timing.kind,
     date: once?.date ?? defaultDateTime().date,
     time: clock,
@@ -325,7 +322,6 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
         name: draft.name,
         cwd: draft.cwd,
         prompt: draft.prompt,
-        engine: draft.engine,
         timing: timingFromDraft(draft),
         timezone: draft.timezone,
         provider,
@@ -462,13 +458,6 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
             <summary>{t("schedule.agentSettings")}</summary>
             <div className={s.advancedBody}>
               <label className={s.field}>
-                <span>{t("agents.executionMode")}</span>
-                <select value={draft.engine} onChange={(event) => setDraft({ ...draft, engine: event.target.value as Draft["engine"] })}>
-                  <option value="standard">{t("agents.standardMode")}</option>
-                  <option value="durable">{t("agents.durableMode")}</option>
-                </select>
-              </label>
-              <label className={s.field}>
                 <span>{t("schedule.model")}</span>
                 <select aria-busy={modelsLoading} value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })}>
                   <option value="">{modelsLoading ? t("schedule.modelsLoading") : t("schedule.projectDefault")}</option>
@@ -548,7 +537,6 @@ export function SchedulePanel({ defaultCwd, onOpenSession }: Props) {
                   <div className={s.cardHeader}>
                     <div className={s.cardTitleWrap}>
                       <strong className={s.cardTitle} title={schedule.name}>{schedule.name}</strong>
-                      {schedule.engine === "durable" && <span className={s.pausedBadge}>{t("agents.durableMode")}</span>}
                       {!schedule.enabled && <span className={s.pausedBadge}>{t("schedule.paused")}</span>}
                     </div>
                     <IconButton

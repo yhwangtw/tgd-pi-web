@@ -46,7 +46,7 @@ function isSchedule(value: unknown): value is AgentSchedule {
   const item = value as Partial<AgentSchedule>;
   return typeof item.id === "string" && typeof item.name === "string"
     && typeof item.cwd === "string" && typeof item.prompt === "string"
-    && (item.engine === undefined || item.engine === "durable")
+    && ((item as { engine?: unknown }).engine === undefined || (item as { engine?: unknown }).engine === "durable")
     && isTiming(item.timing)
     && typeof item.timezone === "string" && typeof item.enabled === "boolean"
     && (item.missedRunPolicy === "run_once" || item.missedRunPolicy === "skip")
@@ -67,22 +67,44 @@ function isRun(value: unknown): value is ScheduleRun {
     && typeof item.scheduledFor === "string" && RUN_STATUSES.has(item.status ?? "")
     && RUN_TRIGGERS.has(item.trigger ?? "") && isOptionalString(item.finishedAt)
     && isOptionalString(item.sessionId) && isOptionalString(item.error)
-    && (item.engine === undefined || item.engine === "durable")
+    && ((item as { engine?: unknown }).engine === undefined || (item as { engine?: unknown }).engine === "durable")
     && (item.execution === undefined || isExecution(item.execution));
 }
 
-export function readScheduleStore(path = scheduleStorePath()): ScheduleStore {
-  if (!existsSync(path)) return emptyStore();
+const REMOVED_ENGINE_ERROR = "Pi Durable execution was removed; this run failed and will not resume automatically. Run the schedule again to start a new SDK run.";
+
+function loadScheduleStore(path: string, now: Date): { store: ScheduleStore; interruptedLegacyRuns: number } {
+  if (!existsSync(path)) return { store: emptyStore(), interruptedLegacyRuns: 0 };
   try {
     const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<ScheduleStore>;
-    return {
-      version: 1,
-      schedules: Array.isArray(raw.schedules) ? raw.schedules.filter(isSchedule) : [],
-      runs: Array.isArray(raw.runs) ? raw.runs.filter(isRun).slice(0, MAX_RUNS) : [],
-    };
+    let interruptedLegacyRuns = 0;
+    const schedules = (Array.isArray(raw.schedules) ? raw.schedules.filter(isSchedule) : []).map(value => {
+      const schedule = { ...value };
+      delete (schedule as { engine?: unknown }).engine;
+      return schedule;
+    });
+    const runs = (Array.isArray(raw.runs) ? raw.runs.filter(isRun).slice(0, MAX_RUNS) : []).map(value => {
+      const run = { ...value };
+      const legacy = (run as { engine?: unknown }).engine === "durable";
+      delete (run as { engine?: unknown }).engine;
+      if (legacy && ACTIVE_SCHEDULE_RUN_STATUSES.has(run.status)) {
+        run.status = "failed";
+        run.finishedAt = now.toISOString();
+        run.error = REMOVED_ENGINE_ERROR;
+        const schedule = schedules.find(item => item.id === run.scheduleId);
+        if (schedule) schedule.lastRunStatus = "failed";
+        interruptedLegacyRuns++;
+      }
+      return run;
+    });
+    return { interruptedLegacyRuns, store: { version: 1, schedules, runs } };
   } catch {
-    return emptyStore();
+    return { store: emptyStore(), interruptedLegacyRuns: 0 };
   }
+}
+
+export function readScheduleStore(path = scheduleStorePath()): ScheduleStore {
+  return loadScheduleStore(path, new Date()).store;
 }
 
 export function writeScheduleStore(store: ScheduleStore, path = scheduleStorePath()): void {
@@ -108,11 +130,10 @@ export function mutateScheduleStore<T>(
 }
 
 export function reconcileInterruptedRuns(path = scheduleStorePath(), now = new Date()): number {
-  const store = readScheduleStore(path);
-  let changed = 0;
+  const { store, interruptedLegacyRuns } = loadScheduleStore(path, now);
+  let changed = interruptedLegacyRuns;
   for (const run of store.runs) {
     if (!ACTIVE_SCHEDULE_RUN_STATUSES.has(run.status)) continue;
-    if (run.engine === "durable") continue;
     run.status = "failed";
     run.finishedAt = now.toISOString();
     run.error = "The server restarted before this run completed";
