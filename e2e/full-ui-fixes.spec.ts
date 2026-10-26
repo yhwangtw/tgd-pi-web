@@ -250,6 +250,7 @@ test("Steer remains usable during a reply", async ({ page }) => {
 for (const width of [390, 1440]) test(`${width}: selected file actions are visible, keyboard usable and stay inside the viewport`, async ({ page }) => {
   await page.setViewportSize({ width, height: 844 });
   await page.goto(MAIN);
+  await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeVisible();
   const files = page.getByRole("button", { name: /^(Explorer|Files)$/ }).first();
   await files.click();
   await page.getByRole("treeitem", { name: "README.md", exact: true }).click();

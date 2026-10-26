@@ -782,3 +782,14 @@ production dependencies. Runtime-center commands align an optional global CLI
 with the embedded version and restore the lockfile with `npm ci` only while the
 checkout's server is stopped. Web updates use the managed update center or the
 release workflow.
+
+### Pi 1.3 historical usage compatibility
+
+The postinstall script `scripts/patch-pi-history-usage.mjs` guards absent assistant
+usage in Pi AI context estimation, SDK compaction context calculation and usage
+totals. Older/imported JSONL messages can legitimately lack usage. These narrow
+guards skip missing billing data and preserve context estimation/unknown state;
+they never synthesize usage records or rewrite session history. The patch is
+idempotent and refuses unreviewed SDK versions or source layouts. Verify/remove
+it when adopting an upstream fix. Regression coverage uses the actual SDK and
+a browser continuation with historical usage omitted.

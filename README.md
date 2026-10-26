@@ -85,7 +85,7 @@ Open [http://localhost:30141](http://localhost:30141).
 
 ### Update an existing checkout
 
-This version pins the embedded Pi packages (`pi-ai`, `pi-coding-agent` and `chord`) to **1.3.0**. Updating Web installs its own runtime; a globally installed CLI is managed separately. To align an optional global CLI, run `npm install -g @earendil-works/pi-coding-agent@1.3.0` and verify it with `pi --version`.
+This version pins the embedded Pi packages (`pi-ai` and `pi-coding-agent`) to **1.3.0**. Updating Web installs its own runtime; a globally installed CLI is managed separately. To align an optional global CLI, run `npm install -g @earendil-works/pi-coding-agent@1.3.0` and verify it with `pi --version`.
 
 Pi Web uses the embedded Pi SDK for conversations, background work and schedules. Review the [upstream Pi 1.3 release notes](https://github.com/earendil-works/pi/releases/tag/v1.3.0) when changing model providers or extension integrations.
 
