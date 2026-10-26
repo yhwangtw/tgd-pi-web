@@ -18,7 +18,9 @@ export function phaseLabel(phase: AgentPhase, translate?: (key: MsgKey) => strin
     }
     if (phase?.kind === "stopping") return "Stopping…";
     if (phase?.kind === "waiting_model") return "Waiting for model...";
-    return "Thinking...";
+    if (phase?.kind === "preparing_tools") return "Preparing tool...";
+    if (phase?.kind === "writing") return "Writing...";
+    return phase?.kind === "thinking" ? "Thinking..." : "Waiting for model...";
   }
   if (phase?.kind === "running_tools") {
     const names = phase.tools.map((tool) => tool.label ?? tool.name);
@@ -30,7 +32,9 @@ export function phaseLabel(phase: AgentPhase, translate?: (key: MsgKey) => strin
   }
   if (phase?.kind === "stopping") return translate("chat.stopping");
   if (phase?.kind === "waiting_model") return translate("chat.waitingModel");
-  return translate("chat.thinkingStatus");
+  if (phase?.kind === "preparing_tools") return translate("chat.speedTool");
+  if (phase?.kind === "writing") return translate("chat.speedOutput");
+  return translate(phase?.kind === "thinking" ? "chat.thinkingStatus" : "chat.waitingModel");
 }
 
 export type RunStatusState = "normal" | "delayed" | "stalled" | "reconnecting" | "connecting";
@@ -40,7 +44,7 @@ export function runStatusState(progress: RunProgressState): RunStatusState {
 }
 
 function Elapsed({ since }: { since: number }) {
-  const [now, setNow] = useState(since);
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
@@ -81,6 +85,7 @@ export function RunStatus({
     <div
       className={styles.runStatus}
       data-progress-state={state}
+      data-run-phase={phase?.kind ?? "waiting_model"}
       data-tone={state === "reconnecting" ? "warning" : "neutral"}
       role="status"
       aria-live="polite"

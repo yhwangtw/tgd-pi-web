@@ -19,7 +19,7 @@ export function DialogShell({
   size = "default",
   mobileMode = "sheet",
   modal = false,
-  placement = "corner",
+  placement = "center",
   initialFocusRef,
   headerActions,
   footer,
@@ -121,6 +121,7 @@ export function DialogShell({
       data-dialog-root
       data-modeless={!modal || undefined}
       data-placement={placement}
+      data-collapsed={!modal && collapsed || undefined}
     >
       <section
         ref={panelRef}
@@ -132,6 +133,7 @@ export function DialogShell({
         tabIndex={-1}
         data-size={size}
         data-mobile-mode={mobileMode}
+        data-collapsed={!modal && collapsed || undefined}
         data-testid={testId}
         onPointerDownCapture={() => { pointerInsideReactTree.current = true; }}
         onClickCapture={() => { pointerInsideReactTree.current = true; }}

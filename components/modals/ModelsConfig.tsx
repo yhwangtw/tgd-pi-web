@@ -735,7 +735,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                             {m.id || t("models.newModel")}
                           </span>
                           {m.reasoning && (
-                            <span className={styles.reasoningBadge}>T</span>
+                            <span className={styles.reasoningBadge} role="img" aria-label={t("models.reasoningHelp")} title={t("models.reasoningHelp")}>T</span>
                           )}
                         </button>
                       );

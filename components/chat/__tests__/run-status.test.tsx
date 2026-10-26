@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
 import { RunStatus, runStatusState } from "../RunStatus";
 
@@ -18,6 +18,7 @@ describe("RunStatus", () => {
     root = null;
     container = null;
     setLocale("en");
+    vi.useRealTimers();
   });
 
   async function render(progress: Parameters<typeof RunStatus>[0]["progress"], locale: "en" | "zh" = "en") {
@@ -69,6 +70,16 @@ describe("RunStatus", () => {
     expect(runStatusState({ idleSeconds: 20, attention: "normal", connection: "reconnecting" })).toBe("reconnecting");
     expect(status.dataset.tone).toBe("warning");
     expect(status.textContent).toContain("reconnecting");
+  });
+
+  it("shows accumulated elapsed time immediately after reconnect instead of resetting to zero", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-26T00:00:00Z"));
+    await render({ idleSeconds: 0, attention: "normal", connection: "connected" });
+    await act(async () => root!.render(<RunStatus phase={{ kind: "writing" }} progress={{ idleSeconds: 0, attention: "normal", connection: "connected" }} startedAt={Date.now() - 65_000} />));
+    expect(container!.textContent).toContain("Writing");
+    expect(container!.textContent).toContain("1m 5s");
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(container!.textContent).toContain("1m 6s");
   });
 
   it("announces only the semantic label, not the ticking timer", async () => {

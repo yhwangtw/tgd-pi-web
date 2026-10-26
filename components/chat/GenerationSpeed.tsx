@@ -23,16 +23,17 @@ export function StreamingSpeed({ message }: { message: AssistantMessage }) {
   }, []);
   const last = message.content?.at(-1);
   // Thinking/tool arguments are not visible text throughput.
-  const phase = last?.type === "thinking" ? "thinking" : last?.type === "toolCall" ? "tool" : "output";
-  return <span className={styles.generationSpeed} data-testid="streaming-speed" title={t("chat.speedEstimate")}>
-    {t(phase === "thinking" ? "chat.speedThinking" : phase === "tool" ? "chat.speedTool" : rate !== null ? "chat.speedOutput" : "chat.speedWaiting")}
-    {phase === "output" && rate !== null && <> · {t("chat.speedApprox")} {rate} t/s</>}
+  const phase = last?.type === "thinking" ? "thinking" : last?.type === "toolCall" ? "tool" : messageText(message) ? "output" : "waiting";
+  return <span className={styles.generationSpeed} data-testid="streaming-speed" data-rate-kind="estimated-live" title={t("chat.speedEstimate")}>
+    {t(phase === "thinking" ? "chat.speedThinking" : phase === "tool" ? "chat.speedTool" : phase === "output" ? "chat.speedOutput" : "chat.waitingModel")}
+    {phase === "output" && rate === null && <> · {t("chat.speedUnavailable")}</>}
+    {phase === "output" && rate !== null && <> · {t("chat.speedLive")} {t("chat.speedApprox")} {rate} {t("chat.speedUnit")}</>}
   </span>;
 }
 
 export function CompletedSpeed({ metrics }: { metrics: GenerationMetrics }) {
   const { t } = useI18n();
-  return <span className={styles.generationSpeed} data-testid="completed-speed" title={t("chat.speedAverageHelp")}>
-    {metrics.estimated && `${t("chat.speedApprox")} `}{t("chat.speedTokenCount").replace("{count}", metrics.tokens.toLocaleString())} · {t("chat.speedAverage")} {metrics.estimated && `${t("chat.speedApprox")} `}{Math.round(metrics.tokens / metrics.seconds)} t/s
+  return <span className={styles.generationSpeed} data-testid="completed-speed" data-rate-kind={metrics.estimated ? "estimated-average" : "provider-average"} title={t("chat.speedAverageHelp")}>
+    {metrics.estimated && `${t("chat.speedApprox")} `}{t("chat.speedTokenCount").replace("{count}", metrics.tokens.toLocaleString())} · {t("chat.speedAverage")} {metrics.estimated && `${t("chat.speedApprox")} `}{Math.round(metrics.tokens / metrics.seconds)} {t("chat.speedUnit")}
   </span>;
 }

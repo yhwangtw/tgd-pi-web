@@ -1,4 +1,5 @@
 "use client";
+import type { ToolExecutionContext } from "@/lib/tool-execution-state";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -1129,6 +1130,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     />
   );
 
+  const toolExecutionContext = useMemo<ToolExecutionContext>(() => ({
+    running: agentRunning,
+    activeIds: new Set(agentPhase?.kind === "running_tools" ? agentPhase.tools.map(tool => tool.id) : []),
+  }), [agentRunning, agentPhase]);
+
   const historyRows = useMemo(() => {
     let refIdx = 0;
     let seenUserMessage = false;
@@ -1212,6 +1218,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           turnActivityMessages={conversationLayout.activityByOwner.get(idx)}
           suppressActivityBlocks={conversationLayout.activityAssistantIndices.has(idx)}
           turnStartedAt={turnStartedAt}
+          toolExecutionContext={turnIndex === conversationLayout.turns.length - 1 && agentRunning ? toolExecutionContext : undefined}
+          turnCancelled={turn?.finalAssistantIndex !== null && turn?.finalAssistantIndex !== undefined && messages[turn.finalAssistantIndex]?.role === "assistant" && (messages[turn.finalAssistantIndex] as import("@/lib/types").AssistantMessage).stopReason === "aborted"}
           usageOverride={conversationLayout.usageByFinalAssistant.get(idx)}
           showUsage={conversationLayout.finalAssistantIndices.has(idx)}
           showActions={conversationLayout.finalAssistantIndices.has(idx)}
@@ -1272,7 +1280,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         </Fragment>
       );
     });
-  }, [messages, entryIds, conversationLayout, streamState.isStreaming, getGenerationMetrics,
+  }, [messages, entryIds, conversationLayout, streamState.isStreaming, getGenerationMetrics, toolExecutionContext,
     toolResultsMap, modelNames, agentRunning, isNew, handleFork, forkingEntryId,
     handleNavigate, handleEditContent, handleEditRerun, onOpenModels, recoveredAuthIndices,
     quoteMessage, toggleBookmark, bookmarks, lastUserIdx, unreadMessageIndex, t,
@@ -1527,6 +1535,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <MessageView
                 message={streamState.streamingMessage as AgentMessage}
                 isStreaming
+                toolExecutionContext={toolExecutionContext}
                 modelNames={modelNames}
                 toolResults={toolResultsMap}
                 showModelLabel={historicalAssistantModelKey !== assistantModelKey(streamState.streamingMessage as { provider?: string; model?: string })}
@@ -1538,10 +1547,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             )}
 
             {agentRunning && !pendingQuestion && (
-              !streamState.streamingMessage
-              || runProgress.attention !== "normal"
-              || runProgress.connection === "reconnecting"
-            ) && (
               <RunStatus phase={agentPhase} progress={runProgress} startedAt={agentStartedAt} />
             )}
 

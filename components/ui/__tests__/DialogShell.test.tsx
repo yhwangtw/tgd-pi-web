@@ -54,6 +54,7 @@ describe("DialogShell", () => {
   it("defaults to a modeless, collapsible panel without losing a form draft", async () => {
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
     await act(async () => root?.render(<><button id="outside">Keep working</button><DialogShell open title="Settings" onClose={() => {}}><input defaultValue="unfinished" /></DialogShell></>));
+    expect(document.querySelector("[data-dialog-root]")?.getAttribute("data-placement")).toBe("center");
     const outside = container.querySelector<HTMLButtonElement>("#outside")!;
     outside.focus();
     expect(container.inert).not.toBe(true);
@@ -64,10 +65,12 @@ describe("DialogShell", () => {
     expect(document.querySelector('[role="dialog"] [hidden]')).not.toBeNull();
     expect(document.activeElement).toBe(outside);
     expect(collapse.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector('[role="dialog"]')?.getAttribute("data-collapsed")).toBe("true");
     const expand = document.querySelector<HTMLButtonElement>('[aria-label="Expand panel"]')!;
     expect(expand.title).toBe("Expand panel");
     await act(async () => expand.click());
     expect(document.querySelector('[role="dialog"] [hidden]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')?.hasAttribute("data-collapsed")).toBe(false);
     expect(document.querySelector<HTMLInputElement>('[role="dialog"] input')?.value).toBe("unfinished");
   });
 

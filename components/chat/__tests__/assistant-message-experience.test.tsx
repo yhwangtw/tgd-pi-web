@@ -48,11 +48,52 @@ describe("AssistantMessageView conversation chrome", () => {
       await act(async () => root!.render(<AssistantMessageView message={{ ...baseMessage, content: [{ type: "text", text: "a".repeat(i * 40) }] }} isStreaming showModelLabel={false} />));
       await act(async () => vi.advanceTimersByTime(500));
     }
-    expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).toBe("Writing · ~ 20 t/s");
+    expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).toBe("Writing · live ~ 20 token/s");
     await act(async () => vi.advanceTimersByTime(2000));
     expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).not.toContain("t/s");
     await act(async () => root!.render(<AssistantMessageView message={{ ...baseMessage, content: [{ type: "toolCall", toolCallId: "tool", toolName: "bash", input: { command: "x".repeat(1000) } }] }} isStreaming showModelLabel={false} />));
     expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).toBe("Preparing tool");
+  });
+
+  it("never treats an absent result as success and follows parallel lifecycle evidence", async () => {
+    const message: AssistantMessage = { ...baseMessage, content: [
+      { type: "toolCall", toolCallId: "a", toolName: "read", input: { path: "a.ts" } },
+      { type: "toolCall", toolCallId: "b", toolName: "write", input: { path: "b.ts", content: "x" } },
+    ] };
+    const results = new Map<string, ToolResultMessage>();
+    await render(message, { toolResults: results, toolExecutionContext: { running: true, activeIds: new Set(["a", "b"]) } });
+    expect(container!.querySelector("[data-tool-group-state]")?.getAttribute("data-tool-group-state")).toBe("running");
+    await act(async () => container!.querySelector<HTMLButtonElement>("section > button")!.click());
+    expect(container!.querySelectorAll('[data-tool-state="running"]')).toHaveLength(2);
+    results.set("a", { role: "toolResult", toolCallId: "a", content: [] });
+    await act(async () => root!.render(<AssistantMessageView message={message} toolResults={results} toolExecutionContext={{ running: true, activeIds: new Set(["b"]) }} />));
+    expect(container!.querySelectorAll('[data-tool-state="success"]')).toHaveLength(1);
+    expect(container!.querySelectorAll('[data-tool-state="running"]')).toHaveLength(1);
+    expect(container!.querySelector("[data-tool-group-state]")?.getAttribute("data-tool-group-state")).toBe("running");
+    await act(async () => root!.render(<AssistantMessageView message={message} toolResults={results} turnCancelled />));
+    expect(container!.querySelectorAll('[data-tool-state="cancelled"]')).toHaveLength(1);
+    expect(container!.querySelectorAll('[data-tool-state="success"]')).toHaveLength(1);
+    await act(async () => root!.render(<AssistantMessageView message={message} toolResults={results} />));
+    expect(container!.querySelectorAll('[data-tool-state="unknown"]')).toHaveLength(1);
+    expect(container!.textContent).toContain("Result unavailable");
+    results.set("b", { role: "toolResult", toolCallId: "b", content: [], isError: true });
+    await act(async () => root!.render(<AssistantMessageView message={message} toolResults={results} turnCancelled />));
+    expect(container!.querySelectorAll('[data-tool-state="error"]')).toHaveLength(1);
+    expect(container!.querySelector("[data-tool-group-state]")?.getAttribute("data-tool-group-state")).toBe("error");
+  });
+
+  it("keeps work logs unfinished until results arrive and only counts successful file changes", async () => {
+    const activity: AssistantMessage[] = [{ ...baseMessage, content: [{ type: "toolCall", toolCallId: "w", toolName: "write", input: { path: "file.ts", content: "x" } }] }];
+    const message = { ...baseMessage, content: [{ type: "text" as const, text: "Done" }] };
+    await render(message, { turnActivityMessages: activity });
+    expect(container!.querySelector('[data-work-log-state="unknown"]')).not.toBeNull();
+    expect(container!.textContent).not.toContain("file changed");
+    await act(async () => root!.render(<AssistantMessageView message={message} turnActivityMessages={activity} toolExecutionContext={{ running: true }} />));
+    expect(container!.querySelector('[data-work-log-state="running"]')).not.toBeNull();
+    const results = new Map<string, ToolResultMessage>([["w", { role: "toolResult", toolCallId: "w", content: [] }]]);
+    await act(async () => root!.render(<AssistantMessageView message={message} turnActivityMessages={activity} toolResults={results} />));
+    expect(container!.querySelector('[data-work-log-state="success"]')).not.toBeNull();
+    expect(container!.textContent).toContain("1 file");
   });
 
   it("looks up only the current message's tool results in a long transcript", async () => {
@@ -75,7 +116,7 @@ describe("AssistantMessageView conversation chrome", () => {
 
   it("shows measured response speed separately from aggregated turn usage", async () => {
     await render({ ...baseMessage, content: [{ type: "text", text: "Answer" }] }, { generationMetrics: { tokens: 480, seconds: 20, estimated: false }, showModelLabel: false });
-    expect(container!.querySelector('[data-testid="completed-speed"]')!.textContent).toBe("480 tokens · avg 24 t/s");
+    expect(container!.querySelector('[data-testid="completed-speed"]')!.textContent).toBe("480 tokens · avg 24 token/s");
     expect(container!.querySelector('[data-testid="streaming-speed"]')).toBeNull();
   });
 

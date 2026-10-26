@@ -11,7 +11,7 @@ import { ToolRunGroup, type ToolRunItem } from "../ToolRunGroup";
 const item = (id: string, toolName: string, duration?: number, failed = false): ToolRunItem => ({
   block: { type: "toolCall", toolCallId: id, toolName, input: {} },
   duration,
-  result: failed ? { role: "toolResult", toolCallId: id, content: [], isError: true } : undefined,
+  result: duration !== undefined || failed ? { role: "toolResult", toolCallId: id, content: [], isError: failed } : undefined,
 });
 
 describe("ToolRunGroup", () => {
@@ -31,7 +31,7 @@ describe("ToolRunGroup", () => {
     document.body.appendChild(container);
     root = createRoot(container);
     await act(async () => root?.render(
-      <ToolRunGroup items={items} activeToolCallId={activeToolCallId}>
+      <ToolRunGroup items={items} executionContext={activeToolCallId ? { running: true, activeIds: new Set([activeToolCallId]) } : undefined}>
         <span>tool details</span>
       </ToolRunGroup>,
     ));
@@ -53,7 +53,7 @@ describe("ToolRunGroup", () => {
 
   it("highlights only the active tool and reports failures", async () => {
     await render([item("1", "read"), item("2", "grep", undefined, true)], "1");
-    expect(container!.textContent).toContain("Running read");
+    expect(container!.textContent).toContain("Running 2 tools");
     expect(container!.textContent).toContain("1 failed");
   });
 });

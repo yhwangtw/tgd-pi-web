@@ -2,8 +2,9 @@
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronDown, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, Clock3, CircleMinus, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { toolStateLabel, type ToolExecutionState } from "@/lib/tool-execution-state";
 import styles from "./TurnActivityGroup.module.css";
 
 interface Props {
@@ -12,10 +13,11 @@ interface Props {
   filesChanged: number;
   failed: number;
   elapsed?: number;
+  state?: ToolExecutionState;
   children: ReactNode;
 }
 
-export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed, children }: Props) {
+export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed, state = failed ? "error" : "success", children }: Props) {
   const [expanded, setExpanded] = useState(false);
   const rootRef = useRef<HTMLElement | null>(null);
   const pendingScrollRef = useRef<{
@@ -25,8 +27,9 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
   } | null>(null);
   const { t } = useI18n();
   const statusText = failed > 0
-    ? `${t("chat.workNeedsAttention")} · ${failed}`
-    : t("chat.workComplete");
+    ? state === "error" ? `${t("chat.workNeedsAttention")} · ${failed}` : `${t(toolStateLabel[state])} · ${failed} ${t("chat.failed")}`
+    : t(toolStateLabel[state]);
+  const active = state === "running" || state === "preparing";
   const stepLabel = t(steps === 1 ? "chat.step" : "chat.steps");
   const toolLabel = t(tools === 1 ? "chat.tool" : "chat.tools");
   const fileLabel = t(filesChanged === 1 ? "chat.fileChanged" : "chat.filesChanged");
@@ -72,8 +75,9 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
   return (
     <section
       ref={rootRef}
-      className={`${styles.root} ${failed ? styles.rootError : ""}`}
+      className={`${styles.root} ${state === "error" ? styles.rootError : state === "success" ? styles.rootSuccess : active ? styles.rootRunning : ""}`}
       aria-label={t("chat.workLog")}
+      data-work-log-state={state}
       data-work-log-expanded={expanded ? "true" : "false"}
     >
       <button
@@ -84,15 +88,11 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
         aria-label={summaryLabel}
       >
         <span className={styles.stateIcon} aria-hidden>
-          {failed ? (
-            <TriangleAlert size={UI_ICON_SIZE.compact} />
-          ) : (
-            <Check size={UI_ICON_SIZE.compact} />
-          )}
+          {active ? <LoaderCircle className={styles.spinner} size={UI_ICON_SIZE.compact} /> : state === "error" ? <TriangleAlert size={UI_ICON_SIZE.compact} /> : state === "success" ? <Check size={UI_ICON_SIZE.compact} /> : state === "cancelled" ? <CircleMinus size={UI_ICON_SIZE.compact} /> : <Clock3 size={UI_ICON_SIZE.compact} />}
         </span>
         <span className={styles.title}>{t("chat.workLog")}</span>
-        {failed > 0 && (
-          <span className={`${styles.outcome} ${styles.outcomeError}`}>
+        {(state !== "success" || failed > 0) && (
+          <span className={`${styles.outcome} ${state === "error" ? styles.outcomeError : ""}`}>
             {statusText}
           </span>
         )}

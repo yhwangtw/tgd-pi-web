@@ -1,4 +1,5 @@
 "use client";
+import { toolExecutionState, toolGroupState, toolStateLabel, type ToolExecutionContext } from "@/lib/tool-execution-state";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
@@ -80,6 +81,8 @@ function copyText(text: string): Promise<void> {
 export function AssistantMessageView({
   message,
   isStreaming,
+  toolExecutionContext,
+  turnCancelled,
   toolResults,
   modelNames,
   showTimestamp,
@@ -101,6 +104,8 @@ export function AssistantMessageView({
 }: {
   message: AssistantMessage;
   isStreaming?: boolean;
+  toolExecutionContext?: ToolExecutionContext;
+  turnCancelled?: boolean;
   toolResults?: Map<string, ToolResultMessage>;
   modelNames?: Record<string, string>;
   showTimestamp?: boolean;
@@ -231,16 +236,13 @@ export function AssistantMessageView({
     onQuote(selected || textContent);
   };
 
-  const activeToolCallId = useMemo(() => {
-    if (!isStreaming) return undefined;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-      const block = blocks[i];
-      if (block.type === "toolCall" && !toolResults?.has(block.toolCallId)) {
-        return block.toolCallId;
-      }
-    }
-    return undefined;
-  }, [blocks, isStreaming, toolResults]);
+  const executionContext = useMemo<ToolExecutionContext>(() => ({
+    ...toolExecutionContext,
+    running: toolExecutionContext?.running ?? Boolean(isStreaming),
+    preparingId: isStreaming && blocks.at(-1)?.type === "toolCall"
+      ? (blocks.at(-1) as ToolCallContent).toolCallId : undefined,
+    cancelled: toolExecutionContext?.cancelled || turnCancelled || message.stopReason === "aborted",
+  }), [toolExecutionContext, isStreaming, blocks, turnCancelled, message.stopReason]);
 
   useEffect(() => {
     if (!isStreaming) {
@@ -299,9 +301,9 @@ export function AssistantMessageView({
           streamingDurations,
           thinkingDurationFromFile,
           toolCallDurations,
-          activeToolCallId,
+          executionContext,
           outputAccessory: turnActivityMessages && turnActivityMessages.length > 0 ? (
-            <TurnWorkLog messages={turnActivityMessages} toolResults={toolResults} turnStartedAt={turnStartedAt} />
+            <TurnWorkLog messages={turnActivityMessages} toolResults={toolResults} turnStartedAt={turnStartedAt} executionContext={executionContext} />
           ) : undefined,
         })}
       </div>
@@ -433,10 +435,12 @@ function TurnWorkLog({
   messages,
   toolResults,
   turnStartedAt,
+  executionContext,
 }: {
   messages: AssistantMessage[];
   toolResults?: Map<string, ToolResultMessage>;
   turnStartedAt?: number;
+  executionContext?: ToolExecutionContext;
 }) {
   const { t } = useI18n();
   const entries = messages.flatMap((activityMessage) =>
@@ -455,8 +459,8 @@ function TurnWorkLog({
   let lastTimestamp = Math.max(0, ...messages.map((activityMessage) => activityMessage.timestamp ?? 0));
   for (const entry of toolEntries) {
     const path = entry.block.input && typeof entry.block.input.path === "string" ? entry.block.input.path : null;
-    if (path && (entry.block.toolName === "edit" || entry.block.toolName === "write")) files.add(path);
     const result = toolResults?.get(entry.block.toolCallId);
+    if (result && !result.isError && path && (entry.block.toolName === "edit" || entry.block.toolName === "write")) files.add(path);
     if (result?.isError) failed += 1;
     if (result?.timestamp) lastTimestamp = Math.max(lastTimestamp, result.timestamp);
   }
@@ -473,13 +477,14 @@ function TurnWorkLog({
       filesChanged={files.size}
       failed={failed}
       elapsed={elapsed}
+      state={executionContext?.running && !executionContext.cancelled ? "running" : failed ? "error" : executionContext?.cancelled ? "cancelled" : toolEntries.length ? toolGroupState(toolEntries.map(({ block }) => toolExecutionState(block.toolCallId, toolResults?.get(block.toolCallId), executionContext))) : "success"}
     >
       {toolEntries.map(({ activityMessage, block }) => {
         const result = toolResults?.get(block.toolCallId);
         const duration = result?.timestamp && activityMessage.timestamp
           ? Math.max(1, Math.round((result.timestamp - activityMessage.timestamp) / 1000))
           : undefined;
-        return <ToolCallBlock key={block.toolCallId} block={block} result={result} duration={duration} />;
+        return <ToolCallBlock key={block.toolCallId} block={block} result={result} duration={duration} executionContext={executionContext} />;
       })}
       {thinkingEntries.length > 0 && (
         <details className={styles.reasoningGroup}>
@@ -505,7 +510,7 @@ function renderBlocks({
   streamingDurations,
   thinkingDurationFromFile,
   toolCallDurations,
-  activeToolCallId,
+  executionContext,
   outputAccessory,
 }: {
   blocks: AssistantContentBlock[];
@@ -514,7 +519,7 @@ function renderBlocks({
   streamingDurations: Map<number, number>;
   thinkingDurationFromFile?: number;
   toolCallDurations: Map<string, number>;
-  activeToolCallId?: string;
+  executionContext?: ToolExecutionContext;
   outputAccessory?: React.ReactNode;
 }) {
   const rendered: React.ReactNode[] = [];
@@ -561,14 +566,14 @@ function renderBlocks({
 
     if (items.length > 1) {
       rendered.push(
-        <ToolRunGroup key={`tools-${i}`} items={items} activeToolCallId={activeToolCallId}>
+        <ToolRunGroup key={`tools-${i}`} items={items} executionContext={executionContext}>
           {items.map((item) => (
             <ToolCallBlock
               key={item.block.toolCallId}
               block={item.block}
               result={item.result}
               duration={item.duration}
-              active={item.block.toolCallId === activeToolCallId}
+              executionContext={executionContext}
             />
           ))}
         </ToolRunGroup>,
@@ -581,7 +586,7 @@ function renderBlocks({
           block={item.block}
           result={item.result}
           duration={item.duration}
-          active={item.block.toolCallId === activeToolCallId}
+          executionContext={executionContext}
         />,
       );
     }
@@ -682,7 +687,7 @@ function ThinkingBlock({ block, duration }: { block: ThinkingContent; duration?:
 }
 
 
-function ToolCallBlock({ block, result, duration, active = false }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; active?: boolean }) {
+function ToolCallBlock({ block, result, duration, executionContext }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; executionContext?: ToolExecutionContext }) {
   const [expanded, setExpanded] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
   const { t } = useI18n();
@@ -702,11 +707,14 @@ function ToolCallBlock({ block, result, duration, active = false }: { block: Too
     ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
     : null;
   const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
-  const isError = result?.isError ?? false;
+  const state = toolExecutionState(block.toolCallId, result, executionContext);
+  const isError = state === "error";
+  const active = state === "running" || state === "preparing";
 
   return (
     <div
-      className={`${styles.toolCallContainer} ${isError ? styles.toolCallContainerError : active ? styles.toolCallContainerRunning : styles.toolCallContainerSuccess}`}
+      data-tool-state={state}
+      className={`${styles.toolCallContainer} ${isError ? styles.toolCallContainerError : active ? styles.toolCallContainerRunning : state === "success" ? styles.toolCallContainerSuccess : styles.toolCallContainerNeutral}`}
     >
       {/* ── Tool call header ── */}
       <button
@@ -714,13 +722,13 @@ function ToolCallBlock({ block, result, duration, active = false }: { block: Too
         className={styles.toolCallButton}
         aria-expanded={expanded}
       >
-        <span className={`${styles.toolName} ${isError ? styles.toolNameError : active ? styles.toolNameRunning : styles.toolNameSuccess}`}>
+        <span className={`${styles.toolName} ${isError ? styles.toolNameError : active ? styles.toolNameRunning : state === "success" ? styles.toolNameSuccess : ""}`}>
           {block.toolName}
         </span>
         <span className={styles.toolPreview}>
           {getToolPreview(block)}
         </span>
-        {active && <span className={styles.toolRunningText}>{t("chat.runningTool")}</span>}
+        <span className={styles.toolStatusText}>{t(toolStateLabel[state])}</span>
         {duration !== undefined && (
           <span className={styles.toolDuration}>{duration}s</span>
         )}
@@ -750,7 +758,7 @@ function ToolCallBlock({ block, result, duration, active = false }: { block: Too
       )}
       {expanded && !isEditTool && !isWriteTool && (
         <pre
-          className={`${styles.toolInputPre} ${isError ? styles.toolInputPreError : styles.toolInputPreSuccess}`}
+          className={`${styles.toolInputPre} ${isError ? styles.toolInputPreError : state === "success" ? styles.toolInputPreSuccess : ""}`}
         >
           {inputStr}
         </pre>
