@@ -1,7 +1,7 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from "react";
 import type { SessionInfo } from "@/lib/types";
 import type { AttentionItem } from "@/lib/attention-center";
 import { FileExplorer } from "./FileExplorer";
@@ -417,6 +417,23 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   );
   const visibleVirtualRows = virtualRows.slice(virtualWindow.start, virtualWindow.end);
 
+  // Keep focus intent until virtualization actually mounts the destination.
+  // A fixed number of animation frames can run before React commits that row.
+  const [pendingSessionFocus, setPendingSessionFocus] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    if (!pendingSessionFocus) return;
+    if (!sessionOrderById.has(pendingSessionFocus)) {
+      setPendingSessionFocus(null);
+      return;
+    }
+    const row = Array.from(listRef.current?.querySelectorAll<HTMLElement>("[data-session-row]") ?? [])
+      .find(element => element.dataset.sessionRow === pendingSessionFocus);
+    if (!row) return;
+    row.focus({ preventScroll: true });
+    row.scrollIntoView({ block: "nearest" });
+    setPendingSessionFocus(null);
+  }, [pendingSessionFocus, sessionOrderById, virtualWindow.start, virtualWindow.end]);
+
   // Keyboard navigation uses logical row order rather than rendered DOM order,
   // so ArrowUp/ArrowDown keep working when the next row is outside the window.
   const focusSessionOrder = useCallback((order: number) => {
@@ -427,6 +444,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       .find((row) => row.dataset.sessionRow === sessionId);
     const existing = findRow();
     if (existing) {
+      setPendingSessionFocus(null);
       existing.focus();
       existing.scrollIntoView({ block: "nearest" });
       return;
@@ -435,9 +453,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     const list = listRef.current;
     const content = virtualContentRef.current;
     if (virtualIndex === undefined || !list || !content) return;
+    setPendingSessionFocus(sessionId);
     list.scrollTop = content.offsetTop + (virtualWindow.offsets[virtualIndex] ?? 0) - 8;
-    requestAnimationFrame(() => requestAnimationFrame(() => findRow()?.focus()));
-  }, [orderedSessionIds, virtualRowIndexBySession, virtualWindow.offsets]);
+    updateVirtualViewport();
+  }, [orderedSessionIds, virtualRowIndexBySession, virtualWindow.offsets, updateVirtualViewport]);
   const handleListKeyDown = useCallback((e: React.KeyboardEvent) => {
     const target = e.target as HTMLElement;
     // Inline rename/delete inputs keep their own arrow/Enter behavior.
@@ -644,6 +663,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         aria-label={t("sidebar.sessions")}
         tabIndex={0}
         onKeyDown={handleListKeyDown}
+        onBlurCapture={(event) => {
+          if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) setPendingSessionFocus(null);
+        }}
         className={styles.sessionList}
         style={{ flex: showExplorer && explorerOpen && (selectedCwdProp || selectedCwd) ? "1 1 0" : "1 1 auto", outline: "none" }}
       >

@@ -185,6 +185,11 @@ test("virtualized session grid focuses offscreen destinations with End and Home"
   await expect(grid.locator(`[data-session-order="${sessions.sessions.length - 1}"]`)).toBeFocused();
   await page.keyboard.press("Home");
   await expect(grid.locator('[data-session-order="0"]')).toBeFocused();
+  // A newer navigation key cancels an offscreen focus request still in flight.
+  await grid.focus();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Home");
+  await expect(grid.locator('[data-session-order="0"]')).toBeFocused();
 });
 
 for (const theme of ["light", "dark"]) test(`${theme}: custom provider fields and delete controls are accessible`, async ({ page }) => {
