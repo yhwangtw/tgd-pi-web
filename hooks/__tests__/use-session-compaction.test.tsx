@@ -82,6 +82,44 @@ describe("compaction client reconciliation", () => {
     expect(transport.send).toHaveBeenCalledOnce();
   });
 
+  it("releases a stale processing state immediately when a reconnect snapshot confirms idle", async () => {
+    await render();
+    await act(async () => api.reconcile({ compaction: job("running") }));
+    await act(async () => api.reconcile({ compaction: null, isCompacting: false }));
+    expect(api.view?.status).toBe("unknown");
+    expect(active).toBe(false);
+    expect(complete).not.toHaveBeenCalled();
+    await act(async () => api.dismiss());
+    expect(api.view).toBeNull();
+  });
+
+  it("does not mistake a snapshot taken before command acceptance for a lost job", async () => {
+    let accept!: (state: CompactionState) => void;
+    let requestedId!: string;
+    transport.send.mockImplementation((_sid, command) => {
+      requestedId = command.requestId;
+      return new Promise<CompactionState>(resolve => { accept = resolve; });
+    });
+    await render();
+    let pending!: Promise<void>;
+    await act(async () => { pending = api.start(); });
+    await act(async () => api.reconcile({ compaction: null, isCompacting: false }));
+    expect(api.view?.status).toBe("running");
+    await act(async () => { accept(job("running", requestedId)); await pending; });
+    expect(api.view?.status).toBe("running");
+  });
+
+  it("preserves the current operation identity across native running snapshots", async () => {
+    await render();
+    await act(async () => api.reconcile({ isCompacting: true }));
+    const original = api.view;
+    await act(async () => api.reconcile({ isCompacting: true }));
+    expect(api.view).toEqual(original);
+    await act(async () => api.reconcile({ compaction: job("running", "manual-job") }));
+    await act(async () => api.reconcile({ isCompacting: true }));
+    expect(api.view).toMatchObject({ id: "manual-job", reason: "manual", startedAt: 1 });
+  });
+
   it("keeps cancellation pending until the server confirms it", async () => {
     transport.send.mockResolvedValue(null);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(stateResponse(job("running"))));
@@ -135,16 +173,35 @@ describe("compaction client reconciliation", () => {
     expect(transport.send).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])("does not redisplay success after remount/reload (manually dismissed=%s)", async (manuallyDismissed) => {
-    await render(); await act(async () => api.reconcile({ compaction: job("completed") }));
+  it.each(["skipped", "cancelled"] as const)("expires %s notices without replaying them or dropping queued prompts", async status => {
+    vi.useFakeTimers();
+    await render();
+    await act(async () => api.reconcile({ compaction: job(status), compactionQueue: [{ id: "pending", message: "keep me" }] }));
+    await act(async () => vi.advanceTimersByTime(4000));
+    await act(async () => api.reconcile({ compaction: job(status) }));
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(api.view).toBeNull();
+    expect(api.queue).toEqual([{ id: "pending", message: "keep me" }]);
+    await act(async () => api.reconcile({ compaction: job(status) }));
+    expect(api.view).toBeNull();
+    resetCompactionNoticeCache();
+    await act(async () => root.render(<Harness key="returned" />));
+    await act(async () => api.reconcile({ compaction: job(status) }));
+    expect(api.view).toBeNull();
+    expect(complete).not.toHaveBeenCalled();
+    expect(transport.send).not.toHaveBeenCalled();
+  });
+
+  it.each((["completed", "skipped", "cancelled"] as const).flatMap(status => [false, true].map(manuallyDismissed => ({ status, manuallyDismissed }))))("does not redisplay $status after remount/reload (manually dismissed=$manuallyDismissed)", async ({ status, manuallyDismissed }) => {
+    await render(); await act(async () => api.reconcile({ compaction: job(status) }));
     if (manuallyDismissed) await act(async () => api.dismiss());
     // Clear module memory too: browser storage must survive a fresh document.
     resetCompactionNoticeCache();
     await act(async () => root.render(<Harness key="returned" />));
-    await act(async () => api.reconcile({ compaction: job("completed") }));
+    await act(async () => api.reconcile({ compaction: job(status) }));
     expect(api.view).toBeNull();
     // Suppress the notice, not the context refresh in a newly mounted view.
-    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete).toHaveBeenCalledTimes(status === "completed" ? 2 : 0);
     expect(transport.send).not.toHaveBeenCalled();
   });
 

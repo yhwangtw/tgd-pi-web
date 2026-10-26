@@ -2,7 +2,7 @@
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState } from "react";
-import { LoaderCircle, Shrink, X } from "lucide-react";
+import { Check, CircleAlert, LoaderCircle, Shrink, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { CompactionView } from "@/hooks/use-session-compaction";
 import styles from "./CompactionStatus.module.css";
@@ -36,14 +36,17 @@ export function CompactionStatus({ state, queued, onCancel, onCheck, onRetry, on
       if ((event.target as HTMLElement).closest("button") && document.activeElement instanceof HTMLTextAreaElement) event.preventDefault();
     }}>
     <div className={styles.row}>
-      {running ? <LoaderCircle size={UI_ICON_SIZE.compact} className={styles.spinner} aria-hidden /> : <Shrink size={UI_ICON_SIZE.compact} aria-hidden />}
+      {running ? <LoaderCircle size={UI_ICON_SIZE.compact} className={styles.spinner} aria-hidden />
+        : state?.status === "completed" ? <Check size={UI_ICON_SIZE.compact} aria-hidden />
+        : state?.status === "failed" || state?.status === "unknown" ? <CircleAlert size={UI_ICON_SIZE.compact} aria-hidden />
+        : <Shrink size={UI_ICON_SIZE.compact} aria-hidden />}
       <span className={styles.label} role="status">{title}</span>
       {running && <button disabled={busy} onClick={() => void action(onCancel)}>{t("compact.cancel")}</button>}
       {(state?.status === "checking" || state?.status === "unknown") && <button disabled={busy} onClick={() => void action(onCheck)}>{t("compact.check")}</button>}
       {(state?.status === "failed" || state?.status === "unknown") && <button disabled={busy} onClick={() => void action(onRetry)}>{t("compact.retry")}</button>}
       {!running && state && <button className={styles.dismiss} onClick={onDismiss} aria-label={t("compact.dismiss")}><X size={UI_ICON_SIZE.control} /></button>}
     </div>
-    {running && <p>{t(state?.status === "checking" ? "compact.reconciling" : "compact.queueHint")}</p>}
+    {state?.status === "checking" && <p>{t("compact.reconciling")}</p>}
     {state?.status === "unknown" && <p>{t("compact.unknownHint")}</p>}
     {state?.status === "completed" && state.result && Number.isFinite(state.result.tokensBefore) && Number.isFinite(state.result.estimatedTokensAfter) && <p className={styles.tokens}>{t("compact.tokens").replace("{before}", state.result.tokensBefore.toLocaleString()).replace("{after}", state.result.estimatedTokensAfter.toLocaleString())}</p>}
     {queued > 0 && <div className={styles.row}><span className={styles.label}>{t("compact.queued").replace("{count}", String(queued))}</span><button disabled={busy} onClick={() => void action(onClear)}>{t("compact.clear")}</button></div>}
