@@ -103,7 +103,7 @@ test.describe("responsive shell", () => {
       detail: "skills-config-detail",
     },
   ]) {
-    test(`AC-RWD-2: ${modal.name} becomes a nonblocking single-column panel at 320px`, async ({ page }) => {
+    test(`AC-RWD-2: ${modal.name} uses the configured fullscreen single-column panel at 320px`, async ({ page }) => {
       await page.setViewportSize({ width: 320, height: 800 });
       await openSession(page);
       await page.evaluate(() => localStorage.setItem("pi-font-size", "xlarge"));
@@ -130,7 +130,12 @@ test.describe("responsive shell", () => {
       expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
       expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(320);
       expect(navBox!.width).toBeGreaterThanOrEqual(280);
-      expect(dialogBox!.height).toBeLessThanOrEqual(800 * 0.55);
+      await expect(dialog).toHaveAttribute("data-mobile-mode", "fullscreen");
+      expect(dialogBox!.x).toBe(0);
+      expect(dialogBox!.y).toBe(0);
+      expect(dialogBox!.width).toBe(320);
+      expect(dialogBox!.height).toBe(800);
+      await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeInViewport();
 
       if (modal.name === "Models") {
         await nav.getByRole("button").first().click();
@@ -148,6 +153,9 @@ test.describe("responsive shell", () => {
       await expect(nav).toBeVisible();
       await expect(detail).toBeHidden();
       await expectNoPageOverflow(page);
+      await dialog.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect(page.getByRole("textbox", { name: "Message…" })).toBeVisible();
     });
   }
 
