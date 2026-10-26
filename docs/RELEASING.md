@@ -8,6 +8,16 @@ restart. Application/runtime changes follow the release/deployment path below.
 Changes to setup, authentication, stored data or deployment logic retain their
 relevant installation, recovery and behavior checks.
 
+For the release that removes Pi Durable execution, source deployment and data
+conversion are separate steps. Before selecting a converted agent directory,
+back up the original data, stop all writers and review the dry run of the
+[offline converter](DURABLE.md#offline-archive-conversion). Run conversion only
+with explicit `--execute`; it creates a separate output directory and makes no
+model calls. Keep the original directory and matching previous runtime for
+rollback. Historical `dw_` IDs become ordinary SDK session IDs, and interrupted
+runs are retained without automatic replay. A source update does not perform
+this conversion or choose the live data directory.
+
 CI chooses coverage from changed files:
 
 - Documentation-only: whitespace/diff checks, without dependency installation.
@@ -24,7 +34,7 @@ workflow's artifact and verify source bytes, Node/platform, build environment an
 artifact hashes before reuse. This artifact is not a macOS production deployment.
 
 Known file-viewer and composer UI leaves run core navigation, chat/reconnection,
-Durable, appearance, responsive and design checks plus mapped feature specs.
+SDK session, appearance, responsive and design checks plus mapped feature specs.
 Changed specs also run alongside the core set. Shared/global UI, backend,
 dependencies, helpers, unknown paths/history, missing mapped specs and manual CI
 run the full suite. `scripts/e2e-scope.mjs` owns the explicit mapping; the scope job

@@ -4,13 +4,6 @@ import { summarizeHintWorkflow, type HintWorkflow } from "./composer-hint-contex
 /** Read an already-running engine only. Hint requests must never start/resume a session. */
 export async function readComposerHintWorkflow(sessionId: string): Promise<HintWorkflow | null> {
   try {
-    if (sessionId.startsWith("dw_")) {
-      const { getDurableChat } = await import("./durable-chat");
-      const chat = getDurableChat(sessionId);
-      if (!chat?.isAlive()) return null;
-      const { readDurableWorkflow } = await import("./durable-workflow");
-      return summarizeHintWorkflow(await readDurableWorkflow(chat.harness, chat.conversation.id));
-    }
     const { getRpcSession } = await import("./rpc-manager");
     const chat = getRpcSession(sessionId);
     if (!chat?.isAlive()) return null;

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { isSupportedNodeVersion, NODE_SUPPORT_DESCRIPTION } from '../lib/node-support.mjs';
 import { resolveServePlan, serveEnvironment } from './serve-plan.mjs';
 import { prepareIsolatedAgentDir } from './preview-data.mjs';
+import { assertSessionArchiveConverted } from './session-archive-guard.mjs';
 
 try {
   if (!isSupportedNodeVersion(process.versions.node)) throw new Error(`Node ${NODE_SUPPORT_DESCRIPTION} required.`);
@@ -18,6 +19,7 @@ try {
     }
   }
   const agentDir = prepareIsolatedAgentDir(plan.environment, process.env, cwd, homedir());
+  assertSessionArchiveConverted(agentDir || process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi', 'agent'));
   const markers = join(cwd, '.piweb-runtime');
   try { mkdirSync(markers, { mode: 0o700 }); } catch (error) { if (error.code !== 'EEXIST') throw error; }
   if (lstatSync(markers).isSymbolicLink() || !lstatSync(markers).isDirectory()) throw new Error('Invalid runtime marker directory.');

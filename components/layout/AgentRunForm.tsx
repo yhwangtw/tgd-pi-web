@@ -54,7 +54,6 @@ export function AgentRunForm({ defaultCwd, onCancel, onCreated }: Props) {
   const projectPaths = [...new Set([defaultCwd, ...(projects.data?.repos ?? []).map(repo => repo.path)].filter((path): path is string => Boolean(path)))];
   const [thinkingLevel, setThinkingLevel] = useState("auto");
   const [toolMode, setToolMode] = useState<ToolMode>("readonly");
-  const [durable, setDurable] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationAttempted, setValidationAttempted] = useState(false);
@@ -79,8 +78,7 @@ export function AgentRunForm({ defaultCwd, onCancel, onCreated }: Props) {
           name,
           cwd,
           prompt,
-          toolNames: TOOL_NAMES[toolMode].filter(tool => !durable || tool !== "ask_user"),
-          ...(durable ? { engine: "durable" } : {}),
+          toolNames: TOOL_NAMES[toolMode],
           ...(selected ? { provider: selected.provider, modelId: selected.id } : {}),
           ...(thinkingLevel !== "auto" ? { thinkingLevel } : {}),
         }),
@@ -106,7 +104,7 @@ export function AgentRunForm({ defaultCwd, onCancel, onCreated }: Props) {
       description={t("agents.newDescription")}
       onClose={onCancel}
       canClose={!saving}
-      hasUnsavedChanges={!!(name || prompt || cwd !== (defaultCwd ?? "") || model || thinkingLevel !== "auto" || toolMode !== "readonly" || durable)}
+      hasUnsavedChanges={!!(name || prompt || cwd !== (defaultCwd ?? "") || model || thinkingLevel !== "auto" || toolMode !== "readonly")}
       mobileMode="fullscreen"
       initialFocusRef={nameRef}
       bodyClassName={s.dialogBody}
@@ -171,14 +169,6 @@ export function AgentRunForm({ defaultCwd, onCancel, onCreated }: Props) {
         <details className={s.advanced}>
           <summary>{t("agents.advancedSettings")}</summary>
           <div className={s.advancedBody}>
-            <label className={s.field}>
-              <span>{t("agents.executionMode")}</span>
-              <select aria-label={t("agents.executionMode")} aria-describedby={durable ? `${formId}-durable-help` : undefined} value={durable ? "durable" : "standard"} onChange={event => setDurable(event.target.value === "durable")}>
-                <option value="standard">{t("agents.standardMode")}</option>
-                <option value="durable">{t("agents.durableMode")}</option>
-              </select>
-              {durable && <small id={`${formId}-durable-help`}>{t("agents.durableHint")}</small>}
-            </label>
             <div className={s.twoColumns}>
               <label className={s.field}>
                 <span>{t("agents.model")}</span>

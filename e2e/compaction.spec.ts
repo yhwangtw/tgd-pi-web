@@ -29,6 +29,9 @@ async function fixture(page: Page, initialOutcome = "running") {
       if (path === `/api/agent/${SESSION}`) return route.fulfill({ json: { running: true, state: state() } });
       return route.continue();
     }
+    // Idle suggestions can run while a completed notice expires. Keep this
+    // unrelated model request deterministic and inside the browser fixture.
+    if (path === "/api/composer-hint") return route.fulfill({ json: { hint: null, status: "empty", retryable: false, retryAfterMs: 0 } });
     const command = request.postDataJSON();
     if (path === "/api/worktrees" && Array.isArray(command?.cwds)) return route.continue();
     if (path.endsWith("/summarize")) return route.fulfill({ json: {} });

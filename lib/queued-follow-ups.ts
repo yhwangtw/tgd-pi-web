@@ -10,7 +10,7 @@ export interface QueuedFollowUp {
   deliveryMode?: "steer" | "followUp";
 }
 
-/** Normalize SDK string queues and Durable inbox items without losing UI identity. */
+/** Normalize persisted and live follow-up queues without losing UI identity. */
 export function normalizeQueuedFollowUps(event: Record<string, unknown>, previous: QueuedFollowUp[] = []): QueuedFollowUp[] {
   const used = new Set<string>();
   let candidates = previous;

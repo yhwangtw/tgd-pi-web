@@ -1,11 +1,9 @@
 import { readSessionCwd } from "@/lib/session-reader";
-import { waitForSessionMigration } from "@/lib/durable-migration";
+import { waitForSessionMigration } from "@/lib/session-migrations";
 import { NextResponse } from "next/server";
 import { getRpcSession, startRpcSession, type AgentSessionWrapper } from "@/lib/rpc-manager";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { buildContextReport } from "@/lib/context-report";
-import { isDurableSessionId } from "@/lib/durable-session-store";
-import { openDurableChat } from "@/lib/durable-chat";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +21,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id: requestedId } = await params;
   const id = await waitForSessionMigration(requestedId);
   try {
-    if (isDurableSessionId(id)) return NextResponse.json(await (await openDurableChat(id)).getContextReport());
     const session = await ensureSession(id);
     if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
     return NextResponse.json(buildContextReport(session.inner, session.cwd));

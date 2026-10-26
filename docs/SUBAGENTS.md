@@ -46,29 +46,28 @@ The Web does not force a model-provider selection for every child.
 - Stops use an owner-validated native async ID. Acknowledgement is shown as a
   pending stop until upstream reports a terminal state. Snapshot-only cards do
   not offer a fabricated retry: ask the owning parent to resume with a follow-up.
-- Standard and Durable parents use the same upstream child engine. Durable still
-  owns parent conversation state; upstream child sessions and runners have their
-  own persistence/recovery. Interrupted unsafe calls must not be blindly replayed
-  as new children.
+- Parent conversations use the Pi SDK. Upstream child sessions and runners own
+  their persistence/recovery; Pi Web does not replace that behavior with a
+  separate execution engine. Interrupted unsafe calls must not be blindly
+  replayed as new children.
 
-## Durable compatibility
+## SDK host integration
 
-The existing ExtensionRunner bridge projects authoritative SQLite entries into
-Pi's SDK SessionManager. It lazily writes an atomic, private JSONL export under
-`<agent-dir>/web-extension-snapshots/` when upstream needs forked context. These
-files are derived exports, not authoritative sessions and not sidebar entries.
-The stable path supports upstream ownership/recovery. Parent entry writes still
-use Durable transactions; the bridge does not allow direct SessionManager writes.
-
+The parent uses Pi's native SessionManager and ExtensionRunner. Upstream receives
+that SDK context and manages its child sessions, workflows and detached runners.
 Tool exposure is preserved for upstream model-only orchestration tools. Goal,
-Plan, MCP, questions and old native child history remain on their existing paths.
+Plan, MCP and questions remain Pi Web integrations through official Pi APIs.
 Upstream TUI-only components are not recreated as browser controls.
+
+Pi Durable execution and its ExtensionRunner bridge have been retired. Archived
+parent/child conversations can be converted into SDK JSONL sessions with the
+[offline archive converter](DURABLE.md#offline-archive-conversion). Conversion
+preserves history and IDs; interrupted work does not restart automatically.
 
 ## Verification
 
 `lib/__tests__/upstream-subagents.integration.test.ts` uses the installed package,
-real SDK/Durable hosts, a local OpenAI-compatible test server and disposable
-agent directories. It checks concurrent foreground children, detached background
-control, parent tool ceilings, budget compatibility and Durable model-issued
-calls/context export. No production models, credentials or conversations are
+a real SDK host, a local OpenAI-compatible test server and disposable agent
+directories. It checks concurrent foreground children, detached background
+control, parent tool ceilings and budget compatibility. No production models, credentials or conversations are
 used. RPC, status projection and route/component regressions have separate tests.

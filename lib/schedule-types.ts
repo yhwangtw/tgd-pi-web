@@ -19,7 +19,6 @@ export interface AgentSchedule {
   name: string;
   cwd: string;
   prompt: string;
-  engine?: "durable";
   timing: ScheduleTiming;
   timezone: string;
   enabled: boolean;
@@ -49,7 +48,6 @@ export interface ScheduleRun {
   finishedAt?: string;
   status: ScheduleRunStatus;
   sessionId?: string;
-  engine?: "durable";
   execution?: ScheduleExecution;
   error?: string;
 }
@@ -64,7 +62,6 @@ export interface ScheduleInput {
   name: string;
   cwd: string;
   prompt: string;
-  engine?: "durable";
   timing: ScheduleTiming;
   timezone: string;
   enabled?: boolean;

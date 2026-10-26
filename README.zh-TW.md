@@ -187,7 +187,6 @@ parent/
 | **規劃模式** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 受信任工作區 |
 | **目標模式** | 官方 Extension API | Web 轉接 | 不需要 | 必須常駐 | 受信任工作區 |
 | **結構化輸出** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 無 |
-| **可恢復背景代理（實驗性）** | 官方 Pi SDK | Web 轉接 | 不需要 | 必須常駐 | 受信任工作區 |
 | **內嵌子代理** | 官方 Pi SDK | Web 轉接 | 不需要 | 一般 Web runtime | 受信任工作區 |
 | **MCP 連線** | 官方 Extension API | Web 轉接 | 不需要 | 一般 Web runtime | 受信任端點／指令 |
 | **Agent 排程** | 官方 Pi SDK | Web 轉接 | 不需要 | 必須常駐 | 管理者設定 |
@@ -199,19 +198,15 @@ parent/
 
 ### Agent 對話
 
-**Durable 對話（預覽）：** 新對話送出前，可展開「更多輸入框設定」，選擇 **Durable（預覽）**。執行進度保存在 SQLite，聊天、分支、Goal／Plan、子代理、MCP 與待回答問題接入官方 Pi Durable。新建對話仍可選標準模式並持續使用。既有 JSONL 對話在第一次閒置續聊時會自動轉換，保留原始檔與舊網址；忙碌或不相容的對話會保留標準模式並顯示原因。重新連線至 Durable 對話可接續未完成工作；只看列表、搜尋或匯出不會恢復執行。暫存對話只留在記憶體。排程中心也可選擇 **重啟後接續（實驗性）**。擴充相容性與恢復範圍見 [Durable 使用與限制](docs/DURABLE.md)。
-
-**可恢復背景任務（實驗性）：** **Agents → 新增任務 → 執行方式、模型與工具 → 重啟後接續** 仍使用另一個範圍較小的 runner，支援所選的檔案與命令工具，以及查看紀錄、取消和重新執行；不載入對話模式的 MCP、互動提問或工作流擴充。中斷的模型請求可能重送並產生用量；恢復執行不保證外部副作用只發生一次。見[背景任務說明](docs/DEVELOPMENT.md#durable-background-runs-experimental)。
-
-Subagent 直接載入社群 `pi-subagents` 套件，由 Pi Web 轉接執行環境；Plan 與 Goal 仍由 Pi Web 維護，使用官方 Pi API。這些與官方內建功能不同；SDK 或擴充升級時仍需驗證相容性。
+對話、手動背景任務與排程都使用 Pi SDK。Pi Durable 執行與續聊時自動轉換已移除；既有封存可透過[離線轉換](docs/DURABLE.md#offline-archive-conversion)產生一般 SDK Session。中斷的工作會保留為中斷／失敗紀錄，不會自動重播。
 
 - 透過 SSE 即時串流，並在送出 prompt 前先建立事件連線。
 - 支援 prompt、steer、follow-up queue、retry、bash 與 context compaction。可在回覆途中編輯、排序或移除佇列訊息，保留附件與當前回覆；停止也能取消尚未完成的首次連線。
 - 使用 `!command` 直接執行 shell；使用 `!!command` 讓結果不進入模型 context。
 - 在 session 中途切換模型與 thinking level。
-- **Subagent 子代理：** 標準與 Durable 對話直接載入社群 [`pi-subagents`](https://github.com/nicobailon/pi-subagents) **0.81.0**，包含工具、生命週期、技能與提示捷徑。主代理可自行決定是否分派；單次／背景執行、平行工作流、追加指示與恢復使用上游實作。Pi Web 保留父對話以接收完成回報，Agents 面板顯示背景任務。工具選擇須用 **繼承** 或啟用 `subagent`；子代理不得擴大父代理的工具範圍。這是社群套件，並非官方 Pi 擴充；詳見[整合與相容性說明](docs/SUBAGENTS.md)。
-- **Goal 目標模式：** `/goal <目標>` 啟動對話專屬目標；`/goal --tokens 100k <目標>` 可加 token 預算。目標面板與 `/goal pause`、`/goal resume`、`/goal status`、`/goal budget 200k`、`/goal clear` 可控制執行。只有 Pi 完成當輪、沒有等待回答或排隊訊息時才續跑；自動續跑指令不會插入可見的聊天訊息。完成、受阻、模型錯誤、停止、預算用完、連續三次無工具且重複／空白的回覆時會停止。預設沒有固定續跑次數；可用 `/goal --runs 50 <目標>` 或 `/goal runs 50` 設定上限，`0` 表示不限。暫停讓當前回覆結束；停止按鈕也會中止當前執行。預算計算供應商回報的非快取輸入與輸出 token，每次模型回覆後檢查，單次回覆可能超過剩餘額度；子代理用量依所選執行引擎的計量與限制處理。瀏覽器重連保留執行狀態；重新建立標準 runtime 或建立分支則先恢復成暫停。Durable 重啟依保存的狀態及[恢復語意](docs/DURABLE.md#storage-and-recovery)接續。
-- **Plan 計畫模式：** `/plan <需求>` 限制工具進行探索，保存最多 30 個有序步驟。用計畫面板或 `/plan refine <調整>` 檢視、修改，再明確選擇 `/plan execute`。執行留在原對話，恢復先前工具，透過 `update_plan` 更新已驗證的進度，可同時標記多個獨立步驟進行中；一般 Markdown 摘要即可，結果卡片可選；`/plan cancel` 保留對話。完成的計畫提供「新增計畫」（`/plan new`）；取消輸入會保留原計畫。Goal／Plan 存在標準對話自訂紀錄或 Durable 原生 document 中，壓縮後仍保留；進入規劃會暫停 Goal。Shell 篩選用來防止常見誤寫，並非作業系統沙箱。
+- **Subagent 子代理：** Pi SDK 對話直接載入社群 [`pi-subagents`](https://github.com/nicobailon/pi-subagents) **0.81.0**，包含工具、生命週期、技能與提示捷徑。主代理可自行決定是否分派；單次／背景執行、平行工作流、追加指示與恢復使用上游實作。Pi Web 保留父對話以接收完成回報，Agents 面板顯示背景任務。工具選擇須用 **繼承** 或啟用 `subagent`；子代理不得擴大父代理的工具範圍。這是社群套件，並非官方 Pi 擴充；詳見[整合與相容性說明](docs/SUBAGENTS.md)。
+- **Goal 目標模式：** `/goal <目標>` 啟動對話專屬目標；`/goal --tokens 100k <目標>` 可加 token 預算。目標面板與 `/goal pause`、`/goal resume`、`/goal status`、`/goal budget 200k`、`/goal clear` 可控制執行。只有 Pi 完成當輪、沒有等待回答或排隊訊息時才續跑；自動續跑指令不會插入可見的聊天訊息。完成、受阻、模型錯誤、停止、預算用完、連續三次無工具且重複／空白的回覆時會停止。預設沒有固定續跑次數；可用 `/goal --runs 50 <目標>` 或 `/goal runs 50` 設定上限，`0` 表示不限。暫停讓當前回覆結束；停止按鈕也會中止當前執行。預算計算供應商回報的非快取輸入與輸出 token，每次模型回覆後檢查，單次回覆可能超過剩餘額度；子代理用量依上游的計量與限制處理。瀏覽器重連保留執行狀態；重新建立 SDK runtime 或建立分支則先恢復成暫停。
+- **Plan 計畫模式：** `/plan <需求>` 限制工具進行探索，保存最多 30 個有序步驟。用計畫面板或 `/plan refine <調整>` 檢視、修改，再明確選擇 `/plan execute`。執行留在原對話，恢復先前工具，透過 `update_plan` 更新已驗證的進度，可同時標記多個獨立步驟進行中；一般 Markdown 摘要即可，結果卡片可選；`/plan cancel` 保留對話。完成的計畫提供「新增計畫」（`/plan new`）；取消輸入會保留原計畫。Goal／Plan 存在 SDK 對話自訂紀錄中，壓縮後仍保留；進入規劃會暫停 Goal。Shell 篩選用來防止常見誤寫，並非作業系統沙箱。
 - **Agents → 舊版子代理上限** 保留原執行方式的限制。若已保存正數上限，新擴充會顯示相容性原因並停止載入，因為上游無法等價執行原本的回合／時間／費用硬限制；不會自動清除設定。手動佇列的併發上限也只適用於手動任務。上游使用自己的設定與預算語意，詳見[相容性限制](docs/SUBAGENTS.md#scope-limits-and-recovery)。
 - 內建 `ask_user` 工具，並支援 Pi extension 的 `select`、`confirm`、`input`、`editor` 對話框、通知、狀態與文字 Widget；等待中的決定可跨斷線重連保留。
 - 設定改為可收合、不阻擋操作的面板，輸入框持續可用。快速切換對話與重新整理會保留草稿，同一瀏覽器分頁會記住閱讀位置；仍在執行的任務不會因為暫時沒輸出而被閒置回收。
@@ -347,7 +342,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 ~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl
 ```
 
-選用 Durable 的對話與排程使用 `<agent-dir>/durable-sessions/<group>/` 私有儲存庫；暫存對話不寫入儲存庫。Durable 背景任務使用 `<agent-dir>/durable-runs/<run-id>/`。詳見[儲存與恢復](docs/DURABLE.md#storage-and-recovery)。
+暫存對話保留在記憶體。已退役的 Durable 儲存庫會保留為封存，須由管理者明確執行[離線轉換](docs/DURABLE.md#offline-archive-conversion)。
 
 ## 架構
 
@@ -362,7 +357,7 @@ Browser                    Next.js server             AgentSessionRuntime
   └─ GET /api/tgd/artifacts ────▶│ sibling tGD directory      │
 ```
 
-圖中為標準模式：唯讀歷史解析不會建立 `AgentSession`；送出訊息才建立 in-process wrapper，由 Pi 管理 session 替換。選用 Durable 的對話則由每個 SQLite 儲存庫的一個 harness 執行，分支各有自己的 conversation，上游子代理則由獨立 SDK 執行引擎管理，事件沿用相同 Web 介面。列表、搜尋與匯出只讀保存的投影，不會恢復執行。詳見 [Durable 架構與限制](docs/DURABLE.md)。
+唯讀歷史解析不會建立 `AgentSession`；送出訊息才建立 in-process SDK wrapper，由 Pi 管理 session 替換。列表、搜尋與匯出讀取原生 JSONL 歷史，背景任務與排程沿用相同的 SDK Session 基礎。
 
 ## 專案結構
 

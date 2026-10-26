@@ -10,7 +10,7 @@ import {
 } from "@/lib/agent-run-types";
 import s from "./AgentDashboardPanel.module.css";
 
-const DurableRunTranscript = dynamic(() => import("./DurableRunTranscript").then(module => module.DurableRunTranscript));
+const AgentRunTranscript = dynamic(() => import("./AgentRunTranscript").then(module => module.AgentRunTranscript));
 
 const STATUS_KEYS: Record<AgentRun["status"], MsgKey> = {
   queued: "agents.status.queued",
@@ -47,7 +47,7 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
   const terminal = TERMINAL_AGENT_RUN_STATUSES.has(run.status);
   const upstream = run.engine === "upstream";
   const canCancel = upstream ? run.upstream?.canStop === true : active;
-  const canRetry = terminal && !run.durableConversation && (!upstream || run.upstream?.canRetry === true);
+  const canRetry = terminal && (!upstream || run.upstream?.canRetry === true);
   const statusKey = upstream && run.upstream ? UPSTREAM_STATUS_KEYS[run.upstream.state] : STATUS_KEYS[run.status];
   const repair = run.status === "failed" || run.status === "interrupted";
   const time = new Intl.DateTimeFormat(locale === "zh" ? "zh-TW" : "en", {
@@ -59,7 +59,7 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
 
   return (
     <article className={`${s.card} ${run.status === "waiting_for_input" ? s.cardWaiting : ""}`} data-status={run.status} data-testid="agent-run-card">
-      {transcriptOpen && <DurableRunTranscript run={run} onClose={() => setTranscriptOpen(false)} />}
+      {transcriptOpen && <AgentRunTranscript run={run} onClose={() => setTranscriptOpen(false)} />}
       <div className={s.cardHeader}>
         {run.sessionId && onToggleSelect && (
           <input
@@ -73,7 +73,6 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
         <span className={`${s.statusDot} ${s[`status_${run.status}`]}`} aria-hidden="true" />
         <strong className={s.cardTitle}>{run.name}</strong>
         {upstream && <span className={s.subagentBadge}>{t("agents.upstream.badge")}</span>}
-        {run.engine === "durable" && <span className={s.subagentBadge}>{t("agents.durableBadge")}</span>}
         {!upstream && run.trigger === "subagent" && <span className={s.subagentBadge}>{t("agents.subagent")}</span>}
         {run.workspace?.branch && <span className={`${s.branch} chrome-mono`}>{run.workspace.branch}</span>}
       </div>
@@ -91,7 +90,6 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
           <div className={`${s.path} chrome-mono`}>{run.cwd}</div>
           {run.error && <div className={s.runError}>{run.error}</div>}
         </details>
-        {!!run.recoveryCount && <p>{t("agents.recovered")}: {run.recoveryCount}</p>}
         {active && run.limitWarning && <p role="status">{t("agents.limitNear")}</p>}
         {run.progress && !run.report && <p>{t("agents.turns")}: {run.progress.turns} · {new Intl.NumberFormat(locale === "zh" ? "zh-TW" : "en", { style: "currency", currency: "USD" }).format(run.progress.costUsd)}</p>}
         {run.report && (
@@ -111,8 +109,8 @@ export function AgentRunCard({ run, busy, selected = false, onToggleSelect, onCa
         )}
       </div>
       <div className={s.cardActions}>
-        {run.engine === "durable" && <button type="button" onClick={() => setTranscriptOpen(true)}>{t("agents.openTranscript")}</button>}
-        {!upstream && !run.durableConversation && ACTIVE_AGENT_RUN_STATUSES.has(run.status) && onExtend && <button type="button" disabled={busy} onClick={() => onExtend(run)}>{t("agents.extend")}</button>}
+        {!upstream && <button type="button" onClick={() => setTranscriptOpen(true)}>{t("agents.openTranscript")}</button>}
+        {!upstream && ACTIVE_AGENT_RUN_STATUSES.has(run.status) && onExtend && <button type="button" disabled={busy} onClick={() => onExtend(run)}>{t("agents.extend")}</button>}
         {upstream && run.parentSessionId && (
           <button type="button" onClick={() => void onOpenSession(run.parentSessionId as string)}>{t("agents.upstream.openParent")}</button>
         )}

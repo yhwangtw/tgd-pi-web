@@ -101,8 +101,9 @@ for (const style of ["original", "trae"] as const) {
       }, style);
       const snapshotsSent = await installStreamingFixture(page);
       await page.goto(`/?session=${MAIN_ID}`);
-      const composer = page.getByRole("textbox", { name: "Queue a follow-up…", exact: true });
+      const composer = page.getByRole("textbox", { name: "Message…", exact: true });
       await expect(composer).toBeVisible({ timeout: 20_000 });
+      await expect(composer).toHaveAttribute("placeholder", "Queue a follow-up…");
       await expect.poll(snapshotsSent).toBeGreaterThan(0);
       await expect(page.getByText("Fixture stream is active; no provider was contacted.", { exact: true })).toBeAttached();
       await expect(page.locator("html")).toHaveAttribute("data-font-size", "xlarge");
@@ -133,7 +134,8 @@ for (const style of ["original", "trae"] as const) {
       await expect(primaryNav).not.toBeInViewport();
       await steer.click();
       await expect(steer).toHaveAttribute("aria-pressed", "true");
-      await expect(page.getByRole("textbox", { name: "Steer the current run…", exact: true })).toHaveValue(draft);
+      await expect(composer).toHaveAttribute("placeholder", "Steer the current run…");
+      await expect(composer).toHaveValue(draft);
       await followUp.click();
       await expect(followUp).toHaveAttribute("aria-pressed", "true");
       await expect(composer).toHaveValue(draft);
@@ -153,7 +155,8 @@ for (const style of ["original", "trae"] as const) {
       await leaveComposerWithKeyboard(page);
       await steer.click();
       await expect(steer).toHaveAttribute("aria-pressed", "true");
-      await expect(page.getByRole("textbox", { name: "Steer the current run…", exact: true })).toHaveValue(draft);
+      await expect(composer).toHaveAttribute("placeholder", "Steer the current run…");
+      await expect(composer).toHaveValue(draft);
       await followUp.click();
       await expect(followUp).toHaveAttribute("aria-pressed", "true");
       await expect(composer).toBeFocused();

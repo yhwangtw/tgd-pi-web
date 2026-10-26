@@ -34,13 +34,27 @@ describe("upstream agent run presentation", () => {
     const view = await render(<AgentRunCard run={run} busy={false} onCancel={cancel} onRetry={vi.fn()} onExtend={vi.fn()} onOpenSession={open} />);
     expect(view.textContent).toContain("Pi Subagents");
     const buttons = [...view.querySelectorAll("button")];
-    expect(buttons.some(button => button.textContent === "Extend limits")).toBe(false);
+    expect(buttons.some(button => button.textContent === "Extend budgets · +30 min")).toBe(false);
     expect(buttons.some(button => button.textContent === "View activity")).toBe(false);
     await act(async () => buttons.find(button => button.textContent === "Open parent chat")!.click());
     expect(open).toHaveBeenCalledWith("parent-1");
     await act(async () => buttons.find(button => button.textContent === "Cancel")!.click());
     expect(cancel).toHaveBeenCalledWith(run);
     expect(view.querySelector('input[type="checkbox"]')).toBeNull();
+  });
+
+  it("keeps activity, session, retry and budget controls available for SDK runs", async () => {
+    const sdk: AgentRun = { id: "sdk-run", name: "SDK review", cwd: "/work", prompt: "Review", toolNames: ["read"], trigger: "manual", status: "running", createdAt: run.createdAt, sessionId: "dw_saved-sdk-id" };
+    const open = vi.fn();
+    const view = await render(<AgentRunCard run={sdk} busy={false} onCancel={vi.fn()} onRetry={vi.fn()} onExtend={vi.fn()} onOpenSession={open} />);
+    expect(view.textContent).not.toContain("Pi Subagents");
+    const buttons = [...view.querySelectorAll("button")];
+    expect(buttons.some(button => button.textContent === "View activity")).toBe(true);
+    expect(buttons.some(button => button.textContent === "Extend budgets · +30 min")).toBe(true);
+    await act(async () => buttons.find(button => button.textContent === "Open session")!.click());
+    expect(open).toHaveBeenCalledWith("dw_saved-sdk-id");
+    await act(async () => root?.render(<AgentRunCard run={{ ...sdk, status: "failed" }} busy={false} onCancel={vi.fn()} onRetry={vi.fn()} onOpenSession={open} />));
+    expect([...view.querySelectorAll("button")].some(button => button.textContent === "Retry")).toBe(true);
   });
 
   it("shows the actual paused state and hides retry when the snapshot has no recovery details", async () => {

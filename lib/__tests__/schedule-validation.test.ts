@@ -17,14 +17,14 @@ afterEach(() => {
 });
 
 describe("schedule validation", () => {
-  it("opts into durable execution without dropping questions and can explicitly return to standard mode", async () => {
+  it("uses SDK execution with questions and rejects removed engine selectors", async () => {
     const base = { name: "Review", cwd: cwd(), prompt: "Inspect", timing: { kind: "daily", time: "09:00" }, timezone: "UTC" };
-    expect((await validateScheduleInput(base)).engine).toBeUndefined();
-    const durable = await validateScheduleInput({ ...base, engine: "durable" });
-    expect(durable.engine).toBe("durable");
-    expect(durable.toolNames).toContain("ask_user");
-    expect((await validateScheduleInput({ ...durable, engine: "standard" })).engine).toBeUndefined();
-    await expect(validateScheduleInput({ ...base, engine: "other" })).rejects.toThrow(/execution mode/);
+    const input = await validateScheduleInput(base);
+    expect(input).not.toHaveProperty("engine");
+    expect(input.toolNames).toContain("ask_user");
+    for (const engine of ["durable", "standard", "other"]) {
+      await expect(validateScheduleInput({ ...base, engine })).rejects.toThrow(/execution mode/);
+    }
   });
   it("accepts Pi's Max level but rejects unsupported Ultra", async () => {
     const base = { name: "Review", cwd: cwd(), prompt: "Inspect", timing: { kind: "daily", time: "09:00" }, timezone: "UTC" };

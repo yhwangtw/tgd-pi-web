@@ -6,7 +6,6 @@ import type { AgentRun } from "./agent-run-types";
 import type { ScheduleRun } from "./schedule-types";
 import type { SessionInfo } from "./types";
 import { redactSensitiveText } from "./redaction";
-import { durableEntries, isDurableSessionId, readDurableProjection } from "./durable-session-store";
 
 export type AttentionSource = "agent" | "schedule" | "session";
 export type AttentionSeverity = "warning" | "error" | "success";
@@ -34,9 +33,7 @@ const SESSION_SCAN_LIMIT = 60;
 
 function assistantErrorFromSession(session: SessionInfo): { message: string; at?: string } | null {
   if (session.lastAssistantError !== undefined) return session.lastAssistantError;
-  const projection = isDurableSessionId(session.id) ? readDurableProjection(session.id) : undefined;
-  if (isDurableSessionId(session.id) && !projection) return null;
-  const entries = projection ? durableEntries(projection.entries, projection.info.created) : readSessionFile(session.path).entries;
+  const entries = readSessionFile(session.path).entries;
   for (let index = entries.length - 1; index >= 0; index--) {
     const entry = entries[index];
     if (entry.type !== "message" || entry.message.role !== "assistant") continue;

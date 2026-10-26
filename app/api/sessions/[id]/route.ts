@@ -1,5 +1,4 @@
-import { resolveMigratedSessionId } from "@/lib/session-migrations";
-import { waitForSessionMigration } from "@/lib/durable-migration";
+import { resolveMigratedSessionId, waitForSessionMigration } from "@/lib/session-migrations";
 import { NextResponse } from "next/server";
 import { encodeSessionData } from "@/lib/session-tree-wire";
 import { readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
@@ -16,8 +15,6 @@ import {
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
 import type { SessionEntry, SessionHeader } from "@/lib/types";
-import { getDurableChat, openDurableChat } from "@/lib/durable-chat";
-import { durableSessionData, isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 
 export async function GET(
   req: Request,
@@ -28,15 +25,6 @@ export async function GET(
   const requestedTree = req.headers.get("x-pi-session-tree");
   const wireFormat = requestedTree === "flat-v1" || requestedTree === "flat-v2" ? requestedTree : undefined;
   try {
-    if (isDurableSessionId(id)) {
-      const live = getDurableChat(id);
-      const projection = live?.isAlive() ? live.getProjection() : readDurableProjection(id);
-      if (!projection || projection.deleted) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-      const data = durableSessionData(projection);
-      return NextResponse.json({ ...(wireFormat ? encodeSessionData(data, wireFormat) : data),
-        ...(new URL(req.url).searchParams.has("includeState") ? { agentState: live?.isAlive() ? { running: true, state: live.getState() } : { running: false } } : {}),
-      }, { headers: { Vary: "X-Pi-Session-Tree" } });
-    }
     const live = getRpcSession(id);
     let filePath = await resolveSessionPath(id);
     let header: SessionHeader | null = null;
@@ -132,12 +120,6 @@ export async function PATCH(
     if (typeof name !== "string") {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
-    if (isDurableSessionId(id)) {
-      const live = getDurableChat(id);
-      if (!live?.isAlive() && !readDurableProjection(id)) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-      await (live?.isAlive() ? live : await openDurableChat(id)).rename(name);
-      return NextResponse.json({ ok: true });
-    }
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -158,12 +140,6 @@ export async function DELETE(
   const { id: requestedId } = await params;
   const id = await waitForSessionMigration(requestedId);
   try {
-    if (isDurableSessionId(id)) {
-      const live = getDurableChat(id);
-      if (!live?.isAlive() && !readDurableProjection(id)) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-      await (live?.isAlive() ? live : await openDurableChat(id)).remove();
-      return NextResponse.json({ ok: true });
-    }
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });

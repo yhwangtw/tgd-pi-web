@@ -16,6 +16,19 @@ beforeEach(() => {
 });
 
 describe("POST /api/agent/new", () => {
+  it.each([undefined, "sdk", "legacy"])("uses the SDK for engine %s", async engine => {
+    const response = await POST(new Request("http://localhost/api/agent/new", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd, engine, deferPrompt: true }) }));
+    expect(response.status).toBe(200);
+    expect(harness.start).toHaveBeenCalledOnce();
+    expect(harness.send).not.toHaveBeenCalled();
+  });
+
+  it.each(["durable", "other"])("rejects the unsupported engine %s before creating a session", async engine => {
+    const response = await POST(new Request("http://localhost/api/agent/new", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd, engine, deferPrompt: true }) }));
+    expect(response.status).toBe(400);
+    expect(harness.start).not.toHaveBeenCalled();
+  });
+
   it("can create and configure a session without starting its first prompt", async () => {
     const response = await POST(new Request("http://localhost/api/agent/new", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd, type: "prompt", message: "instant answer", deferPrompt: true, provider: "test", modelId: "fast" }) }));
     expect(response.status).toBe(200);

@@ -58,7 +58,7 @@ function isAgentRun(value: unknown): value is AgentRun {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<AgentRun>;
   return typeof item.id === "string"
-    && (item.engine === undefined || item.engine === "durable")
+    && (item.engine === undefined || (item as { engine?: unknown }).engine === "durable")
     && typeof item.name === "string"
     && typeof item.cwd === "string"
     && typeof item.prompt === "string"
@@ -91,21 +91,43 @@ export function emptyAgentRunStore(): AgentRunStore {
   return { version: 1, runs: [] };
 }
 
-export function readAgentRunStore(path = agentRunStorePath()): AgentRunStore {
-  if (!existsSync(path)) return emptyAgentRunStore();
+const REMOVED_ENGINE_ERROR = "Pi Durable execution was removed; this run was interrupted and will not resume automatically. Retry explicitly to start a new SDK run.";
+
+function loadAgentRunStore(path: string, now: Date): { store: AgentRunStore; interruptedLegacyRuns: number } {
+  if (!existsSync(path)) return { store: emptyAgentRunStore(), interruptedLegacyRuns: 0 };
   try {
     const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<AgentRunStore>;
+    let interruptedLegacyRuns = 0;
+    const runs = (Array.isArray(raw.runs) ? raw.runs.filter(isAgentRun).slice(0, MAX_RUNS) : []).map(value => {
+      const run = { ...value };
+      const legacy = (run as { engine?: unknown }).engine === "durable";
+      // Preserve historical records, but never send an old execution to a new engine.
+      delete run.engine;
+      delete (run as { durableConversation?: boolean }).durableConversation;
+      if (legacy && (run.status === "queued" || ACTIVE_AGENT_RUN_STATUSES.has(run.status))) {
+        run.status = "interrupted";
+        run.finishedAt = now.toISOString();
+        run.error = REMOVED_ENGINE_ERROR;
+        interruptedLegacyRuns++;
+      }
+      return run;
+    });
     return {
-      version: 1,
-      ...(isAgentRunLimits(raw.subagentLimits) ? { subagentLimits: raw.subagentLimits } : {}),
-      runs: Array.isArray(raw.runs) ? raw.runs.filter(isAgentRun).slice(0, MAX_RUNS) : [],
-      ...(isAgentRunConcurrency(raw.maxConcurrency)
-        ? { maxConcurrency: raw.maxConcurrency }
-        : {}),
+      interruptedLegacyRuns,
+      store: {
+        version: 1,
+        ...(isAgentRunLimits(raw.subagentLimits) ? { subagentLimits: raw.subagentLimits } : {}),
+        runs,
+        ...(isAgentRunConcurrency(raw.maxConcurrency) ? { maxConcurrency: raw.maxConcurrency } : {}),
+      },
     };
   } catch {
-    return emptyAgentRunStore();
+    return { store: emptyAgentRunStore(), interruptedLegacyRuns: 0 };
   }
+}
+
+export function readAgentRunStore(path = agentRunStorePath()): AgentRunStore {
+  return loadAgentRunStore(path, new Date()).store;
 }
 
 export function writeAgentRunStore(store: AgentRunStore, path = agentRunStorePath()): void {
@@ -140,18 +162,10 @@ export function reconcileInterruptedAgentRuns(
   path = agentRunStorePath(),
   now = new Date(),
 ): number {
-  const store = readAgentRunStore(path);
-  let changed = 0;
+  const { store, interruptedLegacyRuns } = loadAgentRunStore(path, now);
+  let changed = interruptedLegacyRuns;
   for (const run of store.runs) {
     if (!ACTIVE_AGENT_RUN_STATUSES.has(run.status)) continue;
-    if (run.engine === "durable") {
-      run.status = "queued";
-      run.recoveryCount = (run.recoveryCount ?? 0) + 1;
-      delete run.finishedAt;
-      delete run.error;
-      changed++;
-      continue;
-    }
     run.status = "interrupted";
     run.finishedAt = now.toISOString();
     run.error = "The agent daemon restarted before this run completed";

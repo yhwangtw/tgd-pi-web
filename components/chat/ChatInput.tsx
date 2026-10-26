@@ -4,7 +4,6 @@ import { UI_ICON_SIZE } from "@/lib/ui-icons";
 import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo, useImperativeHandle, useId, forwardRef, memo, KeyboardEvent, type ReactNode, type RefObject } from "react";
 import {
   ArrowRight,
-  History,
   LogOut,
   Ghost,
   FileText,
@@ -102,8 +101,6 @@ interface Props {
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   ephemeral?: boolean;
   onEphemeralChange?: (enabled: boolean) => void;
-  durable?: boolean;
-  onDurableChange?: (enabled: boolean) => void;
   soundEnabled?: boolean;
   onSoundToggle?: () => void;
   /** Project cwd — enables the `@file` mention autocomplete. */
@@ -218,7 +215,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   ephemeral = false, onEphemeralChange,
-  durable = false, onDurableChange,
   soundEnabled, onSoundToggle,
   cwd,
   persistKey,
@@ -1351,16 +1347,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
               <span className={styles.mobileControlLabel}>{t("input.scrollMode")}</span>
               <ScrollFollowSelector iconOnly={!isMobileViewport} />
             </div>
-
-            {!isStreaming && onDurableChange && (
-              <div className={styles.mobileLabeledControl}>
-                <span className={styles.mobileControlLabel}>{t("input.sessionEngine")}</span>
-                <button type="button" onClick={() => onDurableChange(!durable)} aria-label={t(durable ? "input.durable" : "input.standard")} aria-pressed={durable} className={durable ? styles.autoCompactButtonOn : styles.autoCompactButtonOff} title={`${t(durable ? "input.durable" : "input.standard")} — ${t("input.durableHint")}`}>
-                  <History size={UI_ICON_SIZE.control} aria-hidden="true" />
-                  <span className={styles.mobileControlValue}>{t(durable ? "input.durable" : "input.standard")}</span>
-                </button>
-              </div>
-            )}
 
             {!isStreaming && onEphemeralChange && (
               <div className={styles.mobileLabeledControl}>

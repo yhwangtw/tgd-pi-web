@@ -1,11 +1,9 @@
 import { readSessionCwd } from "@/lib/session-reader";
-import { waitForSessionMigration } from "@/lib/durable-migration";
+import { waitForSessionMigration } from "@/lib/session-migrations";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { getRpcSession, getResumableRpcSession, startRpcSession, type AgentSessionWrapper } from "@/lib/rpc-manager";
 import { encodeAgentStreamRecord, type AgentStreamRecord } from "@/lib/agent-event-log";
 import { AGENT_STREAM_DELTA_FORMAT, AgentStreamTransport } from "@/lib/agent-stream-wire";
-import { getDurableChat, openDurableChat } from "@/lib/durable-chat";
-import { isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 import { decodeSessionData, encodeSessionData } from "@/lib/session-tree-wire";
 
 export const dynamic = "force-dynamic";
@@ -22,23 +20,14 @@ export async function GET(
   const deltas = url.searchParams.get("stream") === AGENT_STREAM_DELTA_FORMAT;
   const requestedTree = url.searchParams.get("tree");
   const wireFormat = requestedTree === "flat-v1" || requestedTree === "flat-v2" ? requestedTree : undefined;
-  const durable = isDurableSessionId(id);
-  const resumed = !durable && cursor ? getResumableRpcSession(id, cursor) : undefined;
+  const resumed = cursor ? getResumableRpcSession(id, cursor) : undefined;
   // withSession/recovery must finish before exposing any replacement target.
   if (resumed?.isReplacementPending()) return new Response("Session replacement is in progress", { status: 503 });
   const moved = resumed && resumed.sessionId !== id;
 
   // Fast path: already-running session
   let session: Pick<AgentSessionWrapper, "sessionId" | "sessionFile" | "cwd" | "isAlive" | "onStreamEvent"> | undefined = resumed ?? getRpcSession(id);
-  if (durable) {
-    const cached = getDurableChat(id);
-    if (!cached?.isAlive() && !readDurableProjection(id)) return new Response("Session not found", { status: 404 });
-    try {
-      const chat = cached?.isAlive() ? cached : await openDurableChat(id);
-      await chat.resume();
-      session = chat;
-    } catch (error) { return new Response(`Failed to start agent: ${error}`, { status: 500 }); }
-  } else if (!session || !session.isAlive()) {
+  if (!session || !session.isAlive()) {
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
       return new Response("Session not found", { status: 404 });

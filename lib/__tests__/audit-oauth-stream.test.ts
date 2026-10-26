@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthInteraction } from "@earendil-works/pi-ai";
-const mocks = vi.hoisted(() => ({ create: vi.fn(), login: vi.fn(), rpc: vi.fn(), durable: vi.fn() }));
+const mocks = vi.hoisted(() => ({ create: vi.fn(), login: vi.fn(), rpc: vi.fn() }));
 vi.mock("@/lib/pi-model-runtime", () => ({ createPiModelRuntime: mocks.create }));
 vi.mock("@/lib/rpc-manager", () => ({ invalidateRpcSessionsForAuthChange: mocks.rpc }));
-vi.mock("@/lib/durable-chat", () => ({ invalidateDurableSessionsForAuthChange: mocks.durable }));
 import { GET } from "../../app/api/auth/login/[provider]/route";
 const params = { params: Promise.resolve({ provider: "fixture" }) };
-beforeEach(() => { vi.clearAllMocks(); mocks.create.mockResolvedValue({ getProvider: () => ({ auth: { oauth: true } }), login: mocks.login }); mocks.durable.mockResolvedValue({ restarted: 0, deferred: 0 }); });
+beforeEach(() => { vi.clearAllMocks(); mocks.create.mockResolvedValue({ getProvider: () => ({ auth: { oauth: true } }), login: mocks.login }); });
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 describe("OAuth stream cleanup", () => {
   it("aborts pending provider work and closes a disconnected request", async () => {
@@ -43,10 +42,10 @@ describe("OAuth stream cleanup", () => {
     const aborted = await GET(new Request("http://localhost", { signal: AbortSignal.abort() }), params);
     expect(await aborted.text()).toBe(""); expect(mocks.create).toHaveBeenCalledTimes(1);
   });
-  it("invalidates both runtimes after successful login", async () => {
+  it("invalidates SDK sessions after successful login", async () => {
     mocks.login.mockResolvedValue(undefined);
     const response = await GET(new Request("http://localhost"), params);
     expect(await response.text()).toContain('"success"');
-    expect(mocks.rpc).toHaveBeenCalledTimes(1); expect(mocks.durable).toHaveBeenCalledTimes(1);
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
   });
 });

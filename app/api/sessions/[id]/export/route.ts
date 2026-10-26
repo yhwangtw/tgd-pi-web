@@ -1,7 +1,7 @@
-import { waitForSessionMigration } from "@/lib/durable-migration";
+import { waitForSessionMigration } from "@/lib/session-migrations";
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { basename, dirname, join } from "path";
 import { promisify } from "util";
@@ -9,8 +9,6 @@ import { fileURLToPath } from "url";
 import { NextResponse } from "next/server";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { redactSensitiveText, redactSensitiveValue } from "@/lib/redaction";
-import { getDurableChat } from "@/lib/durable-chat";
-import { durableEntries, isDurableSessionId, readDurableProjection } from "@/lib/durable-session-store";
 
 const execFileAsync = promisify(execFile);
 
@@ -54,20 +52,8 @@ export async function GET(
   const id = await waitForSessionMigration(requestedId);
   let tempDir: string | undefined;
   try {
-    let filePath: string | null;
-    if (isDurableSessionId(id)) {
-      const live = getDurableChat(id);
-      const projection = live?.isAlive() ? live.getProjection() : readDurableProjection(id);
-      if (!projection || projection.deleted) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-      tempDir = mkdtempSync(join(tmpdir(), "pi-web-export-"));
-      filePath = join(tempDir, `${id}.jsonl`);
-      const entries = [{ type: "session", version: 3, id, cwd: projection.info.cwd, timestamp: projection.info.created },
-        ...durableEntries(projection.entries, projection.info.created)];
-      writeFileSync(filePath, `${entries.map(entry => JSON.stringify(entry)).join("\n")}\n`, { mode: 0o600 });
-    } else {
-      filePath = await resolveSessionPath(id);
-      if (!filePath) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-    }
+    const filePath = await resolveSessionPath(id);
+    if (!filePath) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
     const cliPath = await getPiCliPath();
     if (!existsSync(cliPath)) {

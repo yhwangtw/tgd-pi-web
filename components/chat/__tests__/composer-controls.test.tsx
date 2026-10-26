@@ -494,7 +494,7 @@ describe("composer controls", () => {
     const compact = vi.fn();
     await render(<ChatInput onSend={vi.fn()} onAbort={vi.fn()} isStreaming={false}
       thinkingLevel="high" onThinkingLevelChange={vi.fn()} toolPreset="default" onToolPresetChange={vi.fn()}
-      onCompact={compact} onEphemeralChange={vi.fn()} onDurableChange={vi.fn()} />);
+      onCompact={compact} onEphemeralChange={vi.fn()} />);
     const controls = container!.querySelector<HTMLButtonElement>('[aria-label="More composer controls"]')!;
     expect(controls.textContent).toBe("");
     expect(controls.title).toBe("Composer controls");

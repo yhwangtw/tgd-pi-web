@@ -7,7 +7,6 @@ import type { SessionEntry, SessionHeader, SessionInfo, SessionTreeNode } from "
 import { readFileSync } from "fs";
 import { readdir, readFile, stat } from "fs/promises";
 import { join } from "path";
-import { isDurableSessionId, listDurableSessions } from "./durable-session-store";
 
 export { getAgentDir };
 
@@ -29,6 +28,7 @@ export function getSessionsDir(): string {
 interface RawSessionInfo {
   path: string;
   id: string;
+  sourceSessionId?: string;
   cwd: string;
   name?: string;
   created: string;
@@ -104,7 +104,7 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
   }
   const first = entries[0];
   if (!first || first.type !== "session" || typeof first.id !== "string") return null;
-  const header = first as unknown as { id: string; timestamp?: string; cwd?: string; parentSession?: string };
+  const header = first as unknown as { id: string; timestamp?: string; cwd?: string; parentSession?: string; sourceSessionId?: string };
 
   let name: string | undefined;
   let messageCount = 0;
@@ -146,6 +146,7 @@ async function parseSessionFile(filePath: string, mtimeMs: number): Promise<RawS
   return {
     path: filePath,
     id: header.id,
+    sourceSessionId: header.sourceSessionId,
     cwd: header.cwd ?? "",
     name,
     created: new Date(Number.isNaN(headerTime) ? mtimeMs : headerTime).toISOString(),
@@ -176,14 +177,13 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
 }
 
 async function scanAllSessions(sessionsDir: string): Promise<SessionInfo[]> {
-  const durable = listDurableSessions();
   const cache = getInfoCache();
 
   let topLevel;
   try {
     topLevel = await readdir(sessionsDir, { withFileTypes: true });
   } catch {
-    return durable.sort((a, b) => Date.parse(b.modified) - Date.parse(a.modified));
+    return [];
   }
 
   const files: string[] = [];
@@ -242,6 +242,7 @@ async function scanAllSessions(sessionsDir: string): Promise<SessionInfo[]> {
     return {
       path: info.path,
       id: info.id,
+      sourceSessionId: info.sourceSessionId,
       cwd: info.cwd,
       name: info.name,
       created: info.created,
@@ -258,7 +259,7 @@ async function scanAllSessions(sessionsDir: string): Promise<SessionInfo[]> {
   // JSONL file. Avoid thousands of synchronous missing-receipt reads in archives
   // that have few or no migrations, while retaining authoritative receipt validation.
   const resolveMigration = await listingMigrationResolver();
-  return [...legacy.filter(info => resolveMigration(info.id) === info.id), ...durable].map(info => ({ ...info, parentSessionId: info.parentSessionId ? resolveMigration(info.parentSessionId) : undefined })).sort((a, b) => Date.parse(b.modified) - Date.parse(a.modified));
+  return legacy.filter(info => resolveMigration(info.id) === info.id).map(info => ({ ...info, parentSessionId: info.parentSessionId ? resolveMigration(info.parentSessionId) : undefined })).sort((a, b) => Date.parse(b.modified) - Date.parse(a.modified));
 }
 
 // ============================================================================
@@ -275,9 +276,6 @@ function getPathCache(): Map<string, string> {
 }
 
 export async function resolveSessionPath(sessionId: string): Promise<string | null> {
-  // SQLite projections are not Pi JSONL files; legacy callers must not open or
-  // rewrite a Durable store through SessionManager.
-  if (isDurableSessionId(sessionId)) return null;
   const cached = getPathCache().get(sessionId);
   if (cached) {
     try {

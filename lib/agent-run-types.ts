@@ -25,8 +25,8 @@ export interface AgentRunWorkspace {
 }
 
 export interface AgentRunInput {
-  /** Durable is opt-in; upstream is a read-only projection, rejected by run creation. */
-  engine?: "durable" | "upstream";
+  /** Upstream is a read-only projection; omitted engine uses the managed SDK. */
+  engine?: "upstream";
   name: string;
   cwd: string;
   prompt: string;
@@ -60,8 +60,6 @@ export interface AgentRun extends AgentRunInput {
     statusStale?: boolean;
     stopRequested?: boolean;
   };
-  /** Read-only dashboard projection of a child owned by a chat Harness. */
-  durableConversation?: boolean;
   recoveryCount?: number;
   limitWarning?: boolean;
   progress?: { turns: number; costUsd: number };
@@ -77,13 +75,13 @@ export interface AgentRun extends AgentRunInput {
   report?: AgentRunReport;
 }
 
-export interface DurableRunTranscript {
+export interface AgentRunTranscript {
   messages: import("./types").AgentMessage[];
   truncated: boolean;
   updatedAt: string;
 }
 
-export const DURABLE_AGENT_TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls"] as const;
+export const AGENT_RUN_TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls"] as const;
 
 export interface AgentRunStore {
   version: 1;
