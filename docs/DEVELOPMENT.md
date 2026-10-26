@@ -96,6 +96,11 @@ remain intentional discard actions.
 ## Workflow and delegation
 
 The empty composer can suggest a next message after a completed assistant turn.
+Each suggestion is a human user's question or request addressed to the assistant
+(for example, "Can you verify the mobile layout?" / "幫我驗證手機版的排版。"),
+not an assistant promise such as "I'll test it" / "我會先測試". Role instructions
+and conservative output checks reject obvious assistant self-reports, reusing the
+bounded empty-result retry policy.
 Suggestions use the selected provider/model in a separate tool-free request, with
 at most four visible user/assistant messages (3,000 characters total), no images,
 thinking or tool output, reasoning off, 120 output tokens, a fifteen-second model timeout

@@ -101,4 +101,14 @@ describe("bounded background suggestion generation", () => {
     expect(await generateComposerHint(body, signal())).toMatchObject({ status: "unavailable", retryable: false });
     await generateComposerHint(body, signal()); expect(mocks.complete).toHaveBeenCalledTimes(1);
   });
+  it("retries an assistant-voice prediction and returns only a usable user request", async () => {
+    let now = Date.now(); vi.spyOn(Date, "now").mockImplementation(() => now);
+    const body = request();
+    mocks.complete.mockResolvedValueOnce({ stopReason: "stop", content: [{ type: "text", text: "我會先測手機版。" }] })
+      .mockResolvedValueOnce({ stopReason: "stop", content: [{ type: "text", text: "幫我測試手機版的排版。" }] });
+    expect(await generateComposerHint(body, signal())).toMatchObject({ status: "empty", hint: null, retryable: true });
+    now += 2001;
+    expect(await generateComposerHint(body, signal())).toMatchObject({ status: "ready", hint: "幫我測試手機版的排版。" });
+    expect(mocks.complete).toHaveBeenCalledTimes(2);
+  });
 });

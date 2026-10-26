@@ -67,5 +67,9 @@ export function cleanComposerHint(text: string): string | null {
   const hint = text.trim().replace(/^["'“”`]+|["'“”`]+$/g, "").trim();
   if (!hint || hint.length > MAX_HINT_CHARS || /[\r\n\x00-\x1f]/.test(hint)
     || /^(?:NONE|null|undefined)$/i.test(hint) || /^[\/<{\[]/.test(hint)) return null;
+  // A suggestion is a user's request to the assistant, not an assistant's promise.
+  // These conservative lead-in checks supplement the model's role instructions.
+  if (/^(?:(?:好的|好|沒問題|没问题)[，,！!\s]*)?(?:我(?:會|会|將|将|先|來|来|正在|已|幫你|帮你|可以(?:先|幫|帮))|已(?:完成|修復|修复|更新|加入|處理|处理|解決|解决))/.test(hint)
+    || /^(?:(?:sure|okay|ok)[,!.:\s]+)?(?:I(?:['’]ll| will| am going to|['’]m going to| can help)\b|let me\b|I(?:['’]ve| have)\s+(?:fixed|completed|finished|implemented|updated)\b|done(?:[.!:\s]|$))/i.test(hint)) return null;
   return hint;
 }

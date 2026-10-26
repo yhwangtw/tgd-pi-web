@@ -136,3 +136,26 @@ test("typing pauses an empty-result retry until the draft is cleared", async ({ 
   await composer.fill(""); await expect(page.getByTestId("composer-hint")).toBeVisible();
   expect(requests).toBe(2);
 });
+
+for (const locale of ["en", "zh"]) {
+  test(`${locale}: never displays an assistant-voice prediction as the user's prompt`, async ({ page }) => {
+    await page.addInitScript(locale => localStorage.setItem("pi-locale", locale), locale);
+    const wrong = locale === "zh" ? "我會先測試手機版。" : "I'll test the mobile layout.";
+    const correct = locale === "zh" ? "幫我驗證手機版的排版。" : "Can you verify the mobile layout?";
+    let calls = 0;
+    await page.route("**/api/composer-hint", async route => {
+      calls++;
+      await route.fulfill({ json: { hint: calls === 1 ? wrong : correct } });
+    });
+    const first = page.waitForResponse("**/api/composer-hint");
+    await page.goto(MAIN); await first;
+    const hint = page.getByTestId("composer-hint");
+    await expect(hint).toBeHidden();
+    await expect(hint).toBeVisible({ timeout: 8000 });
+    await expect(hint).toContainText(correct); await expect(hint).not.toContainText(wrong);
+    expect(calls).toBe(2);
+    const composer = page.getByTestId("composer-shell").locator("textarea");
+    await composer.focus(); await composer.press("Tab"); await expect(composer).toHaveValue(correct);
+    await composer.fill(""); await expect(hint).toContainText(correct); expect(calls).toBe(2);
+  });
+}
