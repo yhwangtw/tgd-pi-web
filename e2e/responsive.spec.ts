@@ -153,6 +153,13 @@ test.describe("responsive shell", () => {
       await expect(nav).toBeVisible();
       await expect(detail).toBeHidden();
       await expectNoPageOverflow(page);
+      await dialog.getByRole("button", { name: "Minimize panel", exact: true }).click();
+      await expect(dialog).toHaveAttribute("data-collapsed", "true");
+      expect((await dialog.boundingBox())!.height).toBeLessThan(240);
+      await dialog.getByRole("button", { name: "Expand panel", exact: true }).click();
+      await expect(dialog).not.toHaveAttribute("data-collapsed", "true");
+      expect((await dialog.boundingBox())!.height).toBe(800);
+      await expect(nav).toBeVisible();
       await dialog.getByRole("button", { name: "Close", exact: true }).click();
       await expect(dialog).toBeHidden();
       await expect(page.getByRole("textbox", { name: "Message…" })).toBeVisible();

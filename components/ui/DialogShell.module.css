@@ -59,7 +59,7 @@
 @media (max-width: 700px) {
   .overlay { align-items: end; padding: 0; }
   .dialog { width: 100%; max-height: var(--component-sheet-max-height); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; }
-  .dialog[data-mobile-mode="fullscreen"] { height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+  .dialog[data-mobile-mode="fullscreen"]:not([data-collapsed]) { height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
   .header,
   .footer { padding: var(--space-3) var(--space-4); }
   .body { padding: var(--space-4); }
@@ -67,7 +67,7 @@
   .overlay[data-modeless] .dialog { width: 100%; height: auto; max-height: 55dvh; border: 1px solid var(--border-subtle); border-radius: var(--radius-dialog); }
   .overlay[data-modeless][data-placement="center"] { place-items: end center; padding: 0; }
   .overlay[data-modeless][data-placement="center"] .dialog { max-height: var(--component-sheet-max-height); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; }
-  .overlay[data-modeless][data-placement="center"] .dialog[data-mobile-mode="fullscreen"] { height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+  .overlay[data-modeless][data-placement="center"] .dialog[data-mobile-mode="fullscreen"]:not([data-collapsed]) { height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
   .collapse { min-width: var(--control-touch); min-height: var(--control-touch); }
 }
 

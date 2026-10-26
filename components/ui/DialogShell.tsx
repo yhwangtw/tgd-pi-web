@@ -132,6 +132,7 @@ export function DialogShell({
         tabIndex={-1}
         data-size={size}
         data-mobile-mode={mobileMode}
+        data-collapsed={!modal && collapsed || undefined}
         data-testid={testId}
         onPointerDownCapture={() => { pointerInsideReactTree.current = true; }}
         onClickCapture={() => { pointerInsideReactTree.current = true; }}

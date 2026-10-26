@@ -65,10 +65,12 @@ describe("DialogShell", () => {
     expect(document.querySelector('[role="dialog"] [hidden]')).not.toBeNull();
     expect(document.activeElement).toBe(outside);
     expect(collapse.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector('[role="dialog"]')?.getAttribute("data-collapsed")).toBe("true");
     const expand = document.querySelector<HTMLButtonElement>('[aria-label="Expand panel"]')!;
     expect(expand.title).toBe("Expand panel");
     await act(async () => expand.click());
     expect(document.querySelector('[role="dialog"] [hidden]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')?.hasAttribute("data-collapsed")).toBe(false);
     expect(document.querySelector<HTMLInputElement>('[role="dialog"] input')?.value).toBe("unfinished");
   });
 
