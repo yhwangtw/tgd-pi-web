@@ -155,7 +155,9 @@ test.describe("responsive shell", () => {
       await expectNoPageOverflow(page);
       await dialog.getByRole("button", { name: "Minimize panel", exact: true }).click();
       await expect(dialog).toHaveAttribute("data-collapsed", "true");
-      expect((await dialog.boundingBox())!.height).toBeLessThan(240);
+      const minimized = (await dialog.boundingBox())!;
+      expect(minimized.height).toBeLessThan(240);
+      expect(minimized.y + minimized.height).toBeLessThanOrEqual((await page.getByRole("textbox", { name: "Message…" }).boundingBox())!.y);
       await dialog.getByRole("button", { name: "Expand panel", exact: true }).click();
       await expect(dialog).not.toHaveAttribute("data-collapsed", "true");
       expect((await dialog.boundingBox())!.height).toBe(800);

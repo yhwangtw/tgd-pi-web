@@ -18,10 +18,24 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
     await expect(panel).toBeVisible();
     await expect(panel).not.toHaveAttribute("aria-modal", "true");
     expect(await composer.evaluate(element => element.closest("[inert]"))).toBeNull();
-    await composer.fill("Typing while the panel is expanded");
-    await expect(composer).toBeFocused();
     const box = (await panel.boundingBox())!;
-    expect(box.height).toBeLessThan(900 * (width < 700 ? 0.56 : 0.81));
+    if (width < 700) {
+      await expect(panel).toHaveAttribute("data-mobile-mode", "fullscreen");
+      expect(box.height).toBe(900);
+      await panel.getByRole("button", { name: "Minimize panel" }).click();
+      const minimized = (await panel.boundingBox())!;
+      const input = (await composer.boundingBox())!;
+      expect(minimized.y + minimized.height).toBeLessThanOrEqual(input.y);
+      await composer.fill("Typing while the mobile panel is minimized");
+      await expect(composer).toBeFocused();
+      await panel.getByRole("button", { name: "Expand panel" }).click();
+      expect((await panel.boundingBox())!.height).toBe(900);
+      await expect(composer).toHaveValue("Typing while the mobile panel is minimized");
+    } else {
+      expect(box.height).toBeLessThan(900 * 0.81);
+      await composer.fill("Typing while the panel is expanded");
+      await expect(composer).toBeFocused();
+    }
     expect(await panel.locator("header p").first().evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     const nav = page.getByTestId("skills-config-nav");
     await nav.getByRole("button", { name: /e2e-reading/ }).click();

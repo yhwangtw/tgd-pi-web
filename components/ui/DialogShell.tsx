@@ -121,6 +121,7 @@ export function DialogShell({
       data-dialog-root
       data-modeless={!modal || undefined}
       data-placement={placement}
+      data-collapsed={!modal && collapsed || undefined}
     >
       <section
         ref={panelRef}

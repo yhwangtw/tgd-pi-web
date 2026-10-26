@@ -68,6 +68,8 @@
   .overlay[data-modeless][data-placement="center"] { place-items: end center; padding: 0; }
   .overlay[data-modeless][data-placement="center"] .dialog { max-height: var(--component-sheet-max-height); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; }
   .overlay[data-modeless][data-placement="center"] .dialog[data-mobile-mode="fullscreen"]:not([data-collapsed]) { height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+  .overlay[data-modeless][data-collapsed] { place-items: start center; padding: var(--space-2); }
+  .overlay[data-modeless][data-collapsed] .dialog { border-radius: var(--radius-dialog); }
   .collapse { min-width: var(--control-touch); min-height: var(--control-touch); }
 }
 
