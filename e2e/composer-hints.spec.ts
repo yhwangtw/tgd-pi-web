@@ -6,6 +6,7 @@ const OTHER = "/?session=aaaa1111-2222-3333-4444-555566667777";
 for (const width of [320, 1440]) for (const locale of ["en", "zh"]) {
   test(`context suggestion ${width} ${locale}: accept, edit, dismiss, and opt out`, async ({ page }, info) => {
     const suggestion = locale === "zh" ? "幫我檢查剛修改的 clamp 在手機版預覽是否正常" : "Check the updated clamp function and preview it on mobile";
+    const replacement = locale === "zh" ? "幫我檢查鍵盤操作是否正常" : "Check keyboard navigation on mobile";
     let requests = 0;
     await page.addInitScript(locale => { localStorage.setItem("pi-locale", locale); }, locale);
     await page.setViewportSize({ width, height: 900 });
@@ -16,7 +17,10 @@ for (const width of [320, 1440]) for (const locale of ["en", "zh"]) {
       expect(body.messages.at(-1).role).toBe("assistant");
       expect(body.turnId).toContain("ffff1111-2222-3333-4444-555566667777:");
       expect(JSON.stringify(body.messages)).toContain("clamp");
-      await route.fulfill({ json: { hint: suggestion } });
+      expect(body.context).toMatchObject({ planningOnly: false });
+      expect(body.context.earlierGoal).toBeTruthy();
+      expect(body.sessionId).toBe(MAIN.split("=")[1]);
+      await route.fulfill({ json: { hint: body.excluded?.length ? replacement : suggestion } });
     });
     let sends = 0;
     page.on("request", request => { if (request.method() === "POST" && /\/api\/agent\/.*\/command/.test(request.url())) sends++; });
@@ -47,7 +51,7 @@ for (const width of [320, 1440]) for (const locale of ["en", "zh"]) {
     await expect(hint).toBeHidden();
     await composer.press("Tab"); await expect(composer).not.toBeFocused();
     await composer.fill("A new draft after dismissing"); await composer.fill("");
-    await expect(hint).toBeVisible(); expect(requests).toBe(2); // Reload had its own browser cache.
+    await expect(hint).toContainText(replacement); expect(requests).toBe(3); // A dismissal asks for a different suggestion.
     await page.getByRole("button", { name: locale === "zh" ? "更多輸入框設定" : "More composer controls", exact: true }).click();
     const toggle = page.getByRole("button", { name: locale === "zh" ? "對話輸入建議" : "Contextual suggestions", exact: true });
     await toggle.click(); await expect(toggle).toHaveAttribute("aria-pressed", "false");

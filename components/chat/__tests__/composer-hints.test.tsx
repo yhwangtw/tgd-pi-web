@@ -102,12 +102,15 @@ describe("contextual composer suggestions", () => {
     await settle(); expect(hintRequest).toHaveBeenCalledTimes(1);
     expect(onSend).not.toHaveBeenCalled();
   });
-  it("dismisses with Escape until the user edits and clears a draft, then restores the cached suggestion", async () => {
+  it("excludes an Escape-dismissed suggestion and requests a fresh one after editing and clearing", async () => {
     await render(); await settle();
     await key("Escape"); await settle();
     expect(hint()).toBeNull(); expect(hintRequest).toHaveBeenCalledTimes(1);
+    hintRequest.mockResolvedValue(new Response('{"hint":"Check keyboard navigation next"}'));
     await type("An edited draft"); await type("");
-    expect(hint()?.textContent).toContain("Test the preview on mobile");
+    expect(hint()).toBeNull(); await settle();
+    expect(hint()?.textContent).toContain("Check keyboard navigation next");
+    expect(hintRequest).toHaveBeenCalledTimes(2);
     expect(onSend).not.toHaveBeenCalled();
   });
 });

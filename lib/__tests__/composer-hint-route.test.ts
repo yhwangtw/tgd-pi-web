@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const generate = vi.hoisted(() => vi.fn());
+const workflow = vi.hoisted(() => vi.fn(async () => null as unknown));
 vi.mock("../composer-hint-service", () => ({ generateComposerHint: generate }));
+vi.mock("../composer-hint-workflow", () => ({ readComposerHintWorkflow: workflow }));
 import { POST } from "../../app/api/composer-hint/route";
+import { buildComposerHintContext } from "../composer-hint-context";
 
 const body = { provider: "fixture", modelId: "one", locale: "en", messages: [
   { role: "user", text: "Fix the preview" }, { role: "assistant", text: "Fixed. Test mobile next." },
@@ -9,8 +12,14 @@ const body = { provider: "fixture", modelId: "one", locale: "en", messages: [
 const send = (payload: unknown = body, origin = "http://localhost") => POST(new Request("http://localhost/api/composer-hint", {
   method: "POST", headers: { origin, "content-type": "application/json" }, body: typeof payload === "string" ? payload : JSON.stringify(payload),
 }));
-beforeEach(() => { generate.mockReset(); generate.mockResolvedValue({ hint: "Test the preview on mobile", status: "ready", retryable: false, retryAfterMs: 0 }); });
+beforeEach(() => { workflow.mockReset(); workflow.mockResolvedValue(null); generate.mockReset(); generate.mockResolvedValue({ hint: "Test the preview on mobile", status: "ready", retryable: false, retryAfterMs: 0 }); });
 describe("composer hint HTTP endpoint", () => {
+  it("uses the running engine's saved workflow over stale UI cards", async () => {
+    workflow.mockResolvedValue({ goal: { objective: "Fix UI", status: "complete" } });
+    await send({ ...body, sessionId: "session-one", context: buildComposerHintContext([]) });
+    expect(workflow).toHaveBeenCalledWith("session-one");
+    expect(generate.mock.calls[0][0].context.workflow.goal.status).toBe("complete");
+  });
   it("returns a private uncached suggestion without altering a conversation", async () => {
     const response = await send();
     expect(response.status).toBe(200);

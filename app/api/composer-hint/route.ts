@@ -28,6 +28,11 @@ export async function POST(req: Request) {
     }
     const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     if (!isComposerHintRequest(body)) return NextResponse.json({ hint: null }, { status: 400, headers });
+    if (body.sessionId && body.context) {
+      const { readComposerHintWorkflow } = await import("@/lib/composer-hint-workflow");
+      const workflow = await readComposerHintWorkflow(body.sessionId);
+      if (workflow) body.context = { ...body.context, workflow };
+    }
     const result = await generateComposerHint(body, req.signal);
     return NextResponse.json(result, { headers });
   } catch { return NextResponse.json({ hint: null }, { status: 400, headers }); }

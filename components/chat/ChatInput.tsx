@@ -48,6 +48,7 @@ import type { ModelCatalogDiagnostic, ModelCatalogStatus } from "@/hooks/use-mod
 import { ScreenshotButton } from "./ScreenshotButton";
 import { DialogShell } from "@/components/ui/DialogShell";
 import { useComposerHint } from "@/hooks/useComposerHint";
+import type { ComposerHintContext } from "@/lib/composer-hint-context";
 import type { ComposerHintMessage } from "@/lib/composer-hints";
 
 export interface AttachedImage {
@@ -69,6 +70,7 @@ interface Props {
   onFollowUp?: (message: string, images?: AttachedImage[]) => Promise<boolean>;
   isStreaming: boolean;
   hintMessages?: ComposerHintMessage[] | null;
+  hintContext?: ComposerHintContext;
   hintTurnKey?: string | null;
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
@@ -228,6 +230,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   workflowPending = false,
   wide = false,
   hintMessages,
+  hintContext,
   hintTurnKey,
 }: Props, ref) {
   const { t, locale } = useI18n();
@@ -273,7 +276,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionSeqRef = useRef(0);
   const { hint, enabled: hintsEnabled, setEnabled: setHintsEnabled, dismiss: dismissHint, reset: resetHint } = useComposerHint({
-    messages: hintMessages, model, locale, sessionKey: persistKey, turnKey: hintTurnKey,
+    messages: hintMessages, context: hintContext, model, locale, sessionKey: persistKey, turnKey: hintTurnKey,
     idle: value === "" && !isStreaming && !isCompacting && !isSubmitting && !uploadsPending
       && attachedImages.length === 0 && !quote && !workflowPending && !mention && !showSlashMenu,
   });

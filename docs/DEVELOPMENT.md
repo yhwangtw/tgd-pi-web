@@ -101,9 +101,32 @@ Each suggestion is a human user's question or request addressed to the assistant
 not an assistant promise such as "I'll test it" / "我會先測試". Role instructions
 and conservative output checks reject obvious assistant self-reports, reusing the
 bounded empty-result retry policy.
+The request also carries a bounded task snapshot: an earlier user goal, the
+latest three explicit corrections, read-only mode, current Goal/Plan and six
+normalized execution receipts from the latest user turn. Raw commands, tool
+output, images and thinking are excluded; common credentials are redacted.
+When a session is already running, the server reads its SDK branch or Durable
+workflow document to replace stale/hidden UI cards. This lookup never starts or
+resumes an engine. Missing state remains unknown. The snapshot is capped at
+3,000 serialized characters and uses the same generation call (200 output tokens
+for a structured hint/intent/source response). Deterministic guards reject
+nonexistent sources, completed-step retries, inappropriate execution during
+planning or pauses, failed-execution bypasses, repeated requests and invented consent.
+Latest corrections take precedence over earlier goals in the prompt; source and
+format checks do not prove semantic correctness. The latest user's Chinese/English
+language is detected separately from the UI locale (including mixed file names);
+entirely wrong-language hints are rejected rather than shown.
+Esc rejects that generated suggestion for the current session/turn. Editing and
+clearing may request a different suggestion; clearing an accepted hint restores
+it from cache. Rejected suggestions are kept only in bounded memory/tab storage
+(three per turn, 64 turn keys); after three rejections that turn stays quiet.
+For synthetic model quality/latency comparisons, run
+`node scripts/eval-composer-hints.mjs --origin http://127.0.0.1:30177 --provider <existing-provider> --model <existing-model> --output /absolute/new-report.json`.
+This makes six bounded hint requests and no chat commands. Review its captured
+outputs; lexical checks are not a substitute for semantic review.
 Suggestions use the selected provider/model in a separate tool-free request, with
 at most four visible user/assistant messages (3,000 characters total), no images,
-thinking or tool output, reasoning off, 120 output tokens, a fifteen-second model timeout
+thinking or tool output, reasoning off, up to 200 output tokens, a fifteen-second model timeout
 and no SDK retries. They never alter the session or authorize actions. Tab or a click
 inserts an editable draft; clearing that draft immediately restores its cached
 suggestion. Escape hides it until the user edits and clears the draft or a new
@@ -111,8 +134,8 @@ turn completes. Typed drafts,
 attachments, pending questions, queued messages and running/compacting turns take
 precedence. Composer controls expose a persisted opt-out. Successful suggestions
 have a ten-minute bounded in-memory cache. Empty output and transient failures
-retry only while idle, after two then four seconds (three attempts total per
-turn), with a one-minute cooldown after exhaustion. Typing, running, switching
+retry only while idle, after two then four seconds (three attempts per context/
+exclusion variant), with a one-minute cooldown after exhaustion. Typing, running, switching
 sessions or opting out cancels scheduled retries. Missing models/credentials and
 permanent provider refusals are not retried. The API distinguishes ready, empty,
 error, unavailable and busy outcomes without exposing provider error text.

@@ -1,4 +1,5 @@
 import type { AgentMessage } from "./types";
+import { hintText, isHintContext, type ComposerHintContext } from "./composer-hint-context";
 
 export interface ComposerHintMessage {
   role: "user" | "assistant";
@@ -12,6 +13,10 @@ export interface ComposerHintRequest {
   messages: ComposerHintMessage[];
   /** Local cache identity only; never sent to the model. */
   turnId?: string;
+  /** Local workflow lookup only; never sent to the model. */
+  sessionId?: string;
+  context?: ComposerHintContext;
+  excluded?: string[];
 }
 
 export const MAX_HINT_CHARS = 160;
@@ -43,8 +48,9 @@ export function composerHintMessages(messages: AgentMessage[]): ComposerHintMess
     if (message.role !== "user" && message.role !== "assistant") continue;
     const text = (typeof message.content === "string" ? message.content
       : message.content.flatMap(block => block.type === "text" ? [block.text] : []).join("\n"))
-      .trim().slice(-Math.min(remaining, message.role === "user" ? 600 : 1400));
-    if (text) { result.unshift({ role: message.role, text }); remaining -= text.length; }
+      .trim();
+    const bounded = hintText(text, Math.min(remaining, message.role === "user" ? 600 : 1400));
+    if (bounded) { result.unshift({ role: message.role, text: bounded }); remaining -= bounded.length; }
   }
   return result.at(-1)?.role === "assistant" && result.some(message => message.role === "user") ? result : null;
 }
@@ -56,6 +62,9 @@ export function isComposerHintRequest(value: unknown): value is ComposerHintRequ
     && typeof body.modelId === "string" && body.modelId.length > 0 && body.modelId.length <= 300
     && (body.locale === "en" || body.locale === "zh")
     && (body.turnId === undefined || (typeof body.turnId === "string" && body.turnId.length > 0 && body.turnId.length <= 256))
+    && (body.sessionId === undefined || (typeof body.sessionId === "string" && /^[a-zA-Z0-9_-]{1,160}$/.test(body.sessionId)))
+    && (body.context === undefined || isHintContext(body.context))
+    && (body.excluded === undefined || (Array.isArray(body.excluded) && body.excluded.length <= 3 && body.excluded.every(hint => typeof hint === "string" && hint.length <= MAX_HINT_CHARS)))
     && Array.isArray(body.messages) && body.messages.length >= 2 && body.messages.length <= 4
     && body.messages.every(message => message && (message.role === "user" || message.role === "assistant")
       && typeof message.text === "string" && message.text.trim().length > 0)

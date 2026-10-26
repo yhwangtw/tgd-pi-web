@@ -6,6 +6,7 @@ vi.mock("../pi-model-runtime", () => ({ createPiModelRegistry: async () => ({ re
   find: mocks.find, getError: () => null, getApiKeyAndHeaders: mocks.auth,
 } }) }));
 import { generateComposerHint } from "../composer-hint-service";
+import { buildComposerHintContext } from "../composer-hint-context";
 
 let serial = 0;
 const request = () => ({ provider: "fixture", modelId: `model-${serial++}`, locale: "zh" as const,
@@ -19,6 +20,15 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 describe("bounded background suggestion generation", () => {
+  it("grounds a structured suggestion in bounded task data without sending local identities", async () => {
+    const body = { ...request(), context: buildComposerHintContext([]), sessionId: "local-only-session", turnId: "local-only-turn", excluded: ["檢查舊的項目"] };
+    mocks.complete.mockResolvedValue({ stopReason: "stop", content: [{ type: "text", text: JSON.stringify({ hint: "幫我檢查手機版。", intent: "verify", basis: "latest" }) }] });
+    expect(await generateComposerHint(body, signal())).toMatchObject({ status: "ready", hint: "幫我檢查手機版。" });
+    const [, context, options] = mocks.complete.mock.calls[0];
+    expect(JSON.parse(context.messages[0].content)).toMatchObject({ context: body.context, excluded: body.excluded });
+    expect(JSON.stringify(context)).not.toContain("local-only");
+    expect(options.maxTokens).toBe(200);
+  });
   it("uses the selected provider and one tool-free, non-retrying completion, then caches it", async () => {
     const body = request();
     expect(await generateComposerHint(body, signal())).toMatchObject({ hint: "幫我驗證手機版的檔案預覽", status: "ready", retryable: false });

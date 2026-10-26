@@ -14,7 +14,8 @@ const answer = (hint: string | null, extra = {}) => new Response(JSON.stringify(
 function Probe({ idle = true, turnKey = "turn-one", active = true }: { idle?: boolean; turnKey?: string; active?: boolean }) {
   const state = useComposerHint({ sessionKey, idle, turnKey, model: { provider: "fixture", modelId: "one" }, locale: "en",
     messages: active ? [{ role: "user", text: sessionKey }, { role: "assistant", text: "Test mobile next" }] : null });
-  return <><output>{state.hint ?? ""}</output><button onClick={() => state.setEnabled(false)}>Disable</button></>;
+  return <><output>{state.hint ?? ""}</output><button onClick={() => state.setEnabled(false)}>Disable</button>
+    <button data-action="dismiss" onClick={state.dismiss}>Dismiss</button><button data-action="reset" onClick={state.reset}>Reset</button></>;
 }
 const render = async (props = {}, copies = 1) => { await act(async () => root.render(<>{Array.from({ length: copies }, (_, i) => <Probe key={i} {...props} />)}</>)); };
 const tick = async (milliseconds: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(milliseconds); }); };
@@ -27,6 +28,30 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("suggestion retry scheduling", () => {
+  it("excludes dismissed text, shares that exclusion after remount, and scopes it to the turn", async () => {
+    let calls = 0;
+    fetchHint.mockImplementation(async () => answer(++calls === 1 ? "Check mobile" : "Check keyboard"));
+    await render(); await tick(700);
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-action="dismiss"]')!.click());
+    expect(text()).toBe("");
+    await act(async () => { root.unmount(); root = createRoot(container); });
+    await render(); await tick(700);
+    expect(text()).toBe("Check keyboard");
+    expect(JSON.parse(fetchHint.mock.calls[1][1].body).excluded).toEqual(["Check mobile"]);
+    await render({ turnKey: "turn-two" }); await tick(700);
+    expect(JSON.parse(fetchHint.mock.calls[2][1].body).excluded).toBeUndefined();
+  });
+  it("stops offering suggestions after three dismissals in the same turn", async () => {
+    fetchHint.mockImplementation(async () => answer(`Check step ${fetchHint.mock.calls.length}`));
+    await render(); await tick(700);
+    for (let i = 0; i < 3; i++) {
+      await act(async () => container.querySelector<HTMLButtonElement>('[data-action="dismiss"]')!.click());
+      await act(async () => container.querySelector<HTMLButtonElement>('[data-action="reset"]')!.click());
+      await tick(700);
+    }
+    expect(fetchHint).toHaveBeenCalledTimes(3); expect(text()).toBe("");
+    await tick(120_000); expect(fetchHint).toHaveBeenCalledTimes(3);
+  });
   it.each(["empty", "network"])("recovers from %s on the next attempt without typing or refreshing", async kind => {
     if (kind === "empty") fetchHint.mockResolvedValueOnce(answer(null, { status: "empty", retryable: true, retryAfterMs: 2000 }));
     else fetchHint.mockRejectedValueOnce(new TypeError("offline"));

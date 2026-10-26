@@ -26,6 +26,7 @@ import { motionScrollBehavior, prefersReducedMotion } from "@/lib/motion";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle, type MessageQuote } from "./ChatInput";
 import { composerHintMessages } from "@/lib/composer-hints";
+import { buildComposerHintContext } from "@/lib/composer-hint-context";
 import { ExtensionUIPanel, ExtensionWidgets, PendingQuestionNotice, WorkflowToolbar } from "./ExtensionUIPanel";
 import { useWorkflowVisibility } from "@/hooks/use-workflow-visibility";
 import { useWorkflowCommand } from "@/hooks/use-workflow-command";
@@ -1073,6 +1074,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const workflowControls = useMemo(() => <WorkflowToolbar state={extensionUIState} workflowVisibility={workflowVisibility} />, [extensionUIState, workflowVisibility]);
   const hintMessages = useMemo(() => loading || agentRunning || isCompacting || pendingQuestion || queuedFollowUps.length > 0
     ? null : composerHintMessages(messages), [messages, loading, agentRunning, isCompacting, pendingQuestion, queuedFollowUps.length]);
+  const hintContext = useMemo(() => hintMessages ? buildComposerHintContext(messages, extensionUIState, toolPreset === "plan") : undefined,
+    [hintMessages, messages, extensionUIState, toolPreset]);
 
   const chatInputElement = (
     <ChatInput
@@ -1083,6 +1086,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onFollowUp={agentRunning ? handleFollowUp : undefined}
       isStreaming={agentRunning}
       hintMessages={hintMessages}
+      hintContext={hintContext}
       hintTurnKey={entryIds.at(-1) ?? `${messages.length}:${messages.at(-1)?.timestamp ?? ""}`}
       model={displayModelValue}
       modelNames={modelNames}
