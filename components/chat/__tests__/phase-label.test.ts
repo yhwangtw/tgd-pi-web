@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { phaseLabel } from "../RunStatus";
 
 describe("phaseLabel", () => {
-  it("null phase falls back to thinking", () => {
-    expect(phaseLabel(null)).toBe("Thinking...");
+  it("null phase waits without assuming hidden thinking", () => {
+    expect(phaseLabel(null)).toBe("Waiting for model...");
   });
 
   it("waiting_model", () => {

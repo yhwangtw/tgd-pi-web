@@ -49,7 +49,7 @@
 .body[hidden], .footer[hidden] { display: none; }
 .collapse { color: var(--text-muted); }
 .overlay[data-modeless] { background: transparent; backdrop-filter: none; pointer-events: none; place-items: start end; padding-top: var(--space-4); }
-.overlay[data-modeless] .dialog { pointer-events: auto; width: min(680px, calc(100vw - 32px)); max-height: min(80dvh, 900px); }
+.overlay[data-modeless] .dialog { pointer-events: auto; max-height: min(80dvh, 900px); }
 .overlay[data-modeless][data-placement="center"] { place-items: center; }
 
 :global(html[data-ui-style="trae"]) .dialog { border-color: var(--trae-hairline); background: var(--trae-surface-solid); }

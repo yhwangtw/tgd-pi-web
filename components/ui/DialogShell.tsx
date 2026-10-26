@@ -19,7 +19,7 @@ export function DialogShell({
   size = "default",
   mobileMode = "sheet",
   modal = false,
-  placement = "corner",
+  placement = "center",
   initialFocusRef,
   headerActions,
   footer,

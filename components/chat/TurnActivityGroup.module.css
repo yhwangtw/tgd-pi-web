@@ -12,7 +12,7 @@
 }
 
 .rootError {
-  border-color: var(--color-warning-border);
+  border-color: var(--color-error-border);
 }
 
 .summary {
@@ -38,10 +38,14 @@
 .stateIcon {
   display: inline-flex;
   flex: 0 0 auto;
-  color: var(--color-success-text, var(--accent));
+  color: var(--text-muted);
 }
 
-.rootError .stateIcon { color: var(--color-warning-text); }
+.rootError .stateIcon { color: var(--color-error-text); }
+.rootSuccess .stateIcon { color: var(--color-success-text); }
+.rootRunning .stateIcon { color: var(--accent-text); }
+.spinner { animation: work-log-spin 0.8s linear var(--motion-loop-count, infinite); }
+@keyframes work-log-spin { to { transform: rotate(360deg); } }
 
 .title {
   flex: 0 0 auto;
@@ -51,12 +55,14 @@
 }
 
 .outcome {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: var(--space-optical) var(--space-2);
   border-radius: var(--radius-pill);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .outcomeSuccess {
@@ -66,9 +72,9 @@
 }
 
 .outcomeError {
-  border: 1px solid var(--color-warning-border);
-  background: var(--color-warning-bg);
-  color: var(--color-warning-text);
+  border: 1px solid var(--color-error-border);
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
 }
 
 .meta {
@@ -123,7 +129,7 @@
 
 :global(html[data-ui-style="trae"]) .root { border-color: var(--trae-hairline); border-radius: var(--radius-card); background: var(--trae-surface-solid); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .root:not(.rootError):hover { border-color: var(--color-accent-border); box-shadow: var(--color-shadow-control-hover); }
-:global(html[data-ui-style="trae"]) .rootError { border-color: var(--color-warning-border); box-shadow: var(--trae-card-shadow); }
+:global(html[data-ui-style="trae"]) .rootError { border-color: var(--color-error-border); box-shadow: var(--trae-card-shadow); }
 :global(html[data-ui-style="trae"]) .summary { min-height: 38px; padding: var(--space-2) var(--space-3); }
 :global(html[data-ui-style="trae"]) .body { gap: var(--space-2); padding: var(--space-2); border-top-color: var(--trae-hairline); background: var(--trae-canvas); }
 

@@ -63,6 +63,36 @@ describe("session reconciliation and first-prompt ordering", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+  it("preserves parallel tools and stop intent across interleaved model messages", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    const emit = (event: AgentEvent) => act(async () => current.handleAgentEventRef.current?.(event));
+    await emit(snapshot([], true));
+    await emit({ type: "message_start", message: { ...assistant, content: [{ type: "thinking", thinking: "Plan" }] } });
+    expect(current.agentPhase?.kind).toBe("thinking");
+    await emit({ type: "message_update", message: { ...assistant, content: [{ type: "toolCall", id: "a", name: "read", arguments: { path: "a" } }] } });
+    expect(current.agentPhase?.kind).toBe("preparing_tools");
+    await emit({ type: "tool_execution_start", toolCallId: "a", toolName: "read" });
+    await emit({ type: "tool_execution_start", toolCallId: "b", toolName: "read" });
+    await emit({ type: "message_update", message: assistant });
+    await emit({ type: "message_end", message: assistant });
+    expect(current.agentPhase).toMatchObject({ kind: "running_tools", tools: [{ id: "a" }, { id: "b" }] });
+    await emit({ type: "tool_execution_end", toolCallId: "a" });
+    expect(current.agentPhase).toMatchObject({ kind: "running_tools", tools: [{ id: "b" }] });
+    await emit({ type: "tool_execution_end", toolCallId: "b" });
+    await emit({ type: "message_update", message: assistant });
+    expect(current.agentPhase?.kind).toBe("writing");
+    let finishAbort!: () => void;
+    harness.send.mockImplementation((_sid, command) => command.type === "abort" ? new Promise<void>(resolve => { finishAbort = resolve; }) : Promise.resolve(null));
+    let abort!: Promise<void>;
+    await act(async () => { abort = current.handleAbort(); });
+    await emit({ type: "message_update", message: assistant });
+    await emit({ type: "tool_execution_start", toolCallId: "late", toolName: "read" });
+    expect(current.agentPhase?.kind).toBe("stopping");
+    await act(async () => { finishAbort(); await abort; });
+    await emit({ type: "agent_end", messages: [{ ...assistant, stopReason: "aborted" }] });
+    expect(current.agentPhase).toBeNull();
+  });
+
   it("notifies one live successful completion across rerenders, and stays silent on errors, replay and checkpoints", async () => {
     await act(async () => root.render(<Harness selected={session} />));
     const emit = (event: AgentEvent) => act(async () => current.handleAgentEventRef.current?.(event));

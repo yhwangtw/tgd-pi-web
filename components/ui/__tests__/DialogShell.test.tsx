@@ -54,6 +54,7 @@ describe("DialogShell", () => {
   it("defaults to a modeless, collapsible panel without losing a form draft", async () => {
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
     await act(async () => root?.render(<><button id="outside">Keep working</button><DialogShell open title="Settings" onClose={() => {}}><input defaultValue="unfinished" /></DialogShell></>));
+    expect(document.querySelector("[data-dialog-root]")?.getAttribute("data-placement")).toBe("center");
     const outside = container.querySelector<HTMLButtonElement>("#outside")!;
     outside.focus();
     expect(container.inert).not.toBe(true);

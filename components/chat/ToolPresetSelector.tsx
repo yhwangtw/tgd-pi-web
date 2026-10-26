@@ -104,14 +104,14 @@ export function ToolPresetSelector({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-controls={open ? listboxId : undefined}
-        title={`${t("input.tools")}: ${t(TOOL_LABEL_KEYS[selectedLabel])}`}
+        title={`${t("input.tools")}: ${t(TOOL_LABEL_KEYS[selectedLabel])} · ${t("input.toolsHelp")}`}
         aria-describedby={`${listboxId}-value`}
         className={`${styles.trigger} ${iconOnly ? styles.iconTrigger : ""} ${open ? styles.triggerOpen : ""}`}
       >
         <Wrench size={UI_ICON_SIZE.control} aria-hidden />
         {!iconOnly && <span>{t(TOOL_LABEL_KEYS[selectedLabel])}</span>}
       </button>
-      <span id={`${listboxId}-value`} hidden>{t(TOOL_LABEL_KEYS[selectedLabel])}</span>
+      <span id={`${listboxId}-value`} hidden>{t(TOOL_LABEL_KEYS[selectedLabel])} · {t("input.toolsHelp")}</span>
       {open && (
         <div
           ref={panelRef}

@@ -181,6 +181,8 @@ describe("composer controls", () => {
     );
     expect(thinking?.textContent).toContain("Medium");
     expect(tools?.textContent).toContain("Default");
+    expect(tools?.title).toContain("the model decides when to use them");
+    expect(tools?.title).toContain("does not enable the speed display");
 
     await act(async () => tools!.click());
     expect(container!.textContent).toContain("No tools, chat only");

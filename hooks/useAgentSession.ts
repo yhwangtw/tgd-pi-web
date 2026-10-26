@@ -1,5 +1,6 @@
 "use client";
 
+import { keepActivePhase, phaseForMessage } from "./agent-phase";
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useReducer, useMemo } from "react";
 import type { AgentMessage } from "@/lib/types";
 import { browserMetricsStorage, GenerationMetricsTracker } from "@/lib/generation-metrics";
@@ -333,7 +334,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const running = state?.isStreaming === true || pendingPrompt;
       agentRunningRef.current = running;
       setAgentRunning(running);
-      setAgentPhase(running ? (event.phase as AgentPhase) ?? { kind: "waiting_model" } : null);
+      setAgentPhase(running ? keepActivePhase((event.phase as AgentPhase) ?? null, phaseForMessage(event.streamingMessage as AgentMessage | undefined)) : null);
       setAgentStartedAt((current) => running ? current ?? Date.now() : null);
       if (state?.isCompacting !== undefined) setIsCompacting(state.isCompacting);
       reconcileCompaction(state);
@@ -588,7 +589,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (event.type === "message_start") streamScheduler.start(update);
           else streamScheduler.push(update);
         }
-        setAgentPhase(null);
+        setAgentPhase((previous) => keepActivePhase(previous, phaseForMessage(msg)));
         break;
       }
       case "message_end": {
@@ -601,7 +602,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
         }
         dispatch({ type: "reset" });
-        setAgentPhase({ kind: "waiting_model" });
+        setAgentPhase((previous) => keepActivePhase(previous, { kind: "waiting_model" }));
         break;
       }
       case "tool_execution_start": {
@@ -613,6 +614,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ? (event.tool as { label: string }).label
             : undefined;
         setAgentPhase((prev) => {
+          if (prev?.kind === "stopping") return prev;
           const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
           if (!tools.some((t) => t.id === id)) tools.push({ id, name, ...(label ? { label } : {}) });
           return { kind: "running_tools", tools };
