@@ -1981,6 +1981,13 @@ const MESSAGES = {
 
   // ── Chat input ──
   "input.message": { en: "Message…", zh: "輸入訊息…" },
+  "input.useHint": { en: "Use suggested message", zh: "帶入建議訊息" },
+  "input.hintTab": { en: "Tab", zh: "Tab" },
+  "input.hintHelp": { en: "Click or press Tab to insert the suggestion. Esc dismisses it. Review before sending.", zh: "點選或按 Tab 帶入建議，Esc 忽略；確認後再送出。" },
+  "input.contextHints": { en: "Contextual suggestions", zh: "對話輸入建議" },
+  "input.contextHintsHelp": { en: "Use the selected model and recent conversation to suggest a next message. Uses a small background model request.", zh: "依近期對話，使用目前選定的模型建議下一則訊息，會產生少量背景模型用量。" },
+  "input.hintsOn": { en: "On", zh: "開啟" },
+  "input.hintsOff": { en: "Off", zh: "關閉" },
   "input.agentRunning": { en: "Agent is running…", zh: "Agent 執行中…" },
   "input.steerPlaceholder": { en: "Steer the current run…", zh: "立即插話…" },
   "input.followUpPlaceholder": { en: "Queue a follow-up…", zh: "排入追問…" },

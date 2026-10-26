@@ -95,6 +95,17 @@ remain intentional discard actions.
 
 ## Workflow and delegation
 
+The empty composer can suggest a next message after a completed assistant turn.
+Suggestions use the selected provider/model in a separate tool-free request, with
+at most four visible user/assistant messages (3,000 characters total), no images,
+thinking or tool output, reasoning off, 120 output tokens, a six-second timeout
+and no retries. They never alter the session or authorize actions. Tab or a click
+inserts an editable draft; Escape dismisses the current suggestion. Typed drafts,
+attachments, pending questions, queued messages and running/compacting turns take
+precedence. Composer controls expose a persisted opt-out. Ten-minute bounded
+in-memory caches coalesce duplicate requests; failures retain the normal placeholder.
+Background suggestions have their own small provider usage, outside the agent turn.
+
 Goal has no fixed continuation count. `/goal --runs 50 <objective>` or
 `/goal runs 50` sets one; `0` removes it. Token budgets, explicit stop/pause,
 errors and repeated responses without progress still stop continuation. Reopening
