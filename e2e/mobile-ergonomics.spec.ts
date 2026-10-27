@@ -1,3 +1,4 @@
+import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
 
 const SESSION = "ffff1111-2222-3333-4444-555566667777";
@@ -18,6 +19,7 @@ const test = base.extend<{ layoutNetworkSafety: void }>({
       if (request.method() === "POST" && /^\/api\/agent\/[^/]+$/.test(pathname) && body?.type === "get_tools") {
         return route.fulfill({ json: { success: true, data: [] } });
       }
+      if (isFixtureReadReceipt(request)) return route.continue();
       forbidden.push(`${request.method()} ${pathname}`);
       return route.fulfill({ status: 403, json: { error: "Ergonomics tests forbid model calls and mutations" } });
     });

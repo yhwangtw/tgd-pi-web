@@ -3,6 +3,7 @@
 import type { AgentMessage, SessionInfo, SessionTreeNode } from "@/lib/types";
 import { getAssistantFailure } from "@/lib/assistant-outcome";
 import type { ToolSelectionMode } from "@/lib/tool-selection";
+import type { ResolvedCompactionSettings } from "@/lib/compaction-policy";
 
 export interface SessionData {
   sessionId: string;
@@ -15,11 +16,7 @@ export interface SessionData {
     thinkingLevel: string;
     model: { provider: string; modelId: string } | null;
   };
-  compactionSettings?: {
-    enabled: boolean;
-    reserveTokens: number;
-    keepRecentTokens: number;
-  };
+  compactionSettings?: ResolvedCompactionSettings;
 }
 
 export interface StreamingState {

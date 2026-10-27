@@ -1,3 +1,4 @@
+import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { test as base, expect } from "@playwright/test";
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -38,6 +39,7 @@ const test = base.extend<{ feedback: Feedback }>({
       if (path === "/api/worktrees") return route.fulfill({ json: { worktrees: [] } });
       if (path === `/api/agent/${SESSION}/summarize`) return route.fulfill({ json: { skipped: true } });
       if (path === `/api/agent/${SESSION}` && req.postDataJSON()?.type === "get_tools") return route.fulfill({ json: { success: true, data: [] } });
+      if (isFixtureReadReceipt(req)) return route.continue();
       forbidden.push(`${req.method()} ${path}`); return route.fulfill({ status: 403, json: { error: "No inference or mutations" } });
     });
     await page.route(new RegExp(`/api/sessions/${SESSION}(?:\\?|$)`), async route => {

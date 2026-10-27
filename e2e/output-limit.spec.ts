@@ -1,3 +1,4 @@
+import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
@@ -28,6 +29,7 @@ async function installOutcome(page: Page, variant: typeof variants[number]) {
       commands.push(body);
       return route.fulfill({ json: { success: true, data: body.type === "get_tools" ? [] : null } });
     }
+    if (isFixtureReadReceipt(request)) return route.continue();
     forbidden.push(`${request.method()} ${pathname}`);
     return route.fulfill({ status: 403, json: { error: "Offline fixture forbids live model or persistent changes" } });
   });

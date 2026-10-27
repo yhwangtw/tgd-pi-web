@@ -1,3 +1,4 @@
+import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { withFixtureMessages } from "./session-response-fixture";
 
@@ -32,6 +33,7 @@ async function installFailure(page: Page, rejected = false) {
       thinkingLevel = "max";
       return route.fulfill({ json: { success: true, data: null } });
     }
+    if (isFixtureReadReceipt(request)) return route.continue();
     forbidden.push(`${request.method()} ${pathname}`);
     return route.fulfill({ status: 403, json: { error: "Fixture forbids model requests and persistent changes" } });
   });

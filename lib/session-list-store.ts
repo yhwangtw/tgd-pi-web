@@ -1,5 +1,6 @@
 "use client";
 
+import { mergeSessionReadSnapshot } from "./session-read-state";
 import type { SessionInfo } from "./types";
 
 export const SESSION_POLL_MS = 5_000;
@@ -57,8 +58,9 @@ export function refreshSessionList(invalidate = false): Promise<boolean> {
     try {
       const response = await fetch("/api/sessions", { cache: "no-store", signal: AbortSignal.timeout(15_000) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json() as { sessions?: SessionInfo[] };
+      const data = await response.json() as { sessions?: SessionInfo[]; readState?: { scope: string; receipts: unknown } };
       if (!Array.isArray(data.sessions)) throw new Error("Invalid session list");
+      mergeSessionReadSnapshot(data.readState);
       const sessions = data.sessions;
       for (const [id, session] of optimistic) {
         if (sessions.some(item => item.id === id)) optimistic.delete(id);
@@ -75,6 +77,7 @@ export function refreshSessionList(invalidate = false): Promise<boolean> {
       publish({ allSessions: sessions, loading: false, error: null });
       return true;
     } catch (error) {
+      mergeSessionReadSnapshot();
       publish({ ...snapshot, loading: false, error: String(error) });
       return false;
     } finally {

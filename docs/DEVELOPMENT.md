@@ -367,8 +367,18 @@ The sidebar and command palette share one session-list store. It polls every
 five seconds while the page is visible, refreshes on focus/network recovery,
 and retains newly created local conversations until Pi persists them. Background
 refreshes do not flash the manual-refresh indicator. The sidebar's unread dot
-uses browser-local read receipts, advanced only to visible message timestamps;
-receipts also synchronize across tabs and reuse older transcript entry markers.
+uses monotonic content cursors. A focused, foreground transcript must expose the
+bottom of a user/assistant message unobscured for 600 ms before advancing; quick
+visits, background tabs, overlays and unfinished answers do not count. Scrolling
+back cannot move the cursor backward. Equal timestamps use transcript order.
+
+Read receipts are cached locally and batch-synced via `/api/sessions/reads`. The
+server validates entry IDs against actual session entries and derives timestamps
+and append positions itself. `session-reads.json` lives in the active agent
+directory; existing session-list polls carry its snapshot across devices/origins
+using that same backend. Preview and production stores remain isolated. Failed
+sync preserves local progress and retries on the next list refresh; there is no
+extra poller. Old browser receipts remain usable until confirmed by viewing content.
 
 ### AgentSession lifecycle (`lib/rpc-manager.ts`)
 - One `AgentSessionWrapper` per session id, keyed in `globalThis.__piSessions`

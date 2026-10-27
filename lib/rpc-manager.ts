@@ -677,6 +677,7 @@ export class AgentSessionWrapper {
       compaction: this.compaction.state,
       compactionQueue: this.compactionQueue,
       autoCompactionEnabled: this.inner.autoCompactionEnabled,
+      compactionSettings: this.inner.settingsManager?.getCompactionSettings?.(model),
       autoRetryEnabled: this.inner.autoRetryEnabled,
       model: model ? { id: model.id, provider: model.provider } : undefined,
       messageCount: 0, pendingMessageCount: this.queuedMessages.length,

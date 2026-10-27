@@ -15,6 +15,7 @@ import {
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
 import type { SessionEntry, SessionHeader } from "@/lib/types";
+import type { ResolvedCompactionSettings } from "@/lib/compaction-policy";
 
 export async function GET(
   req: Request,
@@ -75,9 +76,15 @@ export async function GET(
     } : null;
 
     const url = new URL(req.url);
-    let compactionSettings: { enabled: boolean; reserveTokens: number; keepRecentTokens: number } | undefined;
+    let compactionSettings: ResolvedCompactionSettings | undefined;
     try {
-      compactionSettings = SettingsManager.create(header?.cwd ?? process.cwd()).getCompactionSettings();
+      // A live session may have unsaved settings/model changes. Otherwise resolve
+      // the historical model, including Pi's per-model token overrides.
+      compactionSettings = live?.isAlive()
+        ? live.inner.settingsManager.getCompactionSettings(live.inner.model)
+        : SettingsManager.create(header?.cwd ?? process.cwd()).getCompactionSettings(
+          context.model ? { provider: context.model.provider, id: context.model.modelId } : undefined,
+        );
     } catch {
       // Live agent state, when available, remains the authoritative fallback.
     }

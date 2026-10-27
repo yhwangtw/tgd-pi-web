@@ -1,3 +1,4 @@
+import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { expect, test } from "@playwright/test";
 
 const MAIN = "aaaa1111-2222-3333-4444-555566667777";
@@ -36,6 +37,7 @@ for (const style of ["original", "trae"] as const) {
             if (body.type === "prompt" && body.message === `/e2e-reconnect-question ${token}`) return route.continue();
             if (body.type === "extension_ui_response") { responses.push(body); return route.continue(); }
           }
+          if (isFixtureReadReceipt(request)) return route.continue();
           forbidden.push(`${request.method()} ${url.pathname}`);
           return route.fulfill({ status: 403, json: { error: "Only offline question fixture actions are allowed" } });
         });

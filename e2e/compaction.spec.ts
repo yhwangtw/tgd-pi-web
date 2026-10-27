@@ -1,3 +1,4 @@
+import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { expect, test, type Page } from "@playwright/test";
 
 test.afterEach(async ({ page }) => {
@@ -16,12 +17,15 @@ async function enterMessage(page: Page, text: string) {
   await input.press("Enter");
 }
 
-async function fixture(page: Page, initialOutcome = "running") {
+type PolicyFixture = { enabled: boolean; reserveTokens: number; keepRecentTokens: number; tokens: number; contextWindow: number };
+async function fixture(page: Page, initialOutcome = "running", policy?: PolicyFixture) {
   let job: Job | null = null;
   let queue: object[] = [];
   const commands: Record<string, unknown>[] = [];
   const forbidden: string[] = [];
-  const state = () => ({ isStreaming: false, isCompacting: job?.status === "running", compaction: job, compactionQueue: queue, thinkingLevel: "low" });
+  const state = () => ({ isStreaming: false, isCompacting: job?.status === "running", compaction: job, compactionQueue: queue, thinkingLevel: "low",
+    ...(policy ? { compactionSettings: { enabled: policy.enabled, reserveTokens: policy.reserveTokens, keepRecentTokens: policy.keepRecentTokens }, autoCompactionEnabled: policy.enabled,
+      contextUsage: { tokens: policy.tokens, contextWindow: policy.contextWindow, percent: policy.tokens / policy.contextWindow * 100 } } : {}) });
   await page.route((url) => url.pathname.startsWith("/api/"), async route => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -33,6 +37,7 @@ async function fixture(page: Page, initialOutcome = "running") {
     // unrelated model request deterministic and inside the browser fixture.
     if (path === "/api/composer-hint") return route.fulfill({ json: { hint: null, status: "empty", retryable: false, retryAfterMs: 0 } });
     const command = request.postDataJSON();
+    if (isFixtureReadReceipt(request)) return route.continue();
     if (path === "/api/worktrees" && Array.isArray(command?.cwds)) return route.continue();
     if (path.endsWith("/summarize")) return route.fulfill({ json: {} });
     if (path === `/api/agent/${SESSION}`) {
@@ -50,20 +55,28 @@ async function fixture(page: Page, initialOutcome = "running") {
     return route.fulfill({ status: 403, json: { error: "No persistent fixture changes allowed" } });
   });
   await page.route(/\/api\/models(?:\?|$)/, route => route.fulfill({ json: { modelList: [{ provider: "fixture", id: "model", name: "Fixture model", available: true }], defaultModel: { provider: "fixture", modelId: "model" } } }));
-  await page.route(new RegExp(`/api/sessions/${SESSION}(?:\\?includeState)?$`), async route => {
-    const response = await route.fetch(); const data = await response.json();
-    await route.fulfill({ response, json: { ...data, context: { ...data.context, model: { provider: "fixture", modelId: "model" } }, agentState: { running: true, state: state() } } });
-  });
+  // Fake compaction never changes the fixture JSONL. Capture the same flat-v2
+  // transcript once, before navigation, so document reload/teardown cannot race
+  // an upstream route.fetch() with a late fulfill of the original request.
+  const sessionResponse = await page.request.get(`/api/sessions/${SESSION}`, { headers: { "X-Pi-Session-Tree": "flat-v2" } });
+  expect(sessionResponse.status()).toBe(200);
+  const sessionData = await sessionResponse.json();
+  expect(sessionData.tree.format).toBe("flat-v2");
+  await sessionResponse.dispose();
+  await page.route(new RegExp(`/api/sessions/${SESSION}(?:\\?includeState)?$`), route => route.fulfill({
+    json: { ...sessionData, context: { ...sessionData.context, model: { provider: "fixture", modelId: "model" } }, agentState: { running: true, state: state() } },
+  }));
   await page.route(new RegExp(`/api/agent/${SESSION}/events(?:\\?|$)`), route => route.fulfill({ contentType: "text/event-stream", body: `retry: 60000\ndata: ${JSON.stringify({ type: "session_snapshot", sessionId: SESSION, state: state() })}\n\n` }));
   return { commands, forbidden, loseJob() { job = null; }, finish(status: string) { if (job) job = { ...job, status, ...(status === "failed" ? { error: "429 rate limit; provider detail should stay collapsed" } : { result: { tokensBefore: 30000, estimatedTokensAfter: 9000 } }) }; } };
 }
 
-for (const style of ["original", "trae"]) for (const width of [320, 390, 1440]) {
+for (const style of ["original", "trae"]) for (const width of [320, 390, 1440, 1920]) {
   test(`${style} ${width}: compact stays inline, editable, cancellable and responsive`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.addInitScript(({ style, width }) => {
       localStorage.setItem("pi-locale", "en"); localStorage.setItem("pi-ui-style", style);
       localStorage.setItem("pi-font-size", width === 320 ? "xlarge" : "default");
+      localStorage.setItem("pi-chat-width", width === 1920 ? "wide" : "normal");
     }, { style, width });
     const backend = await fixture(page);
     await page.goto(`/?session=${SESSION}`);
@@ -80,6 +93,10 @@ for (const style of ["original", "trae"]) for (const width of [320, 390, 1440]) 
     await expect(status.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
     const panel = await status.boundingBox(); const editor = await input.boundingBox();
+    const composer = await page.getByTestId("composer-toolbar").boundingBox();
+    expect(Math.abs(panel!.x - composer!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(panel!.width - composer!.width)).toBeLessThanOrEqual(1);
+    expect(panel!.width).toBeLessThanOrEqual(width === 1920 ? 1040 : 780);
     expect(panel!.y + panel!.height).toBeLessThanOrEqual(editor!.y + 2);
     await page.screenshot({ path: test.info().outputPath(`compact-${style}-${width}.png`) });
     await status.getByRole("button", { name: "Clear pending" }).click();
@@ -92,6 +109,42 @@ for (const style of ["original", "trae"]) for (const width of [320, 390, 1440]) 
     expect(backend.forbidden).toEqual([]);
   });
 }
+
+test("resolved policy is user-opened while the warning follows the actual model threshold", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.addInitScript(() => { localStorage.setItem("pi-locale", "en"); localStorage.setItem("pi-ui-style", "trae"); });
+  const policy = { enabled: true, reserveTokens: 8_192, keepRecentTokens: 12_000, tokens: 80_000, contextWindow: 100_000 };
+  const backend = await fixture(page, "running", policy);
+  await page.goto(`/?session=${SESSION}`);
+  const details = page.getByTestId("compaction-policy-details");
+  const pressure = page.getByTestId("compaction-pressure");
+  await expect(details).toHaveCount(0);
+  await expect(pressure).toHaveCount(0);
+  await page.getByRole("button", { name: "More composer controls", exact: true }).click();
+  await expect(details).toContainText("Auto above ≈91.8%");
+  await expect(details).toContainText("91,808 context tokens");
+  await expect(details).toContainText("Reserve 8,192 tokens; retain about 12,000 recent tokens");
+  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
+  await expect(details).toHaveCount(0);
+  policy.tokens = 91_809;
+  await page.reload();
+  await expect(pressure).toHaveAttribute("data-pressure", "true");
+  const box = await pressure.boundingBox(); const composer = await page.getByTestId("composer-toolbar").boundingBox();
+  expect(Math.abs(box!.x - composer!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(box!.width - composer!.width)).toBeLessThanOrEqual(1);
+  policy.enabled = false; policy.tokens = 99_000;
+  await page.reload();
+  await expect(pressure).toHaveCount(0);
+  await page.getByRole("button", { name: "More composer controls", exact: true }).click();
+  await expect(details).toContainText("Auto off · manual compaction");
+  await expect(details).toContainText("Automatic threshold and overflow compaction are disabled");
+  await page.getByRole("dialog").getByRole("button", { name: "Compact", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.getByTestId("compaction-status")).toHaveAttribute("data-state", "running");
+  expect(backend.commands.filter(command => command.type === "compact")).toHaveLength(1);
+  expect(backend.forbidden).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});
 
 test("no-op is neutral and failure details/retry are inline", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("pi-locale", "en"));

@@ -24,6 +24,7 @@ import {
 import type { SessionData, AgentEvent, AgentPhase, UseAgentSessionOptions, ThinkingLevelOption, ChatInputHandle, AttachedImage } from "./use-agent-session-types";
 import { streamReducer, getRunError, computeSessionStats, shouldApplySessionLoad } from "./use-agent-session-types";
 import { retainedComposerDraft } from "@/lib/composer-submissions";
+import type { ResolvedCompactionSettings } from "@/lib/compaction-policy";
 import { transferComposerDraft } from "./useComposerDraft";
 import { useSessionCompaction, type CompactionLiveState } from "./use-session-compaction";
 import { useAgentEvents, useRunProgress } from "./use-agent-connection";
@@ -58,6 +59,7 @@ interface LiveAgentState extends CompactionLiveState {
   isStreaming?: boolean;
   isCompacting?: boolean;
   autoCompactionEnabled?: boolean;
+  compactionSettings?: ResolvedCompactionSettings;
   contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
   systemPrompt?: string;
   thinkingLevel?: string;
@@ -114,6 +116,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
   const [isCompacting, setIsCompacting] = useState(false);
   const [autoCompactionEnabled, setAutoCompactionEnabled] = useState<boolean | null>(null);
+  const [compactionSettings, setCompactionSettings] = useState<ResolvedCompactionSettings | null>(null);
   const [autoCompactionUpdating, setAutoCompactionUpdating] = useState(false);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [agentStartedAt, setAgentStartedAt] = useState<number | null>(null);
@@ -235,7 +238,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setActiveLeafId(d.leafId);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
-      if (d.compactionSettings) setAutoCompactionEnabled(d.compactionSettings.enabled);
+      const resolvedCompaction = d.agentState?.state?.compactionSettings ?? d.compactionSettings ?? null;
+      setCompactionSettings(resolvedCompaction);
+      if (resolvedCompaction) setAutoCompactionEnabled(resolvedCompaction.enabled);
       if (d.agentState?.state?.autoCompactionEnabled !== undefined) {
         setAutoCompactionEnabled(d.agentState.state.autoCompactionEnabled);
       }
@@ -347,6 +352,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setAgentStartedAt((current) => running ? current ?? Date.now() : null);
       if (state?.isCompacting !== undefined) setIsCompacting(state.isCompacting);
       reconcileCompaction(state);
+      if (state?.compactionSettings) {
+        setCompactionSettings(state.compactionSettings);
+        setAutoCompactionEnabled(state.compactionSettings.enabled);
+      }
       if (state?.autoCompactionEnabled !== undefined) setAutoCompactionEnabled(state.autoCompactionEnabled);
       if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage);
       if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt);
@@ -1382,6 +1391,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, currentModel, displayModel, sessionStats,
+    compactionSettings: compactionSettings ? { ...compactionSettings, enabled: autoCompactionEnabled ?? compactionSettings.enabled } : null,
     compactionStatus: compaction.view, compactionQueue: compaction.queue,
     handleRetryCompaction: compaction.retry,
     handleCheckCompaction: compaction.check, handleDismissCompaction: compaction.dismiss, handleClearCompactionQueue: compaction.clearQueue,

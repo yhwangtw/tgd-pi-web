@@ -88,6 +88,16 @@ describe("composer controls", () => {
     expect(document.querySelectorAll("[data-model-choice]")).toHaveLength(200);
   });
 
+  it("mounts resolved compaction details only while the user opens More composer controls", async () => {
+    await render(<ChatInput onSend={vi.fn()} onAbort={vi.fn()} isStreaming={false} compactionPolicy={<div data-testid="resolved-policy">Resolved policy</div>} />);
+    expect(container!.querySelector('[data-testid="resolved-policy"]')).toBeNull();
+    const trigger = container!.querySelector<HTMLButtonElement>('[aria-label="More composer controls"]')!;
+    await act(async () => trigger.click());
+    expect(container!.querySelector('[data-testid="resolved-policy"]')?.textContent).toBe("Resolved policy");
+    await act(async () => trigger.click());
+    expect(container!.querySelector('[data-testid="resolved-policy"]')).toBeNull();
+  });
+
   it("offers Max only when the model supports it, including sparse level maps", async () => {
     const change = vi.fn();
     await render(<ThinkingSelector thinkingLevel="high" availableThinkingLevels={["high", "max"]} thinkingLevelMap={{ off: null, minimal: null, low: null, medium: null, high: "high", xhigh: null, max: "max" }} isStreaming={false} onThinkingLevelChange={change} />);

@@ -85,6 +85,7 @@ interface Props {
   onAbortCompaction?: () => void;
   isCompacting?: boolean;
   compactError?: string | null;
+  compactionPolicy?: ReactNode;
   autoCompactionEnabled?: boolean | null;
   autoCompactionUpdating?: boolean;
   onAutoCompactionChange?: (enabled: boolean) => void;
@@ -212,7 +213,7 @@ function ResponsiveComposerControls({
 export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
   modelCatalogStatus, modelCatalogError, modelCatalogDiagnostics, onRetryModelCatalog, onOpenModels,
-  onCompact, onAbortCompaction, isCompacting, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, availableTools, customToolNames, onToolPresetChange,
+  onCompact, onAbortCompaction, isCompacting, compactionPolicy, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, availableTools, customToolNames, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   ephemeral = false, onEphemeralChange,
@@ -1433,6 +1434,10 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                   </div>
                 </div>
               </>
+            )}
+
+            {!isStreaming && mobileToolsOpen && compactionPolicy && (
+              <div className={styles.compactionPolicyControl}>{compactionPolicy}</div>
             )}
 
             {isStreaming && (

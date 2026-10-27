@@ -2,7 +2,7 @@
 import type { ToolExecutionContext } from "@/lib/tool-execution-state";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ArrowDown,
   BadgeCheck,
@@ -18,12 +18,12 @@ import {
   RotateCcw,
   Search,
   Send,
-  TriangleAlert,
   X,
 } from "lucide-react";
 import type { AgentMessage, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
 import { getAssistantFailure, getAssistantOutputIssue, hasVisibleAssistantAnswer } from "@/lib/assistant-outcome";
-import { markSessionRead } from "@/lib/session-read-state";
+import { getSessionReadReceipt, getSessionReadRevision, getServerSessionReadRevision, hasSessionReadSnapshot, subscribeSessionReads } from "@/lib/session-read-state";
+import { useSessionReadTracking } from "@/hooks/use-session-read-tracking";
 import { motionScrollBehavior, prefersReducedMotion } from "@/lib/motion";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle, type MessageQuote } from "./ChatInput";
@@ -51,6 +51,7 @@ import { WelcomeTypewriter } from "./WelcomeTypewriter";
 import { useI18n, type MsgKey } from "@/lib/i18n";
 import { QueuedFollowUps } from "./QueuedFollowUps";
 import { CompactionStatus } from "./CompactionStatus";
+import { CompactionPolicy } from "./CompactionPolicy";
 import { isProviderAuthError } from "./AssistantMessageView";
 import { buildConversationLayout } from "./conversation-turns";
 import { buildTranscriptSearchIndex, findTranscriptMatches, messageText, type FindScope } from "./transcript-search";
@@ -169,7 +170,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
-    isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
+    isCompacting, compactError, compactionSettings, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
     compactionStatus, compactionQueue, handleCheckCompaction, handleDismissCompaction, handleClearCompactionQueue, handleRetryCompaction,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,
     isNew,
@@ -391,6 +392,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   }, [conversationLayout.displayIndices, entryIds, bookmarks]);
 
   const lastReadStorageKey = session?.id ? `pi-last-read:${session.id}` : null;
+  const readRevision = useSyncExternalStore(subscribeSessionReads, getSessionReadRevision, getServerSessionReadRevision);
+  const readSnapshotReady = hasSessionReadSnapshot();
   const [unreadMessageIndex, setUnreadMessageIndex] = useState<number | null>(null);
   const unreadSessionRef = useRef<{ sessionId: string; initialized: boolean } | null>(null);
   useEffect(() => {
@@ -404,79 +407,30 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       unreadSessionRef.current = { sessionId, initialized: false };
       setUnreadMessageIndex(null);
     }
-    if (loading || unreadSessionRef.current.initialized) return;
+    if (loading || !readSnapshotReady || unreadSessionRef.current.initialized) return;
     unreadSessionRef.current.initialized = true;
     if (conversationLayout.displayIndices.length === 0) {
       setUnreadMessageIndex(null);
       return;
     }
-    let lastReadId: string | null = null;
-    try { lastReadId = localStorage.getItem(lastReadStorageKey); } catch { /* private mode */ }
+    const lastReadId = getSessionReadReceipt(sessionId)?.entryId;
     if (!lastReadId) { setUnreadMessageIndex(null); return; }
     const lastReadIndex = entryIds.indexOf(lastReadId);
     if (lastReadIndex < 0) { setUnreadMessageIndex(null); return; }
     const next = conversationLayout.displayIndices.find((index) => index > lastReadIndex && !!entryIds[index]);
     setUnreadMessageIndex(next ?? null);
-  }, [conversationLayout.displayIndices, entryIds, lastReadStorageKey, loading, session?.id]);
+  }, [conversationLayout.displayIndices, entryIds, lastReadStorageKey, loading, session?.id, readRevision, readSnapshotReady]);
 
-  // Keep the read tracker live without recreating its scroll listener for
-  // every streamed/persisted message. Recreating it used to run cleanup-save
-  // just before the assistant entry appeared, then recompute the unread marker
-  // between the user's prompt and the reply in the same active visit.
-  const visibleMessageIndicesRef = useRef(conversationLayout.displayIndices);
-  const readEntryIdsRef = useRef(entryIds);
-  const readMessagesRef = useRef(messages);
-  visibleMessageIndicesRef.current = conversationLayout.displayIndices;
-  readEntryIdsRef.current = entryIds;
-  readMessagesRef.current = messages;
-
-  const saveLastRead = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container || !lastReadStorageKey || document.visibilityState === "hidden") return;
-    const bottom = container.getBoundingClientRect().bottom;
-    let lastVisibleId: string | undefined;
-    let lastVisibleTime = 0;
-    visibleMessageIndicesRef.current.forEach((messageIndex, visibleIndex) => {
-      const element = messageRefs.current[visibleIndex];
-      const entryId = readEntryIdsRef.current[messageIndex];
-      if (element && element.getBoundingClientRect().bottom <= bottom + 12 && entryId) {
-        lastVisibleId = entryId;
-        const message = readMessagesRef.current[messageIndex];
-        if (message?.role === "user" || message?.role === "assistant") {
-          lastVisibleTime = Math.max(lastVisibleTime, message.timestamp ?? 0);
-        }
-      }
-    });
-    if (lastVisibleId) {
-      markSessionRead(lastReadStorageKey.slice("pi-last-read:".length), lastVisibleTime, lastVisibleId);
-    }
-  }, [lastReadStorageKey, messageRefs, scrollContainerRef]);
-
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || !lastReadStorageKey) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const onScroll = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(saveLastRead, 500);
-    };
-    const onPageHide = () => saveLastRead();
-    container.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("pagehide", onPageHide);
-    document.addEventListener("visibilitychange", saveLastRead);
-    return () => {
-      if (timer) clearTimeout(timer);
-      saveLastRead();
-      container.removeEventListener("scroll", onScroll);
-      window.removeEventListener("pagehide", onPageHide);
-      document.removeEventListener("visibilitychange", saveLastRead);
-    };
-  }, [lastReadStorageKey, saveLastRead, scrollContainerRef]);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(saveLastRead);
-    return () => cancelAnimationFrame(frame);
-  }, [conversationLayout.displayIndices, entryIds, saveLastRead]);
+  useSessionReadTracking({
+    sessionId: session?.id ?? null,
+    ready: !loading && readSnapshotReady,
+    streaming: agentRunning,
+    containerRef: scrollContainerRef,
+    messageRefs,
+    displayIndices: conversationLayout.displayIndices,
+    entryIds,
+    messages,
+  });
 
   // ── Long-message collapse ────────────────────────────────────────────────
   // Historical messages taller than a threshold clamp to a preview; the
@@ -1107,6 +1061,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onAbortCompaction={handleAbortCompaction}
       isCompacting={isCompacting}
       compactError={compactError}
+      compactionPolicy={session && compactionSettings ? <CompactionPolicy
+        contextWindow={modelList.find(model => model.id === displayModelValue?.modelId && model.provider === displayModelValue?.provider)?.contextWindow}
+        usage={contextUsage} settings={compactionSettings} busy={agentRunning || isCompacting} onCompact={handleCompact} /> : undefined}
       autoCompactionEnabled={session ? autoCompactionEnabled : null}
       autoCompactionUpdating={autoCompactionUpdating}
       onAutoCompactionChange={session ? handleAutoCompactionChange : undefined}
@@ -1620,37 +1577,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             </span>
           </button>}
         </div>
-        {/* Context-pressure nudge: suggest compaction before it's too late */}
-        {contextUsage?.percent != null && contextUsage.percent >= 80 && !isCompacting && (
-          /* pl-4 pr-[52px]: mirror ChatInput's container padding (right side
-             reserves the minimap rail) so the banner's box aligns exactly
-             with the composer below instead of sticking out to the right. */
-          <div className={`${styles.contextWarningWrap} pb-1 pl-4 pr-[52px]`}>
-          <div className={`mx-auto flex items-center gap-2 ${wideChat ? "max-w-[1040px]" : "max-w-[780px]"}`}>
-            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-3 py-1.5 text-[12px] text-[var(--color-warning-text)]">
-              <TriangleAlert size={UI_ICON_SIZE.inline} className="shrink-0" aria-hidden="true" />
-              {/* min-w-0 flex-1: a flex child's min-width:auto refuses to shrink,
-                  so bare `truncate` never elides — the text collided with the
-                  button on narrow screens. The percent is the key info, so it
-                  lives outside the truncating span and always stays visible. */}
-              <span className="min-w-0 flex-1 truncate" title={t("chat.ctxHigh")}>
-                {t("chat.ctxHigh")}
-              </span>
-              <span className="shrink-0 font-semibold tabular-nums">
-                {Math.round(contextUsage.percent)}%
-              </span>
-              <button
-                onClick={() => void handleCompact()}
-                disabled={agentRunning}
-                className="shrink-0 rounded border border-[var(--color-warning-border)] px-2 py-0.5 text-[11px] font-medium hover:bg-[var(--color-warning-bg-strong)] disabled:opacity-50"
-              >
-                {t("chat.compactNow")}
-              </button>
-            </div>
-          </div>
-          </div>
-        )}
-        <CompactionStatus state={compactionStatus} queued={compactionQueue.length}
+        {!isCompacting && <CompactionPolicy usage={contextUsage} settings={compactionSettings}
+          variant="pressure" wide={wideChat} busy={agentRunning} onCompact={handleCompact} />}
+        <CompactionStatus state={compactionStatus} queued={compactionQueue.length} wide={wideChat}
           onCancel={handleAbortCompaction} onCheck={handleCheckCompaction} onRetry={handleRetryCompaction}
           onDismiss={handleDismissCompaction} onClear={handleClearCompactionQueue} />
         <QueuedFollowUps

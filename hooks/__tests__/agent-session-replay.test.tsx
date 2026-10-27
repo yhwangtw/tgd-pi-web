@@ -63,6 +63,24 @@ describe("session reconciliation and first-prompt ordering", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+  it("reconciles resolved compaction settings from load, snapshots and optimistic toggle rollback", async () => {
+    const persisted = { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 };
+    const live = { enabled: false, reserveTokens: 8_192, keepRecentTokens: 12_000 };
+    harness.fetch.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith("/api/sessions/")
+      ? { ...data(), compactionSettings: persisted, agentState: { running: true, state: { compactionSettings: live } } } : {})));
+    await act(async () => root.render(<Harness selected={session} />));
+    expect(current.compactionSettings).toEqual(live);
+    expect(current.autoCompactionEnabled).toBe(false);
+    const changed = { enabled: true, reserveTokens: 32_768, keepRecentTokens: 40_000 };
+    await act(async () => current.handleAgentEventRef.current?.({ ...snapshot([]), state: { compactionSettings: changed } }));
+    expect(current.compactionSettings).toEqual(changed);
+    await act(async () => current.handleAutoCompactionChange(false));
+    expect(current.compactionSettings).toEqual({ ...changed, enabled: false });
+    harness.send.mockRejectedValueOnce(new Error("offline"));
+    await act(async () => current.handleAutoCompactionChange(true));
+    expect(current.compactionSettings).toEqual({ ...changed, enabled: false });
+  });
+
   it("retains old messages when compaction completion reloads and a reconnect snapshot follows", async () => {
     const old = { role: "user", content: "Old history" } as AgentMessage;
     serverMessages = [old, assistant];

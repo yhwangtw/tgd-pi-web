@@ -36,6 +36,23 @@ describe("Pi 0.86 session state", () => {
   });
 });
 
+describe("resolved live compaction settings", () => {
+  it("includes the current model policy in get_state and SSE snapshots", async () => {
+    const first = { provider: "fixture", id: "small" };
+    const second = { provider: "fixture", id: "large" };
+    const getCompactionSettings = vi.fn(model => ({ enabled: false, reserveTokens: model.id === "small" ? 8_192 : 32_768, keepRecentTokens: 20_000 }));
+    const inner = { sessionId: "policy", sessionFile: "", model: first, autoCompactionEnabled: false, settingsManager: { getCompactionSettings }, dispose: vi.fn() } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner);
+    try {
+      expect(await wrapper.send({ type: "get_state" })).toMatchObject({ compactionSettings: { enabled: false, reserveTokens: 8_192, keepRecentTokens: 20_000 } });
+      expect(getCompactionSettings).toHaveBeenLastCalledWith(first);
+      Object.assign(inner, { model: second });
+      expect(wrapper.getStreamSnapshot().state).toMatchObject({ compactionSettings: { enabled: false, reserveTokens: 32_768, keepRecentTokens: 20_000 } });
+      expect(getCompactionSettings).toHaveBeenLastCalledWith(second);
+    } finally { wrapper.destroy(); }
+  });
+});
+
 describe("active-session idle protection", () => {
   it("does not dispose a silent working model, but still reclaims an idle session", async () => {
     vi.useFakeTimers();

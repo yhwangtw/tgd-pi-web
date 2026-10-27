@@ -1,3 +1,4 @@
+import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { expect, test } from "@playwright/test";
 
 const SESSION = "aaaa1111-2222-3333-4444-555566667777";
@@ -29,6 +30,7 @@ for (const width of [390, 1440]) test(`Goal and Plan controls preserve a draft a
       }
       return route.fulfill({ json: { success: true, data: command.type === "get_tools" ? [] : null } });
     }
+    if (isFixtureReadReceipt(request)) return route.continue();
     forbidden.push(path);
     return route.fulfill({ status: 403, json: { error: "No model calls or persistent writes in this fixture" } });
   });
