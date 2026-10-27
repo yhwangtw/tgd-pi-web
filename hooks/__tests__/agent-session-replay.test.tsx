@@ -63,6 +63,19 @@ describe("session reconciliation and first-prompt ordering", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+  it("retains old messages when compaction completion reloads and a reconnect snapshot follows", async () => {
+    const old = { role: "user", content: "Old history" } as AgentMessage;
+    serverMessages = [old, assistant];
+    await act(async () => root.render(<Harness selected={session} />));
+    const note = { role: "custom", customType: "pi-web-compaction", display: true, content: "Summary" } as AgentMessage;
+    serverMessages = [old, assistant, note];
+    await act(async () => current.handleAgentEventRef.current?.({ type: "compaction_status", compaction: { id: "compact-history", status: "completed", reason: "manual", startedAt: 1, result: { tokensBefore: 40000 } } }));
+    expect(current.messages).toEqual(serverMessages);
+    await act(async () => current.handleAgentEventRef.current?.(snapshot(serverMessages)));
+    expect(current.messages).toEqual(serverMessages);
+    expect(current.messages.filter(message => message.role === "user")).toHaveLength(1);
+  });
+
   it.each(["length", "stop"])("keeps %s no-answer runs out of success callbacks and restores the failure after reconnect", async stopReason => {
     await act(async () => root.render(<Harness selected={session} />));
     const emit = (event: AgentEvent) => act(async () => current.handleAgentEventRef.current?.(event));

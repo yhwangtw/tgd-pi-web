@@ -49,3 +49,18 @@ describe("buildConversationLayout", () => {
     expect(layout.activityByOwner.size).toBe(0);
   });
 });
+
+it("places compaction notes chronologically without splitting an in-progress tool turn", () => {
+  const messages: AgentMessage[] = [
+    { role: "user", content: "Original question" },
+    assistant([{ type: "toolCall", toolCallId: "read", toolName: "read", input: {} }]),
+    { role: "toolResult", toolCallId: "read", content: [{ type: "text", text: "result" }] },
+    { role: "custom", customType: "pi-web-compaction", display: true, content: "Summary" },
+    assistant([{ type: "text", text: "Final answer" }]),
+  ];
+  const layout = buildConversationLayout(messages);
+  expect(layout.turns).toHaveLength(1);
+  expect(layout.displayIndices).toEqual([0, 3, 4]);
+  expect(layout.turns[0].userIndex).toBe(0);
+  expect(layout.activityByOwner.get(4)).toHaveLength(1);
+});

@@ -67,6 +67,12 @@ export default function reconnectFixture(pi) {
     };
     globalThis[guard] = true;
   }
+  pi.on("session_before_compact", (event) => {
+    if (event.customInstructions !== "E2E_HISTORY_COMPACT") return;
+    const kept = event.branchEntries.findLast(entry => entry.type === "message" && entry.message.role === "user");
+    if (!kept) throw new Error("Missing history fixture user");
+    return { compaction: { summary: "Earlier fixture decisions.", firstKeptEntryId: kept.id, tokensBefore: event.preparation.tokensBefore } };
+  });
   const provider = "e2e-reconnect-fixture";
   let outsideReadPath;
   const baseUrl = "https://reconnect-fixture.invalid";
@@ -114,6 +120,11 @@ export default function reconnectFixture(pi) {
           }
           if (!match) throw new Error("Only named reconnect fixture prompts are accepted");
           const [, mode, token] = match;
+          if (token.startsWith("history-after-")) {
+            if (answerTexts.some(text => text.includes("history-old-")) || !answerTexts.some(text => text.includes("Earlier fixture decisions."))) {
+              throw new Error("Full display history leaked into compacted model context");
+            }
+          }
           if (mode === "subagents") {
             const result = context.messages.at(-1);
             if (result?.role === "toolResult" && result.toolName === "subagent") {

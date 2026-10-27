@@ -7,7 +7,7 @@ import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent
 import {
   resolveSessionPath,
   invalidateSessionPathCache,
-  buildSessionContext,
+  buildSessionTranscript,
   buildTree,
   getLeafId,
   readSessionHeader,
@@ -50,7 +50,7 @@ export async function GET(
     const responseFilePath = filePath ?? live?.sessionFile ?? "";
     const tree = buildTree(entries);
     const leafId = getLeafId(entries);
-    const context = buildSessionContext(entries, leafId);
+    const context = buildSessionTranscript(entries, leafId);
 
     let modified = header?.timestamp ?? new Date().toISOString();
     try { modified = statSync(responseFilePath).mtime.toISOString(); } catch { /* use header timestamp */ }

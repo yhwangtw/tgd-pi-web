@@ -10,7 +10,7 @@ import {
   type ExtensionError,
   type ModelRegistry,
 } from "@earendil-works/pi-coding-agent";
-import { buildSessionContext, buildTree, cacheSessionPath, getLeafId } from "./session-reader";
+import { buildSessionTranscript, buildTree, cacheSessionPath, getLeafId } from "./session-reader";
 import { encodeSessionData } from "./session-tree-wire";
 import { AgentEventLog, type AgentStreamRecord, type ReplayStatus } from "./agent-event-log";
 import { CompactionController } from "./compaction-controller";
@@ -695,7 +695,7 @@ export class AgentSessionWrapper {
       cursor: this.eventLog.cursor, replayStatus, state: this.getLiveState(),
       sessionData: encodeSessionData({
         sessionId: this.sessionId, filePath: this.sessionFile, leafId,
-        tree: buildTree(entries), context: buildSessionContext(entries, leafId),
+        tree: buildTree(entries), context: buildSessionTranscript(entries, leafId),
       }, "flat-v2"),
       streamingMessage: this.streamingMessage,
       phase: this.activeTools.size ? { kind: "running_tools", tools: [...this.activeTools.values()] } : null,

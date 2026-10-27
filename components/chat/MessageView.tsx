@@ -15,6 +15,7 @@ import { AssistantMessageView } from "./AssistantMessageView";
 import { BashBlock } from "./BashBlock";
 import type { BashExecutionMessage } from "@/lib/types";
 import type { AssistantUsage } from "@/lib/usage-aggregation";
+import { CompactionSummary, getCompactionSummary } from "./CompactionSummary";
 import { CustomMessageView } from "./CustomMessageView";
 
 interface Props {
@@ -58,6 +59,8 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     }
   }, [entryId, message.role, onQuote]);
   const onQuoteText = onQuote && entryId ? quoteMessage : undefined;
+  const summary = getCompactionSummary(message);
+  if (summary !== null) return <CompactionSummary summary={summary} />;
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} onEditRerun={onEditRerun} onQuote={onQuoteText} isBookmarked={isBookmarked} onToggleBookmark={onToggleBookmark} />;
   }

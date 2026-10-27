@@ -1,4 +1,5 @@
 import type { AgentMessage, AssistantMessage } from "@/lib/types";
+import { getCompactionSummary } from "@/lib/compaction-message";
 import { getAssistantOutputIssue } from "@/lib/assistant-outcome";
 import { addUsage, emptyUsage, type AssistantUsage } from "@/lib/usage-aggregation";
 
@@ -80,6 +81,7 @@ export function buildConversationLayout(messages: AgentMessage[]): ConversationL
   };
 
   messages.forEach((message, index) => {
+    if (getCompactionSummary(message) !== null) return;
     if (message.role === "user") {
       finish();
       current = {
@@ -107,7 +109,7 @@ export function buildConversationLayout(messages: AgentMessage[]): ConversationL
   });
   finish();
 
-  const displayIndices: number[] = [];
+  const displayIndices: number[] = messages.flatMap((message, index) => getCompactionSummary(message) !== null ? [index] : []);
   const activityByOwner = new Map<number, AssistantMessage[]>();
   const activityAssistantIndices = new Set<number>();
   const finalAssistantIndices = new Set<number>();

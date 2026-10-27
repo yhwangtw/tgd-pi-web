@@ -358,7 +358,7 @@ export function buildTree(entries: SessionEntry[]): SessionTreeNode[] {
   return roots;
 }
 
-export { buildSessionContext } from "./session-context";
+export { buildSessionContext, buildSessionTranscript } from "./session-context";
 
 export function getLeafId(entries: SessionEntry[]): string | null {
   if (entries.length === 0) return null;

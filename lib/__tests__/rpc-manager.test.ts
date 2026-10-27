@@ -697,3 +697,25 @@ describe("official SDK queue adapter", () => {
     } finally { wrapper.destroy(); }
   });
 });
+
+it("reconnect snapshots preserve pre-compaction history without changing the live model context", () => {
+  const t = "2026-10-27T00:00:00Z";
+  const entries: SessionEntry[] = [
+    { type: "message", id: "old", parentId: null, timestamp: t, message: { role: "user", content: "Old question" } },
+    { type: "message", id: "kept", parentId: "old", timestamp: t, message: { role: "user", content: "Kept question" } },
+    { type: "compaction", id: "compact", parentId: "kept", timestamp: t, summary: "Summary", firstKeptEntryId: "kept", tokensBefore: 40000 },
+  ];
+  const before = JSON.stringify(entries);
+  const liveMessages = [{ role: "user", content: "Model summary only" }];
+  const inner = { sessionId: "compacted-snapshot", sessionFile: "", messages: liveMessages, dispose: vi.fn(), sessionManager: { getEntries: () => entries, getLeafId: () => "compact" } } as unknown as AgentSessionLike;
+  const wrapper = new AgentSessionWrapper(inner);
+  try {
+    const records: string[] = [];
+    const stop = wrapper.onStreamEvent(record => records.push(record.data), "expired:1"); stop();
+    const restored = decodeSessionData(JSON.parse(records[0]).sessionData);
+    expect(restored.context.entryIds).toEqual(["old", "kept", "compact"]);
+    expect(restored.context.messages.map((m: { role: string }) => m.role)).toEqual(["user", "user", "custom"]);
+    expect((inner as unknown as { messages: unknown }).messages).toBe(liveMessages);
+    expect(JSON.stringify(entries)).toBe(before);
+  } finally { wrapper.destroy(); }
+});

@@ -77,6 +77,11 @@ scroll memory; prepend compensation uses a committed row's real position, never
 estimated-height placeholders. `isPrependingRef` suppresses stream following while
 anchoring, and explicit history navigation pauses smart follow before scrolling.
 This is progressive mounting, not a permanent 200-row cap after manual expansion.
+Chat detail, branch navigation, background transcripts and reconnect snapshots use
+`buildSessionTranscript`: the complete selected branch with collapsed compaction
+notes. The legacy response field `context` contains this display transcript, not
+model input. Pi continues to build its own compacted context; reading history
+never rewrites session files or sends earlier messages back to the model.
 Minimap geometry is cached between layout changes; scrolling only updates its
 viewport indicator, with observer work coalesced into animation frames. Scroll
 before visibility assertions for offscreen controls. UI text uses the Unicode
