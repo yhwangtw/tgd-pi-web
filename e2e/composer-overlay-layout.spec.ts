@@ -39,9 +39,15 @@ const test = base.extend<{ layoutNetworkSafety: void }>({
     await page.route(/\/api\/sessions\/[^/?]+\?includeState$/, async (route) => {
       const response = await route.fetch();
       const data = await response.json();
-      await route.fulfill({ response, json: { ...data, agentState: { running: false } } });
+      await route.fulfill({ response, json: {
+        ...data,
+        context: { ...data.context, model: { provider: "anthropic", modelId: "claude-sonnet-5" } },
+        compactionSettings: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 },
+        agentState: { running: false },
+      } });
     });
     await use();
+    await page.unrouteAll({ behavior: "wait" });
     expect(forbidden, "Opening, resizing, and closing composer controls must not call a model or mutate a session").toEqual([]);
   }, { auto: true }],
 });
@@ -106,9 +112,17 @@ for (const style of ["original", "trae"] as const) {
     await controls.click();
     const panel = page.getByRole("region", { name: "Composer controls", exact: true });
     await expectContained(page, panel);
-    // Expanded controls intentionally expose their labels. At this desktop
-    // width they may wrap into three compact rows; the idle trigger stays icon-only.
-    expect((await panel.boundingBox())!.height).toBeLessThanOrEqual(160);
+    // Keep the original control-density budget independent of the new full-width
+    // compaction explanation. Both sections still have to fit in the viewport.
+    const policy = panel.getByTestId("compaction-policy-details");
+    await expect(policy).toBeVisible();
+    await expectContained(page, policy);
+    const controlHeight = await panel.evaluate(element => {
+      const explanation = element.querySelector('[class*="compactionPolicyControl"]')!;
+      return element.getBoundingClientRect().height - explanation.getBoundingClientRect().height
+        - Number.parseFloat(getComputedStyle(element).rowGap);
+    });
+    expect(controlHeight).toBeLessThanOrEqual(160);
     for (const label of ["Composer", "Reasoning", "Tools", "Response scroll", "Auto compact", "Context", "Sound"]) {
       await expect(panel.getByText(label, { exact: true })).toBeVisible();
     }

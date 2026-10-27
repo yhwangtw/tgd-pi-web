@@ -1436,10 +1436,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
               </>
             )}
 
-            {!isStreaming && mobileToolsOpen && compactionPolicy && (
-              <div className={styles.compactionPolicyControl}>{compactionPolicy}</div>
-            )}
-
             {isStreaming && (
               <button
                 type="button"
@@ -1472,6 +1468,9 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                   <span className={styles.mobileControlValue}>{t(soundEnabled ? "chat.on" : "chat.off")}</span>
                 </button>
               </div>
+            )}
+            {!isStreaming && mobileToolsOpen && compactionPolicy && (
+              <div className={styles.compactionPolicyControl}>{compactionPolicy}</div>
             )}
           </ResponsiveComposerControls>
 

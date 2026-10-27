@@ -104,8 +104,12 @@ test("switching sessions while a send fails preserves both drafts", async ({ pag
     return route.continue();
   });
   await input(page).fill("Original A"); await input(page).press("Enter"); await expect(input(page)).toHaveValue("");
+  // Earlier specs create recent sessions; the older fixture may be virtualized.
+  const search = page.getByRole("textbox", { name: "Search conversations", exact: true });
+  await search.fill("專案架構分析");
   await page.locator(`[data-session-row="${FIXTURE}"]`).click(); await input(page).fill("Draft B"); hold.release();
   await expect(page).toHaveURL(new RegExp(`session=${FIXTURE}`)); await expect(input(page)).toHaveValue("Draft B");
+  await search.fill("seed-switch");
   await page.locator(`[data-session-row="${id}"]`).click();
   await expect(page.getByText("Message not sent · draft saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Restore draft", exact: true }).click(); await expect(input(page)).toHaveValue("Original A");

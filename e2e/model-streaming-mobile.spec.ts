@@ -281,13 +281,21 @@ for (const style of ["original", "trae"] as const) {
           localStorage.setItem("pi-density", density);
           localStorage.setItem("pi-font-size", fontSize);
         }, { style, density, fontSize });
-        await page.setViewportSize({ width: 1440, height: 900 });
-        await page.goto(`/?session=${MAIN_ID}`);
         const row = page.locator(`[data-session-row="${MAIN_ID}"]`);
-        await expect(row).toBeVisible();
         for (const width of [1440, 390]) {
+          // Mount in the target viewport: resizing an open desktop sidebar to
+          // mobile retains its state, so blindly clicking Sessions closes it.
           await page.setViewportSize({ width, height: 900 });
-          if (width === 390) await page.getByRole("button", { name: "Sessions", exact: true }).click();
+          await page.goto(`/?session=${MAIN_ID}`);
+          await expect(page.getByTestId("app-shell")).toHaveAttribute("data-hydrated", "true");
+          if (width === 390) {
+            await expect(page.locator(".sidebar-container")).toHaveAttribute("aria-hidden", "true");
+            await page.getByRole("button", { name: "Sessions", exact: true }).click();
+          }
+          // The shared fixture store can contain many newer conversations.
+          await page.getByRole("textbox", { name: "Search conversations", exact: true }).fill("專案架構分析");
+          await expect(row).toHaveAttribute("aria-selected", "true");
+          await expect(row).toBeVisible();
           await expect.poll(async () => {
             const box = await row.boundingBox();
             return !!box && box.x >= 0 && box.x + box.width <= width;
