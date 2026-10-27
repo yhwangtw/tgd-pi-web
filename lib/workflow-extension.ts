@@ -1,3 +1,4 @@
+import { getAssistantFailure, getAssistantOutputIssue, type AssistantOutputIssue } from "./assistant-outcome";
 import { goalActions, planActions } from "./workflow-actions";
 import { randomUUID } from "node:crypto";
 import { defineTool, type ExtensionAPI, type ExtensionContext, type ExtensionCommandContext, type InlineExtension, type RegisteredCommand } from "@earendil-works/pi-coding-agent";
@@ -26,6 +27,7 @@ export function createWorkflowExtension(): InlineExtension {
     let repeatedRuns = 0;
     let runHadTools = false;
     let runOutput = "";
+    let runOutputIssue: AssistantOutputIssue | null = null;
     let commandBusy = false;
     let runGoalId: string | undefined;
     let runSettled = false;
@@ -273,7 +275,7 @@ export function createWorkflowExtension(): InlineExtension {
       if (state.plan) instructions.push(`Saved plan (${state.plan.status}): ${state.plan.title}\n${state.plan.steps.map((s, i) => `${i + 1}. [${s.status}] ${s.text}`).join("\n")}\nUse update_plan for plan changes and verified progress. Planning and ready plans require a user request before execution.`);
       return instructions.length ? { systemPrompt: `${event.systemPrompt}\n\n${instructions.join("\n")}` } : undefined;
     });
-    pi.on("agent_start", () => { generation++; runSettled = false; pendingContinuation = false; runOutput = ""; runHadTools = false; runGoalId = state.goal?.status === "active" ? state.goal.id : undefined; });
+    pi.on("agent_start", () => { generation++; runSettled = false; pendingContinuation = false; runOutput = ""; runOutputIssue = null; runHadTools = false; runGoalId = state.goal?.status === "active" ? state.goal.id : undefined; });
     pi.on("ui_prompt_start", () => { pendingDialogs++; });
     pi.on("ui_prompt_end", (_event, ctx) => { pendingDialogs = Math.max(0, pendingDialogs - 1); continueGoal(ctx); });
     pi.on("tool_call", (_event, ctx) => {
@@ -284,10 +286,12 @@ export function createWorkflowExtension(): InlineExtension {
     pi.on("message_end", (event, ctx) => {
       if (event.message.role !== "assistant") return;
       const message = event.message;
+      runOutputIssue = getAssistantOutputIssue(message);
       runOutput = message.content.filter(b => b.type === "text").map(b => b.type === "text" ? b.text : "").join("\n").trim();
       if (!state.goal || state.goal.id !== runGoalId) return;
       state.goal.tokens += Math.max(0, message.usage.input + message.usage.output);
-      if (message.stopReason === "aborted" || message.stopReason === "error") pause(ctx, message.stopReason === "aborted" ? "Stopped by user." : "Model error. Resolve it before resuming.");
+      const failure = getAssistantFailure(message);
+      if (message.stopReason === "aborted" || message.stopReason === "error") pause(ctx, message.stopReason === "aborted" ? "Stopped by user." : `${failure}. Resolve it before resuming.`);
       if (state.goal.status === "active" && state.goal.tokenBudget && state.goal.tokens >= state.goal.tokenBudget) {
         state.goal.status = "budget_limited";
         state.goal.reason = "Token budget reached. Usage is checked after each model response.";
@@ -311,6 +315,15 @@ export function createWorkflowExtension(): InlineExtension {
       save(ctx);
       send(`Continue the active goal: ${goal.objective}\nMake concrete progress and verify the result. Use goal_status with id ${goal.id} when complete or blocked.`, true);
     }
-    pi.on("agent_settled", (_event, ctx) => { runSettled = true; continueGoal(ctx); });
+    pi.on("agent_settled", (_event, ctx) => {
+      runSettled = true;
+      // Pi may compact/retry an intermediate length stop. Judge the final
+      // response only, after official recovery and queued work have settled.
+      if (runOutputIssue && state.goal && state.goal.id === runGoalId && state.goal.status === "active") {
+        pause(ctx, runOutputIssue === "output_limit" ? "Output token limit reached. Adjust settings before resuming." : "No visible answer was produced. Review before resuming.");
+        return;
+      }
+      continueGoal(ctx);
+    });
   } };
 }

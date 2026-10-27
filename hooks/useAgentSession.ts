@@ -4,6 +4,7 @@ import { keepActivePhase, phaseForMessage } from "./agent-phase";
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useReducer, useMemo } from "react";
 import type { AgentMessage } from "@/lib/types";
 import { browserMetricsStorage, GenerationMetricsTracker } from "@/lib/generation-metrics";
+import { getAssistantOutputIssue } from "@/lib/assistant-outcome";
 import { RunLatencyTracker } from "@/lib/run-latency";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { decodeSessionData, type SessionTreeWire } from "@/lib/session-tree-wire";
@@ -352,7 +353,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setRetryInfo(null);
         setQueuedFollowUps([]);
         resetRunProgress();
-        if (typeof event.lastRunError === "string" && event.lastRunError) {
+        const outputIssue = getAssistantOutputIssue(wire?.context?.messages.findLast(message => message.role === "assistant"));
+        if (outputIssue) {
+          setProviderRecovery(null);
+          setErrorTitle(sessionNameRef.current);
+        } else if (typeof event.lastRunError === "string" && event.lastRunError) {
           const classified = classifyProviderError(event.lastRunError);
           setProviderRecovery({ message: event.lastRunError, kind: classified.kind, retryAfterSeconds: classified.retryAfterSeconds, candidate: null, automatic: false });
           setErrorTitle(sessionNameRef.current);
@@ -509,8 +514,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setQueuedFollowUps([]);
         resetRunProgress();
         {
+          const finalMessage = (event.messages as AgentMessage[] | undefined)?.findLast(message => message.role === "assistant");
+          const outputIssue = getAssistantOutputIssue(finalMessage);
           const runError = getRunError(event);
-          if (runError) {
+          if (outputIssue) {
+            setProviderRecovery(null);
+            setErrorTitle(sessionNameRef.current);
+            if (observedRunning && !event.replayed) notifyDone(sessionNameRef.current, translate(outputIssue === "output_limit" ? "chat.outputLimitTitle" : "chat.emptyOutputTitle"));
+          } else if (runError) {
             const classified = classifyProviderError(runError);
             const failedMessage = (event.messages as AgentMessage[] | undefined)?.findLast((message) => message.role === "assistant");
             const current = failedMessage?.role === "assistant" && failedMessage.provider && failedMessage.model
@@ -1146,13 +1157,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       : Array.isArray(content)
         ? (content as Array<{ type?: string; text?: string }>).filter((b) => b.type === "text").map((b) => b.text ?? "").join("\n")
         : "";
-    if (!text.trim()) return;
+    const images: AttachedImage[] = Array.isArray(content) ? content.flatMap(block => {
+      if (block.type !== "image") return [];
+      const data = block.source?.data ?? block.data;
+      const mimeType = block.source?.media_type ?? block.mimeType;
+      return typeof data === "string" && typeof mimeType === "string"
+        ? [{ data, mimeType, previewUrl: `data:${mimeType};base64,${data}` }] : [];
+    }) : [];
+    if (!text.trim() && !images.length) return;
     let prevEntryId: string | undefined;
     for (let i = lastUserIdx - 1; i >= 0; i--) {
       if (entryIds[i]) { prevEntryId = entryIds[i]; break; }
     }
     if (prevEntryId) await handleNavigate(prevEntryId);
-    await handleSend(text);
+    await handleSend(text, images.length ? images : undefined);
   }, [messages, entryIds, agentRunning, handleNavigate, handleSend]);
 
   const handleRetryWithModel = useCallback(async (model: ProviderRecoveryModel) => {

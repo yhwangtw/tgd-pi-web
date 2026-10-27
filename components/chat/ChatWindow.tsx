@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import type { AgentMessage, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
+import { getAssistantFailure, getAssistantOutputIssue, hasVisibleAssistantAnswer } from "@/lib/assistant-outcome";
 import { markSessionRead } from "@/lib/session-read-state";
 import { motionScrollBehavior, prefersReducedMotion } from "@/lib/motion";
 import { MessageView } from "./MessageView";
@@ -523,7 +524,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         }
         continue;
       }
-      if (assistant.stopReason !== "error" && messageText(assistant).trim()) {
+      if (!getAssistantFailure(assistant) && assistant.stopReason !== "aborted" && messageText(assistant).trim()) {
         hasLaterAssistantSuccess = true;
         if (provider) laterSuccessfulProviders.add(provider);
       }
@@ -1036,10 +1037,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !agentRunning;
   const lastAssistantOutcome = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index--) {
+      if (messages[index].role === "user") return null;
       if (messages[index].role === "assistant") return messages[index] as import("@/lib/types").AssistantMessage;
     }
     return null;
   }, [messages]);
+  const lastOutputIssue = getAssistantOutputIssue(lastAssistantOutcome);
   const [runAnnouncement, setRunAnnouncement] = useState("");
   const wasAgentRunningRef = useRef(false);
   useEffect(() => {
@@ -1050,15 +1053,17 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       return;
     }
     if (!agentRunning && wasRunning) {
-      if (lastAssistantOutcome?.stopReason === "error") {
+      if (lastOutputIssue) {
+        setRunAnnouncement(t(lastOutputIssue === "output_limit" ? "chat.outputLimitTitle" : "chat.emptyOutputTitle"));
+      } else if (lastAssistantOutcome?.stopReason === "error") {
         setRunAnnouncement(t("chat.responseFailed"));
       } else if (lastAssistantOutcome?.stopReason === "aborted") {
         setRunAnnouncement(t("chat.responseStopped"));
-      } else {
+      } else if (lastAssistantOutcome) {
         setRunAnnouncement(t("chat.responseComplete"));
       }
     }
-  }, [agentRunning, lastAssistantOutcome?.stopReason, t]);
+  }, [agentRunning, lastAssistantOutcome?.stopReason, lastOutputIssue, t]);
 
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
@@ -1496,14 +1501,17 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
             {/* Recovery actions stay next to the interrupted outcome. Earlier
                 turns already expose edit/rerun + fork from the user message. */}
-            {!agentRunning && (lastAssistantOutcome?.stopReason === "error" || lastAssistantOutcome?.stopReason === "aborted") && (
+            {!agentRunning && (lastOutputIssue || lastAssistantOutcome?.stopReason === "error" || lastAssistantOutcome?.stopReason === "aborted") && (
               <div className={styles.recoveryActions}>
-                {lastAssistantOutcome.stopReason === "aborted" && (
+                {(lastAssistantOutcome?.stopReason === "aborted" || (lastOutputIssue === "output_limit" && hasVisibleAssistantAnswer(lastAssistantOutcome))) && (
                   <button type="button" onClick={() => void handleSend(t("chat.continuePrompt"))}>
                     <ChevronRight size={UI_ICON_SIZE.inline} aria-hidden="true" />
                     {t("chat.continue")}
                   </button>
                 )}
+                {lastOutputIssue && <button type="button" onClick={() => chatInputRef.current?.openControls?.()}>
+                  {t("recovery.adjustThinking")}
+                </button>}
                 <button type="button" onClick={() => void handleRetry()}>
                   <RotateCcw size={UI_ICON_SIZE.inline} aria-hidden="true" />
                   {t("chat.retry")}

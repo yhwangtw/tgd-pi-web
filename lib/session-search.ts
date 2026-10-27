@@ -1,3 +1,5 @@
+import { getAssistantFailure } from "./assistant-outcome";
+
 export interface SessionSearchMatch {
   entryId: string;
   role: "user" | "assistant";
@@ -83,7 +85,7 @@ export function getSessionSearchMetadata(entries: readonly SearchableEntry[]): S
     }
     if (entry.type !== "message" || entry.message?.role !== "assistant") continue;
     const stopReason = entry.message.stopReason;
-    status = stopReason === "error" ? "failed" : stopReason === "aborted" ? "interrupted" : "completed";
+    status = getAssistantFailure(entry.message) ? "failed" : stopReason === "aborted" ? "interrupted" : "completed";
   }
   return { provider, modelId, status };
 }

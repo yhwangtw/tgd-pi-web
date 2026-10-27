@@ -19,6 +19,17 @@ function fixture() {
 }
 
 describe("agent SSE replay contract", () => {
+  it.each(["length", "stop"])("retains %s output failure on reconnect and clears it for the next run", stopReason => {
+    const { wrapper, emit } = fixture();
+    try {
+      emit({ type: "agent_start" });
+      emit({ type: "agent_end", messages: [{ role: "assistant", stopReason, content: [] }] });
+      expect(wrapper.getStreamSnapshot().lastRunError).toBe(stopReason === "length" ? "Output token limit reached" : "Model finished without a visible answer");
+      emit({ type: "agent_start" });
+      expect(wrapper.getStreamSnapshot().lastRunError).toBeNull();
+    } finally { wrapper.destroy(); }
+  });
+
   it("does not stream or replay internal system messages as chat bubbles", () => {
     const { wrapper, emit } = fixture();
     try {

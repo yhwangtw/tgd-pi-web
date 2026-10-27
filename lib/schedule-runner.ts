@@ -1,3 +1,4 @@
+import { getAssistantFailure } from "./assistant-outcome";
 import { randomUUID } from "node:crypto";
 import { startRpcSession, type AgentEvent, type AgentSessionWrapper } from "./rpc-manager";
 import { nextScheduleRunAt } from "./schedule-core";
@@ -20,9 +21,8 @@ function eventRunError(event: AgentEvent): string | null {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
     if (message?.role !== "assistant") continue;
-    if (message.stopReason === "error") return message.errorMessage || "Model call failed";
     if (message.stopReason === "aborted") return "The agent run was aborted";
-    return null;
+    return getAssistantFailure(message);
   }
   return null;
 }

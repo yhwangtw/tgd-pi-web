@@ -31,6 +31,12 @@ describe("buildConversationLayout", () => {
     expect(layout.usageByFinalAssistant.get(5)).toMatchObject({ input: 30, output: 6, cacheRead: 5, cost: { total: 0.03 } });
   });
 
+  it.each(["length", "stop"])("keeps a final %s outcome visible even with no text or activity", stopReason => {
+    const layout = buildConversationLayout([{ role: "user", content: "Answer" }, assistant([], { stopReason })]);
+    expect(layout.displayIndices).toEqual([0, 1]);
+    expect(layout.finalAssistantIndices.has(1)).toBe(true);
+  });
+
   it("keeps ordinary answers and errored outcomes visible", () => {
     const messages: AgentMessage[] = [
       { role: "user", content: "Hi" },

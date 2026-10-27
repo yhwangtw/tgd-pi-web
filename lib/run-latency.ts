@@ -1,3 +1,5 @@
+import { getAssistantFailure } from "./assistant-outcome";
+
 /** Local, content-free timings. Client and server durations use separate clocks. */
 export type RunLatencyStatus = "running" | "completed" | "failed" | "aborted" | "interrupted";
 export type ServerLatencyStage = "accepted" | "provider_request" | "first_content" | "completed";
@@ -102,7 +104,7 @@ export class RunLatencyTracker {
     if (event.type === "agent_end") {
       const messages = Array.isArray(event.messages) ? event.messages : [];
       const assistant = [...messages].reverse().find(message => message?.role === "assistant");
-      this.finish(assistant?.stopReason === "error" ? "failed" : assistant?.stopReason === "aborted" ? "aborted" : "completed");
+      this.finish(getAssistantFailure(assistant) ? "failed" : assistant?.stopReason === "aborted" ? "aborted" : "completed");
     }
   }
   /** Called in React's layout effect after the received text reaches the DOM.

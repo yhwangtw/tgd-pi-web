@@ -19,7 +19,7 @@ describe("composer hint context", () => {
   });
   it("does not offer guesses for empty, incomplete, errored, or tool-only turns", () => {
     for (const messages of [[], [user], [assistant], [user, assistant, user, { ...assistant, content: [] }], [user, { ...assistant, stopReason: "error" }],
-      [user, { ...assistant, stopReason: "aborted" }],
+      [user, { ...assistant, stopReason: "aborted" }], [user, { ...assistant, stopReason: "length" }],
       [user, { ...assistant, content: [{ type: "toolCall", toolCallId: "one", toolName: "bash", input: {} }] }]] as AgentMessage[][]) {
       expect(composerHintMessages(messages)).toBeNull();
     }

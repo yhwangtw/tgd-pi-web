@@ -1,3 +1,4 @@
+import { getAssistantFailure } from "./assistant-outcome";
 import { readAgentRunStore } from "./agent-run-store";
 import { readScheduleStore } from "./schedule-store";
 import { listAllSessions, readSessionFile } from "./session-reader";
@@ -38,9 +39,10 @@ function assistantErrorFromSession(session: SessionInfo): { message: string; at?
     const entry = entries[index];
     if (entry.type !== "message" || entry.message.role !== "assistant") continue;
     const message = entry.message as AssistantMessage;
-    if (message.stopReason !== "error") return null;
+    const failure = getAssistantFailure(message);
+    if (!failure) return null;
     return {
-      message: message.errorMessage?.trim() || "Model call failed",
+      message: failure,
       at: entry.timestamp,
     };
   }

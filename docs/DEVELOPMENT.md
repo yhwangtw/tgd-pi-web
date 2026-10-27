@@ -93,6 +93,17 @@ stay open. `canClose` protects in-flight work and `hasUnsavedChanges` asks befor
 X, Escape or outside dismissal discards an edited form. Explicit Cancel buttons
 remain intentional discard actions.
 
+## Output limits and empty answers
+
+Keep provider output limits intact. A final `length` response is incomplete,
+including when reasoning consumed the allowance before any visible answer.
+Preserve partial output and show an explicit outcome with manual retry and
+thinking controls. A finished `stop` with known empty/thinking-only content is
+an empty answer; streaming placeholders and tool handoffs are not failures.
+Use the shared assistant outcome classifier for notifications, reconnect state,
+run records and session metadata. Goals judge the final response at
+`agent_settled`, allowing official SDK recovery to succeed before pausing.
+
 ## Workflow and delegation
 
 The empty composer can suggest a next message after a completed assistant turn.

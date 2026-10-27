@@ -1,4 +1,5 @@
 import type { AgentMessage, AssistantMessage } from "@/lib/types";
+import { getAssistantOutputIssue } from "@/lib/assistant-outcome";
 import { addUsage, emptyUsage, type AssistantUsage } from "@/lib/usage-aggregation";
 
 export interface ConversationTurn {
@@ -27,7 +28,8 @@ export function assistantHasActivity(message: AssistantMessage): boolean {
 }
 
 export function assistantHasVisibleOutcome(message: AssistantMessage): boolean {
-  return message.stopReason === "error"
+  return getAssistantOutputIssue(message) !== null
+    || message.stopReason === "error"
     || message.stopReason === "aborted"
     || message.content.some((block) => block.type === "text" || block.type === "image");
 }

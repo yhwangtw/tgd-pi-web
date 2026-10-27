@@ -1,3 +1,4 @@
+import { getAssistantFailure } from "@/lib/assistant-outcome";
 import type { AgentMessage, ToolResultMessage } from "@/lib/types";
 import type { ConversationLayout } from "./conversation-turns";
 
@@ -33,9 +34,9 @@ export function buildTranscriptSearchIndex(
     const message = messages[index];
     const activityMessages = layout.activityByOwner.get(index) ?? [];
     const parts: string[] = [];
-    let hasError = message.role === "assistant" && message.stopReason === "error";
+    let hasError = getAssistantFailure(message) !== null;
     for (const item of activityMessages) {
-      hasError ||= item.stopReason === "error";
+      hasError ||= getAssistantFailure(item) !== null;
       if (item.errorMessage) parts.push(item.errorMessage);
       for (const block of item.content) {
         if (block.type === "thinking") parts.push(block.thinking);

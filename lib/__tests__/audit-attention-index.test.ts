@@ -39,7 +39,7 @@ describe("indexed attention failures", () => {
       expect(readFileSync(path, "utf8")).toContain("test-secret-123456789");
       globalThis.__piSessionInfoCache = undefined;
       expect((await listAllSessions())[0].lastAssistantError).toEqual(indexed[0].lastAssistantError);
-      entries.push({ type: "message", id: "m3", parentId: "m2", timestamp: at, message: { role: "assistant", content: [], timestamp: Date.parse(at), stopReason: "stop" } });
+      entries.push({ type: "message", id: "m3", parentId: "m2", timestamp: at, message: { role: "assistant", content: [{ type: "text", text: "Recovered answer" }], timestamp: Date.parse(at), stopReason: "stop" } });
       save();
       const recovered = await listAllSessions();
       expect(recovered[0].lastAssistantError).toBeNull();

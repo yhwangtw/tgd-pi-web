@@ -1,3 +1,4 @@
+import { getAssistantFailure } from "./assistant-outcome";
 import type { AgentMessage } from "./types";
 import { hintText, isHintContext, type ComposerHintContext } from "./composer-hint-context";
 
@@ -38,7 +39,7 @@ export interface ComposerHintResult {
 /** Only visible text from the latest exchange; never images, thinking or tools. */
 export function composerHintMessages(messages: AgentMessage[]): ComposerHintMessage[] | null {
   const last = messages.at(-1);
-  if (!last || last.role !== "assistant" || last.stopReason === "error" || last.stopReason === "aborted"
+  if (!last || last.role !== "assistant" || getAssistantFailure(last) || last.stopReason === "aborted"
     || last.content.some(block => block.type === "toolCall")
     || !last.content.some(block => block.type === "text" && block.text.trim())) return null;
   const result: ComposerHintMessage[] = [];

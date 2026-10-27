@@ -38,6 +38,7 @@ import { MessageBookmarkAction, MessageBookmarkIndicator } from "./MessageBookma
 import { useMobileActionPlacement } from "@/hooks/use-mobile-action-placement";
 import { redactSensitiveText } from "@/lib/redaction";
 import type { OutputCardKind } from "@/lib/output-design";
+import { getAssistantFailure, getAssistantOutputIssue, hasVisibleAssistantAnswer } from "@/lib/assistant-outcome";
 import { presentProviderError } from "@/lib/provider-error-presentation";
 export { presentProviderError } from "@/lib/provider-error-presentation";
 
@@ -126,6 +127,7 @@ export function AssistantMessageView({
   onToggleBookmark?: (entryId: string) => void;
 }) {
   const { locale, t } = useI18n();
+  const outputIssue = getAssistantOutputIssue(message);
   const time = showTimestamp ? formatTime(message.timestamp, locale) : null;
   const errorPresentation = presentProviderError(message.errorMessage, t("chat.modelFailed"), {
     unsupported_setting: t("recovery.unsupportedThinking"),
@@ -308,6 +310,17 @@ export function AssistantMessageView({
         })}
       </div>
 
+      {!isStreaming && outputIssue && (
+        <div className={styles.errorCard} role="alert" data-output-issue={outputIssue}>
+          <TriangleAlert size={UI_ICON_SIZE.compact} aria-hidden="true" />
+          <div className={styles.errorContent}>
+            <span className={styles.errorSummary}>{t(outputIssue === "output_limit" ? "chat.outputLimitTitle" : "chat.emptyOutputTitle")}</span>
+            <span className={styles.outcomeHint}>{t(outputIssue === "empty_output" ? "chat.emptyOutputHint"
+              : hasVisibleAssistantAnswer(message) ? "chat.outputLimitPartial" : "chat.outputLimitNoAnswer")}</span>
+            {outputIssue === "output_limit" && <span className={styles.outcomeHint}>{t("chat.outputLimitHint")}</span>}
+          </div>
+        </div>
+      )}
       {!isStreaming && message.stopReason === "error" && (
         authRecovered && isProviderAuthError(message.errorMessage) ? (
           <details className={styles.recoveredError}>
@@ -455,7 +468,7 @@ function TurnWorkLog({
     (entry): entry is typeof entry & { block: ThinkingContent } => entry.block.type === "thinking",
   );
   const files = new Set<string>();
-  let failed = messages.filter((activityMessage) => activityMessage.stopReason === "error").length;
+  let failed = messages.filter((activityMessage) => getAssistantFailure(activityMessage) !== null).length;
   let lastTimestamp = Math.max(0, ...messages.map((activityMessage) => activityMessage.timestamp ?? 0));
   for (const entry of toolEntries) {
     const path = entry.block.input && typeof entry.block.input.path === "string" ? entry.block.input.path : null;

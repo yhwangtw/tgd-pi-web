@@ -1,3 +1,4 @@
+import { getAssistantFailure } from "./assistant-outcome";
 import { hasUpstreamSubagentWork } from "./upstream-subagents";
 import {
   createAgentSessionFromServices,
@@ -745,7 +746,7 @@ export class AgentSessionWrapper {
       this.activeTools.clear();
       const messages = "messages" in event && Array.isArray(event.messages) ? event.messages : [];
       const last = [...messages].reverse().find((item: { role?: string }) => item?.role === "assistant");
-      this.lastRunError = last?.stopReason === "error" ? last.errorMessage || "Model call failed" : null;
+      this.lastRunError = getAssistantFailure(last);
       const workflow = [...(this.inner.sessionManager?.getBranch?.() ?? [])].reverse()
         .find(entry => entry.type === "custom" && entry.customType === WORKFLOW_ENTRY);
       if (workflow?.type === "custom" && readWorkflow(workflow.data)?.goal?.status === "active") event = { ...event, goalActive: true };
