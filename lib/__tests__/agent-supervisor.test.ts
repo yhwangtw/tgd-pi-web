@@ -101,6 +101,17 @@ describe("AgentRunSupervisor", () => {
     await supervisor.cancel(run.id);
   });
 
+  it.each(["length", "stop"])("marks a child ending with %s and no answer as failed", async stopReason => {
+    const child = fakeSession();
+    harness.startRpcSession.mockResolvedValue({ session: child.session, realSessionId: "limited-child" });
+    const supervisor = new AgentRunSupervisor({ maxConcurrency: 1 });
+    supervisor.enqueue({ ...input("Limited"), limits: { timeoutMs: 0 } });
+    await vi.waitFor(() => expect(harness.store.runs[0].sessionId).toBe("limited-child"));
+    child.emit({ type: "agent_end", messages: [{ role: "assistant", stopReason, content: [] }] });
+    expect(harness.store.runs[0]).toMatchObject({ status: "failed", error: expect.any(String) });
+    expect(child.session.send.mock.calls.filter(([command]) => command.type === "prompt")).toHaveLength(1);
+  });
+
   it("stops the whole delegation at its shared cost cap, including queued and retried tasks", async () => {
     const children = [fakeSession(), fakeSession()];
     children.forEach((child, i) => harness.startRpcSession.mockResolvedValueOnce({ session: child.session, realSessionId: `group-${i}` }));

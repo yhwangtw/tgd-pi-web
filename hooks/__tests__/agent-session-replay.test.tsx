@@ -11,7 +11,7 @@ vi.mock("@/hooks/useToast", () => ({ showToast: harness.toast }));
 vi.mock("@/lib/attention", () => ({ setIdleTitle: vi.fn(), setRunningTitle: vi.fn(), setDoneTitle: vi.fn(), setErrorTitle: vi.fn(), setExtensionTitle: vi.fn(), notifyDone: vi.fn(), requestNotifyPermission: vi.fn() }));
 vi.mock("../use-model-catalog", () => ({ useModelCatalog: () => ({ modelNames: {}, modelList: [], modelThinkingLevels: {}, modelThinkingLevelMaps: {}, newSessionModel: { provider: "fixture", modelId: "instant" }, setNewSessionModel: vi.fn(), catalogStatus: "ready", catalogDiagnostics: [], retryModelCatalog: vi.fn(), reportModelUnavailable: harness.rejectModel }) }));
 import { useAgentSession } from "../useAgentSession";
-import { setIdleTitle, setRunningTitle } from "@/lib/attention";
+import { setIdleTitle, setRunningTitle, setDoneTitle, setErrorTitle, notifyDone } from "@/lib/attention";
 import { encodeSessionData } from "@/lib/session-tree-wire";
 import { readRunLatencyRecords } from "@/lib/run-latency";
 
@@ -62,6 +62,75 @@ describe("session reconciliation and first-prompt ordering", () => {
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it("reconciles resolved compaction settings from load, snapshots and optimistic toggle rollback", async () => {
+    const persisted = { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 };
+    const live = { enabled: false, reserveTokens: 8_192, keepRecentTokens: 12_000 };
+    harness.fetch.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith("/api/sessions/")
+      ? { ...data(), compactionSettings: persisted, agentState: { running: true, state: { compactionSettings: live } } } : {})));
+    await act(async () => root.render(<Harness selected={session} />));
+    expect(current.compactionSettings).toEqual(live);
+    expect(current.autoCompactionEnabled).toBe(false);
+    const changed = { enabled: true, reserveTokens: 32_768, keepRecentTokens: 40_000 };
+    await act(async () => current.handleAgentEventRef.current?.({ ...snapshot([]), state: { compactionSettings: changed } }));
+    expect(current.compactionSettings).toEqual(changed);
+    await act(async () => current.handleAutoCompactionChange(false));
+    expect(current.compactionSettings).toEqual({ ...changed, enabled: false });
+    harness.send.mockRejectedValueOnce(new Error("offline"));
+    await act(async () => current.handleAutoCompactionChange(true));
+    expect(current.compactionSettings).toEqual({ ...changed, enabled: false });
+  });
+
+  it("retains old messages when compaction completion reloads and a reconnect snapshot follows", async () => {
+    const old = { role: "user", content: "Old history" } as AgentMessage;
+    serverMessages = [old, assistant];
+    await act(async () => root.render(<Harness selected={session} />));
+    const note = { role: "custom", customType: "pi-web-compaction", display: true, content: "Summary" } as AgentMessage;
+    serverMessages = [old, assistant, note];
+    await act(async () => current.handleAgentEventRef.current?.({ type: "compaction_status", compaction: { id: "compact-history", status: "completed", reason: "manual", startedAt: 1, result: { tokensBefore: 40000 } } }));
+    expect(current.messages).toEqual(serverMessages);
+    await act(async () => current.handleAgentEventRef.current?.(snapshot(serverMessages)));
+    expect(current.messages).toEqual(serverMessages);
+    expect(current.messages.filter(message => message.role === "user")).toHaveLength(1);
+  });
+
+  it.each(["length", "stop"])("keeps %s no-answer runs out of success callbacks and restores the failure after reconnect", async stopReason => {
+    await act(async () => root.render(<Harness selected={session} />));
+    const emit = (event: AgentEvent) => act(async () => current.handleAgentEventRef.current?.(event));
+    const failed = { ...assistant, stopReason, content: [] } as AgentMessage;
+    await emit(snapshot([]));
+    vi.mocked(setDoneTitle).mockClear(); vi.mocked(setErrorTitle).mockClear(); vi.mocked(notifyDone).mockClear();
+    await emit({ type: "agent_start" });
+    await emit({ type: "message_end", message: failed });
+    await emit({ type: "agent_end", messages: [failed] });
+    expect(current.agentRunning).toBe(false);
+    expect(current.providerRecovery).toBeNull();
+    expect(harness.complete).not.toHaveBeenCalled();
+    expect(setDoneTitle).not.toHaveBeenCalled();
+    expect(setErrorTitle).toHaveBeenCalled();
+    expect(notifyDone).toHaveBeenCalledTimes(1);
+    await emit({ type: "agent_end", messages: [failed], replayed: true });
+    expect(notifyDone).toHaveBeenCalledTimes(1);
+    await emit(snapshot([failed]));
+    expect(current.messages).toEqual([failed]);
+    expect(current.providerRecovery).toBeNull();
+    expect(setDoneTitle).not.toHaveBeenCalled();
+  });
+
+  it.each(["sdk", "ui"])("preserves image-only input when manually retrying an output-limited turn (%s)", async shape => {
+    const image = shape === "sdk" ? { type: "image", data: "cG5n", mimeType: "image/png" }
+      : { type: "image", source: { type: "base64", media_type: "image/png", data: "cG5n" } };
+    const imageUser = { role: "user", content: [image] } as AgentMessage;
+    const failed = { ...assistant, stopReason: "length", content: [] } as AgentMessage;
+    serverMessages = [imageUser, failed];
+    await act(async () => root.render(<Harness selected={session} />));
+    const source = FakeEventSource.instances[0];
+    await act(async () => { source.open(); source.message(snapshot(serverMessages), "epoch:0"); });
+    await act(async () => { await current.handleRetry(); });
+    const prompts = harness.send.mock.calls.filter(([, command]) => command.type === "prompt");
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toEqual(["one", expect.objectContaining({ message: "", images: [{ type: "image", data: "cG5n", mimeType: "image/png" }] })]);
+  });
 
   it("preserves parallel tools and stop intent across interleaved model messages", async () => {
     await act(async () => root.render(<Harness selected={session} />));
@@ -342,6 +411,21 @@ describe("session reconciliation and first-prompt ordering", () => {
     expect(current.messages).toEqual([user, assistant]);
     expect(current.agentRunning).toBe(false); expect(current.streamState.isStreaming).toBe(false);
     expect(harness.created).toHaveBeenCalledOnce();
+  });
+
+  it("does not navigate back when a new-session acknowledgement arrives after switching", async () => {
+    await act(async () => root.render(<Harness selected={null} />));
+    let finish!: () => void;
+    harness.send.mockImplementation((_sid, command) => command.type === "prompt" ? new Promise<void>(resolve => { finish = resolve; }) : Promise.resolve(null));
+    let sending!: Promise<boolean>;
+    await act(async () => { sending = current.handleSend("belongs to A"); });
+    const source = FakeEventSource.instances[0];
+    await act(async () => { source.open(); source.message(snapshot([]), "epoch:0"); });
+    expect(harness.send.mock.calls.filter(([, command]) => command.type === "prompt")).toHaveLength(1);
+    await act(async () => root.render(<Harness selected={{ ...session, id: "B" }} />));
+    await act(async () => { finish(); await sending; });
+    expect(harness.created).not.toHaveBeenCalled();
+    expect(harness.send.mock.calls.filter(([, command]) => command.type === "prompt")).toHaveLength(1);
   });
 
   it("ends a new-session observation on remount instead of timing its replay as cold output", async () => {

@@ -9,6 +9,7 @@ import { useTranscriptScroll } from "@/hooks/use-transcript-scroll";
 import { resetScrollFollowModeCache, setScrollFollowMode } from "@/lib/prefs";
 import type { useAgentSession } from "@/hooks/useAgentSession";
 import type { AssistantMessage } from "@/lib/types";
+import { getSessionReadReceipt, mergeSessionReadSnapshot } from "@/lib/session-read-state";
 
 type SessionFixture = Pick<ReturnType<typeof useAgentSession>,
   "messages" | "entryIds" | "streamState" | "agentRunning" | "extensionUIState" |
@@ -57,6 +58,7 @@ vi.mock("@/components/chat/RunStatus", () => ({ RunStatus: () => null }));
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
+let readScope = 0;
 let markerTop = 600;
 let contentHeight = 1800;
 const resizeObservers = new Set<ResizeObserverStub>();
@@ -80,6 +82,9 @@ const scroller = () => host.querySelector("[data-transcript-scroll]")!;
 
 beforeEach(() => {
   localStorage.clear(); resetScrollFollowModeCache(); fixture.messageRenders.clear(); fixture.quote = null; fixture.openQuote = null;
+  mergeSessionReadSnapshot({ scope: `scroll-fixture-${++readScope}`, receipts: {} });
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 503 })));
   markerTop = 600; contentHeight = 1800;
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   fixture.state = {
@@ -98,14 +103,16 @@ beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get: () => contentHeight });
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); resizeObservers.clear(); });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); resizeObservers.clear(); });
 
 it("follows a growing text stream", async () => {
   await render(); scrollIntoView.mockClear(); markerTop = 800;
   fixture.state.streamState = { isStreaming: true, streamingMessage: answer("longer") };
   await render(); expect(scrollIntoView).toHaveBeenCalled();
 });
-it("does not mark background messages read until the transcript becomes visible", async () => {
+it("requires foreground visibility and a full dwell before recording a read", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "performance"] });
+  Object.defineProperty(document, "elementFromPoint", { configurable: true, value: () => host.querySelector(".msg-item") });
   const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
   fixture.state.messages = [answer("A newly delivered reply")];
   fixture.state.entryIds = ["unseen-answer"];
@@ -117,11 +124,14 @@ it("does not mark background messages read until the transcript becomes visible"
   }} newSessionCwd={null} />));
   markerTop = 100;
   await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
-  expect(localStorage.getItem("pi-session-read:read-visibility")).toBeNull();
+  await act(async () => vi.advanceTimersByTime(1000));
+  expect(getSessionReadReceipt("read-visibility")).toBeUndefined();
   visibility.mockReturnValue("visible");
   await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
-  expect(localStorage.getItem("pi-session-read:read-visibility")).toBe("1");
-  expect(localStorage.getItem("pi-last-read:read-visibility")).toBe("unseen-answer");
+  await act(async () => vi.advanceTimersByTime(600));
+  expect(getSessionReadReceipt("read-visibility")).toBeUndefined();
+  await act(async () => vi.advanceTimersByTime(200));
+  expect(getSessionReadReceipt("read-visibility")).toEqual({ timestamp: 1, entryId: "unseen-answer" });
 });
 it("follows the final committed message after the last throttled frame", async () => {
   await render(); scrollIntoView.mockClear(); markerTop = 800;

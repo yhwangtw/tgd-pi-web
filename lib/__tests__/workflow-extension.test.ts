@@ -73,12 +73,29 @@ describe("persistent Web goals and plans", () => {
     expect(h.api.sendUserMessage).toHaveBeenCalledTimes(2);
   });
 
-  it.each(["error", "aborted"])("pauses after %s instead of restarting", async stopReason => {
+  it.each(["error", "aborted", "length", "stop"])("pauses after %s instead of restarting", async stopReason => {
     const h = await harness();
     await h.command("goal", "Fix it"); await h.emit("agent_start");
     await h.message("", stopReason); await h.emit("agent_settled");
     expect(h.state().goal?.status).toBe("paused");
     expect(h.api.sendUserMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("settles an output-limited ordinary conversation without an active goal", async () => {
+    const h = await harness(); await h.emit("agent_start");
+    await h.message("", "length"); await expect(h.emit("agent_settled")).resolves.not.toThrow();
+    expect(h.state().goal).toBeNull();
+    expect(h.api.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("lets official recovery finish before deciding whether to pause a goal", async () => {
+    const h = await harness();
+    await h.command("goal", "Fix it"); await h.emit("agent_start");
+    await h.message("", "length");
+    expect(h.state().goal?.status).toBe("active");
+    await h.message("Recovered answer", "stop"); await h.emit("agent_settled");
+    expect(h.state().goal?.status).toBe("active");
+    expect(h.api.sendUserMessage).toHaveBeenCalledTimes(2);
   });
 
   it("stops at the token budget and requires a larger budget before resuming", async () => {

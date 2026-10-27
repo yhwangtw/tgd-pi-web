@@ -1,7 +1,8 @@
+import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
 
 const MAIN_ID = "aaaa1111-2222-3333-4444-555566667777";
-const MODEL_NAME = "Fixture Claude Sonnet streaming";
+const MODEL_NAME = "Fixture Claude Sonnet streaming with a deliberately long model name";
 const model = { provider: "anthropic", id: "claude-sonnet-5" };
 
 const test = base.extend<{ streamingNetworkSafety: void }>({
@@ -21,6 +22,7 @@ const test = base.extend<{ streamingNetworkSafety: void }>({
       if (request.method() === "POST" && /^\/api\/agent\/[^/]+$/.test(pathname) && body?.type === "get_tools") {
         return route.fulfill({ json: { success: true, data: [] } });
       }
+      if (isFixtureReadReceipt(request)) return route.continue();
       forbidden.push(`${request.method()} ${pathname}`);
       return route.fulfill({ status: 403, json: { error: "Streaming layout E2E forbids model calls and mutations" } });
     });
@@ -80,6 +82,32 @@ async function expectInsideViewport(page: Page, locator: Locator) {
   expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);
 }
 
+async function expectSingleLineLabel(button: Locator) {
+  const text = await button.evaluate(element => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const rects = Array.from(range.getClientRects());
+    const box = element.getBoundingClientRect();
+    return {
+      lines: new Set(rects.map(rect => Math.round(rect.y))).size,
+      fits: rects.every(rect => rect.x >= box.x && rect.right <= box.right + 1 && rect.y >= box.y && rect.bottom <= box.bottom + 1),
+    };
+  });
+  expect(text, "Delivery labels must remain fully visible on one line").toEqual({ lines: 1, fits: true });
+}
+
+async function expectComposerBorder(page: Page, token: string) {
+  const composer = page.locator('[class*="innerWrapper"]').first();
+  await expect.poll(() => composer.evaluate((element, token) => {
+    const probe = document.createElement("span");
+    probe.style.border = `1px solid var(${token})`;
+    element.append(probe);
+    const expected = getComputedStyle(probe).borderTopColor;
+    probe.remove();
+    return getComputedStyle(element).borderTopColor === expected;
+  }, token)).toBe(true);
+}
+
 async function leaveComposerWithKeyboard(page: Page) {
   const root = page.locator("[data-composer-editing]");
   for (let index = 0; index < 30; index += 1) {
@@ -126,6 +154,8 @@ for (const style of ["original", "trae"] as const) {
         await expect(control).toBeEnabled();
         await expectInsideViewport(page, control);
       }
+      await expectSingleLineLabel(followUp);
+      await expectSingleLineLabel(steer);
       // Mode switches are local UI actions. Keep a draft, but never submit it.
       const draft = "Fixture draft only — do not send.";
       await composer.fill(draft);
@@ -190,4 +220,97 @@ for (const style of ["original", "trae"] as const) {
       await expect(primaryNav).toBeInViewport();
     });
   }
+}
+
+for (const style of ["original", "trae"] as const) {
+  test(`${style}: desktop delivery controls stay legible when the conversation narrows`, async ({ page }) => {
+    await page.addInitScript(style => {
+      localStorage.setItem("pi-locale", "en");
+      localStorage.setItem("pi-ui-style", style);
+      localStorage.setItem("pi-theme", "dark");
+    }, style);
+    await installStreamingFixture(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/?session=${MAIN_ID}`);
+    const composer = page.getByRole("textbox", { name: "Message…", exact: true });
+    const delivery = page.getByRole("group", { name: "Message delivery mode", exact: true });
+    const followUp = delivery.getByRole("button", { name: "Follow-up", exact: true });
+    const steer = delivery.getByRole("button", { name: "Steer", exact: true });
+    const stop = page.getByRole("button", { name: "Stop", exact: true });
+    const identity = page.getByTestId("model-selector-trigger");
+    await expect(delivery).toBeVisible();
+    await expectComposerBorder(page, "--border-subtle");
+    await composer.fill("Keep this draft while switching modes");
+    await expectComposerBorder(page, "--color-accent-border-focus");
+    const followUpAction = page.getByRole("button", { name: "Queue until the current run finishes (Command+Enter)", exact: true });
+    const actionColor = await followUpAction.evaluate(element => getComputedStyle(element).backgroundColor);
+    await steer.click();
+    await expect(steer).toHaveAttribute("aria-pressed", "true");
+    const steerAction = page.getByRole("button", { name: "Interrupt the current run and inject now (Option+Enter)", exact: true });
+    expect(await steerAction.evaluate(element => getComputedStyle(element).backgroundColor)).toBe(actionColor);
+    await expectComposerBorder(page, "--color-accent-border-focus");
+    await followUp.click();
+    for (const width of [1440, 1100, 840, 701]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const control of [followUp, steer, stop, identity]) await expectInsideViewport(page, control);
+      await expectSingleLineLabel(followUp);
+      await expectSingleLineLabel(steer);
+      await stop.click({ trial: true });
+      if (width >= 1100) {
+        const [modeBox, stopBox] = await Promise.all([delivery.boundingBox(), stop.boundingBox()]);
+        expect(Math.abs(modeBox!.y + modeBox!.height / 2 - stopBox!.y - stopBox!.height / 2), "Desktop Stop should share the delivery toolbar row").toBeLessThanOrEqual(1);
+      }
+      await expect(composer).toHaveValue("Keep this draft while switching modes");
+      const bounds = await page.locator('[class*="bottomBarStreaming"]').evaluate(element => {
+        const box = element.getBoundingClientRect();
+        return Array.from(element.querySelectorAll("button")).filter(button => button.getClientRects().length > 0)
+          .every(button => { const rect = button.getBoundingClientRect(); return rect.x >= box.x - 1 && rect.right <= box.right + 1; });
+      });
+      expect(bounds, "Controls must stay inside the composer even with the sidebar open").toBe(true);
+      await page.screenshot({ path: test.info().outputPath(`streaming-${style}-${width}.png`) });
+    }
+  });
+
+  test(`${style}: session title and preview stay vertically centered at both densities and text sizes`, async ({ page }) => {
+    await installStreamingFixture(page, false);
+    for (const density of ["comfortable", "compact"]) {
+      for (const fontSize of ["default", "xlarge"]) {
+        await page.addInitScript(({ style, density, fontSize }) => {
+          localStorage.setItem("pi-locale", "en");
+          localStorage.setItem("pi-ui-style", style);
+          localStorage.setItem("pi-density", density);
+          localStorage.setItem("pi-font-size", fontSize);
+        }, { style, density, fontSize });
+        const row = page.locator(`[data-session-row="${MAIN_ID}"]`);
+        for (const width of [1440, 390]) {
+          // Mount in the target viewport: resizing an open desktop sidebar to
+          // mobile retains its state, so blindly clicking Sessions closes it.
+          await page.setViewportSize({ width, height: 900 });
+          await page.goto(`/?session=${MAIN_ID}`);
+          await expect(page.getByTestId("app-shell")).toHaveAttribute("data-hydrated", "true");
+          if (width === 390) {
+            await expect(page.locator(".sidebar-container")).toHaveAttribute("aria-hidden", "true");
+            await page.getByRole("button", { name: "Sessions", exact: true }).click();
+          }
+          // The shared fixture store can contain many newer conversations.
+          await page.getByRole("textbox", { name: "Search conversations", exact: true }).fill("專案架構分析");
+          await expect(row).toHaveAttribute("aria-selected", "true");
+          await expect(row).toBeVisible();
+          await expect.poll(async () => {
+            const box = await row.boundingBox();
+            return !!box && box.x >= 0 && box.x + box.width <= width;
+          }, { message: "Wait for the sidebar drawer to fully enter the viewport" }).toBe(true);
+          const geometry = await row.evaluate(element => {
+            const box = element.getBoundingClientRect();
+            const content = element.querySelector('[role="gridcell"]')!.getBoundingClientRect();
+            return { offset: Math.abs((content.top + content.bottom - box.top - box.bottom) / 2), fits: content.top >= box.top && content.bottom <= box.bottom };
+          });
+          expect(geometry.offset).toBeLessThanOrEqual(1);
+          expect(geometry.fits).toBe(true);
+          if (width === 1440) await row.screenshot({ path: test.info().outputPath(`session-row-${style}-${density}-${fontSize}.png`) });
+        }
+        await page.screenshot({ path: test.info().outputPath(`session-card-${style}-${density}-${fontSize}.png`) });
+      }
+    }
+  });
 }

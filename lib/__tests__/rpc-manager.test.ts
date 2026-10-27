@@ -36,6 +36,23 @@ describe("Pi 0.86 session state", () => {
   });
 });
 
+describe("resolved live compaction settings", () => {
+  it("includes the current model policy in get_state and SSE snapshots", async () => {
+    const first = { provider: "fixture", id: "small" };
+    const second = { provider: "fixture", id: "large" };
+    const getCompactionSettings = vi.fn(model => ({ enabled: false, reserveTokens: model.id === "small" ? 8_192 : 32_768, keepRecentTokens: 20_000 }));
+    const inner = { sessionId: "policy", sessionFile: "", model: first, autoCompactionEnabled: false, settingsManager: { getCompactionSettings }, dispose: vi.fn() } as unknown as AgentSessionLike;
+    const wrapper = new AgentSessionWrapper(inner);
+    try {
+      expect(await wrapper.send({ type: "get_state" })).toMatchObject({ compactionSettings: { enabled: false, reserveTokens: 8_192, keepRecentTokens: 20_000 } });
+      expect(getCompactionSettings).toHaveBeenLastCalledWith(first);
+      Object.assign(inner, { model: second });
+      expect(wrapper.getStreamSnapshot().state).toMatchObject({ compactionSettings: { enabled: false, reserveTokens: 32_768, keepRecentTokens: 20_000 } });
+      expect(getCompactionSettings).toHaveBeenLastCalledWith(second);
+    } finally { wrapper.destroy(); }
+  });
+});
+
 describe("active-session idle protection", () => {
   it("does not dispose a silent working model, but still reclaims an idle session", async () => {
     vi.useFakeTimers();
@@ -696,4 +713,26 @@ describe("official SDK queue adapter", () => {
       await expect(wrapper.send({ type: "replace_queue", items: queued })).rejects.toThrow("already been delivered");
     } finally { wrapper.destroy(); }
   });
+});
+
+it("reconnect snapshots preserve pre-compaction history without changing the live model context", () => {
+  const t = "2026-10-27T00:00:00Z";
+  const entries: SessionEntry[] = [
+    { type: "message", id: "old", parentId: null, timestamp: t, message: { role: "user", content: "Old question" } },
+    { type: "message", id: "kept", parentId: "old", timestamp: t, message: { role: "user", content: "Kept question" } },
+    { type: "compaction", id: "compact", parentId: "kept", timestamp: t, summary: "Summary", firstKeptEntryId: "kept", tokensBefore: 40000 },
+  ];
+  const before = JSON.stringify(entries);
+  const liveMessages = [{ role: "user", content: "Model summary only" }];
+  const inner = { sessionId: "compacted-snapshot", sessionFile: "", messages: liveMessages, dispose: vi.fn(), sessionManager: { getEntries: () => entries, getLeafId: () => "compact" } } as unknown as AgentSessionLike;
+  const wrapper = new AgentSessionWrapper(inner);
+  try {
+    const records: string[] = [];
+    const stop = wrapper.onStreamEvent(record => records.push(record.data), "expired:1"); stop();
+    const restored = decodeSessionData(JSON.parse(records[0]).sessionData);
+    expect(restored.context.entryIds).toEqual(["old", "kept", "compact"]);
+    expect(restored.context.messages.map((m: { role: string }) => m.role)).toEqual(["user", "user", "custom"]);
+    expect((inner as unknown as { messages: unknown }).messages).toBe(liveMessages);
+    expect(JSON.stringify(entries)).toBe(before);
+  } finally { wrapper.destroy(); }
 });

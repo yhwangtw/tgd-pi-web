@@ -32,6 +32,12 @@ describe("getRunError", () => {
     })).toBe("429 rate limited");
   });
 
+  it.each(["length", "stop"])("recognizes an unfinished/empty %s response, but lets a later success win", stopReason => {
+    const failure = { role: "assistant", stopReason, content: [] };
+    expect(getRunError({ type: "agent_end", messages: [failure] })).not.toBeNull();
+    expect(getRunError({ type: "agent_end", messages: [failure, { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Recovered" }] }] })).toBeNull();
+  });
+
   it("falls back to a generic message when errorMessage is missing", () => {
     expect(getRunError({
       type: "agent_end",

@@ -77,6 +77,11 @@ scroll memory; prepend compensation uses a committed row's real position, never
 estimated-height placeholders. `isPrependingRef` suppresses stream following while
 anchoring, and explicit history navigation pauses smart follow before scrolling.
 This is progressive mounting, not a permanent 200-row cap after manual expansion.
+Chat detail, branch navigation, background transcripts and reconnect snapshots use
+`buildSessionTranscript`: the complete selected branch with collapsed compaction
+notes. The legacy response field `context` contains this display transcript, not
+model input. Pi continues to build its own compacted context; reading history
+never rewrites session files or sends earlier messages back to the model.
 Minimap geometry is cached between layout changes; scrolling only updates its
 viewport indicator, with observer work coalesced into animation frames. Scroll
 before visibility assertions for offscreen controls. UI text uses the Unicode
@@ -92,6 +97,24 @@ top dialog responds; child portals, internal selections and canceled gestures
 stay open. `canClose` protects in-flight work and `hasUnsavedChanges` asks before
 X, Escape or outside dismissal discards an edited form. Explicit Cancel buttons
 remain intentional discard actions.
+
+## Output limits and empty answers
+
+An output ceiling limits one provider response, not the entire user's answer.
+Pi Web's output recovery extension uses the official `turn_end` boundary to
+append a hidden custom message and continue the same agent loop when a response
+reaches its confirmed model ceiling. Distinct progressing chunks continue until
+the model finishes; repeated chunks and repeated no-answer results stop recovery.
+A first empty/thinking-only result gets an answer-focused continuation, using a
+supported lower reasoning effort for that answer request only. Saved model,
+thinking and output settings remain unchanged; compaction requests are excluded.
+
+Defer context-clamped or premature truncation to Pi's official compact/retry path.
+Abort, queued user input, model/session changes and explicit Goal limits take
+priority. Hidden continuations never become another user chat message. A later
+successful answer quiets earlier output-limit notices without losing partial text.
+Unrecovered outcomes retain an explicit explanation and manual retry controls.
+Goals judge the final response at `agent_settled`, after official recovery.
 
 ## Workflow and delegation
 
@@ -344,8 +367,18 @@ The sidebar and command palette share one session-list store. It polls every
 five seconds while the page is visible, refreshes on focus/network recovery,
 and retains newly created local conversations until Pi persists them. Background
 refreshes do not flash the manual-refresh indicator. The sidebar's unread dot
-uses browser-local read receipts, advanced only to visible message timestamps;
-receipts also synchronize across tabs and reuse older transcript entry markers.
+uses monotonic content cursors. A focused, foreground transcript must expose the
+bottom of a user/assistant message unobscured for 600 ms before advancing; quick
+visits, background tabs, overlays and unfinished answers do not count. Scrolling
+back cannot move the cursor backward. Equal timestamps use transcript order.
+
+Read receipts are cached locally and batch-synced via `/api/sessions/reads`. The
+server validates entry IDs against actual session entries and derives timestamps
+and append positions itself. `session-reads.json` lives in the active agent
+directory; existing session-list polls carry its snapshot across devices/origins
+using that same backend. Preview and production stores remain isolated. Failed
+sync preserves local progress and retries on the next list refresh; there is no
+extra poller. Old browser receipts remain usable until confirmed by viewing content.
 
 ### AgentSession lifecycle (`lib/rpc-manager.ts`)
 - One `AgentSessionWrapper` per session id, keyed in `globalThis.__piSessions`

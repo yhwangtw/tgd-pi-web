@@ -46,6 +46,7 @@ import type { ModelCatalogEntry } from "@/lib/model-catalog-types";
 import type { ModelCatalogDiagnostic, ModelCatalogStatus } from "@/hooks/use-model-catalog";
 import { ScreenshotButton } from "./ScreenshotButton";
 import { DialogShell } from "@/components/ui/DialogShell";
+import { beginComposerSubmission, hasPendingComposerSubmission, restoreComposerSubmission, sameSubmissionImages, failComposerSubmission, removeComposerSubmission, useComposerSubmissions, type ComposerSubmission } from "@/lib/composer-submissions";
 import { useComposerHint } from "@/hooks/useComposerHint";
 import type { ComposerHintContext } from "@/lib/composer-hint-context";
 import type { ComposerHintMessage } from "@/lib/composer-hints";
@@ -84,6 +85,7 @@ interface Props {
   onAbortCompaction?: () => void;
   isCompacting?: boolean;
   compactError?: string | null;
+  compactionPolicy?: ReactNode;
   autoCompactionEnabled?: boolean | null;
   autoCompactionUpdating?: boolean;
   onAutoCompactionChange?: (enabled: boolean) => void;
@@ -211,7 +213,7 @@ function ResponsiveComposerControls({
 export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
   modelCatalogStatus, modelCatalogError, modelCatalogDiagnostics, onRetryModelCatalog, onOpenModels,
-  onCompact, onAbortCompaction, isCompacting, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, availableTools, customToolNames, onToolPresetChange,
+  onCompact, onAbortCompaction, isCompacting, compactionPolicy, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, availableTools, customToolNames, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   ephemeral = false, onEphemeralChange,
@@ -233,7 +235,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   const hintHelpId = useId();
   const { prompts } = usePrompts();
   const slashItems = useMemo(() => buildSlashItems(prompts), [prompts]);
-  const [value, setValue] = useComposerDraft(persistKey ?? null);
+  const [value, setValue, readDraft] = useComposerDraft(persistKey ?? null);
   const onFilesUploaded = useCallback((names: string[]) => {
     const references = names.map(name => /\s/.test(name) ? `@"${name}"` : `@${name}`).join(" ");
     setValue(previous => `${previous}${previous && !/\s$/.test(previous) ? "\n" : ""}${references} `);
@@ -257,7 +259,16 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashFilter, setSlashFilter] = useState("");
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submissionKey = persistKey ?? `composer:${hintHelpId}`;
+  const submissions = useComposerSubmissions(submissionKey);
+  const isSubmitting = submissions.some(item => item.status === "pending");
+  const submissionScope = useRef<object | null>(null);
+  const currentQuote = useRef(quote);
+  currentQuote.current = quote;
+  useLayoutEffect(() => {
+    submissionScope.current = {};
+    return () => { submissionScope.current = null; };
+  }, [submissionKey]);
   const exitPlan = useWorkflowCommand(persistKey ?? undefined, async () => onExitPlan ? onExitPlan() : false);
   const [expanded, setExpanded] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
@@ -294,6 +305,41 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
     setValue(hint);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, [hint, value, setValue]);
+
+  const processImageFiles = useCallback(async (files: File[]) => {
+    if (hasPendingComposerSubmission(submissionKey)) { showToast(t("input.waitForDelivery"), { type: "info" }); return; }
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+    const epoch = imageEpoch.current;
+    const newImages = await Promise.all(
+      imageFiles.map(
+        (file) =>
+          new Promise<AttachedImage>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              // result is "data:<mime>;base64,<data>"
+              const base64 = result.split(",")[1];
+              resolve({ data: base64, mimeType: file.type, previewUrl: URL.createObjectURL(file) });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          })
+      )
+    );
+    if (epoch !== imageEpoch.current || hasPendingComposerSubmission(submissionKey)) {
+      if (epoch === imageEpoch.current) showToast(t("input.waitForDelivery"), { type: "info" });
+      newImages.forEach(image => URL.revokeObjectURL(image.previewUrl));
+      return;
+    }
+    setAttachedImages((prev) => [...prev, ...newImages]);
+  }, [submissionKey, t]);
+
+  const processFiles = (files: File[]) => {
+    if (isSubmitting) return;
+    void processImageFiles(files).catch(() => showToast(t("input.imageReadFailed"), { type: "error" }));
+    void fileUploads.addFiles(files.filter(file => !file.type.startsWith("image/")));
+  };
 
   useImperativeHandle(ref, () => ({
     openControls() {
@@ -366,39 +412,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
       processFiles(files);
     },
   }));
-
-  const processImageFiles = useCallback(async (files: File[]) => {
-    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
-    if (!imageFiles.length) return;
-    const epoch = imageEpoch.current;
-    const newImages = await Promise.all(
-      imageFiles.map(
-        (file) =>
-          new Promise<AttachedImage>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const result = reader.result as string;
-              // result is "data:<mime>;base64,<data>"
-              const base64 = result.split(",")[1];
-              resolve({ data: base64, mimeType: file.type, previewUrl: URL.createObjectURL(file) });
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          })
-      )
-    );
-    if (epoch !== imageEpoch.current) {
-      newImages.forEach(image => URL.revokeObjectURL(image.previewUrl));
-      return;
-    }
-    setAttachedImages((prev) => [...prev, ...newImages]);
-  }, []);
-
-  const processFiles = (files: File[]) => {
-    if (isSubmitting) return;
-    void processImageFiles(files).catch(() => showToast(t("input.imageReadFailed"), { type: "error" }));
-    void fileUploads.addFiles(files.filter(file => !file.type.startsWith("image/")));
-  };
 
   const removeImage = useCallback((index: number) => {
     setAttachedImages((prev) => {
@@ -490,14 +503,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   // Persisted per session so it survives reloads.
   const historyRef = useRef<string[]>([]);
   const historyPosRef = useRef(-1); // -1 = not navigating
-  const pushHistory = useCallback((msg: string) => {
-    if (!msg) return;
-    const h = historyRef.current;
-    if (h[h.length - 1] !== msg) h.push(msg);
-    if (h.length > 50) h.shift();
-    historyPosRef.current = -1;
-    saveHistory(persistKey ?? null, h);
-  }, [persistKey]);
+
 
   // ── Draft persistence ──────────────────────────────────────────────────
   // Restore draft + history when the session changes; save the draft
@@ -587,57 +593,73 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
     return () => document.removeEventListener("keydown", handleExpandedKeys);
   }, [expanded, mention, showSlashMenu]);
 
-  const handleSend = useCallback(async () => {
-    const msg = value.trim();
-    if ((!msg && !attachedImages.length) || isStreaming || isSubmitting || uploadsPending) return;
-    const submittedValue = value;
+  const submit = useCallback(async (deliver: Props["onSend"]) => {
+    const draft = readDraft() ?? "";
+    const msg = draft.trim();
+    if ((!msg && !attachedImages.length) || uploadsPending) return;
+    const outgoing = quote ? `> ${quote.text.replace(/\n/g, "\n> ")}\n\n${msg}` : msg;
+    const recoveryText = quote ? `> ${quote.text.replace(/\n/g, "\n> ")}\n\n${draft}` : draft;
     const submittedImages = [...attachedImages];
-    setIsSubmitting(true);
-    try {
-      const outgoing = quote ? `> ${quote.text.replace(/\n/g, "\n> ")}\n\n${msg}` : msg;
-      const sent = await onSend(outgoing, submittedImages.length ? submittedImages : undefined);
-      if (!sent) return;
-      pushHistory(outgoing);
+    const started = beginComposerSubmission(submissionKey, recoveryText, submittedImages, draft);
+    if (!started) return;
+    const { item: submission, persisted, restoredIds } = started;
+    const scope = submissionScope.current;
+    // Clear before awaiting transport. The recovery copy has separate ownership,
+    // so later acknowledgements never clear the next draft or revoke its images.
+    if (persisted) {
+      setValue("");
+      clearDraft(persistKey ?? null);
       clearImages(submittedImages);
       onClearQuote?.();
-      if ((textareaRef.current?.value ?? value) === submittedValue) {
-        setValue("");
-        clearDraft(persistKey ?? null);
-        if (textareaRef.current) textareaRef.current.style.height = "auto";
-      }
-    } finally {
-      setIsSubmitting(false);
     }
-  }, [value, attachedImages, isStreaming, isSubmitting, uploadsPending, onSend, clearImages, pushHistory, persistKey, quote, onClearQuote, setValue]);
+    setShowSlashMenu(false); setMention(null);
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    let sent = false;
+    try {
+      sent = await deliver(outgoing, submittedImages.length ? submittedImages : undefined);
+    } catch { /* Keep the original payload recoverable even if a caller rejects. */ }
+    if (sent) {
+      const history = loadHistory(persistKey ?? null);
+      if (history.at(-1) !== outgoing) history.push(outgoing);
+      saveHistory(persistKey ?? null, history);
+      if (scope && submissionScope.current === scope) {
+        historyRef.current = history; historyPosRef.current = -1;
+      }
+      if (!persisted && scope && submissionScope.current === scope) {
+        if (readDraft() === draft) { setValue(""); clearDraft(persistKey ?? null); }
+        clearImages(submittedImages);
+        if (currentQuote.current === quote) onClearQuote?.();
+      }
+      removeComposerSubmission(submissionKey, submission.id, restoredIds);
+    } else if (scope && submissionScope.current === scope && readDraft() === ""
+      && (!currentQuote.current || currentQuote.current === quote)
+      && imagesRef.current.every(image => submittedImages.includes(image))) {
+      if (currentQuote.current === quote && quote) onClearQuote?.();
+      setValue(submission.text);
+      setAttachedImages(submission.images);
+      restoreComposerSubmission(submissionKey, submission.id);
+    } else {
+      // New text or another session must never be overwritten by a late failure.
+      failComposerSubmission(submissionKey, submission.id);
+    }
+  }, [readDraft, attachedImages, uploadsPending, quote, submissionKey, setValue, persistKey, clearImages, onClearQuote]);
+
+  const handleSend = useCallback(async () => {
+    if (!isStreaming) await submit(onSend);
+  }, [isStreaming, submit, onSend]);
 
   const sendQueued = useCallback(async (mode: StreamingSendMode) => {
-    const msg = value.trim();
-    if ((!msg && !attachedImages.length) || isSubmitting || uploadsPending) return;
-    const submittedValue = value;
-    const submittedImages = [...attachedImages];
-    setIsSubmitting(true);
-    try {
-      let sent = false;
-      const outgoing = quote ? `> ${quote.text.replace(/\n/g, "\n> ")}\n\n${msg}` : msg;
-      if (mode === "steer" && onSteer) {
-        sent = await onSteer(outgoing, submittedImages.length ? submittedImages : undefined);
-      } else if (mode === "followup" && onFollowUp) {
-        sent = await onFollowUp(outgoing, submittedImages.length ? submittedImages : undefined);
-      }
-      if (sent) {
-        pushHistory(outgoing);
-        clearImages(submittedImages);
-        onClearQuote?.();
-        if ((textareaRef.current?.value ?? value) === submittedValue) {
-          setValue("");
-          clearDraft(persistKey ?? null);
-          if (textareaRef.current) textareaRef.current.style.height = "auto";
-        }
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [value, attachedImages, isSubmitting, uploadsPending, onSteer, onFollowUp, clearImages, pushHistory, persistKey, quote, onClearQuote, setValue]);
+    const deliver = mode === "steer" ? onSteer : onFollowUp;
+    if (deliver) await submit(deliver);
+  }, [onSteer, onFollowUp, submit]);
+
+  const draftForRecovery = quote ? `> ${quote.text.replace(/\n/g, "\n> ")}\n\n${value}` : value;
+  const restoreSubmission = (submission: ComposerSubmission) => {
+    setValue(current => current && current !== submission.text ? `${current}\n\n${submission.text}` : submission.text);
+    setAttachedImages(current => [...current, ...submission.images.filter(image => !current.some(existing => existing.data === image.data && existing.mimeType === image.mimeType))]);
+    restoreComposerSubmission(submissionKey, submission.id);
+    textareaRef.current?.focus();
+  };
 
   const chooseStreamingSendMode = useCallback((mode: StreamingSendMode) => {
     setStreamingSendMode(mode);
@@ -978,6 +1000,20 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
             {t("input.retrying")} ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span className={styles.retryErrorText}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
+        {submissions.length > 0 && <div className={styles.deliveryNotices}>
+          {submissions.map(submission => submission.status === "pending" ? (
+            <div key={submission.id} className={styles.deliveryNotice} role="status">{t("input.sending")}</div>
+          ) : (
+            <div key={submission.id} className={styles.deliveryNotice} role="alert">
+              <details><summary>{t(submission.status === "unknown" ? "input.deliveryUnknown" : submission.status === "restored" ? "input.restoredDraft" : "input.unsentDraft")}</summary>
+                <p>{submission.text}</p>
+                {submission.images.length > 0 && <span>{t("input.savedImages").replace("{count}", String(submission.images.length))}</span>}
+              </details>
+              <button type="button" disabled={isSubmitting || (draftForRecovery === submission.text && sameSubmissionImages(attachedImages, submission.images))} onClick={() => restoreSubmission(submission)}>{t(value || attachedImages.length ? "input.appendUnsentDraft" : "input.restoreDraft")}</button>
+              <button type="button" onClick={() => removeComposerSubmission(submissionKey, submission.id)} aria-label={t("input.discardUnsentDraft")}><X size={UI_ICON_SIZE.inline} aria-hidden="true" /></button>
+            </div>
+          ))}
+        </div>}
         {quote && (
           <div className={styles.quoteRow} aria-label={quote.role === "user" ? t("chat.quoteYou") : t("chat.quoteAssistant")}>
             <button type="button" className={styles.quoteOpen} onClick={() => onOpenQuote?.(quote.entryId)} title={t("chat.openQuote")}>
@@ -1086,7 +1122,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
             }}
             onInput={handleInput}
             onPaste={handlePaste}
-            readOnly={isSubmitting}
             aria-busy={isSubmitting}
             aria-label={t("input.message")}
             aria-describedby={hint ? hintHelpId : undefined}
@@ -1199,9 +1234,12 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
               className={isSubmitting ? styles.attachButtonDisabled : styles.attachButtonEnabled}
               disabled={isSubmitting}
               onChooseFile={() => fileInputRef.current?.click()}
-              onAttach={({ dataUrl }) => setAttachedImages(previous => [...previous, {
-                data: dataUrl.slice(dataUrl.indexOf(",") + 1), mimeType: "image/png", previewUrl: dataUrl,
-              }])}
+              onAttach={({ dataUrl }) => {
+                if (hasPendingComposerSubmission(submissionKey)) { showToast(t("input.waitForDelivery"), { type: "info" }); return; }
+                setAttachedImages(previous => [...previous, {
+                  data: dataUrl.slice(dataUrl.indexOf(",") + 1), mimeType: "image/png", previewUrl: dataUrl,
+                }]);
+              }}
             />
             {isStreaming && onSteer && onFollowUp && (
               <div className={styles.sendModeSwitch} aria-label={t("input.sendMode")} role="group">
@@ -1430,6 +1468,9 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                   <span className={styles.mobileControlValue}>{t(soundEnabled ? "chat.on" : "chat.off")}</span>
                 </button>
               </div>
+            )}
+            {!isStreaming && mobileToolsOpen && compactionPolicy && (
+              <div className={styles.compactionPolicyControl}>{compactionPolicy}</div>
             )}
           </ResponsiveComposerControls>
 

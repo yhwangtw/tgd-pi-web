@@ -39,6 +39,34 @@ describe("AssistantMessageView conversation chrome", () => {
     await act(async () => root?.render(<AssistantMessageView message={message} {...props} />));
   }
 
+  it.each(["en", "zh"] as const)("explains output exhaustion without hiding thinking or the partial answer (%s)", async locale => {
+    setLocale(locale);
+    const message: AssistantMessage = { ...baseMessage, stopReason: "length", content: [{ type: "thinking", thinking: "Reasoning" }] };
+    await render(message);
+    expect(container!.querySelector('[data-output-issue="output_limit"]')).not.toBeNull();
+    expect(container!.textContent).toContain(locale === "en" ? "before producing a visible answer" : "產生可見回答前");
+    const partial: AssistantMessage = { ...message, content: [{ type: "text", text: "Preserved partial answer" }] };
+    await act(async () => root!.render(<AssistantMessageView message={partial} />));
+    expect(container!.textContent).toContain("Preserved partial answer");
+    expect(container!.textContent).toContain(locale === "en" ? "partial answer is preserved" : "保留部分內容");
+    await act(async () => root!.render(<AssistantMessageView message={message} isStreaming />));
+    expect(container!.querySelector('[data-output-issue]')).toBeNull();
+  });
+
+  it("keeps recovered output history quiet without discarding partial text", async () => {
+    await render({ ...baseMessage, stopReason: "length", content: [{ type: "text", text: "Retained part" }] }, { outputRecovered: true });
+    expect(container!.querySelector('[role="alert"]')).toBeNull();
+    expect(container!.querySelector('[data-output-recovered="true"]')).not.toBeNull();
+    expect(container!.textContent).toContain("Retained part");
+  });
+
+  it("distinguishes a finished empty answer from an output cap", async () => {
+    await render({ ...baseMessage, stopReason: "stop", content: [] });
+    expect(container!.querySelector('[data-output-issue="empty_output"]')).not.toBeNull();
+    expect(container!.textContent).toContain("No answer produced");
+    expect(container!.textContent).not.toContain("Output limit reached");
+  });
+
   it("shows smoothed speed independently of repeated model labels, then removes stale speed", async () => {
     vi.useFakeTimers();
     await render({ ...baseMessage, content: [] }, { isStreaming: true, showModelLabel: false });

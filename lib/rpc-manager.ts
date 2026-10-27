@@ -1,3 +1,4 @@
+import { getAssistantFailure } from "./assistant-outcome";
 import { hasUpstreamSubagentWork } from "./upstream-subagents";
 import {
   createAgentSessionFromServices,
@@ -9,7 +10,7 @@ import {
   type ExtensionError,
   type ModelRegistry,
 } from "@earendil-works/pi-coding-agent";
-import { buildSessionContext, buildTree, cacheSessionPath, getLeafId } from "./session-reader";
+import { buildSessionTranscript, buildTree, cacheSessionPath, getLeafId } from "./session-reader";
 import { encodeSessionData } from "./session-tree-wire";
 import { AgentEventLog, type AgentStreamRecord, type ReplayStatus } from "./agent-event-log";
 import { CompactionController } from "./compaction-controller";
@@ -676,6 +677,7 @@ export class AgentSessionWrapper {
       compaction: this.compaction.state,
       compactionQueue: this.compactionQueue,
       autoCompactionEnabled: this.inner.autoCompactionEnabled,
+      compactionSettings: this.inner.settingsManager?.getCompactionSettings?.(model),
       autoRetryEnabled: this.inner.autoRetryEnabled,
       model: model ? { id: model.id, provider: model.provider } : undefined,
       messageCount: 0, pendingMessageCount: this.queuedMessages.length,
@@ -694,7 +696,7 @@ export class AgentSessionWrapper {
       cursor: this.eventLog.cursor, replayStatus, state: this.getLiveState(),
       sessionData: encodeSessionData({
         sessionId: this.sessionId, filePath: this.sessionFile, leafId,
-        tree: buildTree(entries), context: buildSessionContext(entries, leafId),
+        tree: buildTree(entries), context: buildSessionTranscript(entries, leafId),
       }, "flat-v2"),
       streamingMessage: this.streamingMessage,
       phase: this.activeTools.size ? { kind: "running_tools", tools: [...this.activeTools.values()] } : null,
@@ -745,7 +747,7 @@ export class AgentSessionWrapper {
       this.activeTools.clear();
       const messages = "messages" in event && Array.isArray(event.messages) ? event.messages : [];
       const last = [...messages].reverse().find((item: { role?: string }) => item?.role === "assistant");
-      this.lastRunError = last?.stopReason === "error" ? last.errorMessage || "Model call failed" : null;
+      this.lastRunError = getAssistantFailure(last);
       const workflow = [...(this.inner.sessionManager?.getBranch?.() ?? [])].reverse()
         .find(entry => entry.type === "custom" && entry.customType === WORKFLOW_ENTRY);
       if (workflow?.type === "custom" && readWorkflow(workflow.data)?.goal?.status === "active") event = { ...event, goalActive: true };

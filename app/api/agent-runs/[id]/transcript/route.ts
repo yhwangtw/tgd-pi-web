@@ -3,7 +3,7 @@ import { readAgentRunStore } from "@/lib/agent-run-store";
 import type { AgentRunTranscript } from "@/lib/agent-run-types";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { resolveMigratedSessionId } from "@/lib/session-migrations";
-import { buildSessionContext, getLeafId, readSessionFile, resolveSessionPath } from "@/lib/session-reader";
+import { buildSessionTranscript, getLeafId, readSessionFile, resolveSessionPath } from "@/lib/session-reader";
 import type { SessionEntry } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         return Response.json({ error: "Run session transcript is unavailable" }, { status: 404 });
       }
     }
-    const messages = buildSessionContext(entries, getLeafId(entries)).messages;
+    const messages = buildSessionTranscript(entries, getLeafId(entries)).messages;
     const transcript: AgentRunTranscript = {
       messages: messages.slice(-MAX_TRANSCRIPT_MESSAGES),
       truncated: messages.length > MAX_TRANSCRIPT_MESSAGES,

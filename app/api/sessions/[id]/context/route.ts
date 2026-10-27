@@ -1,6 +1,6 @@
 import { waitForSessionMigration } from "@/lib/session-migrations";
 import { NextResponse } from "next/server";
-import { resolveSessionPath, buildSessionContext, getSessionEntries } from "@/lib/session-reader";
+import { resolveSessionPath, buildSessionTranscript, getSessionEntries } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
 import type { SessionEntry } from "@/lib/types";
 
@@ -30,7 +30,7 @@ export async function GET(
     if (!entries) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
-    const context = buildSessionContext(entries, leafId);
+    const context = buildSessionTranscript(entries, leafId);
 
     return NextResponse.json({ context });
   } catch (error) {

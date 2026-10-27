@@ -1,3 +1,4 @@
+import { getAssistantFailure } from "@/lib/assistant-outcome";
 import type { AssistantMessage } from "@/lib/types";
 
 export function assistantModelKey(message: { provider?: string; model?: string }): string {
@@ -7,5 +8,5 @@ export function assistantModelKey(message: { provider?: string; model?: string }
 export function shouldShowAssistantModelLabel(previousKey: string | null, message: AssistantMessage): boolean {
   return previousKey === null
     || previousKey !== assistantModelKey(message)
-    || message.stopReason === "error";
+    || getAssistantFailure(message) !== null;
 }

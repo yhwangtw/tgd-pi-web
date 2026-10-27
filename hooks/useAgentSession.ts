@@ -4,6 +4,7 @@ import { keepActivePhase, phaseForMessage } from "./agent-phase";
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useReducer, useMemo } from "react";
 import type { AgentMessage } from "@/lib/types";
 import { browserMetricsStorage, GenerationMetricsTracker } from "@/lib/generation-metrics";
+import { getAssistantOutputIssue } from "@/lib/assistant-outcome";
 import { RunLatencyTracker } from "@/lib/run-latency";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { decodeSessionData, type SessionTreeWire } from "@/lib/session-tree-wire";
@@ -22,6 +23,9 @@ import {
 } from "@/lib/tool-selection";
 import type { SessionData, AgentEvent, AgentPhase, UseAgentSessionOptions, ThinkingLevelOption, ChatInputHandle, AttachedImage } from "./use-agent-session-types";
 import { streamReducer, getRunError, computeSessionStats, shouldApplySessionLoad } from "./use-agent-session-types";
+import { retainedComposerDraft } from "@/lib/composer-submissions";
+import type { ResolvedCompactionSettings } from "@/lib/compaction-policy";
+import { transferComposerDraft } from "./useComposerDraft";
 import { useSessionCompaction, type CompactionLiveState } from "./use-session-compaction";
 import { useAgentEvents, useRunProgress } from "./use-agent-connection";
 import { createStreamUpdateScheduler, hasStreamMessageContent, streamMessageSize } from "./stream-update-scheduler";
@@ -55,6 +59,7 @@ interface LiveAgentState extends CompactionLiveState {
   isStreaming?: boolean;
   isCompacting?: boolean;
   autoCompactionEnabled?: boolean;
+  compactionSettings?: ResolvedCompactionSettings;
   contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
   systemPrompt?: string;
   thinkingLevel?: string;
@@ -111,6 +116,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
   const [isCompacting, setIsCompacting] = useState(false);
   const [autoCompactionEnabled, setAutoCompactionEnabled] = useState<boolean | null>(null);
+  const [compactionSettings, setCompactionSettings] = useState<ResolvedCompactionSettings | null>(null);
   const [autoCompactionUpdating, setAutoCompactionUpdating] = useState(false);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [agentStartedAt, setAgentStartedAt] = useState<number | null>(null);
@@ -140,6 +146,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   useEffect(() => () => { streamScheduler.cancel(); runLatency.finish("interrupted"); }, [session?.id, streamScheduler, runLatency]);
   const pendingPromptMessageRef = useRef<AgentMessage | null>(null);
   const pendingSendRef = useRef<AbortController | null>(null);
+  const viewScope = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    const scope = {};
+    viewScope.current = scope;
+    return () => { if (viewScope.current === scope) viewScope.current = null; };
+  }, [session?.id, newSessionCwd]);
   const abortInFlightRef = useRef(false);
   const agentRunningRef = useRef(false);
   const agentPhaseRef = useRef<AgentPhase>(null);
@@ -226,7 +238,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setActiveLeafId(d.leafId);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
-      if (d.compactionSettings) setAutoCompactionEnabled(d.compactionSettings.enabled);
+      const resolvedCompaction = d.agentState?.state?.compactionSettings ?? d.compactionSettings ?? null;
+      setCompactionSettings(resolvedCompaction);
+      if (resolvedCompaction) setAutoCompactionEnabled(resolvedCompaction.enabled);
       if (d.agentState?.state?.autoCompactionEnabled !== undefined) {
         setAutoCompactionEnabled(d.agentState.state.autoCompactionEnabled);
       }
@@ -338,6 +352,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setAgentStartedAt((current) => running ? current ?? Date.now() : null);
       if (state?.isCompacting !== undefined) setIsCompacting(state.isCompacting);
       reconcileCompaction(state);
+      if (state?.compactionSettings) {
+        setCompactionSettings(state.compactionSettings);
+        setAutoCompactionEnabled(state.compactionSettings.enabled);
+      }
       if (state?.autoCompactionEnabled !== undefined) setAutoCompactionEnabled(state.autoCompactionEnabled);
       if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage);
       if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt);
@@ -352,7 +370,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setRetryInfo(null);
         setQueuedFollowUps([]);
         resetRunProgress();
-        if (typeof event.lastRunError === "string" && event.lastRunError) {
+        const outputIssue = getAssistantOutputIssue(wire?.context?.messages.findLast(message => message.role === "assistant"));
+        if (outputIssue) {
+          setProviderRecovery(null);
+          setErrorTitle(sessionNameRef.current);
+        } else if (typeof event.lastRunError === "string" && event.lastRunError) {
           const classified = classifyProviderError(event.lastRunError);
           setProviderRecovery({ message: event.lastRunError, kind: classified.kind, retryAfterSeconds: classified.retryAfterSeconds, candidate: null, automatic: false });
           setErrorTitle(sessionNameRef.current);
@@ -509,8 +531,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setQueuedFollowUps([]);
         resetRunProgress();
         {
+          const finalMessage = (event.messages as AgentMessage[] | undefined)?.findLast(message => message.role === "assistant");
+          const outputIssue = getAssistantOutputIssue(finalMessage);
           const runError = getRunError(event);
-          if (runError) {
+          if (outputIssue) {
+            setProviderRecovery(null);
+            setErrorTitle(sessionNameRef.current);
+            if (observedRunning && !event.replayed) notifyDone(sessionNameRef.current, translate(outputIssue === "output_limit" ? "chat.outputLimitTitle" : "chat.emptyOutputTitle"));
+          } else if (runError) {
             const classified = classifyProviderError(runError);
             const failedMessage = (event.messages as AgentMessage[] | undefined)?.findLast((message) => message.role === "assistant");
             const current = failedMessage?.role === "assistant" && failedMessage.provider && failedMessage.model
@@ -693,6 +721,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     signal?: AbortSignal,
     timingId?: string,
   ): Promise<string> => {
+    const creatingScope = viewScope.current;
     if (!newSessionCwd) throw new Error("No cwd for new session");
     const selectedModel = newSessionModel;
     if (catalogStatus !== "ready" || !selectedModel) throw new Error(translate("model.catalogRequired"));
@@ -729,17 +758,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       runLatency.finish("aborted");
       signal.throwIfAborted();
     }
-    onSessionCreated?.({
-      id: result.sessionId,
-      path: "",
-      cwd: newSessionCwd,
-      name: undefined,
-      created: new Date().toISOString(),
-      modified: new Date().toISOString(),
-      messageCount: 1,
-      firstMessage: message,
-      ephemeral: ephemeralNewSession,
-    });
+    // A late acknowledgement must not navigate a view that moved elsewhere.
+    if (creatingScope && viewScope.current === creatingScope) {
+      transferComposerDraft(`new:${newSessionCwd}`, result.sessionId, retainedComposerDraft(`new:${newSessionCwd}`));
+      onSessionCreated?.({
+        id: result.sessionId,
+        path: "",
+        cwd: newSessionCwd,
+        name: undefined,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+        messageCount: 1,
+        firstMessage: message,
+        ephemeral: ephemeralNewSession,
+      });
+    }
     return result.sessionId;
   }, [newSessionCwd, newSessionModel, catalogStatus, toolPreset, customToolNames, thinkingLevel, ephemeralNewSession, connectEvents, onSessionCreated, runLatency]);
 
@@ -1146,13 +1179,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       : Array.isArray(content)
         ? (content as Array<{ type?: string; text?: string }>).filter((b) => b.type === "text").map((b) => b.text ?? "").join("\n")
         : "";
-    if (!text.trim()) return;
+    const images: AttachedImage[] = Array.isArray(content) ? content.flatMap(block => {
+      if (block.type !== "image") return [];
+      const data = block.source?.data ?? block.data;
+      const mimeType = block.source?.media_type ?? block.mimeType;
+      return typeof data === "string" && typeof mimeType === "string"
+        ? [{ data, mimeType, previewUrl: `data:${mimeType};base64,${data}` }] : [];
+    }) : [];
+    if (!text.trim() && !images.length) return;
     let prevEntryId: string | undefined;
     for (let i = lastUserIdx - 1; i >= 0; i--) {
       if (entryIds[i]) { prevEntryId = entryIds[i]; break; }
     }
     if (prevEntryId) await handleNavigate(prevEntryId);
-    await handleSend(text);
+    await handleSend(text, images.length ? images : undefined);
   }, [messages, entryIds, agentRunning, handleNavigate, handleSend]);
 
   const handleRetryWithModel = useCallback(async (model: ProviderRecoveryModel) => {
@@ -1351,6 +1391,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, currentModel, displayModel, sessionStats,
+    compactionSettings: compactionSettings ? { ...compactionSettings, enabled: autoCompactionEnabled ?? compactionSettings.enabled } : null,
     compactionStatus: compaction.view, compactionQueue: compaction.queue,
     handleRetryCompaction: compaction.retry,
     handleCheckCompaction: compaction.check, handleDismissCompaction: compaction.dismiss, handleClearCompactionQueue: compaction.clearQueue,

@@ -1,3 +1,4 @@
+import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { expect, test as base, type Locator, type Page, type Route } from "@playwright/test";
 import { realpathSync } from "node:fs";
 import path from "node:path";
@@ -47,6 +48,7 @@ const test = base.extend<{ modelNetworkSafety: void }>({
       if (request.method() === "POST" && /^\/api\/agent\/[^/]+$/.test(pathname) && body?.type === "get_tools") {
         return route.fulfill({ json: { success: true, data: [] } });
       }
+      if (isFixtureReadReceipt(request)) return route.continue();
       forbidden.push(`${request.method()} ${pathname}`);
       return route.fulfill({ status: 403, json: { error: "Model recovery E2E forbids mutations and model calls" } });
     });

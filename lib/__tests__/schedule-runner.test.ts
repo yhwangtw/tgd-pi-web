@@ -105,6 +105,18 @@ describe("ScheduleRunner", () => {
     expect(harness.store.runs[0].error).toBe("No model configured");
   });
 
+  it.each(["length", "stop"])("marks a scheduled %s no-answer result as failed without retrying", async stopReason => {
+    let emit!: (event: { type: string; messages: unknown[] }) => void;
+    const session = { isAlive: () => true, onEvent: vi.fn(listener => { emit = listener; return vi.fn(); }), send: vi.fn().mockResolvedValue(null) };
+    harness.startRpcSession.mockResolvedValue({ session, realSessionId: "limited-schedule" });
+    const runner = new ScheduleRunner(); runner.runNow("schedule-1");
+    await vi.waitFor(() => expect(harness.store.runs[0].sessionId).toBe("limited-schedule"));
+    emit({ type: "agent_end", messages: [{ role: "assistant", stopReason, content: [] }] });
+    expect(harness.store.runs[0]).toMatchObject({ status: "failed", error: expect.any(String) });
+    expect(session.send.mock.calls.filter(([command]) => command.type === "prompt")).toHaveLength(1);
+    runner.dispose();
+  });
+
   it("does not report an aborted background agent as completed", async () => {
     const eventSink: {
       listener?: (event: { type: string; [key: string]: unknown }) => void;

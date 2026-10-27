@@ -43,6 +43,12 @@ for (const width of [1440, 390]) {
     await row.screenshot({ path: info.outputPath(`unread-${width}.png`) });
     await row.click();
     await expect(page.getByText("New external reply", { exact: true }).last()).toBeVisible();
+    // Wait for the foreground transcript dwell before covering it with the mobile drawer.
+    await expect.poll(() => page.evaluate((id) => {
+      const scope = localStorage.getItem("pi-session-read-scope");
+      const receipt = localStorage.getItem(`pi-session-read-v2:${scope}:${id}`);
+      return receipt ? JSON.parse(receipt).entryId : null;
+    }, id)).toBe("answer");
     await openSidebar();
     await expect(row).not.toHaveAttribute("data-unread", "true");
     // Move away before another writer adds a reply.
@@ -56,6 +62,12 @@ for (const width of [1440, 390]) {
     await expect(row).toHaveAttribute("data-unread", "true", { timeout: 12_000 });
     await row.click();
     await expect(page.getByText("Later unseen reply", { exact: true }).last()).toBeVisible();
+    // Wait for the foreground transcript dwell before covering it with the mobile drawer.
+    await expect.poll(() => page.evaluate((id) => {
+      const scope = localStorage.getItem("pi-session-read-scope");
+      const receipt = localStorage.getItem(`pi-session-read-v2:${scope}:${id}`);
+      return receipt ? JSON.parse(receipt).entryId : null;
+    }, id)).toBe("later");
     await openSidebar();
     await expect(row).not.toHaveAttribute("data-unread", "true");
     await page.reload();

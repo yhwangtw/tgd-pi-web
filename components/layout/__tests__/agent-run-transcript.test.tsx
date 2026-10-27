@@ -16,6 +16,7 @@ it("renders and refreshes saved SDK run messages with the normal conversation re
   const transcript: Transcript = { messages: [
     { role: "user", content: "Review the source", timestamp: 1 },
     { role: "assistant", provider: "fixture", model: "fixture", content: [{ type: "text", text: "Review complete" }], timestamp: 2 },
+    { role: "custom", customType: "pi-web-compaction", display: true, content: "Saved background summary" },
   ], truncated: true, updatedAt: "2026-10-26T00:01:00Z" };
   const fetcher = vi.fn(async () => new Response(JSON.stringify(transcript)));
   vi.stubGlobal("fetch", fetcher);
@@ -28,6 +29,9 @@ it("renders and refreshes saved SDK run messages with the normal conversation re
     const panel = document.querySelector<HTMLElement>('[role="dialog"]')!;
     expect(panel.textContent).toContain("Review the source");
     expect(panel.textContent).toContain("Review complete");
+    expect(panel.textContent).toContain("Earlier context summary");
+    expect(panel.textContent).not.toContain("pi-web-compaction");
+    expect(panel.querySelector("details")?.open).toBe(false);
     expect(panel.textContent).toContain("Showing recent activity");
     expect(panel.querySelector('[data-chat-cwd="/fixture"]')).not.toBeNull();
     await act(async () => [...panel.querySelectorAll("button")].find(button => button.textContent === "Refresh activity")!.click());

@@ -20,6 +20,7 @@ import { createMcpExtension } from "./mcp";
 import { createUpstreamSubagentExtension, upstreamSubagentResources } from "./upstream-subagents";
 import { createPlanModeExtension } from "./plan-mode";
 import { createWorkflowExtension } from "./workflow-extension";
+import { createOutputRecoveryExtension } from "./output-recovery-extension";
 import { createStructuredOutputExtension } from "./structured-output-extension";
 
 interface ProviderModelLike {
@@ -238,6 +239,7 @@ export async function createTrackedAgentServices(cwd: string, observations?: {
         ...(observations?.onBeforeProviderRequest ? [createRunTimingExtension(observations.onBeforeProviderRequest)] : []),
         createPlanModeExtension(),
         createWorkflowExtension(),
+        createOutputRecoveryExtension(),
         createStructuredOutputExtension(),
         createMcpExtension(cwd),
         createUpstreamSubagentExtension(),

@@ -31,6 +31,12 @@ describe("buildConversationLayout", () => {
     expect(layout.usageByFinalAssistant.get(5)).toMatchObject({ input: 30, output: 6, cacheRead: 5, cost: { total: 0.03 } });
   });
 
+  it.each(["length", "stop"])("keeps a final %s outcome visible even with no text or activity", stopReason => {
+    const layout = buildConversationLayout([{ role: "user", content: "Answer" }, assistant([], { stopReason })]);
+    expect(layout.displayIndices).toEqual([0, 1]);
+    expect(layout.finalAssistantIndices.has(1)).toBe(true);
+  });
+
   it("keeps ordinary answers and errored outcomes visible", () => {
     const messages: AgentMessage[] = [
       { role: "user", content: "Hi" },
@@ -42,4 +48,19 @@ describe("buildConversationLayout", () => {
     expect(layout.displayIndices).toEqual([0, 1, 2, 3]);
     expect(layout.activityByOwner.size).toBe(0);
   });
+});
+
+it("places compaction notes chronologically without splitting an in-progress tool turn", () => {
+  const messages: AgentMessage[] = [
+    { role: "user", content: "Original question" },
+    assistant([{ type: "toolCall", toolCallId: "read", toolName: "read", input: {} }]),
+    { role: "toolResult", toolCallId: "read", content: [{ type: "text", text: "result" }] },
+    { role: "custom", customType: "pi-web-compaction", display: true, content: "Summary" },
+    assistant([{ type: "text", text: "Final answer" }]),
+  ];
+  const layout = buildConversationLayout(messages);
+  expect(layout.turns).toHaveLength(1);
+  expect(layout.displayIndices).toEqual([0, 3, 4]);
+  expect(layout.turns[0].userIndex).toBe(0);
+  expect(layout.activityByOwner.get(4)).toHaveLength(1);
 });

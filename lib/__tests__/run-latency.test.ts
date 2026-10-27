@@ -20,6 +20,13 @@ describe("content-free run latency", () => {
       firstContentMs: 200, firstCommitMs: 204, displayLagMs: 4, completedMs: 600, server: { provider_request: 5 } });
     expect(JSON.stringify(t.output)).not.toContain("private response");
   });
+  it.each(["length", "stop"])("does not report a no-answer %s run as completed", stopReason => {
+    const t = setup(); t.tracker.begin("limited"); t.tracker.requestSent("limited");
+    t.tracker.record({ type: "agent_end", messages: [{ ...message, stopReason, content: [] }] });
+    expect(t.last().status).toBe("failed");
+    expect(t.last().firstContentMs).toBeUndefined();
+  });
+
   it("does not count an initial snapshot while connecting, but invalidates a resumed run", () => {
     const t = setup(); t.tracker.begin("one"); t.tracker.record({ type: "session_snapshot" });
     expect(t.last().status).toBe("running");

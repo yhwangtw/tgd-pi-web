@@ -100,6 +100,12 @@
   font-weight: var(--weight-medium);
 }
 
+.outcomeHint {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+}
+
 .errorActions {
   display: flex;
   flex: 0 0 auto;

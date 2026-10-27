@@ -55,6 +55,16 @@ describe("agent run transcript", () => {
     expect(readFileSync(harness.filePath, "utf8")).toBe(source);
   });
 
+  it("keeps background-run history before compaction", async () => {
+    const history = entries(2);
+    history.push({ id: "compact", type: "compaction", parentId: "entry-1", timestamp: "2026-10-27T00:00:00Z", summary: "Summary", firstKeptEntryId: "entry-1", tokensBefore: 40000 });
+    harness.live = { sessionId: "sdk-session", isAlive: () => true, inner: { sessionManager: { getEntries: () => history } } };
+    const response = await get(); const body = await response.json();
+    expect(body.messages).toHaveLength(3);
+    expect(body.messages[0].content).toBe("message 0");
+    expect(body.messages[2]).toMatchObject({ role: "custom", customType: "pi-web-compaction" });
+  });
+
   it("reads an unsaved live SDK session and bounds the transcript", async () => {
     harness.live = { sessionId: "sdk-session", isAlive: () => true, inner: { sessionManager: { getEntries: () => entries(405) } } };
     const response = await get();

@@ -7,8 +7,8 @@ import { useI18n } from "@/lib/i18n";
 import type { CompactionView } from "@/hooks/use-session-compaction";
 import styles from "./CompactionStatus.module.css";
 
-export function CompactionStatus({ state, queued, onCancel, onCheck, onRetry, onDismiss, onClear }: {
-  state: CompactionView | null; queued: number;
+export function CompactionStatus({ state, queued, wide, onCancel, onCheck, onRetry, onDismiss, onClear }: {
+  state: CompactionView | null; queued: number; wide?: boolean;
   onCancel: () => Promise<void>; onCheck: () => Promise<void>; onRetry: () => Promise<void>;
   onDismiss: () => void; onClear: () => Promise<void>;
 }) {
@@ -28,7 +28,7 @@ export function CompactionStatus({ state, queued, onCancel, onCheck, onRetry, on
     setBusy(true); setActionFailed(false);
     try { await run(); } catch { setActionFailed(true); } finally { setBusy(false); }
   };
-  return <section className={styles.panel} data-testid="compaction-status" data-state={state?.status} aria-label={t("compact.status")}
+  return <div className={styles.outer}><section className={`${styles.panel} ${wide ? styles.panelWide : ""}`} data-testid="compaction-status" data-state={state?.status} aria-label={t("compact.status")}
     onPointerDown={event => {
       // Blurring the composer restores mobile navigation between pointerdown
       // and click, moving this bar out from under the pointer. Keep keyboard
@@ -52,5 +52,5 @@ export function CompactionStatus({ state, queued, onCancel, onCheck, onRetry, on
     {queued > 0 && <div className={styles.row}><span className={styles.label}>{t("compact.queued").replace("{count}", String(queued))}</span><button disabled={busy} onClick={() => void action(onClear)}>{t("compact.clear")}</button></div>}
     {state?.status === "failed" && state.error && <details><summary>{t("compact.details")}</summary><pre>{state.error}</pre></details>}
     {actionFailed && <p role="alert">{t("compact.actionFailed")}</p>}
-  </section>;
+  </section></div>;
 }

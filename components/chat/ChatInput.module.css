@@ -48,8 +48,6 @@
   box-shadow: var(--color-shadow-input), var(--color-focus-ring);
 }
 
-.innerWrapper:not(.innerWrapperExpanded):has(.inputWrapperStreaming) { border-color: var(--color-warning-border-strong); }
-
 .innerWrapperWide {
   max-width: 1040px;
 }
@@ -366,7 +364,7 @@
   box-shadow: none;
 }
 
-.innerWrapperExpanded .inputWrapperStreaming { border-color: var(--color-warning-border-strong); }
+.innerWrapperExpanded .inputWrapper:focus-within { border-color: var(--color-accent-border-focus); }
 
 .inputRow {
   display: flex;
@@ -493,10 +491,11 @@
 /* Steer button base */
 .steerButton {
   display: flex;
+  white-space: nowrap;
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-warning-border-strong);
+  border: 1px solid var(--color-accent-border);
   border-radius: var(--radius-control);
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
@@ -506,13 +505,13 @@
 
 .steerButtonActive {
   composes: steerButton;
-  background: var(--color-warning-bg-strong);
-  color: var(--color-warning-text-strong);
+  background: var(--color-accent-bg-strong);
+  color: var(--accent-text);
   box-shadow: var(--color-shadow-control);
   cursor: pointer;
 }
 .steerButtonActive:hover {
-  border-color: var(--color-warning-text-strong);
+  border-color: var(--color-accent-border-focus);
   filter: brightness(1.04);
 }
 
@@ -526,6 +525,7 @@
 /* Follow-up button base */
 .followUpButton {
   display: flex;
+  white-space: nowrap;
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
@@ -621,6 +621,10 @@
   gap: var(--space-optical);
 }
 
+/* Wrap the toolbar before squeezing delivery controls or hiding the model. */
+.bottomBarStreaming .bottomBarLeft { flex-basis: 360px; }
+.bottomBarStreaming .keyboardHint { display: none; }
+
 .modelControl {
   min-width: 0;
   flex: 0 1 auto;
@@ -646,6 +650,7 @@
 
 .sendModeSwitch {
   display: inline-flex;
+  flex: 0 0 auto;
   height: 32px;
   align-items: center;
   gap: var(--space-optical);
@@ -658,6 +663,8 @@
 
 .sendModeButton {
   display: inline-flex;
+  flex: 0 0 auto;
+  white-space: nowrap;
   align-items: center;
   justify-content: center;
   min-width: 62px;
@@ -717,6 +724,13 @@
 
 .mobileToolsHeader {
   display: none;
+}
+
+/* Resolved context policy is part of the user-opened controls, across columns. */
+.compactionPolicyControl {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
 }
 
 .composerSettingsSheetBody { padding: 0; }
@@ -783,7 +797,7 @@
   position: static;
   display: flex;
   flex: 0 0 auto;
-  margin-left: 0;
+  margin-left: auto;
 }
 
 .bottomBarRightStreaming > :not(.stopButton):not(.mobileSoundControl) {
@@ -1669,4 +1683,19 @@
 @keyframes attachment-arrive {
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: none; }
+}
+
+.deliveryNotices { display: grid; gap: var(--space-1); }
+.deliveryNotice { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); color: var(--text-muted); font-size: var(--text-xs); }
+.deliveryNotice details { flex: 1; min-width: 0; }
+.deliveryNotice summary { cursor: pointer; }
+.deliveryNotice p { max-height: 120px; overflow: auto; overflow-wrap: anywhere; white-space: pre-wrap; }
+.deliveryNotice button { flex-shrink: 0; border-radius: var(--radius-control); padding: var(--space-1); color: var(--accent-text); }
+.deliveryNotice button:hover { background: var(--bg-hover); }
+
+/* Very narrow phones need a full row for translated / large delivery labels. */
+@media (max-width: 360px) {
+  .bottomBarStreaming .sendModeSwitch { grid-column: 1 / -1; }
+  .bottomBarStreaming .bottomBarRightStreaming { grid-column: 1 / -1; grid-row: 3; }
+  .bottomBarStreaming > [data-workflow-toolbar] { grid-row: 4; }
 }

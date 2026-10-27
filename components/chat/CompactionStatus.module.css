@@ -1,6 +1,11 @@
-.panel {
+.outer {
   flex-shrink: 0;
-  margin: var(--space-2) var(--space-4);
+  min-width: 0;
+  padding: 0 var(--component-chat-minimap-gutter) var(--space-1) var(--space-4);
+}
+.panel {
+  max-width: 780px;
+  margin: 0 auto;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
@@ -10,6 +15,7 @@
   line-height: var(--leading-copy);
   min-width: 0;
 }
+.panelWide { max-width: 1040px; }
 .row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); min-width: 0; }
 .row > svg { flex-shrink: 0; }
 .label { flex: 1 1 120px; min-width: 0; overflow-wrap: anywhere; color: var(--text); }
@@ -32,4 +38,15 @@
 .spinner { animation: spin 1s linear var(--motion-loop-count, infinite); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
-@media (max-width: 640px) { .panel { margin-inline: var(--space-2); } }
+:global(html[data-ui-style="trae"]) .outer {
+  padding-left: var(--space-6);
+  padding-right: var(--component-composer-action-gutter);
+}
+@media (max-width: 700px) {
+  .outer { padding-inline: var(--space-2); }
+  :global(html[data-ui-style="trae"]) .outer { padding-inline: var(--space-3); }
+}
+@media (max-width: 700px), (pointer: coarse) {
+  .panel button { min-height: var(--control-touch); }
+  .dismiss { min-width: var(--control-touch); }
+}

@@ -455,6 +455,10 @@ test("Original and TRAE share one semantic radius contract with distinct geometr
     const page = await context.newPage();
     try {
       await openMain(page, style, 1440, 900);
+      // Other specs create newer conversations. Reveal the selected historical
+      // fixture through the public filter before measuring a virtualized row.
+      await page.getByRole("textbox", { name: "Search conversations", exact: true }).fill("專案架構分析");
+      await expect(page.locator("[data-session-row][aria-selected='true']")).toBeVisible();
       const measured = await page.evaluate(() => {
         const tokenNames = [
           "inline",

@@ -31,7 +31,9 @@ Browser tests run in four isolated CI jobs, each with its own fixture server and
 session store and one worker. The stable `E2E` check succeeds only when every
 selected shard passes. Build runs once on Linux/Node 22; shards download that
 workflow's artifact and verify source bytes, Node/platform, build environment and
-artifact hashes before reuse. This artifact is not a macOS production deployment.
+artifact hashes before reuse. Each shard installs the exact Node patch version
+reported by the build job, avoiding floating-version drift across runners. This
+artifact is not a macOS production deployment.
 
 Known file-viewer and composer UI leaves run core navigation, chat/reconnection,
 SDK session, appearance, responsive and design checks plus mapped feature specs.

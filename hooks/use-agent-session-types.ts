@@ -1,7 +1,9 @@
 "use client";
 
 import type { AgentMessage, SessionInfo, SessionTreeNode } from "@/lib/types";
+import { getAssistantFailure } from "@/lib/assistant-outcome";
 import type { ToolSelectionMode } from "@/lib/tool-selection";
+import type { ResolvedCompactionSettings } from "@/lib/compaction-policy";
 
 export interface SessionData {
   sessionId: string;
@@ -14,11 +16,7 @@ export interface SessionData {
     thinkingLevel: string;
     model: { provider: string; modelId: string } | null;
   };
-  compactionSettings?: {
-    enabled: boolean;
-    reserveTokens: number;
-    keepRecentTokens: number;
-  };
+  compactionSettings?: ResolvedCompactionSettings;
 }
 
 export interface StreamingState {
@@ -52,19 +50,18 @@ export interface AgentEvent {
 }
 
 /**
- * If an agent_end event's final assistant message carries stopReason "error",
+ * If an agent_end event's final assistant message failed or produced no answer,
  * return its error text — the run finished by failing, and every "done"
  * signal (sound, ✅ title, notification) should say so instead.
  */
 export function getRunError(event: AgentEvent): string | null {
   if (event.type !== "agent_end") return null;
-  const messages = event.messages as Array<{ role?: string; stopReason?: string; errorMessage?: string }> | undefined;
+  const messages = event.messages as Array<{ role?: string; stopReason?: string; errorMessage?: string; content?: unknown }> | undefined;
   if (!Array.isArray(messages)) return null;
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m?.role !== "assistant") continue;
-    if (m.stopReason === "error") return m.errorMessage || "Model call failed";
-    return null; // last assistant message ended normally
+    return getAssistantFailure(m); // Only the final assistant determines the outcome.
   }
   return null;
 }
