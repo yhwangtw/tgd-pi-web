@@ -95,14 +95,21 @@ remain intentional discard actions.
 
 ## Output limits and empty answers
 
-Keep provider output limits intact. A final `length` response is incomplete,
-including when reasoning consumed the allowance before any visible answer.
-Preserve partial output and show an explicit outcome with manual retry and
-thinking controls. A finished `stop` with known empty/thinking-only content is
-an empty answer; streaming placeholders and tool handoffs are not failures.
-Use the shared assistant outcome classifier for notifications, reconnect state,
-run records and session metadata. Goals judge the final response at
-`agent_settled`, allowing official SDK recovery to succeed before pausing.
+An output ceiling limits one provider response, not the entire user's answer.
+Pi Web's output recovery extension uses the official `turn_end` boundary to
+append a hidden custom message and continue the same agent loop when a response
+reaches its confirmed model ceiling. Distinct progressing chunks continue until
+the model finishes; repeated chunks and repeated no-answer results stop recovery.
+A first empty/thinking-only result gets an answer-focused continuation, using a
+supported lower reasoning effort for that answer request only. Saved model,
+thinking and output settings remain unchanged; compaction requests are excluded.
+
+Defer context-clamped or premature truncation to Pi's official compact/retry path.
+Abort, queued user input, model/session changes and explicit Goal limits take
+priority. Hidden continuations never become another user chat message. A later
+successful answer quiets earlier output-limit notices without losing partial text.
+Unrecovered outcomes retain an explicit explanation and manual retry controls.
+Goals judge the final response at `agent_settled`, after official recovery.
 
 ## Workflow and delegation
 

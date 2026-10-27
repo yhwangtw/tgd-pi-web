@@ -86,6 +86,10 @@ export default function reconnectFixture(pi) {
       const delegated = text.startsWith("<delegated_role ") && text.includes("<delegated_task>")
         ? text.split("<delegated_task>")[1].split("</delegated_task>")[0].trim() : null;
       const fixtureText = delegated ?? (text.startsWith("Task: ") ? text.slice(6).split("\n\n---\n**Output:**\n", 1)[0] : text);
+      const answerTexts = context.messages.map(message => typeof message.content === "string" ? message.content : (message.content ?? []).map(part => part.text ?? "").join(""));
+      const answerIndex = answerTexts.findLastIndex(text => /^E2E_ANSWER_CAP:([a-z0-9-]{1,80})$/.test(text));
+      const answerProbe = answerIndex < 0 ? null : /^E2E_ANSWER_CAP:([a-z0-9-]{1,80})$/.exec(answerTexts[answerIndex]);
+      const hasAnswerContinuation = answerTexts.slice(answerIndex + 1).some(text => text.startsWith("The previous response ended without a visible answer."));
       const match = /^E2E_RECONNECT:(complete|delayed|error|question|outside|subagents):([a-z0-9-]{1,80})$/.exec(fixtureText);
       const message = { role: "assistant", api: model.api, provider, model: model.id,
         content: [], stopReason: "stop", timestamp: Date.now(),
@@ -93,6 +97,21 @@ export default function reconnectFixture(pi) {
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
       queueMicrotask(async () => {
         try {
+          if (answerProbe) {
+            if (hasAnswerContinuation) {
+              message.content = [{ type: "text", text: "ANSWER_COMPLETED:" + answerProbe[1] }];
+              message.usage.output = 8;
+              stream.push({ type: "start", partial: message });
+              stream.push({ type: "done", reason: "stop", message });
+            } else {
+              message.content = [{ type: "thinking", thinking: "Synthetic reasoning reached the model output ceiling." }];
+              message.stopReason = "length";
+              message.usage.output = model.maxTokens;
+              stream.push({ type: "start", partial: message });
+              stream.push({ type: "done", reason: "length", message });
+            }
+            stream.end(); return;
+          }
           if (!match) throw new Error("Only named reconnect fixture prompts are accepted");
           const [, mode, token] = match;
           if (mode === "subagents") {

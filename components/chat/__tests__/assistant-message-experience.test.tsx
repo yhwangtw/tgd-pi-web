@@ -53,6 +53,13 @@ describe("AssistantMessageView conversation chrome", () => {
     expect(container!.querySelector('[data-output-issue]')).toBeNull();
   });
 
+  it("keeps recovered output history quiet without discarding partial text", async () => {
+    await render({ ...baseMessage, stopReason: "length", content: [{ type: "text", text: "Retained part" }] }, { outputRecovered: true });
+    expect(container!.querySelector('[role="alert"]')).toBeNull();
+    expect(container!.querySelector('[data-output-recovered="true"]')).not.toBeNull();
+    expect(container!.textContent).toContain("Retained part");
+  });
+
   it("distinguishes a finished empty answer from an output cap", async () => {
     await render({ ...baseMessage, stopReason: "stop", content: [] });
     expect(container!.querySelector('[data-output-issue="empty_output"]')).not.toBeNull();

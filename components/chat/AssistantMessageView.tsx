@@ -90,6 +90,7 @@ export function AssistantMessageView({
   prevTimestamp,
   onOpenModels,
   authRecovered,
+  outputRecovered = false,
   showModelLabel = true,
   turnActivityMessages,
   suppressActivityBlocks,
@@ -113,6 +114,7 @@ export function AssistantMessageView({
   prevTimestamp?: number;
   onOpenModels?: () => void;
   authRecovered?: boolean;
+  outputRecovered?: boolean;
   showModelLabel?: boolean;
   turnActivityMessages?: AssistantMessage[];
   suppressActivityBlocks?: boolean;
@@ -305,12 +307,20 @@ export function AssistantMessageView({
           toolCallDurations,
           executionContext,
           outputAccessory: turnActivityMessages && turnActivityMessages.length > 0 ? (
-            <TurnWorkLog messages={turnActivityMessages} toolResults={toolResults} turnStartedAt={turnStartedAt} executionContext={executionContext} />
+            <TurnWorkLog messages={turnActivityMessages} toolResults={toolResults} turnStartedAt={turnStartedAt} executionContext={executionContext} outputRecovered={outputRecovered} />
           ) : undefined,
         })}
       </div>
 
-      {!isStreaming && outputIssue && (
+      {!isStreaming && outputIssue && outputRecovered && (
+        <div className={styles.recoveredError} data-output-recovered="true">
+          <span className={styles.recoveredErrorSummary}>
+            <Check className={styles.recoveredIcon} size={UI_ICON_SIZE.inline} aria-hidden="true" />
+            {t("chat.outputRecovered")}
+          </span>
+        </div>
+      )}
+      {!isStreaming && outputIssue && !outputRecovered && (
         <div className={styles.errorCard} role="alert" data-output-issue={outputIssue}>
           <TriangleAlert size={UI_ICON_SIZE.compact} aria-hidden="true" />
           <div className={styles.errorContent}>
@@ -449,8 +459,10 @@ function TurnWorkLog({
   toolResults,
   turnStartedAt,
   executionContext,
+  outputRecovered,
 }: {
   messages: AssistantMessage[];
+  outputRecovered?: boolean;
   toolResults?: Map<string, ToolResultMessage>;
   turnStartedAt?: number;
   executionContext?: ToolExecutionContext;
@@ -468,7 +480,7 @@ function TurnWorkLog({
     (entry): entry is typeof entry & { block: ThinkingContent } => entry.block.type === "thinking",
   );
   const files = new Set<string>();
-  let failed = messages.filter((activityMessage) => getAssistantFailure(activityMessage) !== null).length;
+  let failed = messages.filter((activityMessage) => getAssistantFailure(activityMessage) !== null && !(outputRecovered && getAssistantOutputIssue(activityMessage))).length;
   let lastTimestamp = Math.max(0, ...messages.map((activityMessage) => activityMessage.timestamp ?? 0));
   for (const entry of toolEntries) {
     const path = entry.block.input && typeof entry.block.input.path === "string" ? entry.block.input.path : null;

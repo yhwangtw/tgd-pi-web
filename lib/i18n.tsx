@@ -1489,6 +1489,7 @@ const MESSAGES = {
   "chat.takingLonger": { en: "Taking longer than usual — you can keep waiting or stop the run.", zh: "回應時間比平常久；可以繼續等待或停止執行。" },
   "chat.reconnecting": { en: "Connection interrupted — reconnecting…", zh: "連線暫時中斷，正在重新連線…" },
   "chat.copyMessage": { en: "Copy message", zh: "複製訊息" },
+  "chat.outputRecovered": { en: "Answer continued automatically", zh: "已自動接續回答" },
   "chat.outputLimitTitle": { en: "Output limit reached", zh: "已達輸出上限" },
   "chat.outputLimitNoAnswer": { en: "The model reached its output limit before producing a visible answer. Reasoning can use this allowance too.", zh: "模型在產生可見回答前已用完輸出額度；推理也可能占用這份額度。" },
   "chat.outputLimitPartial": { en: "The response was cut short. The partial answer is preserved above.", zh: "回答因輸出額度用完而中止，上方已保留部分內容。" },

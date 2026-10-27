@@ -1,3 +1,5 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { withFixtureMessages } from "./session-response-fixture";
 
@@ -85,5 +87,30 @@ for (const style of ["original", "trae"]) for (const variant of variants) {
     await expect.poll(() => fixture.commands.filter(command => command.type === "prompt").length).toBe(1);
     expect(fixture.commands.find(command => command.type === "prompt")?.message).toBe("Answer the synthetic question");
     expect(fixture.forbidden).toEqual([]);
+  });
+}
+
+for (const width of [390, 1440]) {
+  test(`${width}px: real SDK automatically finishes an output-capped answer without another user message`, async ({ page, request }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(() => { localStorage.setItem("pi-composer-hints", "off"); localStorage.setItem("pi-locale", "en"); });
+    await page.route(/\/api\/agent\/[^/]+\/summarize$/, route => route.fulfill({ json: { skipped: true } }));
+    const cwd = process.env.E2E_PROJECT_CWD!;
+    const created = await request.post("/api/agent/new", { data: { cwd, deferPrompt: true, provider: "e2e-reconnect-fixture", modelId: "deterministic" } });
+    expect(created.ok(), await created.text()).toBe(true);
+    const { sessionId } = await created.json();
+    await page.goto(`/?session=${sessionId}`);
+    const prompt = `E2E_ANSWER_CAP:auto-${width}`;
+    const input = page.getByRole("textbox", { name: "Message…", exact: true });
+    await input.fill(prompt); await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(page.getByRole("log", { name: "Conversation" }).getByText(`ANSWER_COMPLETED:auto-${width}`, { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('[data-output-recovered="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-output-issue]')).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Retry last run", exact: true })).toHaveCount(0);
+    const persisted = await request.get(`/api/sessions/${sessionId}`);
+    const { context } = await persisted.json();
+    expect(context.messages.filter((message: { role: string }) => message.role === "user")).toHaveLength(1);
+    expect(context.messages.at(-1)).toMatchObject({ role: "assistant", stopReason: "stop" });
+    writeFileSync(test.info().outputPath("automatic-answer-session.json"), JSON.stringify({ sessionId, agentDir: join(process.env.E2E_ROOT!, "agent"), width }));
   });
 }

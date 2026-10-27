@@ -1063,7 +1063,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         setRunAnnouncement(t("chat.responseComplete"));
       }
     }
-  }, [agentRunning, lastAssistantOutcome?.stopReason, lastOutputIssue, t]);
+  }, [agentRunning, lastAssistantOutcome, lastOutputIssue, t]);
 
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
@@ -1139,6 +1139,19 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     running: agentRunning,
     activeIds: new Set(agentPhase?.kind === "running_tools" ? agentPhase.tools.map(tool => tool.id) : []),
   }), [agentRunning, agentPhase]);
+
+  const recoveredOutputIndices = useMemo(() => {
+    const indices = new Set<number>();
+    for (const turn of conversationLayout.turns) {
+      const finalIndex = turn.assistantIndices.at(-1);
+      const final = finalIndex === undefined ? null : messages[finalIndex];
+      if (!hasVisibleAssistantAnswer(final) || getAssistantFailure(final) || final?.role !== "assistant" || final.stopReason === "aborted") continue;
+      for (const index of turn.assistantIndices) {
+        if (index !== finalIndex && getAssistantOutputIssue(messages[index])) indices.add(index);
+      }
+    }
+    return indices;
+  }, [conversationLayout.turns, messages]);
 
   const historyRows = useMemo(() => {
     let refIdx = 0;
@@ -1219,6 +1232,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           prevTimestamp={idx > 0 ? (messages[idx - 1] as import("@/lib/types").AgentMessage & { timestamp?: number }).timestamp : undefined}
           onOpenModels={onOpenModels}
           authRecovered={recoveredAuthIndices.has(idx)}
+          outputRecovered={recoveredOutputIndices.has(idx)}
           showModelLabel={showModelLabel}
           turnActivityMessages={conversationLayout.activityByOwner.get(idx)}
           suppressActivityBlocks={conversationLayout.activityAssistantIndices.has(idx)}
@@ -1287,7 +1301,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     });
   }, [messages, entryIds, conversationLayout, streamState.isStreaming, getGenerationMetrics, toolExecutionContext,
     toolResultsMap, modelNames, agentRunning, isNew, handleFork, forkingEntryId,
-    handleNavigate, handleEditContent, handleEditRerun, onOpenModels, recoveredAuthIndices,
+    handleNavigate, handleEditContent, handleEditRerun, onOpenModels, recoveredAuthIndices, recoveredOutputIndices,
     quoteMessage, toggleBookmark, bookmarks, lastUserIdx, unreadMessageIndex, t,
     rovingMessageIndex, handleMessageRovingKeyDown, messageRefs, lastUserMsgRef,
     expandedKeys, toggleExpanded, historyStartIndex]);
