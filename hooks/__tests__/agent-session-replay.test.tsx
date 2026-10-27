@@ -395,6 +395,21 @@ describe("session reconciliation and first-prompt ordering", () => {
     expect(harness.created).toHaveBeenCalledOnce();
   });
 
+  it("does not navigate back when a new-session acknowledgement arrives after switching", async () => {
+    await act(async () => root.render(<Harness selected={null} />));
+    let finish!: () => void;
+    harness.send.mockImplementation((_sid, command) => command.type === "prompt" ? new Promise<void>(resolve => { finish = resolve; }) : Promise.resolve(null));
+    let sending!: Promise<boolean>;
+    await act(async () => { sending = current.handleSend("belongs to A"); });
+    const source = FakeEventSource.instances[0];
+    await act(async () => { source.open(); source.message(snapshot([]), "epoch:0"); });
+    expect(harness.send.mock.calls.filter(([, command]) => command.type === "prompt")).toHaveLength(1);
+    await act(async () => root.render(<Harness selected={{ ...session, id: "B" }} />));
+    await act(async () => { finish(); await sending; });
+    expect(harness.created).not.toHaveBeenCalled();
+    expect(harness.send.mock.calls.filter(([, command]) => command.type === "prompt")).toHaveLength(1);
+  });
+
   it("ends a new-session observation on remount instead of timing its replay as cold output", async () => {
     await act(async () => root.render(<Harness key="new" selected={null} />));
     let sending!: Promise<boolean>;

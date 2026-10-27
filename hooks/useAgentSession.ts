@@ -23,6 +23,8 @@ import {
 } from "@/lib/tool-selection";
 import type { SessionData, AgentEvent, AgentPhase, UseAgentSessionOptions, ThinkingLevelOption, ChatInputHandle, AttachedImage } from "./use-agent-session-types";
 import { streamReducer, getRunError, computeSessionStats, shouldApplySessionLoad } from "./use-agent-session-types";
+import { retainedComposerDraft } from "@/lib/composer-submissions";
+import { transferComposerDraft } from "./useComposerDraft";
 import { useSessionCompaction, type CompactionLiveState } from "./use-session-compaction";
 import { useAgentEvents, useRunProgress } from "./use-agent-connection";
 import { createStreamUpdateScheduler, hasStreamMessageContent, streamMessageSize } from "./stream-update-scheduler";
@@ -141,6 +143,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   useEffect(() => () => { streamScheduler.cancel(); runLatency.finish("interrupted"); }, [session?.id, streamScheduler, runLatency]);
   const pendingPromptMessageRef = useRef<AgentMessage | null>(null);
   const pendingSendRef = useRef<AbortController | null>(null);
+  const viewScope = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    const scope = {};
+    viewScope.current = scope;
+    return () => { if (viewScope.current === scope) viewScope.current = null; };
+  }, [session?.id, newSessionCwd]);
   const abortInFlightRef = useRef(false);
   const agentRunningRef = useRef(false);
   const agentPhaseRef = useRef<AgentPhase>(null);
@@ -704,6 +712,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     signal?: AbortSignal,
     timingId?: string,
   ): Promise<string> => {
+    const creatingScope = viewScope.current;
     if (!newSessionCwd) throw new Error("No cwd for new session");
     const selectedModel = newSessionModel;
     if (catalogStatus !== "ready" || !selectedModel) throw new Error(translate("model.catalogRequired"));
@@ -740,17 +749,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       runLatency.finish("aborted");
       signal.throwIfAborted();
     }
-    onSessionCreated?.({
-      id: result.sessionId,
-      path: "",
-      cwd: newSessionCwd,
-      name: undefined,
-      created: new Date().toISOString(),
-      modified: new Date().toISOString(),
-      messageCount: 1,
-      firstMessage: message,
-      ephemeral: ephemeralNewSession,
-    });
+    // A late acknowledgement must not navigate a view that moved elsewhere.
+    if (creatingScope && viewScope.current === creatingScope) {
+      transferComposerDraft(`new:${newSessionCwd}`, result.sessionId, retainedComposerDraft(`new:${newSessionCwd}`));
+      onSessionCreated?.({
+        id: result.sessionId,
+        path: "",
+        cwd: newSessionCwd,
+        name: undefined,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+        messageCount: 1,
+        firstMessage: message,
+        ephemeral: ephemeralNewSession,
+      });
+    }
     return result.sessionId;
   }, [newSessionCwd, newSessionModel, catalogStatus, toolPreset, customToolNames, thinkingLevel, ephemeralNewSession, connectEvents, onSessionCreated, runLatency]);
 
