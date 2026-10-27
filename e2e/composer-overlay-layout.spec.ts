@@ -178,8 +178,13 @@ for (const style of ["original", "trae"] as const) {
     await expect(controls).toHaveAttribute("aria-expanded", "false");
     await expectModelAnchored(page);
     const selected = page.getByTestId("model-selector-popover").getByRole("button", { name: new RegExp(LONG_MODEL) });
+    // Re-selecting the saved model closes the picker without a runtime command.
     await selected.click();
-    expect(selections).toEqual([{ type: "set_model", provider: "anthropic", modelId: "claude-sonnet-5" }]);
+    await expect(page.getByTestId("model-selector-popover")).toBeHidden();
+    expect(selections).toEqual([]);
+    await trigger.click();
+    await page.getByTestId("model-selector-popover").getByRole("button", { name: /Fixture short model/ }).click();
+    await expect.poll(() => selections).toEqual([{ type: "set_model", provider: "fixture-layout", modelId: "short-model" }]);
     await expect(page.getByTestId("model-selector-popover")).toBeHidden();
     await expect(trigger).toBeFocused();
     await trigger.click();
