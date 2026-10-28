@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { AgentSessionWrapper } from "../rpc-manager";
 import type { AgentSessionLike } from "../pi-types";
+import type { AgentRunState } from "../agent-run-state";
 import { WebExtensionUIBridge } from "../web-extension-ui";
 
 function fixture() {
@@ -18,7 +19,55 @@ function fixture() {
   return { wrapper, emit: (event: Parameters<typeof emit>[0]) => { if (event.type === "agent_start") streaming = true; if (event.type === "agent_end") streaming = false; emit(event); } };
 }
 
+const runState = (state: unknown) => (state as { runState: AgentRunState | null }).runState;
+
 describe("agent SSE replay contract", () => {
+  it("retains one run clock and the actual phase through subscriptions, reads and quiet periods", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(10_000);
+    const { wrapper, emit } = fixture();
+    try {
+      emit({ type: "agent_start" });
+      const first = runState(await wrapper.send({ type: "get_state" }))!;
+      expect(first).toMatchObject({ startedAt: 10_000, lastProgressAt: 10_000, phase: { kind: "waiting_model" } });
+      vi.setSystemTime(15_000);
+      emit({ type: "message_update", message: { role: "assistant", content: [{ type: "thinking", thinking: "Working" }] } });
+      vi.setSystemTime(130_000);
+      const frames: Array<{ type: string; state?: { runState: AgentRunState } }> = [];
+      const stop = wrapper.onStreamEvent(record => frames.push(JSON.parse(record.data)), null); stop();
+      const run = frames.find(frame => frame.type === "session_snapshot")!.state!.runState;
+      expect(run).toEqual({ ...first, lastProgressAt: 15_000, observedAt: 130_000, phase: { kind: "thinking" } });
+      expect(runState(await wrapper.send({ type: "get_state" }))!).toEqual(run);
+      emit({ type: "tool_execution_start", toolCallId: "a", toolName: "read" });
+      expect(wrapper.getStreamSnapshot().phase).toEqual({ kind: "running_tools", tools: [{ id: "a", name: "read" }] });
+      emit({ type: "tool_execution_end", toolCallId: "a" });
+      emit({ type: "message_update", message: { role: "assistant", content: [{ type: "text", text: "Answer" }] } });
+      expect(wrapper.getStreamSnapshot().phase).toEqual({ kind: "writing" });
+      emit({ type: "message_end" });
+      expect(wrapper.getStreamSnapshot().phase).toEqual({ kind: "waiting_model" });
+      emit({ type: "agent_end", messages: [] });
+      expect(runState(wrapper.getStreamSnapshot().state)!).toBeNull();
+      vi.setSystemTime(140_000); emit({ type: "agent_start" });
+      const next = runState(wrapper.getStreamSnapshot().state)!;
+      expect(next.id).not.toBe(first.id); expect(next.startedAt).toBe(140_000);
+    } finally { wrapper.destroy(); vi.useRealTimers(); }
+  });
+
+  it("restores stopping and resets it if abort fails or the run ends", async () => {
+    const { wrapper, emit } = fixture();
+    try {
+      emit({ type: "agent_start" });
+      Object.assign(wrapper.inner, { abort: vi.fn().mockRejectedValue(new Error("abort failed")) });
+      await expect(wrapper.send({ type: "abort" })).rejects.toThrow("abort failed");
+      expect(wrapper.getStreamSnapshot().phase).toEqual({ kind: "waiting_model" });
+      let finish!: () => void;
+      Object.assign(wrapper.inner, { abort: vi.fn(() => new Promise<void>(resolve => { finish = resolve; })) });
+      const stopping = wrapper.send({ type: "abort" });
+      expect(wrapper.getStreamSnapshot().phase).toEqual({ kind: "stopping" });
+      emit({ type: "agent_end", messages: [] }); finish(); await stopping;
+      expect(runState(wrapper.getStreamSnapshot().state)!).toBeNull();
+    } finally { wrapper.destroy(); }
+  });
+
   it.each(["length", "stop"])("retains %s output failure on reconnect and clears it for the next run", stopReason => {
     const { wrapper, emit } = fixture();
     try {

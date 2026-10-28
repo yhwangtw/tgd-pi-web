@@ -1,6 +1,6 @@
 "use client";
 
-import { keepActivePhase, phaseForMessage } from "./agent-phase";
+import { keepActivePhase, phaseForMessage, restoreRunClock, type AgentRunState } from "@/lib/agent-run-state";
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useReducer, useMemo } from "react";
 import type { AgentMessage } from "@/lib/types";
 import { browserMetricsStorage, GenerationMetricsTracker } from "@/lib/generation-metrics";
@@ -27,7 +27,7 @@ import { retainedComposerDraft } from "@/lib/composer-submissions";
 import type { ResolvedCompactionSettings } from "@/lib/compaction-policy";
 import { transferComposerDraft } from "./useComposerDraft";
 import { useSessionCompaction, type CompactionLiveState } from "./use-session-compaction";
-import { useAgentEvents, useRunProgress } from "./use-agent-connection";
+import { classifyRunProgress, useAgentEvents, useRunProgress } from "./use-agent-connection";
 import { createStreamUpdateScheduler, hasStreamMessageContent, streamMessageSize } from "./stream-update-scheduler";
 import { useTranscriptScroll } from "./use-transcript-scroll";
 import { shouldResyncOnVisible } from "@/lib/wake-resync";
@@ -55,6 +55,7 @@ import {
 export type { SessionData, AgentPhase, ThinkingLevelOption, ChatInputHandle, AttachedImage };
 
 interface LiveAgentState extends CompactionLiveState {
+  runState?: AgentRunState | null;
   queuedFollowUps?: QueuedFollowUp[];
   isStreaming?: boolean;
   isCompacting?: boolean;
@@ -155,6 +156,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const abortInFlightRef = useRef(false);
   const agentRunningRef = useRef(false);
   const agentPhaseRef = useRef<AgentPhase>(null);
+  const runIdRef = useRef<string | null>(null);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
   // Already-named sessions never need auto-naming — skip the summarize call
   const hasSummarizedRef = useRef(Boolean(session?.name));
@@ -179,6 +181,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     lastEventAtRef,
     connectionState,
   );
+  const restoreLiveRun = useCallback((run: AgentRunState | null | undefined) => {
+    const clock = restoreRunClock(run);
+    if (!clock || !run) return false;
+    const sameRun = runIdRef.current === clock.id;
+    runIdRef.current = clock.id;
+    // A slower reconnect response must never make the same run count backwards.
+    setAgentStartedAt(current => sameRun && current !== null ? Math.min(current, clock.startedAt) : clock.startedAt);
+    setAgentPhase(run.phase);
+    agentPhaseRef.current = run.phase;
+    lastEventAtRef.current = clock.lastProgressAt;
+    resetRunProgress(classifyRunProgress(Math.max(0, Math.floor((Date.now() - clock.lastProgressAt) / 1000)), run.phase, connectionState));
+    return true;
+  }, [connectionState, lastEventAtRef, resetRunProgress]);
   const {
     initialScrollDoneRef, lastUserMsgRef, pendingScrollToUserRef,
     messagesEndRef, scrollContainerRef,
@@ -348,8 +363,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const running = state?.isStreaming === true || pendingPrompt;
       agentRunningRef.current = running;
       setAgentRunning(running);
-      setAgentPhase(running ? keepActivePhase((event.phase as AgentPhase) ?? null, phaseForMessage(event.streamingMessage as AgentMessage | undefined)) : null);
-      setAgentStartedAt((current) => running ? current ?? Date.now() : null);
+      if (!running) {
+        runIdRef.current = null;
+        setAgentPhase(null);
+        setAgentStartedAt(null);
+      } else if (!restoreLiveRun(state?.runState)) {
+        setAgentPhase(keepActivePhase((event.phase as AgentPhase) ?? null, phaseForMessage(event.streamingMessage as AgentMessage | undefined)));
+        // Older servers cannot provide a trustworthy start time after remount.
+        // Preserve a local pending prompt's clock, but do not invent a new one.
+      }
       if (state?.isCompacting !== undefined) setIsCompacting(state.isCompacting);
       reconcileCompaction(state);
       if (state?.compactionSettings) {
@@ -508,10 +530,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         streamScheduler.cancel();
         agentRunningRef.current = true;
         setAgentRunning(true);
-        setAgentPhase({ kind: "waiting_model" });
-        setAgentStartedAt(Date.now());
-        lastEventAtRef.current = Date.now();
-        resetRunProgress();
+        if (!restoreLiveRun(event.runState as AgentRunState | undefined)) {
+          runIdRef.current = null;
+          setAgentPhase({ kind: "waiting_model" });
+          setAgentStartedAt(Date.now());
+          lastEventAtRef.current = Date.now();
+          resetRunProgress();
+        }
         setRunningTitle(sessionNameRef.current);
         dispatch({ type: "start" });
         // Reload so user messages injected mid-stream (steer, queued
@@ -519,6 +544,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (sessionIdRef.current) loadSession(sessionIdRef.current);
         break;
       case "agent_end": {
+        runIdRef.current = null;
         const observedRunning = agentRunningRef.current;
         agentRunningRef.current = false;
         streamScheduler.cancel();
@@ -676,7 +702,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setRetryInfo(null);
         break;
     }
-  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onAgentComplete, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef, reportModelUnavailable, handleCompactionEvent, reconcileCompaction, generationMetrics, streamScheduler, runLatency]);
+  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onAgentComplete, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef, reportModelUnavailable, handleCompactionEvent, reconcileCompaction, generationMetrics, streamScheduler, runLatency, restoreLiveRun]);
   handleAgentEventRef.current = handleAgentEvent;
 
   useEffect(() => {
@@ -1284,10 +1310,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           loadTools(session.id);
           if (agentState.state?.isStreaming) {
             setAgentRunning(true);
-            setAgentPhase({ kind: "waiting_model" });
-            setAgentStartedAt(Date.now());
-            lastEventAtRef.current = Date.now();
-            resetRunProgress();
+            if (!restoreLiveRun(agentState.state.runState)) {
+              setAgentPhase({ kind: "waiting_model" });
+              setAgentStartedAt(null);
+            }
           }
           // An alive idle wrapper may have completed before this view mounted
           // or still own pending extension UI. Reconcile it too.
@@ -1331,9 +1357,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       if (agentState?.running && agentState.state?.isStreaming) {
         setAgentRunning(true);
-        if (!agentStartedAt) setAgentStartedAt(Date.now());
-        lastEventAtRef.current = Date.now();
-        resetRunProgress();
+        restoreLiveRun(agentState.state.runState);
       } else if (agentRunningRef.current && !agentState.state?.isStreaming) {
         // The run finished while we were away — the "end" event was lost, so
         // reflect idle now instead of showing a stuck spinner.
@@ -1348,7 +1372,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // hidden. Reopen with the cursor to recover them and reconcile a snapshot.
       if (agentState.running) void connectEvents(sid, true);
     });
-  }, [agentStartedAt, connectEvents, lastEventAtRef, loadSession, resetRunProgress, reconcileCompaction, streamScheduler]);
+  }, [connectEvents, loadSession, reconcileCompaction, streamScheduler, restoreLiveRun]);
 
   useEffect(() => {
     const onVisibility = () => {

@@ -234,13 +234,20 @@ export default function reconnectFixture(pi) {
             if (mode === "error") await new Promise(resolve => setTimeout(resolve, 500));
           }
           if (mode === "error") throw new Error("Fixture reconnect failure " + token);
+          // Named clock fixtures keep a real SDK run waiting without provider traffic.
+          if (mode === "delayed" && token.startsWith("run-clock-wait-")) await new Promise((resolve, reject) => {
+            const abort = () => { clearTimeout(timer); reject(new Error("Fixture run aborted")); };
+            const timer = setTimeout(() => { options?.signal?.removeEventListener("abort", abort); resolve(); }, 30_000);
+            if (options?.signal?.aborted) abort();
+            else options?.signal?.addEventListener("abort", abort, { once: true });
+          });
           message.content = [{ type: "text", text: "Fixture progress " + token + ". " + (parallelChild ? "Fixture parallel sibling observed " + token + ". " : "") }];
           stream.push({ type: "start", partial: message });
           stream.push({ type: "text_start", contentIndex: 0, partial: message });
           stream.push({ type: "text_delta", contentIndex: 0, delta: message.content[0].text, partial: message });
           if (mode === "delayed") await new Promise((resolve, reject) => {
             const abort = () => { clearTimeout(timer); reject(new Error("Fixture run aborted")); };
-            const timer = setTimeout(() => { options?.signal?.removeEventListener("abort", abort); resolve(); }, token.startsWith("queue-fix-") ? 30_000 : 5000);
+            const timer = setTimeout(() => { options?.signal?.removeEventListener("abort", abort); resolve(); }, (token.startsWith("queue-fix-") || token.startsWith("run-clock-")) ? 30_000 : 5000);
             if (options?.signal?.aborted) abort();
             else options?.signal?.addEventListener("abort", abort, { once: true });
           });

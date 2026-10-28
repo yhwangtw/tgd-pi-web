@@ -257,6 +257,51 @@ async function completedOnce(page: Page, relay: Relay, token: string) {
   expect(matches, "The authoritative transcript must contain exactly one completed answer").toHaveLength(1);
 }
 
+function elapsedSeconds(text: string) {
+  const match = /(?:([0-9]+)m )?([0-9]+)s/.exec(text);
+  return match ? Number(match[1] ?? 0) * 60 + Number(match[2]) : -1;
+}
+
+for (const phase of ["waiting_model", "writing"] as const) {
+  test(`${phase}: switching, reload and native SSE reconnect retain one run clock without resending`, async ({ page, relay }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const token = `run-clock-${phase === "waiting_model" ? "wait" : "writing"}-resume`;
+    await begin(page, relay, "delayed", token);
+    const sid = id(page)!;
+    const initial = (await live(page, relay)).state.runState;
+    expect(initial.id).toBeTruthy();
+    const status = page.locator(`[data-run-phase="${phase}"]`);
+    const elapsed = status.getByTestId("run-status-elapsed");
+    await expect(status).toBeVisible();
+    await expect.poll(async () => elapsedSeconds(await elapsed.innerText())).toBeGreaterThanOrEqual(2);
+    const before = elapsedSeconds(await elapsed.innerText());
+    // Leave through the real navigation and return via its session row.
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    await expect.poll(() => id(page)).toBeNull();
+    await page.getByRole("textbox", { name: "Search conversations", exact: true }).fill(token);
+    await page.locator(`[data-session-row="${sid}"]`).click();
+    await expect(status).toBeVisible();
+    expect(elapsedSeconds(await elapsed.innerText())).toBeGreaterThanOrEqual(before);
+    await page.reload();
+    await expect(status).toBeVisible();
+    expect(elapsedSeconds(await elapsed.innerText())).toBeGreaterThanOrEqual(before);
+    const cutAt = relay.frames.length;
+    relay.cutStreams(); relay.resume();
+    await expect.poll(() => relay.frames.slice(cutAt).some(frame => frame.event.type === "session_snapshot" && frame.event.state.runState?.id === initial.id)).toBe(true);
+    await expect(status).toBeVisible();
+    expect(elapsedSeconds(await elapsed.innerText())).toBeGreaterThanOrEqual(before);
+    const restored = (await live(page, relay)).state.runState;
+    expect(restored).toMatchObject({ id: initial.id, startedAt: initial.startedAt, phase: { kind: phase } });
+    const actual = elapsedSeconds(await elapsed.innerText());
+    expect(Math.abs(actual - Math.floor((restored.observedAt - restored.startedAt) / 1000))).toBeLessThanOrEqual(2);
+    expect(relay.requests.filter(request => request.path === `/api/agent/${sid}` && request.body?.type === "prompt")).toHaveLength(1);
+    await page.screenshot({ path: test.info().outputPath(`run-clock-${phase}.png`) });
+    await page.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(page.locator("[data-run-phase]")).toHaveCount(0);
+    expect((await live(page, relay)).state.runState).toBeNull();
+  });
+}
+
 test("a new session receives an instant completed first turn after its authoritative snapshot", async ({ page, relay }) => {
   const token = "instant-first";
   await begin(page, relay, "complete", token);
