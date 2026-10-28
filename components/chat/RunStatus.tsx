@@ -51,7 +51,7 @@ function Elapsed({ since }: { since: number }) {
   }, []);
   const seconds = Math.max(0, Math.floor((now - since) / 1000));
   const label = seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
-  return <span className={styles.runStatusElapsed}>· {label}</span>;
+  return <span className={styles.runStatusElapsed} data-testid="run-status-elapsed">· {label}</span>;
 }
 
 export function RunStatus({
@@ -99,7 +99,7 @@ export function RunStatus({
           className={`${styles.runStatusIcon} ${state === "normal" || state === "reconnecting" ? styles.runStatusSpin : ""}`}
         />
         <span className={styles.runStatusMessage}>{label}</span>
-        {startedAt && <Elapsed since={startedAt} />}
+        {startedAt !== null && <Elapsed since={startedAt} />}
       </span>
     </div>
   );

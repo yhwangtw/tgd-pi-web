@@ -63,6 +63,42 @@ describe("session reconciliation and first-prompt ordering", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+  it("restores the same run and quiet duration on remount, reload and reconnect without sending a prompt", async () => {
+    vi.setSystemTime(1_000_000);
+    const run = { id: "run-one", startedAt: 10_000, lastProgressAt: 20_000, observedAt: 130_000, phase: { kind: "thinking" } as const };
+    harness.fetch.mockImplementation(async () => new Response(JSON.stringify({ ...data(), agentState: { running: true, state: { isStreaming: true, runState: run } } })));
+    await act(async () => root.render(<Harness key="one" selected={session} />));
+    expect(current.agentStartedAt).toBe(880_000);
+    expect(current.agentPhase).toEqual({ kind: "thinking" });
+    expect(current.runProgress.attention).toBe("delayed");
+    await act(async () => root.render(<Harness key="away" selected={null} />));
+    vi.setSystemTime(1_010_000); run.observedAt += 10_000;
+    await act(async () => root.render(<Harness key="back" selected={session} />));
+    expect(current.agentStartedAt).toBe(880_000);
+    const source = FakeEventSource.instances.at(-1)!;
+    await act(async () => { source.open(); source.message({ ...snapshot([], true), state: { isStreaming: true, runState: run } }, "clock:1"); });
+    expect(current.agentStartedAt).toBe(880_000);
+    expect(current.agentPhase).toEqual({ kind: "thinking" });
+    expect(current.runProgress.idleSeconds).toBe(120);
+    // Even a delayed response must not make the elapsed counter go backwards.
+    await act(async () => source.message({ ...snapshot([], true), state: { isStreaming: true, runState: { ...run, observedAt: run.observedAt - 1000 } } }, "clock:1"));
+    expect(current.agentStartedAt).toBe(880_000);
+    const nextRun = { ...run, id: "run-two", startedAt: run.observedAt, lastProgressAt: run.observedAt, phase: { kind: "waiting_model" } };
+    await act(async () => source.message({ type: "agent_start", runState: nextRun }, "clock:2"));
+    expect(current.agentStartedAt).toBe(1_010_000);
+    await act(async () => source.message({ type: "agent_end", messages: [] }, "clock:3"));
+    expect(current.agentStartedAt).toBeNull();
+    expect(harness.send.mock.calls.some(([, command]) => command.type === "prompt")).toBe(false);
+  });
+
+  it("does not show a fabricated zero-second clock when reconnecting to an older server", async () => {
+    serverStreaming = true;
+    await act(async () => root.render(<Harness selected={session} />));
+    expect(current.agentStartedAt).toBeNull();
+    await act(async () => current.handleAgentEventRef.current?.(snapshot([], true)));
+    expect(current.agentStartedAt).toBeNull();
+  });
+
   it("reconciles resolved compaction settings from load, snapshots and optimistic toggle rollback", async () => {
     const persisted = { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 };
     const live = { enabled: false, reserveTokens: 8_192, keepRecentTokens: 12_000 };

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { phaseForMessage, type AgentPhase, type AgentRunState } from "./agent-run-state";
 import { getAssistantFailure } from "./assistant-outcome";
 import { hasUpstreamSubagentWork } from "./upstream-subagents";
 import {
@@ -15,7 +17,7 @@ import { encodeSessionData } from "./session-tree-wire";
 import { AgentEventLog, type AgentStreamRecord, type ReplayStatus } from "./agent-event-log";
 import { CompactionController } from "./compaction-controller";
 import { normalizeQueuedFollowUps, type QueuedFollowUp } from "./queued-follow-ups";
-import type { SessionEntry } from "./types";
+import type { AgentMessage, SessionEntry } from "./types";
 import { createSnapshot } from "./git-snapshot";
 import { RunLatencyServer } from "./run-latency-server";
 import { applyWorkflowToolSelection } from "./workflow-extension";
@@ -132,6 +134,7 @@ export class AgentSessionWrapper {
   private pendingQueueItem: QueuedFollowUp | null = null;
   private queueCommandTail: Promise<void> = Promise.resolve();
   private runActive: boolean | null = null;
+  private liveRun: { id: string; startedAt: number; lastProgressAt: number; stopping: boolean } | null = null;
   private lastRunError: string | null = null;
   private lastAgentEndCursor: string | null = null;
   private activeTools = new Map<string, { id: string; name: string; label?: string }>();
@@ -323,6 +326,7 @@ export class AgentSessionWrapper {
     this.compactionQueueIds.clear();
     this.compaction = this.createCompactionController();
     this.runActive = null;
+    this.liveRun = null;
     this.streamingMessage = null;
     this.activeTools.clear();
     this.streamBash = null;
@@ -666,6 +670,18 @@ export class AgentSessionWrapper {
     return sessionId === this.sessionId || sessionId === this.pendingReplacement?.previousSessionId || this.streamAliases.has(sessionId);
   }
 
+  private getRunPhase(): AgentPhase {
+    if (this.liveRun?.stopping) return { kind: "stopping" } as const;
+    if (this.activeTools.size) return { kind: "running_tools", tools: [...this.activeTools.values()] };
+    return phaseForMessage(this.streamingMessage as Partial<AgentMessage> | undefined);
+  }
+
+  private getRunState(): AgentRunState | null {
+    if (!this.liveRun || !this.runActive) return null;
+    const { id, startedAt, lastProgressAt } = this.liveRun;
+    return { id, startedAt, lastProgressAt, observedAt: Math.max(Date.now(), lastProgressAt), phase: this.getRunPhase() };
+  }
+
   private getLiveState() {
     const model = this.inner.model;
     const contextUsage = this.inner.getContextUsage?.();
@@ -673,6 +689,7 @@ export class AgentSessionWrapper {
       sessionId: this.inner.sessionId,
       sessionFile: this.inner.sessionFile ?? "",
       isStreaming: this.runActive ?? this.inner.isStreaming,
+      runState: this.getRunState(),
       isCompacting: this.inner.isCompacting || this.compaction.state?.status === "running",
       compaction: this.compaction.state,
       compactionQueue: this.compactionQueue,
@@ -699,7 +716,7 @@ export class AgentSessionWrapper {
         tree: buildTree(entries), context: buildSessionTranscript(entries, leafId),
       }, "flat-v2"),
       streamingMessage: this.streamingMessage,
-      phase: this.activeTools.size ? { kind: "running_tools", tools: [...this.activeTools.values()] } : null,
+      phase: (this.runActive ?? this.inner.isStreaming) ? this.getRunPhase() : null,
       bashRun: this.streamBash,
       lastRunError: this.lastRunError,
     };
@@ -734,6 +751,8 @@ export class AgentSessionWrapper {
       && (message as { role?: string } | undefined)?.role === "system") return;
     if (event.type === "agent_start") {
       this.runActive = true;
+      const now = Date.now();
+      this.liveRun = { id: randomUUID(), startedAt: now, lastProgressAt: now, stopping: false };
       this.lastRunError = null;
       this.streamingMessage = null;
       this.activeTools.clear();
@@ -743,6 +762,7 @@ export class AgentSessionWrapper {
       this.streamingMessage = null;
     } else if (event.type === "agent_end") {
       this.runActive = false;
+      this.liveRun = null;
       this.streamingMessage = null;
       this.activeTools.clear();
       const messages = "messages" in event && Array.isArray(event.messages) ? event.messages : [];
@@ -763,6 +783,10 @@ export class AgentSessionWrapper {
     } else if (event.type === "bash_end") {
       this.streamBash = null;
     }
+    if (this.liveRun && /^(?:message_(?:start|update|end)|tool_execution_(?:start|update|end)|turn_(?:start|end)|auto_(?:retry|compaction)_(?:start|end))$/.test(event.type)) {
+      this.liveRun.lastProgressAt = Math.max(this.liveRun.lastProgressAt, Date.now());
+    }
+    if (event.type === "agent_start") event = { ...event, runState: this.getRunState() };
     const record: AgentStreamRecord = (event.type.startsWith("extension_ui_") || event.type === "run_timing")
       ? { type: event.type, data: JSON.stringify(event) }
       : this.eventLog.append(event);
@@ -903,8 +927,15 @@ export class AgentSessionWrapper {
         // between two SDK runs when abort alone has nothing to cancel.
         const runner = this.inner.extensionRunner;
         const goal = runner?.getCommand("goal");
-        if (runner && goal) await goal.handler("pause", runner.createCommandContext());
-        await this.inner.abort();
+        const run = this.liveRun;
+        if (run) run.stopping = true;
+        try {
+          if (runner && goal) await goal.handler("pause", runner.createCommandContext());
+          await this.inner.abort();
+        } catch (error) {
+          if (run && this.liveRun === run) run.stopping = false;
+          throw error;
+        }
         return null;
       }
 

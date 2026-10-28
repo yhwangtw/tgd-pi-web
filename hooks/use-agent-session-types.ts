@@ -66,11 +66,7 @@ export function getRunError(event: AgentEvent): string | null {
   return null;
 }
 
-export type AgentPhase =
-  | { kind: "stopping"; tools?: undefined }
-  | { kind: "waiting_model" | "thinking" | "preparing_tools" | "writing"; tools?: undefined }
-  | { kind: "running_tools"; tools: { id: string; name: string; label?: string }[] }
-  | null;
+export type { AgentPhase } from "@/lib/agent-run-state";
 
 export interface RunProgressState {
   idleSeconds: number;

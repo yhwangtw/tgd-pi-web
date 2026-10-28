@@ -462,7 +462,7 @@ describe("AgentSessionWrapper extension lifecycle", () => {
     // Rebind precedes withSession. The public replacement event is emitted by
     // the enclosing runtime operation only after withSession succeeds.
     expect(events).not.toContainEqual(expect.objectContaining({ type: "session_replaced" }));
-    expect(events).toContainEqual({ type: "agent_start" });
+    expect(events).toContainEqual(expect.objectContaining({ type: "agent_start", runState: expect.objectContaining({ id: expect.any(String), startedAt: expect.any(Number) }) }));
 
     wrapper.destroy();
     expect(nextUnsubscribe).toHaveBeenCalledOnce();

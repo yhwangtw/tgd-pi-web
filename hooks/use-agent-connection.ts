@@ -132,7 +132,7 @@ export function useAgentEvents(
             reconnectAttemptRef.current = 0;
             reconnectStartedAtRef.current = null;
             settle(true);
-          } else if (event.type !== "connected") {
+          } else if (event.type !== "connected" && event.type !== "agent_start") {
             // Transport/bootstrap snapshots are not meaningful model progress.
             lastEventAtRef.current = Date.now();
           }
@@ -242,8 +242,8 @@ export function useRunProgress(
     return () => clearInterval(id);
   }, [agentRunning, agentPhaseRef, connectionState, lastEventAtRef]);
 
-  const resetRunProgress = useCallback(() => {
-    setRunProgress(HEALTHY_PROGRESS);
+  const resetRunProgress = useCallback((progress: RunProgressState = HEALTHY_PROGRESS) => {
+    setRunProgress(progress);
   }, []);
 
   return { runProgress, resetRunProgress };
