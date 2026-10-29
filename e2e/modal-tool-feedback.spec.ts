@@ -85,7 +85,19 @@ test("real SSE keeps tool preparation, parallel execution and final outcome dist
   feedback.send({ type: "tool_execution_end", toolCallId: "b" });
   await expect(group.locator('[data-tool-state="error"]')).toHaveCount(1);
   feedback.end(true);
-  await expect(page.locator('[data-work-log-state="error"]')).toBeVisible();
+  // The final answer completed, while its work log still discloses the failed
+  // tool. Do not misreport the entire response as failed after a normal stop.
+  const completedLog = page.locator('[data-work-log-state="issues"]');
+  await expect(completedLog).toBeVisible();
+  if (await completedLog.getAttribute("data-work-log-expanded") !== "true") {
+    await completedLog.locator(":scope > button").click();
+  }
+  await expect(completedLog.locator('[data-tool-state="error"]')).toHaveCount(1);
+  await completedLog.getByRole("button", { name: /^write b\.ts Failed/ }).click();
+  await expect(completedLog).toContainText("Permission denied");
+  await expect(page.getByText("One tool failed.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Assistant response complete", { exact: true })).toHaveCount(1);
+  await expect(page.locator('[data-work-log-state="error"]')).toHaveCount(0);
   await expect(page.locator('[data-run-phase]')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath("tool-result-evidence.png") });
 });
