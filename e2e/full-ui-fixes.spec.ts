@@ -72,7 +72,9 @@ test("Stop during slow initial snapshot preserves the draft and never starts a p
   await expect(input).toBeVisible();
   await input.fill("E2E_RECONNECT:complete:cancel-before-start");
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await expect(page.getByText("Connecting…", { exact: true }).first()).toBeVisible();
+  const monitor = page.getByTestId("run-monitor");
+  await expect(monitor).toBeVisible();
+  await expect(monitor).toHaveAttribute("data-progress-state", "connecting");
   await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(input).toHaveValue("E2E_RECONNECT:complete:cancel-before-start");
   release();
