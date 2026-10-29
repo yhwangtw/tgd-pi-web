@@ -38,7 +38,7 @@ describe("agent SSE replay contract", () => {
       expect(run).toEqual({ ...first, lastProgressAt: 15_000, observedAt: 130_000, phase: { kind: "thinking" } });
       expect(runState(await wrapper.send({ type: "get_state" }))!).toEqual(run);
       emit({ type: "tool_execution_start", toolCallId: "a", toolName: "read" });
-      expect(wrapper.getStreamSnapshot().phase).toEqual({ kind: "running_tools", tools: [{ id: "a", name: "read" }] });
+      expect(wrapper.getStreamSnapshot().phase).toEqual({ kind: "running_tools", tools: [{ id: "a", name: "read", startedAt: 130_000 }] });
       emit({ type: "tool_execution_end", toolCallId: "a" });
       emit({ type: "message_update", message: { role: "assistant", content: [{ type: "text", text: "Answer" }] } });
       expect(wrapper.getStreamSnapshot().phase).toEqual({ kind: "writing" });
