@@ -1,3 +1,5 @@
+import type { GenerationMetrics } from "./generation-metrics";
+
 // Types mirrored from pi-mono coding-agent session-manager
 
 export interface SessionHeader {
@@ -205,6 +207,7 @@ export interface SessionInfo {
 }
 
 export interface SessionContext {
+  generationMetrics?: Record<string, GenerationMetrics>;
   messages: AgentMessage[];
   entryIds: string[]; // parallel to messages — the session entry id for each message
   thinkingLevel: string;

@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import type { AgentMessage, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
-import { getAssistantFailure, getAssistantOutputIssue, hasVisibleAssistantAnswer } from "@/lib/assistant-outcome";
+import { getAssistantFailure, getAssistantOutputIssue, getAssistantOutcome, hasVisibleAssistantAnswer } from "@/lib/assistant-outcome";
 import { getSessionReadReceipt, getSessionReadRevision, getServerSessionReadRevision, hasSessionReadSnapshot, subscribeSessionReads } from "@/lib/session-read-state";
 import { useSessionReadTracking } from "@/hooks/use-session-read-tracking";
 import { motionScrollBehavior, prefersReducedMotion } from "@/lib/motion";
@@ -107,7 +107,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     loading, error, runtimeFailure, messages, entryIds, streamState, getGenerationMetrics,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
-    retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
+    retryInfo, continuingOutput, runOutcome, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
     isCompacting, compactError, compactionSettings, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
     compactionStatus, compactionQueue, handleCheckCompaction, handleDismissCompaction, handleClearCompactionQueue, handleRetryCompaction,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState, lastProgressAtRef,
@@ -117,7 +117,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,
     handleUpdateQueued, handleMoveQueued,
-    handleToolPresetChange, handleThinkingLevelChange, setEphemeralNewSession, handleClearQueue, handleRemoveQueued, handleRetry,
+    handleToolPresetChange, handleThinkingLevelChange, setEphemeralNewSession, handleClearQueue, handleRemoveQueued, handleResume, handleRetry,
     handleRetryWithModel, handleAutoProviderFallbackChange, setProviderRecovery,
     handleEditRerun, handleAbortBash, handleExtensionUIResponse,
   } = useAgentSession({
@@ -859,17 +859,21 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       return;
     }
     if (!agentRunning && wasRunning) {
-      if (lastOutputIssue) {
+      if (runOutcome === "stopped") {
+        setRunAnnouncement(t("chat.responseStopped"));
+      } else if (lastOutputIssue) {
         setRunAnnouncement(t(lastOutputIssue === "output_limit" ? "chat.outputLimitTitle" : "chat.emptyOutputTitle"));
       } else if (lastAssistantOutcome?.stopReason === "error") {
         setRunAnnouncement(t("chat.responseFailed"));
       } else if (lastAssistantOutcome?.stopReason === "aborted") {
         setRunAnnouncement(t("chat.responseStopped"));
-      } else if (lastAssistantOutcome) {
+      } else if (runOutcome === "completed" || getAssistantOutcome(lastAssistantOutcome) === "completed") {
         setRunAnnouncement(t("chat.responseComplete"));
+      } else {
+        setRunAnnouncement(t("chat.responseEnded"));
       }
     }
-  }, [agentRunning, lastAssistantOutcome, lastOutputIssue, t]);
+  }, [agentRunning, runOutcome, lastAssistantOutcome, lastOutputIssue, t]);
 
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
@@ -930,7 +934,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
       availableThinkingLevels={availableThinkingLevels}
       thinkingLevelMap={currentThinkingLevelMap}
-      retryInfo={retryInfo}
       ephemeral={ephemeralNewSession}
       onEphemeralChange={isNew ? setEphemeralNewSession : undefined}
       soundEnabled={soundEnabled}
@@ -946,11 +949,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   const toolExecutionContext = useMemo<ToolExecutionContext>(() => ({
     running: agentRunning,
+    continuing: continuingOutput,
     activeIds: new Set(agentPhase?.kind === "running_tools" ? agentPhase.tools.map(tool => tool.id) : []),
     runStartedAt: agentStartedAt,
     toolStartedAt: new Map(agentPhase?.kind === "running_tools" ? agentPhase.tools.flatMap(tool => typeof tool.startedAt === "number" ? [[tool.id, tool.startedAt] as const] : []) : []),
     revealRequest: toolReveal?.sessionId === session?.id ? toolReveal ?? undefined : undefined,
-  }), [agentRunning, agentPhase, agentStartedAt, toolReveal, session?.id]);
+  }), [agentRunning, continuingOutput, agentPhase, agentStartedAt, toolReveal, session?.id]);
 
   const revealCurrentTool = useCallback((id: string) => {
     if (!currentTools.some(tool => tool.id === id && tool.canReveal)) return;
@@ -1056,7 +1060,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           suppressActivityBlocks={conversationLayout.activityAssistantIndices.has(idx)}
           turnStartedAt={turnStartedAt}
           toolExecutionContext={turnIndex === conversationLayout.turns.length - 1 && agentRunning ? toolExecutionContext : undefined}
-          turnCancelled={turn?.finalAssistantIndex !== null && turn?.finalAssistantIndex !== undefined && messages[turn.finalAssistantIndex]?.role === "assistant" && (messages[turn.finalAssistantIndex] as import("@/lib/types").AssistantMessage).stopReason === "aborted"}
+          turnCancelled={(turnIndex === conversationLayout.turns.length - 1 && runOutcome === "stopped") || turn?.finalAssistantIndex !== null && turn?.finalAssistantIndex !== undefined && messages[turn.finalAssistantIndex]?.role === "assistant" && (messages[turn.finalAssistantIndex] as import("@/lib/types").AssistantMessage).stopReason === "aborted"}
           usageOverride={conversationLayout.usageByFinalAssistant.get(idx)}
           showUsage={conversationLayout.finalAssistantIndices.has(idx)}
           showActions={conversationLayout.finalAssistantIndices.has(idx)}
@@ -1119,7 +1123,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     });
   }, [messages, entryIds, conversationLayout, streamState.isStreaming, getGenerationMetrics, toolExecutionContext,
     toolResultsMap, modelNames, agentRunning, isNew, handleFork, forkingEntryId,
-    handleNavigate, handleEditContent, handleEditRerun, onOpenModels, recoveredAuthIndices, recoveredOutputIndices,
+    handleNavigate, handleEditContent, handleEditRerun, onOpenModels, recoveredAuthIndices, recoveredOutputIndices, runOutcome,
     quoteMessage, toggleBookmark, bookmarks, lastUserIdx, unreadMessageIndex, t,
     rovingMessageIndex, handleMessageRovingKeyDown, messageRefs, lastUserMsgRef,
     expandedKeys, toggleExpanded, historyStartIndex]);
@@ -1312,21 +1316,25 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
             {/* Recovery actions stay next to the interrupted outcome. Earlier
                 turns already expose edit/rerun + fork from the user message. */}
-            {!agentRunning && (lastOutputIssue || lastAssistantOutcome?.stopReason === "error" || lastAssistantOutcome?.stopReason === "aborted") && (
-              <div className={styles.recoveryActions}>
-                {(lastAssistantOutcome?.stopReason === "aborted" || (lastOutputIssue === "output_limit" && hasVisibleAssistantAnswer(lastAssistantOutcome))) && (
-                  <button type="button" onClick={() => void handleSend(t("chat.continuePrompt"))}>
-                    <ChevronRight size={UI_ICON_SIZE.inline} aria-hidden="true" />
-                    {t("chat.continue")}
-                  </button>
-                )}
+            {!agentRunning && (runOutcome === "stopped" || lastOutputIssue || lastAssistantOutcome?.stopReason === "error" || lastAssistantOutcome?.stopReason === "aborted") && (
+              <div className={styles.recoveryActions} data-outcome={runOutcome ?? undefined} role="group" aria-label={t("recovery.options")}>
+                {runOutcome === "stopped" && <p className={styles.recoveryHint} role="status">{t("chat.responseStopped")}</p>}
+                <button type="button" className={styles.resumeButton} onClick={() => void handleResume()} title={t("chat.resumeHelp")}>
+                  <ChevronRight size={UI_ICON_SIZE.inline} aria-hidden="true" />
+                  {t("chat.resume")}
+                </button>
+                <p className={styles.resumeHint}>{t("chat.resumeHelp")}</p>
                 {lastOutputIssue && <button type="button" onClick={() => chatInputRef.current?.openControls?.()}>
                   {t("recovery.adjustThinking")}
                 </button>}
-                <button type="button" onClick={() => void handleRetry()}>
-                  <RotateCcw size={UI_ICON_SIZE.inline} aria-hidden="true" />
-                  {t("chat.retry")}
-                </button>
+                <details className={styles.rerunOptions}>
+                  <summary>{t("chat.retry")}</summary>
+                  <p className={styles.recoveryHint}>{t("chat.rerunHelp")}</p>
+                  <button type="button" onClick={() => void handleRetry()} title={t("chat.rerunHelp")}>
+                    <RotateCcw size={UI_ICON_SIZE.inline} aria-hidden="true" />
+                    {t("chat.rerunConfirm")}
+                  </button>
+                </details>
               </div>
             )}
 
@@ -1354,6 +1362,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <MessageView
                 message={streamState.streamingMessage as AgentMessage}
                 isStreaming
+                streamingSpeedEnabled={!isCompacting && !retryInfo && runProgress.connection === "connected"
+                  && (!agentPhase || agentPhase.kind === "writing" || agentPhase.kind === "waiting_model")}
                 toolExecutionContext={toolExecutionContext}
                 modelNames={modelNames}
                 toolResults={toolResultsMap}
@@ -1389,9 +1399,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       </div>
 
       <div className={`${styles.composerDock} relative`}>
-        {agentRunning && !pendingQuestion && !runtimeFailure && (
+        {(agentRunning || isCompacting) && (
           <RunStatus key={session?.id ?? "new"} phase={agentPhase} progress={runProgress} startedAt={agentStartedAt}
-            lastProgressAtRef={lastProgressAtRef} tools={currentTools} onRevealTool={revealCurrentTool} wide={wideChat} />
+            lastProgressAtRef={lastProgressAtRef} tools={currentTools} onRevealTool={revealCurrentTool} wide={wideChat} retry={retryInfo} continuing={continuingOutput}
+            active={!!(agentRunning || isCompacting)} compacting={isCompacting}
+            />
         )}
         <div className={styles.jumpControlRow}>
           {!isParallel && <MobileTurnNavigator

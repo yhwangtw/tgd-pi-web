@@ -64,6 +64,7 @@ export function QueuedFollowUps({ items, busy, wide, onRemove, onUpdate, onMove,
           )}
         </header>
 
+        <p className={styles.deliveryHint}>{t(items.some(item => item.deliveryMode === "steer") ? "chat.queueSteerHint" : "chat.queueFollowHint")}</p>
         <ol className={styles.list}>
           {items.map((item, index) => (
             <li className={styles.item} key={item.id}>

@@ -103,7 +103,9 @@ test.describe("chat transcript", () => {
   test("failed run shows the error card and a Retry action", async ({ page }) => {
     await page.goto(FAILED);
     await expect(page.getByText(/429 rate_limit_error/)).toBeAttached({ timeout: 20_000 });
-    const retry = page.getByRole("button", { name: "Retry last run" });
+    await expect(page.getByRole("button", { name: "Resume task", exact: true })).toBeVisible();
+    await page.getByText("Rerun this turn", { exact: true }).click();
+    const retry = page.getByRole("button", { name: "Rerun original request", exact: true });
     await expect(retry).toBeVisible();
     // Keep the retry deterministic and observe its completed error handling.
     await page.route("**/api/agent/eeee1111-2222-3333-4444-555566667777", async route => {

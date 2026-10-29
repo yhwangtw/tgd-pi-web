@@ -112,6 +112,43 @@ describe("AgentRunSupervisor", () => {
     expect(child.session.send.mock.calls.filter(([command]) => command.type === "prompt")).toHaveLength(1);
   });
 
+  it("keeps a retrying child active and its waiter pending until the recovered final answer", async () => {
+    const child = fakeSession(), next = fakeSession();
+    harness.startRpcSession
+      .mockResolvedValueOnce({ session: child.session, realSessionId: "retrying-child" })
+      .mockResolvedValueOnce({ session: next.session, realSessionId: "next-child" });
+    const supervisor = new AgentRunSupervisor({ maxConcurrency: 1 });
+    const updates: string[] = [];
+    const completion = supervisor.enqueueAndWait({ ...input("Retrying"), limits: { timeoutMs: 0 } }, {
+      trigger: "subagent", onUpdate: run => updates.push(run.status),
+    });
+    let settled = false; void completion.then(() => { settled = true; });
+    const queued = supervisor.enqueue({ ...input("Next"), limits: { timeoutMs: 0 } });
+    await vi.waitFor(() => expect(harness.store.runs.find(run => run.sessionId === "retrying-child")).toBeDefined());
+    const run = harness.store.runs.find(run => run.sessionId === "retrying-child")!;
+    const startedAt = run.startedAt;
+    const failed = { role: "assistant", stopReason: "error", content: [], errorMessage: "503 Service unavailable" };
+    child.emit({ type: "message_end", message: failed });
+    child.emit({ type: "agent_end", messages: [failed], willRetry: true });
+    child.emit({ type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 100 });
+    await Promise.resolve();
+    expect(run).toMatchObject({ status: "running", sessionId: "retrying-child", startedAt });
+    expect(run.finishedAt).toBeUndefined(); expect(run.error).toBeUndefined();
+    expect(settled).toBe(false);
+    expect(updates.some(status => status === "completed" || status === "failed")).toBe(false);
+    expect(child.session.onEvent.mock.results[0].value).not.toHaveBeenCalled();
+    expect(harness.store.runs.find(item => item.id === queued.id)?.status).toBe("queued");
+    expect(harness.startRpcSession).toHaveBeenCalledTimes(1);
+    child.emit({ type: "agent_start" });
+    const recovered = { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Recovered answer" }] };
+    child.emit({ type: "message_end", message: recovered });
+    child.emit({ type: "agent_end", messages: [failed, recovered], willRetry: false });
+    await expect(completion).resolves.toMatchObject({ run: { status: "completed", startedAt }, messages: [failed, recovered] });
+    expect(run.finishedAt).toBeDefined(); expect(run.error).toBeUndefined();
+    await vi.waitFor(() => expect(harness.store.runs.find(item => item.id === queued.id)?.sessionId).toBe("next-child"));
+    await supervisor.cancel(queued.id);
+  });
+
   it("stops the whole delegation at its shared cost cap, including queued and retried tasks", async () => {
     const children = [fakeSession(), fakeSession()];
     children.forEach((child, i) => harness.startRpcSession.mockResolvedValueOnce({ session: child.session, realSessionId: `group-${i}` }));

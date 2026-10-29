@@ -89,6 +89,37 @@ describe("ScheduleRunner", () => {
     expect(harness.store.runs[0].finishedAt).toBeDefined();
   });
 
+  it("keeps the scheduled run and overlap lock through a failed attempt until its recovered final answer", async () => {
+    let emit!: (event: { type: string; [key: string]: unknown }) => void;
+    const unsubscribe = vi.fn();
+    const session = {
+      isAlive: () => true,
+      onEvent: vi.fn((listener: typeof emit) => { emit = listener; return unsubscribe; }),
+      send: vi.fn().mockResolvedValue(null),
+    };
+    harness.startRpcSession.mockResolvedValue({ session, realSessionId: "retrying-schedule" });
+    const runner = new ScheduleRunner();
+    const reserved = runner.runNow("schedule-1");
+    await vi.waitFor(() => expect(harness.store.runs[0].sessionId).toBe("retrying-schedule"));
+    const failed = { role: "assistant", stopReason: "error", content: [], errorMessage: "503 Service unavailable" };
+    emit({ type: "agent_end", messages: [failed], willRetry: true });
+    emit({ type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 100 });
+    expect(harness.store.runs[0]).toMatchObject({ status: "running", startedAt: reserved.startedAt, sessionId: "retrying-schedule" });
+    expect(harness.store.runs[0].finishedAt).toBeUndefined(); expect(harness.store.runs[0].error).toBeUndefined();
+    expect(harness.store.schedules[0].lastRunStatus).toBe("running");
+    expect(unsubscribe).not.toHaveBeenCalled();
+    expect(() => runner.runNow("schedule-1")).toThrow(/active run/);
+    emit({ type: "agent_start" });
+    const recovered = { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Recovered answer" }] };
+    emit({ type: "agent_end", messages: [failed, recovered], willRetry: false });
+    expect(harness.store.runs[0]).toMatchObject({ status: "completed", startedAt: reserved.startedAt });
+    expect(harness.store.runs[0].finishedAt).toBeDefined(); expect(harness.store.runs[0].error).toBeUndefined();
+    expect(harness.store.schedules[0].lastRunStatus).toBe("completed");
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(session.send.mock.calls.filter(([command]) => command.type === "prompt")).toHaveLength(1);
+    runner.dispose();
+  });
+
   it("turns an immediate model/setup rejection into a failed run", async () => {
     const session = {
       isAlive: () => true,

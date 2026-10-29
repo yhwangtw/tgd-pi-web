@@ -60,6 +60,29 @@ describe("AssistantMessageView conversation chrome", () => {
     expect(container!.textContent).toContain("Retained part");
   });
 
+  it("keeps incomplete output neutral during an active run and restores the terminal explanation if it fails", async () => {
+    const partial: AssistantMessage = { ...baseMessage, stopReason: "length", content: [{ type: "text", text: "Partial answer" }] };
+    await render(partial, { toolExecutionContext: { running: true } });
+    expect(container!.querySelector('[data-output-pending]')).not.toBeNull();
+    expect(container!.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => root!.render(<AssistantMessageView message={partial} toolExecutionContext={{ running: true, continuing: true }} />));
+    expect(container!.textContent).toContain("Continuing the answer");
+    await act(async () => root!.render(<AssistantMessageView message={partial} />));
+    expect(container!.querySelector('[data-output-issue="output_limit"]')).not.toBeNull();
+    expect(container!.textContent).toContain("Partial answer");
+  });
+
+  it("retains failed tools as history without claiming a completed answer repaired them", async () => {
+    const activity: AssistantMessage[] = [{ ...baseMessage, content: [{ type: "toolCall", toolCallId: "failed", toolName: "read", input: { path: "missing.txt" } }] }];
+    const results = new Map<string, ToolResultMessage>([["failed", { role: "toolResult", toolCallId: "failed", isError: true, content: [{ type: "text", text: "Missing" }] }]]);
+    await render({ ...baseMessage, stopReason: "stop", content: [{ type: "text", text: "An answer with limitations" }] }, { turnActivityMessages: activity, toolResults: results });
+    expect(container!.querySelector('[data-work-log-state="issues"]')).not.toBeNull();
+    expect(container!.textContent).toContain("Earlier failures: 1");
+    expect(container!.textContent).not.toContain("Needs attention");
+    await act(async () => container!.querySelector<HTMLButtonElement>('[data-work-log-state] > button')!.click());
+    expect(container!.querySelector('[data-tool-state="error"]')).not.toBeNull();
+  });
+
   it("distinguishes a finished empty answer from an output cap", async () => {
     await render({ ...baseMessage, stopReason: "stop", content: [] });
     expect(container!.querySelector('[data-output-issue="empty_output"]')).not.toBeNull();
@@ -67,20 +90,22 @@ describe("AssistantMessageView conversation chrome", () => {
     expect(container!.textContent).not.toContain("Output limit reached");
   });
 
-  it("shows smoothed speed independently of repeated model labels, then removes stale speed", async () => {
+  it("keeps live speed in the original message row even when a repeated model label is hidden", async () => {
     vi.useFakeTimers();
-    await render({ ...baseMessage, content: [] }, { isStreaming: true, showModelLabel: false });
-    expect(container!.textContent).not.toContain("gpt-test");
-    expect(container!.querySelector('[data-testid="streaming-speed"]')).not.toBeNull();
+    const props = { isStreaming: true, showModelLabel: false };
+    await render({ ...baseMessage, content: [] }, props);
     for (let i = 1; i <= 2; i++) {
-      await act(async () => root!.render(<AssistantMessageView message={{ ...baseMessage, content: [{ type: "text", text: "a".repeat(i * 40) }] }} isStreaming showModelLabel={false} />));
+      await act(async () => root!.render(<AssistantMessageView {...props} message={{ ...baseMessage, content: [{ type: "text", text: "a".repeat(i * 40) }] }} />));
       await act(async () => vi.advanceTimersByTime(500));
     }
-    expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).toBe("Writing · live ~ 20 token/s");
-    await act(async () => vi.advanceTimersByTime(2000));
-    expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).not.toContain("t/s");
-    await act(async () => root!.render(<AssistantMessageView message={{ ...baseMessage, content: [{ type: "toolCall", toolCallId: "tool", toolName: "bash", input: { command: "x".repeat(1000) } }] }} isStreaming showModelLabel={false} />));
-    expect(container!.querySelector('[data-testid="streaming-speed"]')!.textContent).toBe("Preparing tool");
+    expect(container!.textContent).not.toContain("gpt-test");
+    const speed = container!.querySelector('[data-testid="streaming-speed"]')!;
+    expect(speed.textContent).toContain("20~ 20.0 token/s");
+    expect(speed.querySelector("[data-speed-tier]")?.getAttribute("data-speed-tier")).toBe("mid");
+    expect(speed.parentElement?.nextElementSibling?.textContent).toContain("a".repeat(80));
+    await act(async () => root!.render(<AssistantMessageView {...props} streamingSpeedEnabled={false} message={{ ...baseMessage, content: [{ type: "text", text: "a".repeat(1000) }] }} />));
+    expect(speed.getAttribute("data-rate-available")).toBe("false");
+    expect(speed.textContent).not.toContain("token/s");
   });
 
   it("never treats an absent result as success and follows parallel lifecycle evidence", async () => {
@@ -146,6 +171,9 @@ describe("AssistantMessageView conversation chrome", () => {
     await render({ ...baseMessage, content: [{ type: "text", text: "Answer" }] }, { generationMetrics: { tokens: 480, seconds: 20, estimated: false }, showModelLabel: false });
     expect(container!.querySelector('[data-testid="completed-speed"]')!.textContent).toBe("480 tokens · avg 24 token/s");
     expect(container!.querySelector('[data-testid="streaming-speed"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="generation-speed-details"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="completed-speed"]')!.closest("details")).toBeNull();
+
   });
 
   it("renders a recovered authentication failure as compact history, not an active alert", async () => {
@@ -373,4 +401,14 @@ describe("AssistantMessageView conversation chrome", () => {
     expect(dialog!.textContent).toContain("Wrap lines");
     expect(dialog!.querySelector('button[aria-label="Line 1"]')).not.toBeNull();
   });
+  it("keeps a stopped recovery neutral while preserving its partial answer and earlier error", async () => {
+    await render({ ...baseMessage, stopReason: "length", content: [{ type: "text", text: "Saved partial output" }] }, { turnCancelled: true });
+    expect(container!.querySelector('[data-output-stopped="true"]')?.textContent).toBe("Response stopped");
+    expect(container!.querySelector('[role="alert"]')).toBeNull();
+    expect(container!.textContent).toContain("Saved partial output");
+    await act(async () => root!.render(<AssistantMessageView message={{ ...baseMessage, stopReason: "error", errorMessage: "Service unavailable", content: [] }} turnCancelled />));
+    expect(container!.querySelector('[data-stopped-attempt="true"] summary')?.textContent).toContain("the run was stopped");
+    expect(container!.querySelector('[role="alert"]')).toBeNull();
+  });
+
 });

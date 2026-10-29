@@ -3,7 +3,7 @@ import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { ChevronDown, Clock3, LoaderCircle, RefreshCw } from "lucide-react";
-import { runProgressAttention } from "@/lib/agent-run-state";
+import { runProgressAttention, type RunRetryInfo } from "@/lib/agent-run-state";
 import type { AgentPhase, RunProgressState } from "@/hooks/use-agent-session-types";
 import { useI18n, type MsgKey } from "@/lib/i18n";
 import type { activeToolDetails } from "@/lib/tool-preview";
@@ -48,7 +48,7 @@ export function runStatusState(progress: RunProgressState): RunStatusState {
 }
 
 // Update only this small monitor; the history and composer don't tick with it.
-function useRunClock(progress: RunProgressState, lastProgressAtRef?: RefObject<number>) {
+function useRunClock(progress: RunProgressState, lastProgressAtRef?: RefObject<number>, active = true) {
   const [clock, setClock] = useState(() => {
     const now = Date.now();
     return { now, lastProgressAt: progress.lastProgressAt ?? now - progress.idleSeconds * 1000 };
@@ -57,9 +57,10 @@ function useRunClock(progress: RunProgressState, lastProgressAtRef?: RefObject<n
     const fallback = progress.lastProgressAt ?? Date.now() - progress.idleSeconds * 1000;
     const update = () => setClock({ now: Date.now(), lastProgressAt: lastProgressAtRef?.current ?? fallback });
     update();
+    if (!active) return;
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, [lastProgressAtRef, progress.lastProgressAt, progress.idleSeconds]);
+  }, [lastProgressAtRef, progress.lastProgressAt, progress.idleSeconds, active]);
   return clock;
 }
 
@@ -68,7 +69,7 @@ const childStateLabel: Record<ChildActivity["state"], MsgKey> = {
   failed: "chat.toolFailed", detached: "chat.runChildDetached",
 };
 
-export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools = [], onRevealTool, wide = false }: {
+export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools = [], onRevealTool, wide = false, retry, continuing = false, active = true, compacting = false }: {
   phase: AgentPhase;
   progress: RunProgressState;
   startedAt: number | null;
@@ -76,9 +77,13 @@ export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools
   tools?: ReturnType<typeof activeToolDetails>;
   onRevealTool?: (id: string) => void;
   wide?: boolean;
+  retry?: RunRetryInfo | null;
+  continuing?: boolean;
+  active?: boolean;
+  compacting?: boolean;
 }) {
   const { t } = useI18n();
-  const clock = useRunClock(progress, lastProgressAtRef);
+  const clock = useRunClock(progress, lastProgressAtRef, active);
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -88,7 +93,12 @@ export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools
   const unconfirmed = quiet || state === "reconnecting" || state === "connecting";
   const reportedPhase = phase?.kind === "running_tools" && phase.tools.length > 1
     ? t("chat.runToolCount").replace("{count}", String(phase.tools.length)) : phaseLabel(phase, t);
-  const label = unconfirmed ? t("chat.runLastState").replace("{state}", reportedPhase) : reportedPhase;
+  const retrySeconds = retry ? Math.max(0, Math.ceil((retry.retryAt - clock.now) / 1000)) : 0;
+  const retryLabel = retry ? t(retrySeconds > 0 ? "chat.retryCountdown" : "chat.retryActive")
+    .replace("{seconds}", String(retrySeconds)).replace("{attempt}", String(retry.attempt)).replace("{max}", String(retry.maxAttempts)).replace("{phase}", reportedPhase) : null;
+  const operation = compacting ? t("chat.compacting") : phase?.kind === "stopping" ? reportedPhase : retryLabel
+    ?? (continuing ? `${t("chat.outputContinuing")} · ${reportedPhase}` : reportedPhase);
+  const label = unconfirmed && (!retryLabel || state === "reconnecting" || state === "connecting") ? t("chat.runLastState").replace("{state}", operation) : operation;
   const connection = state === "connecting" ? t("chat.connecting")
     : state === "reconnecting" ? t("chat.reconnecting")
     : quiet ? t("chat.runQuiet") : t("chat.runConnected");
@@ -96,12 +106,14 @@ export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools
   const elapsed = (start: number) => formatRunDuration(Math.max(0, Math.floor((clock.now - start) / 1000)));
   const reveal = (id: string) => { setExpanded(false); onRevealTool?.(id); };
   const first = tools[0];
+  if (!active) return null;
   return (
     <div
       className={`${styles.runStatus} ${wide ? styles.runStatusWide : ""}`}
       data-testid="run-monitor"
       data-progress-state={state}
-      data-run-phase={phase?.kind ?? "waiting_model"}
+      data-run-phase={active ? compacting ? "compacting" : phase?.kind ?? "waiting_model" : "completed"}
+      data-run-operation={active ? compacting ? "compacting" : phase?.kind === "stopping" ? "stopping" : retry ? "retry" : continuing ? "continuing" : "normal" : "completed"}
       data-tone={state === "reconnecting" ? "warning" : "neutral"}
       role="group"
       aria-label={t("chat.runMonitor")}
@@ -109,31 +121,33 @@ export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools
         if (event.key === "Escape" && expanded) { event.stopPropagation(); setExpanded(false); toggleRef.current?.focus(); }
       }}
     >
-      <span className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">{label} · {connection}</span>
+      {active && <span className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">{retry && retrySeconds > 0 && phase?.kind !== "stopping" ? t("chat.retryScheduled").replace("{attempt}", String(retry.attempt)).replace("{max}", String(retry.maxAttempts)) : label} · {connection}</span>}
       <div className={styles.runStatusVisual} aria-live="off">
-        <div className={styles.runStatusHeading}>
-          <Icon size={UI_ICON_SIZE.compact} aria-hidden="true"
-            className={`${styles.runStatusIcon} ${state === "normal" || state === "reconnecting" || state === "connecting" ? styles.runStatusSpin : ""}`} />
-          <span className={styles.runStatusMessage}>{label}</span>
-          {first?.preview && <button type="button" className={styles.runStatusToolPreview}
-            disabled={!first.canReveal || !onRevealTool} onClick={() => reveal(first.id)}
-            aria-label={t("chat.runRevealTool").replace("{tool}", first.label ?? first.name)} data-testid="run-tool-preview">
-            {first.preview}
-          </button>}
-        </div>
-        <div className={styles.runStatusMeta}>
-          {startedAt != null && Number.isFinite(startedAt) && <span className={styles.runStatusElapsed} data-testid="run-status-elapsed">
-            {t("chat.runElapsed").replace("{time}", elapsed(startedAt))}
-          </span>}
-          <span className={styles.runStatusLastProgress} data-testid="run-last-progress">
-            {t("chat.runLastProgress").replace("{time}", formatRunDuration(idle))}
-          </span>
-        </div>
-        <button ref={toggleRef} type="button" className={styles.runStatusToggle} aria-expanded={expanded} aria-controls={detailsId}
-          aria-label={t(expanded ? "chat.runHideDetails" : "chat.runShowDetails")} onClick={() => setExpanded(value => !value)}>
-          <ChevronDown size={UI_ICON_SIZE.compact} aria-hidden="true" />
-        </button>
-        {expanded && <div id={detailsId} className={styles.runStatusDetails} data-testid="run-details">
+        {active && <>
+          <div className={styles.runStatusHeading}>
+            <Icon size={UI_ICON_SIZE.compact} aria-hidden="true"
+              className={`${styles.runStatusIcon} ${state === "normal" || state === "reconnecting" || state === "connecting" ? styles.runStatusSpin : ""}`} />
+            <span className={styles.runStatusMessage}>{label}</span>
+            {first?.preview && <button type="button" className={styles.runStatusToolPreview}
+              disabled={!first.canReveal || !onRevealTool} onClick={() => reveal(first.id)}
+              aria-label={t("chat.runRevealTool").replace("{tool}", first.label ?? first.name)} data-testid="run-tool-preview">
+              {first.preview}
+            </button>}
+          </div>
+          <div className={styles.runStatusMeta}>
+            {startedAt != null && Number.isFinite(startedAt) && <span className={styles.runStatusElapsed} data-testid="run-status-elapsed">
+              {t("chat.runElapsed").replace("{time}", elapsed(startedAt))}
+            </span>}
+            <span className={styles.runStatusLastProgress} data-testid="run-last-progress">
+              {t("chat.runLastProgress").replace("{time}", formatRunDuration(idle))}
+            </span>
+          </div>
+          <button ref={toggleRef} type="button" className={styles.runStatusToggle} aria-expanded={expanded} aria-controls={detailsId}
+            aria-label={t(expanded ? "chat.runHideDetails" : "chat.runShowDetails")} onClick={() => setExpanded(value => !value)}>
+            <ChevronDown size={UI_ICON_SIZE.compact} aria-hidden="true" />
+          </button>
+        </>}
+        {active && expanded && <div id={detailsId} className={styles.runStatusDetails} data-testid="run-details">
           <p data-testid="run-connection">{connection}</p>
           <p className={styles.runStatusHint}>{t("chat.runQuietHint")}</p>
           {tools.length > 0 && <ul className={styles.runStatusTools}>

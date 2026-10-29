@@ -17,7 +17,10 @@ export function preservedRunSpacerHeight(
   currentSpacerHeight: number,
 ): number {
   const contentHeight = Math.max(0, scrollHeight - currentSpacerHeight);
-  return Math.max(0, Math.ceil(scrollTop + clientHeight - contentHeight));
+  // scrollTop can be fractional while the height measurements are rounded.
+  // Retiring filler may only shrink it: a subpixel overshoot must not grow it
+  // by 1px on every layout effect and trigger a synchronous render loop.
+  return Math.min(currentSpacerHeight, Math.max(0, Math.ceil(scrollTop + clientHeight - contentHeight)));
 }
 
 /**
@@ -213,10 +216,12 @@ export function useTranscriptScroll(
           const frame = requestAnimationFrame(apply);
           const timer = setTimeout(apply, 80);
           const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
-          events.forEach((event) => container.addEventListener(event, cancel, { passive: true }));
+          // Dock and navigation controls are outside the transcript; their
+          // explicit navigation must also win over a pending initial restore.
+          events.forEach((event) => document.addEventListener(event, cancel, { passive: true, capture: true }));
           return () => {
             cancel(); cancelAnimationFrame(frame); clearTimeout(timer);
-            events.forEach((event) => container.removeEventListener(event, cancel));
+            events.forEach((event) => document.removeEventListener(event, cancel, true));
           };
         } else {
           scrollToBottom("instant");

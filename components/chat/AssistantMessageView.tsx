@@ -41,7 +41,7 @@ import { MessageBookmarkAction, MessageBookmarkIndicator } from "./MessageBookma
 import { useMobileActionPlacement } from "@/hooks/use-mobile-action-placement";
 import { redactSensitiveText } from "@/lib/redaction";
 import type { OutputCardKind } from "@/lib/output-design";
-import { getAssistantFailure, getAssistantOutputIssue, hasVisibleAssistantAnswer } from "@/lib/assistant-outcome";
+import { getAssistantFailure, getAssistantOutputIssue, hasVisibleAssistantAnswer, getAssistantOutcome } from "@/lib/assistant-outcome";
 import { presentProviderError } from "@/lib/provider-error-presentation";
 export { presentProviderError } from "@/lib/provider-error-presentation";
 
@@ -85,6 +85,7 @@ function copyText(text: string): Promise<void> {
 export function AssistantMessageView({
   message,
   isStreaming,
+  streamingSpeedEnabled = true,
   toolExecutionContext,
   turnCancelled,
   toolResults,
@@ -109,6 +110,7 @@ export function AssistantMessageView({
 }: {
   message: AssistantMessage;
   isStreaming?: boolean;
+  streamingSpeedEnabled?: boolean;
   toolExecutionContext?: ToolExecutionContext;
   turnCancelled?: boolean;
   toolResults?: Map<string, ToolResultMessage>;
@@ -297,7 +299,7 @@ export function AssistantMessageView({
     <div ref={rootRef} data-testid="assistant-message" className={`hover-group ${styles.messageContainer}`}>
       {isStreaming && <div className={styles.modelLabel}>
         {showModelLabel && resolvedModelName && <span className={styles.modelName}>{resolvedModelName}</span>}
-        <StreamingSpeed message={message} />
+        <StreamingSpeed message={message} enabled={streamingSpeedEnabled} resetKey={toolExecutionContext?.runStartedAt} />
       </div>}
 
       <div className={styles.blocksContainer}>
@@ -310,7 +312,7 @@ export function AssistantMessageView({
           toolCallDurations,
           executionContext,
           outputAccessory: turnActivityMessages && turnActivityMessages.length > 0 ? (
-            <TurnWorkLog messages={turnActivityMessages} toolResults={toolResults} turnStartedAt={turnStartedAt} executionContext={executionContext} outputRecovered={outputRecovered} />
+            <TurnWorkLog messages={turnActivityMessages} toolResults={toolResults} turnStartedAt={turnStartedAt} executionContext={executionContext} outputRecovered={outputRecovered} answerOutcome={getAssistantOutcome(message)} />
           ) : undefined,
         })}
       </div>
@@ -323,7 +325,15 @@ export function AssistantMessageView({
           </span>
         </div>
       )}
-      {!isStreaming && outputIssue && !outputRecovered && (
+      {!isStreaming && outputIssue && !outputRecovered && executionContext.running && !executionContext.cancelled && (
+        <div className={styles.pendingOutcome} role="status" data-output-pending="true">
+          {t(executionContext.continuing ? "chat.outputContinuing" : "chat.outputAwaitingOutcome")}
+        </div>
+      )}
+      {!isStreaming && outputIssue && !outputRecovered && executionContext.cancelled && (
+        <div className={styles.pendingOutcome} role="status" data-output-stopped="true">{t("chat.stopped")}</div>
+      )}
+      {!isStreaming && outputIssue && !outputRecovered && !executionContext.running && !executionContext.cancelled && (
         <div className={styles.errorCard} role="alert" data-output-issue={outputIssue}>
           <TriangleAlert size={UI_ICON_SIZE.compact} aria-hidden="true" />
           <div className={styles.errorContent}>
@@ -334,8 +344,18 @@ export function AssistantMessageView({
           </div>
         </div>
       )}
-      {!isStreaming && message.stopReason === "error" && (
-        authRecovered && isProviderAuthError(message.errorMessage) ? (
+      {!isStreaming && message.stopReason === "error" && executionContext.running && !executionContext.cancelled && (
+        <details className={styles.pendingOutcome} data-retry-pending="true">
+          <summary>{t("chat.attemptFailedPending")}</summary>
+          <p>{errorPresentation.summary}</p>
+        </details>
+      )}
+      {!isStreaming && message.stopReason === "error" && (!executionContext.running || executionContext.cancelled) && (
+        turnCancelled ? (
+          <details className={styles.pendingOutcome} data-stopped-attempt="true">
+            <summary>{t("chat.stoppedAttempt")}</summary><p>{errorPresentation.summary}</p>
+          </details>
+        ) : authRecovered && isProviderAuthError(message.errorMessage) ? (
           <details className={styles.recoveredError}>
             <summary className={styles.recoveredErrorSummary}>
               <Check className={styles.recoveredIcon} size={UI_ICON_SIZE.inline} aria-hidden="true" />
@@ -463,9 +483,11 @@ function TurnWorkLog({
   turnStartedAt,
   executionContext,
   outputRecovered,
+  answerOutcome,
 }: {
   messages: AssistantMessage[];
   outputRecovered?: boolean;
+  answerOutcome?: import("@/lib/assistant-outcome").AssistantOutcome;
   toolResults?: Map<string, ToolResultMessage>;
   turnStartedAt?: number;
   executionContext?: ToolExecutionContext;
@@ -511,7 +533,7 @@ function TurnWorkLog({
         const state = toolExecutionState(block.toolCallId, toolResults?.get(block.toolCallId), executionContext);
         return state === "running" || state === "preparing";
       }).map(({ block }) => [block.toolName, getToolPreview(block)].filter(Boolean).join(" · ")).join(" · ")}
-      state={executionContext?.running && !executionContext.cancelled ? "running" : failed ? "error" : executionContext?.cancelled ? "cancelled" : toolEntries.length ? toolGroupState(toolEntries.map(({ block }) => toolExecutionState(block.toolCallId, toolResults?.get(block.toolCallId), executionContext))) : "success"}
+      state={executionContext?.running && !executionContext.cancelled ? "running" : executionContext?.cancelled ? "cancelled" : failed ? answerOutcome === "completed" ? "issues" : "error" : toolEntries.length ? toolGroupState(toolEntries.map(({ block }) => toolExecutionState(block.toolCallId, toolResults?.get(block.toolCallId), executionContext))) : "success"}
     >
       {toolEntries.map(({ activityMessage, block }) => {
         const result = toolResults?.get(block.toolCallId);

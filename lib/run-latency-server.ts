@@ -34,9 +34,9 @@ export class RunLatencyServer {
     // A diagnostics consumer must never reject a provider request or a prompt.
     try { this.emit({ type: "run_timing", timingId: active.timingId, stage, elapsedMs }); } catch { /* observation only */ }
   }
-  observe(event: { type?: unknown; message?: unknown }): void {
+  observe(event: { type?: unknown; message?: unknown; willRetry?: unknown }): void {
     if (!this.active) return;
-    if (event.type === "agent_end") { this.complete(); return; }
+    if (event.type === "agent_end" && event.willRetry !== true) { this.complete(); return; }
     if (event.type !== "message_start" && event.type !== "message_update" && event.type !== "message_end") return;
     if (this.has("first_content")) return;
     const message = event.message as { role?: unknown; content?: unknown } | null | undefined;

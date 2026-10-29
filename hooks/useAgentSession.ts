@@ -1,11 +1,11 @@
 "use client";
 
 import { localToolClock, type ActiveTool } from "@/lib/tool-activity";
-import { keepActivePhase, phaseForMessage, restoreRunClock, type AgentRunState } from "@/lib/agent-run-state";
+import { keepActivePhase, phaseForMessage, restoreRunClock, type AgentRunState, type RunRetryInfo } from "@/lib/agent-run-state";
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useReducer, useMemo } from "react";
 import type { AgentMessage } from "@/lib/types";
 import { browserMetricsStorage, GenerationMetricsTracker } from "@/lib/generation-metrics";
-import { getAssistantOutputIssue } from "@/lib/assistant-outcome";
+import { getAssistantOutputIssue, getAssistantOutcome } from "@/lib/assistant-outcome";
 import { RunLatencyTracker } from "@/lib/run-latency";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { decodeSessionData, type SessionTreeWire } from "@/lib/session-tree-wire";
@@ -14,7 +14,7 @@ import { parseWorkflowCommand } from "@/lib/workflow-state";
 import { showToast } from "@/hooks/useToast";
 import { translate } from "@/lib/i18n";
 import { presentProviderError } from "@/lib/provider-error-presentation";
-import { setIdleTitle, setRunningTitle, setDoneTitle, setErrorTitle, setExtensionTitle, notifyDone, requestNotifyPermission } from "@/lib/attention";
+import { setIdleTitle, setRunningTitle, setDoneTitle, setStoppedTitle, setErrorTitle, setExtensionTitle, notifyDone, requestNotifyPermission } from "@/lib/attention";
 import {
   DEFAULT_TOOL_CATALOG,
   namesForToolSelection,
@@ -99,7 +99,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [customToolNames, setCustomToolNames] = useState<string[]>([]);
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [ephemeralNewSession, setEphemeralNewSession] = useState(false);
-  const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
+  const [retryInfo, setRetryInfo] = useState<RunRetryInfo | null>(null);
+  const [continuingOutput, setContinuingOutput] = useState(false);
+  const [runOutcome, setRunOutcome] = useState<ReturnType<typeof getAssistantOutcome> | null>(null);
   const [autoProviderFallback, setAutoProviderFallback] = useState(() => {
     if (typeof window === "undefined") return false;
     try { return localStorage.getItem(AUTO_PROVIDER_FALLBACK_KEY) === "1"; } catch { return false; }
@@ -158,6 +160,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const agentRunningRef = useRef(false);
   const agentPhaseRef = useRef<AgentPhase>(null);
   const runIdRef = useRef<string | null>(null);
+  const runObservationRef = useRef({ active: false, version: 0 });
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
   // Already-named sessions never need auto-naming — skip the summarize call
   const hasSummarizedRef = useRef(Boolean(session?.name));
@@ -192,6 +195,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const phase = run.phase?.kind === "running_tools"
       ? { ...run.phase, tools: run.phase.tools.map(tool => localToolClock(tool, run.observedAt)) } : run.phase;
     setAgentPhase(phase);
+    setRunOutcome(null);
+    setContinuingOutput(run.continuing === true);
+    setRetryInfo(run.retry ? { ...run.retry, retryAt: Date.now() + run.retry.retryAt - run.observedAt } : null);
     agentPhaseRef.current = phase;
     lastEventAtRef.current = clock.lastProgressAt;
     resetRunProgress(classifyRunProgress(Math.max(0, Math.floor((Date.now() - clock.lastProgressAt) / 1000)), run.phase, connectionState));
@@ -250,6 +256,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         return null;
       }
       const d = decodeSessionData(wire);
+      generationMetrics.restore(sid, d.context.generationMetrics);
       setData(d);
       const info = (d as { info?: { name?: string } }).info;
       if (info?.name) sessionNameRef.current = info.name;
@@ -277,7 +284,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, []);
+  }, [generationMetrics]);
 
   const compaction = useSessionCompaction(sessionIdRef, setIsCompacting, () => {
     const sid = sessionIdRef.current;
@@ -351,9 +358,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sessionLoadRequestRef.current += 1;
       streamScheduler.cancel();
       const state = event.state as LiveAgentState | undefined;
+      runObservationRef.current = { active: state?.isStreaming === true, version: runObservationRef.current.version + 1 };
       const wire = event.sessionData as (Omit<SessionData, "tree"> & { tree: SessionData["tree"] | SessionTreeWire }) | undefined;
       if (wire?.context && Array.isArray(wire.context.messages)) {
         const restored = decodeSessionData(wire);
+        if (sessionIdRef.current) generationMetrics.restore(sessionIdRef.current, restored.context.generationMetrics);
         setData(restored);
         setActiveLeafId(restored.leafId);
         setMessages(pendingPromptMessageRef.current ? [...restored.context.messages, pendingPromptMessageRef.current] : restored.context.messages);
@@ -361,9 +370,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setLoading(false);
         setError(null);
       }
-      const pendingPrompt = pendingPromptMessageRef.current !== null;
+      const pendingStart = pendingPromptMessageRef.current !== null || pendingSendRef.current?.signal.aborted === false;
       const wasRunning = agentRunningRef.current;
-      const running = state?.isStreaming === true || pendingPrompt;
+      const running = state?.isStreaming === true || pendingStart;
       agentRunningRef.current = running;
       setAgentRunning(running);
       if (!running) {
@@ -371,7 +380,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setAgentPhase(null);
         setAgentStartedAt(null);
       } else if (!restoreLiveRun(state?.runState)) {
-        setAgentPhase(keepActivePhase((event.phase as AgentPhase) ?? null, phaseForMessage(event.streamingMessage as AgentMessage | undefined)));
+        setAgentPhase(pendingStart && state?.isStreaming !== true
+          ? agentPhaseRef.current ?? { kind: "waiting_model" }
+          : keepActivePhase((event.phase as AgentPhase) ?? null, phaseForMessage(event.streamingMessage as AgentMessage | undefined)));
         // Older servers cannot provide a trustworthy start time after remount.
         // Preserve a local pending prompt's clock, but do not invent a new one.
       }
@@ -393,10 +404,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       else dispatch({ type: running ? "start" : "end" });
       if (!running) {
         setRetryInfo(null);
+        setContinuingOutput(false);
         setQueuedFollowUps([]);
         resetRunProgress();
+        const final = wire?.context?.messages.findLast(message => message.role === "assistant");
+        const outcome = event.lastRunOutcome === "stopped" ? "stopped" : getAssistantOutcome(final);
+        setRunOutcome(outcome);
         const outputIssue = getAssistantOutputIssue(wire?.context?.messages.findLast(message => message.role === "assistant"));
-        if (outputIssue) {
+        if (outcome === "stopped") {
+          setProviderRecovery(null);
+          if (wasRunning) setStoppedTitle(sessionNameRef.current);
+        } else if (outputIssue) {
           setProviderRecovery(null);
           setErrorTitle(sessionNameRef.current);
         } else if (typeof event.lastRunError === "string" && event.lastRunError) {
@@ -405,7 +423,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           setErrorTitle(sessionNameRef.current);
         } else {
           setProviderRecovery(null);
-          if (wasRunning) setDoneTitle(sessionNameRef.current);
+          if (wasRunning && outcome === "completed") setDoneTitle(sessionNameRef.current);
+          else if (wasRunning) setIdleTitle(sessionNameRef.current);
         }
       }
       return;
@@ -429,6 +448,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
     switch (event.type) {
       case "session_closed":
+        runObservationRef.current = { active: false, version: runObservationRef.current.version + 1 };
         agentRunningRef.current = false;
         streamScheduler.cancel();
         // The terminal event is authoritative even if an individual question
@@ -530,6 +550,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       }
       case "agent_start":
+        runObservationRef.current = { active: true, version: runObservationRef.current.version + 1 };
+        setRunOutcome(null);
         streamScheduler.cancel();
         agentRunningRef.current = true;
         setAgentRunning(true);
@@ -546,7 +568,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // follow-ups) show up in the transcript from the session file.
         if (sessionIdRef.current) loadSession(sessionIdRef.current);
         break;
+      case "task_resume_started":
+      case "turn_start":
+        if (event.runState) restoreLiveRun(event.runState as AgentRunState);
+        break;
       case "agent_end": {
+        if (event.willRetry === true) { streamScheduler.flush(); break; }
+        // A live terminal event settles an admitted start even when its HTTP
+        // receipt is still pending. Bootstrap replay must not cancel a start.
+        if (!event.replayed && pendingPromptMessageRef.current === null) pendingSendRef.current = null;
+        runObservationRef.current = { active: false, version: runObservationRef.current.version + 1 };
+        const stopped = event.runOutcome === "stopped" || agentPhaseRef.current?.kind === "stopping";
         runIdRef.current = null;
         const observedRunning = agentRunningRef.current;
         agentRunningRef.current = false;
@@ -554,6 +586,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setAgentRunning(false);
         setAgentPhase(null);
         setRetryInfo(null);
+        setContinuingOutput(false);
         setAgentStartedAt(null);
         // Queued follow-ups are consumed right after this event; the next
         // agent_start reload will surface them as real messages.
@@ -561,9 +594,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         resetRunProgress();
         {
           const finalMessage = (event.messages as AgentMessage[] | undefined)?.findLast(message => message.role === "assistant");
+          const outcome = stopped ? "stopped" : getAssistantOutcome(finalMessage);
+          setRunOutcome(outcome);
           const outputIssue = getAssistantOutputIssue(finalMessage);
           const runError = getRunError(event);
-          if (outputIssue) {
+          if (outcome === "stopped") {
+            setProviderRecovery(null);
+            setStoppedTitle(sessionNameRef.current);
+          } else if (outputIssue) {
             setProviderRecovery(null);
             setErrorTitle(sessionNameRef.current);
             if (observedRunning && !event.replayed) notifyDone(sessionNameRef.current, translate(outputIssue === "output_limit" ? "chat.outputLimitTitle" : "chat.emptyOutputTitle"));
@@ -601,15 +639,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             });
             setErrorTitle(sessionNameRef.current);
             // The transcript owns the error; do not add a duplicate toast.
-            notifyDone(sessionNameRef.current, summary);
+            if (observedRunning && !event.replayed) notifyDone(sessionNameRef.current, summary);
           } else {
             setProviderRecovery(null);
             autoFallbackAttemptedRef.current = false;
             if (event.goalActive) setRunningTitle(sessionNameRef.current);
-            else {
+            else if (outcome === "completed" && observedRunning && !event.replayed) {
               setDoneTitle(sessionNameRef.current);
               notifyDone(sessionNameRef.current);
-            }
+            } else setIdleTitle(sessionNameRef.current);
           }
         }
         dispatch({ type: "end" });
@@ -631,7 +669,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           }
         }
         const finalAssistant = Array.isArray(event.messages) ? (event.messages as AgentMessage[]).findLast((message) => message.role === "assistant") : undefined;
-        if (observedRunning && !event.replayed && !getRunError(event) && finalAssistant?.stopReason !== "aborted") onAgentComplete?.();
+        if (observedRunning && !event.replayed && !stopped && getAssistantOutcome(finalAssistant) === "completed") onAgentComplete?.();
         onAgentEnd?.();
         break;
       }
@@ -655,6 +693,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // a late flush after the reset would resurrect the streaming bubble.
         streamScheduler.cancel();
         const completed = event.message as AgentMessage | undefined;
+        // A queued message is delivered only at the SDK user-message boundary.
+        // Persistence follows event delivery; a microtask fetch observes it.
+        if (completed?.role === "user" && !pendingPromptMessageRef.current) {
+          const sid = sessionIdRef.current;
+          queueMicrotask(() => { if (sid && sid === sessionIdRef.current) void loadSession(sid); });
+        }
         if (completed && completed.role !== "user") {
           setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
         }
@@ -718,7 +762,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       case "auto_retry_start":
         streamScheduler.flush();
-        setRetryInfo({ attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
+        if (event.runState) restoreLiveRun(event.runState as AgentRunState);
+        else setRetryInfo({ attempt: Number(event.attempt), maxAttempts: Number(event.maxAttempts), retryAt: Date.now() + Math.max(0, Number(event.delayMs) || 0), errorMessage: event.errorMessage as string | undefined });
         break;
       case "auto_retry_end":
         setRetryInfo(null);
@@ -917,6 +962,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     pendingPromptMessageRef.current = userMsg;
     agentRunningRef.current = true;
     setMessages((prev) => [...prev, userMsg]);
+    setRunOutcome(null);
+    setContinuingOutput(false);
+    setRetryInfo(null);
     setAgentRunning(true);
     setAgentPhase({ kind: "waiting_model" });
     setAgentStartedAt(Date.now());
@@ -978,6 +1026,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleAbort = useCallback(async () => {
     if (abortInFlightRef.current) return;
     abortInFlightRef.current = true;
+    runObservationRef.current.version += 1;
     streamScheduler.flush();
     setAgentPhase({ kind: "stopping" });
     pendingSendRef.current?.abort();
@@ -1103,22 +1152,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (isCompacting) return enqueueCompaction(message, images, "steer");
     const sid = sessionIdRef.current;
     if (!sid) return false;
-    const optimisticMessage = { role: "user", content: `[steer] ${message}`, timestamp: Date.now() } as AgentMessage;
-    setMessages((prev) => [...prev, optimisticMessage]);
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
+    const item: QueuedFollowUp = { id: crypto.randomUUID(), message, deliveryMode: "steer", ...(piImages?.length ? { images: piImages } : {}) };
+    setQueuedFollowUps(previous => [...previous, item]);
     try {
       await sendAgentCommand(sid, {
         type: "steer",
+        queueId: item.id,
         message,
         ...(piImages?.length ? { images: piImages } : {}),
       });
       return true;
     } catch (e) {
       console.error("Failed to steer:", e);
-      setMessages((prev) => {
-        const index = prev.lastIndexOf(optimisticMessage);
-        return index < 0 ? prev : [...prev.slice(0, index), ...prev.slice(index + 1)];
-      });
+      setQueuedFollowUps(previous => previous.filter(queued => queued.id !== item.id));
       showToast(`${translate("toast.steerFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
       return false;
     }
@@ -1209,6 +1256,101 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return replaceQueuedFollowUps(next);
   }, [queuedFollowUps, replaceQueuedFollowUps]);
 
+  // Resume is a runtime action, not a composer submission: preserve the
+  // transcript, saved draft and current branch while Pi starts a recovery run.
+  const handleResume = useCallback(async (): Promise<boolean> => {
+    const sid = sessionIdRef.current;
+    if (!sid || isNew || agentRunningRef.current || pendingSendRef.current || isCompacting || bashRun?.running) return false;
+    const scope = viewScope.current;
+    const isCurrent = () => viewScope.current === scope && sessionIdRef.current === sid;
+    const previousOutcome = runOutcome;
+    const start = new AbortController();
+    const timingId = runLatency.begin();
+    pendingSendRef.current = start;
+    const fallbackRetry = autoFallbackInFlightRef.current;
+    autoFallbackInFlightRef.current = false;
+    if (!fallbackRetry) autoFallbackAttemptedRef.current = false;
+    requestNotifyPermission();
+    lastEventAtRef.current = Date.now();
+    resetRunProgress();
+    agentRunningRef.current = true;
+    setRunOutcome(null);
+    setContinuingOutput(false);
+    setRetryInfo(null);
+    setAgentRunning(true);
+    setAgentPhase({ kind: "waiting_model" });
+    setAgentStartedAt(Date.now());
+    dispatch({ type: "start" });
+    try {
+      if (!(await connectEvents(sid, false, start.signal))) {
+        start.signal.throwIfAborted();
+        throw new Error(translate("connection.streamNotReady"));
+      }
+      start.signal.throwIfAborted();
+      if (!isCurrent()) return false;
+      runLatency.requestSent(timingId);
+      // Live hidden entries can advance the leaf beyond activeLeafId. Let the
+      // server validate its authoritative recovery checkpoint instead.
+      const receipt = await sendAgentCommand<{ accepted: boolean }>(sid, { type: "resume", timingId });
+      if (start.signal.aborted) {
+        // Stop may have reached the server before resume was admitted. Repeat
+        // it after the receipt so a late admission cannot escape the stop.
+        await sendAgentCommand(sid, { type: "abort" });
+        runLatency.finish("aborted");
+        start.signal.throwIfAborted();
+      }
+      if (receipt?.accepted !== true) throw new Error(translate("chat.resumeFailed"));
+      return true;
+    } catch (reason) {
+      // A terminal event may already have settled this request, or a newer
+      // start may own the view. A lost receipt must not replace that outcome.
+      if (pendingSendRef.current !== start && !start.signal.aborted) return false;
+      // A failed receipt does not prove the runtime rejected the request. Stop
+      // treating this as an unsent start before reading authoritative state.
+      if (pendingSendRef.current === start) pendingSendRef.current = null;
+      if (!start.signal.aborted && isCurrent()) {
+        const observedVersion = runObservationRef.current.version;
+        let live: AgentStateEnvelope | null = null;
+        try {
+          const response = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const result = await response.json() as AgentStateEnvelope;
+          if (typeof result.running !== "boolean") throw new Error("Invalid agent state");
+          live = result;
+        } catch { /* Keep a live SSE observation when state cannot be read. */ }
+        if (!isCurrent()) return false;
+        // Newer SSE state or a stop action wins over an in-flight state read.
+        if (runObservationRef.current.version !== observedVersion) return false;
+        if (live?.running && live.state?.isStreaming) {
+          runObservationRef.current = { active: true, version: observedVersion + 1 };
+          agentRunningRef.current = true;
+          setAgentRunning(true);
+          restoreLiveRun(live.state.runState);
+          dispatch({ type: "start" });
+          return false;
+        }
+        if (!live && runObservationRef.current.active && agentRunningRef.current) return false;
+        const summary = translate("chat.resumeFailed");
+        const detail = reason instanceof Error ? reason.message : String(reason);
+        showToast(detail === summary ? summary : `${summary}: ${detail}`, { type: "error" });
+      }
+      if (start.signal.aborted) runLatency.cancelPendingSend();
+      else runLatency.finish("failed");
+      if (isCurrent()) {
+        agentRunningRef.current = false;
+        streamScheduler.cancel();
+        setAgentRunning(false);
+        setAgentStartedAt(null);
+        setAgentPhase(null);
+        setRunOutcome(start.signal.aborted ? "stopped" : previousOutcome);
+        dispatch({ type: "end" });
+      }
+      return false;
+    } finally {
+      if (pendingSendRef.current === start) pendingSendRef.current = null;
+    }
+  }, [isNew, isCompacting, bashRun?.running, runOutcome, runLatency, lastEventAtRef, resetRunProgress, connectEvents, streamScheduler, restoreLiveRun]);
+
   /**
    * Re-run the last failed exchange: roll back to the node before the last
    * user message (dropping the errored attempt into a dead branch), then
@@ -1250,8 +1392,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     autoFallbackInFlightRef.current = true;
     setProviderRecovery(null);
     showToast(translate("recovery.switched").replace("{model}", model.name), { type: "success" });
-    await handleRetry();
-  }, [agentRunning, handleModelChange, handleRetry]);
+    await handleResume();
+  }, [agentRunning, handleModelChange, handleResume]);
   autoFallbackRetryRef.current = (model) => { void handleRetryWithModel(model); };
 
   const handleAutoProviderFallbackChange = useCallback((enabled: boolean) => {
@@ -1435,7 +1577,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     getGenerationMetrics,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
-    retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,
+    retryInfo, continuingOutput, runOutcome, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, autoCompactionEnabled, autoCompactionUpdating, currentModel, displayModel, sessionStats,
     compactionSettings: compactionSettings ? { ...compactionSettings, enabled: autoCompactionEnabled ?? compactionSettings.enabled } : null,
     compactionStatus: compaction.view, compactionQueue: compaction.queue,
@@ -1450,7 +1592,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // Actions
     handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,
-    handleToolPresetChange, handleThinkingLevelChange, setEphemeralNewSession, handleClearQueue, handleRemoveQueued, handleUpdateQueued, handleMoveQueued, handleRetry, handleRetryWithModel, handleAutoProviderFallbackChange, setProviderRecovery, handleEditRerun, handleAbortBash, handleExtensionUIResponse, loadTools, setActiveLeafId, setData, setMessages,
+    handleToolPresetChange, handleThinkingLevelChange, setEphemeralNewSession, handleClearQueue, handleRemoveQueued, handleUpdateQueued, handleMoveQueued, handleResume, handleRetry, handleRetryWithModel, handleAutoProviderFallbackChange, setProviderRecovery, handleEditRerun, handleAbortBash, handleExtensionUIResponse, loadTools, setActiveLeafId, setData, setMessages,
     dispatch, setAgentRunning, setForkingEntryId,
     // Subscriptions
     handleAgentEventRef,

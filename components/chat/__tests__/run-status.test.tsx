@@ -145,11 +145,35 @@ describe("RunStatus", () => {
     expect(document.activeElement).toBe(toggle);
   });
 
+  it("prioritizes retry countdown over stale writing, then explicit stop over retry", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(100_000);
+    await render({ idleSeconds: 0, attention: "normal", connection: "connected" });
+    const props = { progress: { idleSeconds: 0, attention: "normal" as const, connection: "connected" as const }, startedAt: 90_000, retry: { attempt: 2, maxAttempts: 3, retryAt: 102_000 } };
+    await act(async () => root!.render(<RunStatus {...props} phase={{ kind: "writing" }} />));
+    expect(container!.textContent).toContain("Retry 2/3 in 2s"); expect(container!.textContent).not.toContain("Writing");
+    await act(async () => vi.advanceTimersByTime(2000));
+    expect(container!.textContent).toContain("Retrying 2/3 · Writing");
+    expect(container!.textContent).not.toContain("waiting for response");
+    await act(async () => root!.render(<RunStatus {...props} phase={{ kind: "writing" }} progress={{ ...props.progress, connection: "reconnecting" }} />));
+    expect(container!.textContent).toContain("Last state: Retrying 2/3 · Writing");
+    await act(async () => root!.render(<RunStatus {...props} phase={{ kind: "stopping" }} />));
+    expect(container!.querySelector('[data-run-operation="stopping"]')).not.toBeNull();
+    expect(container!.textContent).toContain("Stopping"); expect(container!.textContent).not.toContain("Retrying");
+  });
+
   it("describes quiet thinking as the last observed state", async () => {
     await render({ idleSeconds: 200, attention: "stalled", connection: "connected" });
     await act(async () => root!.render(<RunStatus phase={{ kind: "thinking" }} progress={{ idleSeconds: 200, attention: "stalled", connection: "connected" }} startedAt={null} />));
     expect(container!.textContent).toContain("Last state: Thinking");
     expect(container!.querySelector('[data-testid="run-monitor"]')!.getAttribute("data-tone")).toBe("neutral");
+  });
+
+  it("removes the live monitor when the run has ended", async () => {
+    await render({ idleSeconds: 0, attention: "normal", connection: "connected" });
+    expect(container!.querySelector('[data-testid="streaming-speed"]')).toBeNull();
+    await act(async () => root!.render(<RunStatus phase={null} progress={{ idleSeconds: 0, attention: "normal", connection: "connected" }} startedAt={null} active={false} />));
+    expect(container!.querySelector('[data-testid="run-monitor"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="completed-speed"]')).toBeNull();
   });
 
 });

@@ -96,11 +96,11 @@ describe("ChatInput actions", () => {
     });
     expect(steer.getAttribute("aria-pressed")).toBe("true");
     expect(followUp.getAttribute("aria-pressed")).toBe("false");
-    expect(textarea.placeholder).toBe("Steer the current run…");
+    expect(textarea.placeholder).toBe("Queue a steering message…");
     expect(textarea.value).toBe(draft);
-    await act(async () => root!.render(<ChatInput {...props} retryInfo={{ attempt: 1, maxAttempts: 3 }} />));
+    await act(async () => root!.render(<ChatInput {...props} />));
     expect(steer.getAttribute("aria-pressed")).toBe("true");
-    expect(textarea.placeholder).toBe("Steer the current run…");
+    expect(textarea.placeholder).toBe("Queue a steering message…");
     expect(textarea.value).toBe(draft);
     expect(props.onSteer).not.toHaveBeenCalled(); expect(props.onFollowUp).not.toHaveBeenCalled();
     await act(async () => followUp.click());

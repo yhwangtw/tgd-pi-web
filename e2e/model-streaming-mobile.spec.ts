@@ -165,7 +165,7 @@ for (const style of ["original", "trae"] as const) {
       await expect(primaryNav).not.toBeInViewport();
       await steer.click();
       await expect(steer).toHaveAttribute("aria-pressed", "true");
-      await expect(composer).toHaveAttribute("placeholder", "Steer the current run…");
+      await expect(composer).toHaveAttribute("placeholder", "Queue a steering message…");
       await expect(composer).toHaveValue(draft);
       await followUp.click();
       await expect(followUp).toHaveAttribute("aria-pressed", "true");
@@ -186,7 +186,7 @@ for (const style of ["original", "trae"] as const) {
       await leaveComposerWithKeyboard(page);
       await steer.click();
       await expect(steer).toHaveAttribute("aria-pressed", "true");
-      await expect(composer).toHaveAttribute("placeholder", "Steer the current run…");
+      await expect(composer).toHaveAttribute("placeholder", "Queue a steering message…");
       await expect(composer).toHaveValue(draft);
       await followUp.click();
       await expect(followUp).toHaveAttribute("aria-pressed", "true");
@@ -246,7 +246,7 @@ for (const style of ["original", "trae"] as const) {
     const actionColor = await followUpAction.evaluate(element => getComputedStyle(element).backgroundColor);
     await steer.click();
     await expect(steer).toHaveAttribute("aria-pressed", "true");
-    const steerAction = page.getByRole("button", { name: "Interrupt the current run and inject now (Option+Enter)", exact: true });
+    const steerAction = page.getByRole("button", { name: "Queue for the next model call (Option+Enter)", exact: true });
     expect(await steerAction.evaluate(element => getComputedStyle(element).backgroundColor)).toBe(actionColor);
     await expectComposerBorder(page, "--color-accent-border-focus");
     await followUp.click();

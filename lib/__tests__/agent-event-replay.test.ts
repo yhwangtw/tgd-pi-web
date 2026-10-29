@@ -52,6 +52,39 @@ describe("agent SSE replay contract", () => {
     } finally { wrapper.destroy(); vi.useRealTimers(); }
   });
 
+  it("retains one clock through scheduled SDK retries and clears it on cancellation", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(10_000);
+    const { wrapper, emit } = fixture();
+    try {
+      emit({ type: "agent_start" });
+      const first = runState(wrapper.getStreamSnapshot().state)!;
+      emit({ type: "agent_end", willRetry: true, messages: [{ role: "assistant", stopReason: "error" }] });
+      vi.setSystemTime(12_000);
+      emit({ type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 5000 });
+      expect(runState(wrapper.getStreamSnapshot().state)).toMatchObject({ id: first.id, startedAt: 10_000, retry: { retryAt: 17_000 } });
+      emit({ type: "agent_start" });
+      expect(runState(wrapper.getStreamSnapshot().state)?.id).toBe(first.id);
+      emit({ type: "auto_retry_end", success: false, finalError: "Retry cancelled" });
+      expect(runState(wrapper.getStreamSnapshot().state)).toBeNull();
+      expect(wrapper.getStreamSnapshot().lastRunOutcome).toBe("stopped");
+    } finally { wrapper.destroy(); vi.useRealTimers(); }
+  });
+
+  it("reports continuation only after the committed SDK marker, restoring it on reconnect", () => {
+    const { wrapper, emit } = fixture();
+    let entries: unknown[] = [];
+    Object.assign(wrapper.inner.sessionManager, { getBranch: () => entries });
+    try {
+      emit({ type: "agent_start" }); emit({ type: "turn_start" });
+      expect(runState(wrapper.getStreamSnapshot().state)?.continuing).toBeUndefined();
+      entries = [{ type: "custom_message", customType: "pi-web-output-continuation", display: false }];
+      emit({ type: "turn_start" });
+      expect(runState(wrapper.getStreamSnapshot().state)?.continuing).toBe(true);
+      emit({ type: "message_start", message: { role: "user", content: "new direction" } });
+      expect(runState(wrapper.getStreamSnapshot().state)?.continuing).toBeUndefined();
+    } finally { wrapper.destroy(); }
+  });
+
   it("replays live compact retry status in snapshots without a second request", async () => {
     vi.useFakeTimers(); vi.setSystemTime(100_000);
     const { wrapper, emit } = fixture();

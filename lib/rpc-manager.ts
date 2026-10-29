@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { subagentProgress, type ActiveTool } from "./tool-activity";
-import { isRunProgressEvent, phaseForMessage, type AgentPhase, type AgentRunState } from "./agent-run-state";
+import { isRunProgressEvent, phaseForMessage, type AgentPhase, type AgentRunState, type RunRetryInfo } from "./agent-run-state";
 import { getAssistantFailure } from "./assistant-outcome";
+import { createTaskResumeMessage, hasTaskResumeReceipt, TASK_RESUME_ENTRY } from "./task-resume";
 import { hasUpstreamSubagentWork } from "./upstream-subagents";
 import {
   createAgentSessionFromServices,
@@ -21,6 +22,8 @@ import { normalizeQueuedFollowUps, type QueuedFollowUp } from "./queued-follow-u
 import type { AgentMessage, SessionEntry } from "./types";
 import { createSnapshot } from "./git-snapshot";
 import { RunLatencyServer } from "./run-latency-server";
+import { generationMessageKey } from "./generation-metrics";
+import { ServerGenerationMetricsTracker, persistGenerationMetrics } from "./server-generation-metrics";
 import { applyWorkflowToolSelection } from "./workflow-extension";
 import { isPlanToolSelection } from "./plan-mode";
 import { readWorkflow, WORKFLOW_ENTRY } from "./workflow-state";
@@ -127,6 +130,7 @@ export class AgentSessionWrapper {
   private streamListeners = new Set<(record: AgentStreamRecord) => void>();
   private readonly eventLog = new AgentEventLog();
   private readonly runTiming = new RunLatencyServer(event => this.emitEvent({ ...event }));
+  private readonly generationMetrics = new ServerGenerationMetricsTracker();
   // Resume-only aliases belong to this live epoch, never ordinary session
   // reads/commands. Keep them finite even for long-running replacement chains.
   private readonly streamAliases = new Map<string, number>();
@@ -135,8 +139,13 @@ export class AgentSessionWrapper {
   private pendingQueueItem: QueuedFollowUp | null = null;
   private queueCommandTail: Promise<void> = Promise.resolve();
   private runActive: boolean | null = null;
+  private pendingResume: { cancelled: boolean } | null = null;
+  private readonly resumeRequests = new Map<string, Promise<unknown>>();
   private liveRun: { id: string; startedAt: number; lastProgressAt: number; stopping: boolean } | null = null;
   private lastRunError: string | null = null;
+  private lastRunOutcome: "stopped" | null = null;
+  private retryInfo: RunRetryInfo | null = null;
+  private continuingOutput = false;
   private lastAgentEndCursor: string | null = null;
   private activeTools = new Map<string, ActiveTool>();
   private streamBash: { command: string; output: string; running: boolean } | null = null;
@@ -323,6 +332,7 @@ export class AgentSessionWrapper {
 
   private prepareForSessionReplacement(): void {
     this.runTiming.cancel();
+    this.generationMetrics.reset();
     this.compactionQueue = [];
     this.compactionQueueIds.clear();
     this.compaction = this.createCompactionController();
@@ -332,6 +342,9 @@ export class AgentSessionWrapper {
     this.activeTools.clear();
     this.streamBash = null;
     this.lastRunError = null;
+    this.lastRunOutcome = null;
+    this.retryInfo = null;
+    this.continuingOutput = false;
     this.webExtensionUI?.resetForSessionReplacement();
     this.unsubscribe?.();
     this.unsubscribe = null;
@@ -680,7 +693,7 @@ export class AgentSessionWrapper {
   private getRunState(): AgentRunState | null {
     if (!this.liveRun || !this.runActive) return null;
     const { id, startedAt, lastProgressAt } = this.liveRun;
-    return { id, startedAt, lastProgressAt, observedAt: Math.max(Date.now(), lastProgressAt), phase: this.getRunPhase() };
+    return { id, startedAt, lastProgressAt, observedAt: Math.max(Date.now(), lastProgressAt), phase: this.getRunPhase(), ...(this.retryInfo ? { retry: this.retryInfo } : {}), ...(this.continuingOutput ? { continuing: true } : {}) };
   }
 
   private getLiveState() {
@@ -720,14 +733,38 @@ export class AgentSessionWrapper {
       phase: (this.runActive ?? this.inner.isStreaming) ? this.getRunPhase() : null,
       bashRun: this.streamBash,
       lastRunError: this.lastRunError,
+      lastRunOutcome: this.lastRunOutcome,
     };
   }
 
   /** Called only at the current official runtime's before_provider_request boundary. */
-  markProviderRequest(): void { this.runTiming.mark("provider_request"); }
+  markProviderRequest(): void {
+    this.runTiming.mark("provider_request");
+    // Compaction and idle/background summaries are separate provider work.
+    if (this._alive && (this.runActive ?? this.inner.isStreaming) && !this.inner.isCompacting
+      && this.compaction.state?.status !== "running") this.generationMetrics.markProviderRequest();
+  }
 
   private emitEvent(event: AgentEvent | WebExtensionUIEvent): void {
     this.runTiming.observe(event);
+    const assistantEvent = ["message_start", "message_update", "message_end"].includes(event.type)
+      && ("message" in event && (event.message as { role?: string } | undefined)?.role === "assistant");
+    const unrelated = assistantEvent && (!(this.runActive ?? this.inner.isStreaming) || this.inner.isCompacting
+      || this.compaction.state?.status === "running");
+    if (unrelated) this.generationMetrics.reset();
+    const metrics = unrelated ? undefined : this.generationMetrics.observe(event);
+    if (metrics && event.type === "message_end") {
+      const inner = this.inner;
+      const previousLeafId = inner.sessionManager?.getLeafId?.();
+      const key = generationMessageKey((event as AgentEvent).message as AgentMessage);
+      // Enrich the Web event only. Pi retains its original assistant object.
+      event = { ...event, generationMetrics: metrics } as AgentEvent;
+      if (key && previousLeafId !== undefined) queueMicrotask(() => {
+        if (!this._alive || this.inner !== inner) return;
+        try { persistGenerationMetrics(inner.sessionManager, previousLeafId, key, metrics); }
+        catch { /* Observability must never reject a turn or move another branch. */ }
+      });
+    }
     if (event.type === "queue_update") {
       const pending = this.pendingQueueItem;
       if (pending) {
@@ -752,18 +789,62 @@ export class AgentSessionWrapper {
     // replayed after reconnect; the effective prompt is exposed in state.
     if (["message_start", "message_update", "message_end"].includes(event.type)
       && (message as { role?: string } | undefined)?.role === "system") return;
+    if (["message_start", "message_update", "message_end"].includes(event.type)
+      && (message as { role?: string; customType?: string } | undefined)?.role === "custom"
+      && (message as { customType?: string }).customType === TASK_RESUME_ENTRY) {
+      if (event.type === "message_end") {
+        const inner = this.inner;
+        const requestId = (message as { details?: { requestId?: string } }).details?.requestId;
+        // Pi persists immediately after its public message_end listeners. Publish
+        // only after that commit; never flash the recovery instructions as a bubble.
+        queueMicrotask(() => {
+          if (requestId && this._alive && this.inner === inner && this.runActive
+            && hasTaskResumeReceipt(inner.sessionManager.getBranch(), requestId)) {
+            this.continuingOutput = true;
+            this.emitEvent({ type: "task_resume_started", runState: this.getRunState() });
+          }
+        });
+      }
+      return;
+    }
     if (event.type === "agent_start") {
       this.runActive = true;
       const now = Date.now();
-      this.liveRun = { id: randomUUID(), startedAt: now, lastProgressAt: now, stopping: false };
+      if (!this.retryInfo || !this.liveRun) {
+        this.liveRun = { id: randomUUID(), startedAt: now, lastProgressAt: now, stopping: false };
+        this.continuingOutput = false;
+      }
       this.lastRunError = null;
+      this.lastRunOutcome = null;
       this.streamingMessage = null;
       this.activeTools.clear();
+    } else if (event.type === "turn_start") {
+      // The official boundary has committed this entry before the next turn.
+      const last = this.inner.sessionManager?.getBranch?.().at(-1);
+      if (last?.type === "custom_message" && ["pi-web-output-continuation", TASK_RESUME_ENTRY].includes(last.customType)) this.continuingOutput = true;
+    } else if (event.type === "auto_retry_start") {
+      this.retryInfo = { attempt: Number(event.attempt), maxAttempts: Number(event.maxAttempts),
+        retryAt: Date.now() + Math.max(0, Number(event.delayMs) || 0),
+        ...(typeof event.errorMessage === "string" ? { errorMessage: event.errorMessage } : {}) };
+    } else if (event.type === "auto_retry_end") {
+      this.retryInfo = null;
+      // Pi emits no further agent_end when cancellation happens during backoff.
+      if (event.success === false && this.runActive && this.liveRun) {
+        const stopped = this.liveRun.stopping || event.finalError === "Retry cancelled";
+        this.emitEvent({ type: "agent_end", ...(stopped ? { runOutcome: "stopped" } : {}), messages: [{ role: "assistant", content: [],
+          stopReason: stopped ? "aborted" : "error", errorMessage: String(event.finalError ?? "Retry failed") }] });
+      }
     } else if (event.type === "message_start" || event.type === "message_update") {
+      if ((message as { role?: string } | undefined)?.role === "user") this.continuingOutput = false;
       if (message && (message as { role?: string }).role !== "user") this.streamingMessage = message;
     } else if (event.type === "message_end") {
       this.streamingMessage = null;
-    } else if (event.type === "agent_end") {
+    } else if (event.type === "agent_end" && event.willRetry !== true) {
+      const stopped = this.liveRun?.stopping || event.runOutcome === "stopped";
+      if (stopped) event = { ...event, runOutcome: "stopped" };
+      this.lastRunOutcome = stopped ? "stopped" : null;
+      this.retryInfo = null;
+      this.continuingOutput = false;
       this.runActive = false;
       this.liveRun = null;
       this.streamingMessage = null;
@@ -803,7 +884,7 @@ export class AgentSessionWrapper {
     if (this.liveRun && isRunProgressEvent(event.type)) {
       this.liveRun.lastProgressAt = Math.max(this.liveRun.lastProgressAt, Date.now());
     }
-    if (event.type === "agent_start") event = { ...event, runState: this.getRunState() };
+    if (["agent_start", "turn_start", "auto_retry_start"].includes(event.type)) event = { ...event, runState: this.getRunState() };
     const record: AgentStreamRecord = (event.type.startsWith("extension_ui_") || event.type === "run_timing")
       ? { type: event.type, data: JSON.stringify(event) }
       : this.eventLog.append(event);
@@ -870,6 +951,21 @@ export class AgentSessionWrapper {
         this.queueCommandTail = operation.then(() => {}, () => {});
         return await operation;
       }
+      if (command.type === "resume") {
+        const requestId = command.requestId;
+        if (typeof requestId !== "string" || !/^[\w-]{1,128}$/.test(requestId)) throw new Error("A valid resume request ID is required");
+        const receiptKey = `${this.sessionId}:${requestId}`;
+        const previous = this.resumeRequests.get(receiptKey);
+        if (previous) return await previous;
+        // The persisted SDK entry also deduplicates a lost acknowledgement after
+        // a runtime reload. It is a receipt of admission, not proof of completion.
+        if (hasTaskResumeReceipt(this.inner.sessionManager.getEntries(), requestId)) return { accepted: true };
+        const operation = this.performCommand(command);
+        this.resumeRequests.set(receiptKey, operation);
+        // In-flight admission is protected by pendingResume and the SDK busy guard.
+        while (this.resumeRequests.size > 128) this.resumeRequests.delete(this.resumeRequests.keys().next().value!);
+        return await operation;
+      }
       return await this.performCommand(command);
     } finally { this.admittedCommands--; }
   }
@@ -886,6 +982,7 @@ export class AgentSessionWrapper {
 
     switch (type) {
       case "prompt": {
+        if (this.pendingResume) throw new Error("Task recovery is already starting");
         const timing = !this.runActive && !this.inner.isStreaming ? this.runTiming.accept(command.timingId) : null;
         try {
           // Snapshot the working tree before the run so its file changes can be
@@ -924,6 +1021,59 @@ export class AgentSessionWrapper {
         }
       }
 
+      case "resume": {
+        if (this.pendingResume || this.runActive || this.inner.isStreaming || this.inner.isIdle === false
+          || this.inner.isCompacting || this.compaction.state?.status === "running" || this.bashRunning
+          || this.flushingCompactionQueue || this.compactionQueue.length || this.inner.pendingMessageCount
+          || this.isReplacementPending() || hasUpstreamSubagentWork(this.sessionId)) {
+          throw new Error("Wait for the current activity to finish before resuming this task");
+        }
+        if (!this.inner.model) throw new Error("Select a model before resuming this task");
+        const inner = this.inner;
+        const sourceLeafId = inner.sessionManager.getLeafId();
+        if (command.expectedLeafId !== undefined && command.expectedLeafId !== sourceLeafId) {
+          throw new Error("The conversation changed; refresh it before resuming");
+        }
+        const message = createTaskResumeMessage(inner.sessionManager.getBranch(), command.requestId as string,
+          this.lastRunOutcome === "stopped" || !!this.lastRunError);
+        const pending = { cancelled: false };
+        this.pendingResume = pending;
+        const timing = this.runTiming.accept(command.timingId);
+        try {
+          if (this.cwd) await createSnapshot(this.cwd, inner.sessionId, "Before task resume").catch(() => {});
+          if (pending.cancelled || !this._alive || this.inner !== inner) throw new Error("Task recovery was cancelled");
+          if (inner.sessionManager.getLeafId() !== sourceLeafId || inner.isStreaming || inner.isIdle === false || inner.isCompacting) {
+            throw new Error("The conversation changed; refresh it before resuming");
+          }
+          const previousEnd = this.lastAgentEndCursor;
+          // This supported SDK entry point runs the usual preparation, extension
+          // hooks, compaction and retries. No tree navigation or user replay.
+          const running = inner.sendCustomMessage(message, { triggerTurn: true });
+          this.pendingResume = null;
+          const settled = () => {
+            if (!inner.isStreaming && !this.runActive && this.inner === inner) {
+              if (timing) this.runTiming.complete(timing);
+              this.emitEvent(this.getStreamSnapshot());
+            }
+          };
+          const rejected = (error: unknown) => {
+            if (timing) this.runTiming.complete(timing);
+            if (this.inner === inner && this.lastAgentEndCursor === previousEnd) this.emitEvent({
+              type: "agent_end", messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage: this.errorMessage(error) }],
+            });
+          };
+          if (command.awaitCompletion === true) {
+            try { await running; settled(); } catch (error) { rejected(error); throw error; }
+          } else void running.then(settled, rejected);
+          return { accepted: true };
+        } catch (error) {
+          if (timing) this.runTiming.complete(timing);
+          throw error;
+        } finally {
+          if (this.pendingResume === pending) this.pendingResume = null;
+        }
+      }
+
       case "workflow_command": {
         if (command.command !== "goal" && command.command !== "plan") throw new Error("Unknown workflow command");
         const runner = this.inner.extensionRunner;
@@ -939,6 +1089,7 @@ export class AgentSessionWrapper {
       }
 
       case "abort": {
+        if (this.pendingResume) this.pendingResume.cancelled = true;
         this.runTiming.cancel();
         // Stop also revokes automatic Goal continuation, including the gap
         // between two SDK runs when abort alone has nothing to cancel.
@@ -1245,6 +1396,7 @@ export class AgentSessionWrapper {
     if (!this._alive) return;
     this._alive = false;
     this.runTiming.cancel();
+    this.generationMetrics.reset();
     this.streamAliases.clear();
     this.runtimeState = "disposed";
     // Flush pending question closures before the terminal frame makes the

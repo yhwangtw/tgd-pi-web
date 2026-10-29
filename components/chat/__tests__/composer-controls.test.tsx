@@ -732,7 +732,7 @@ describe("composer controls", () => {
     const steer = [...container!.querySelectorAll<HTMLButtonElement>("button")]
       .find((button) => button.textContent === "Steer")!;
     await act(async () => steer.click());
-    expect(textarea.placeholder).toBe("Steer the current run…");
+    expect(textarea.placeholder).toBe("Queue a steering message…");
   });
 
   it("marks the disabled model control separately from active streaming actions", async () => {
