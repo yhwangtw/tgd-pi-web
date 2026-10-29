@@ -449,7 +449,8 @@ parameters, results and provider-supplied reasoning stay expandable.
 - On send: smart/always mode anchors a short user message in the upper quarter;
   tall messages get room for their beginning. Preserve mode reveals only what
   is needed. Immediate positioning settles after nested layout commits (two
-  stable frames, four at most), cancels on reader input, and is not mistaken
+  stable frames, four at most). A viewport-height observer corrects late composer
+  reflow only until the first reply or reader input; anchoring is not mistaken
   for an upward-reading pause. A three-quarter-viewport spacer leaves reply room.
 - End of run: never infer follow intent from the post-layout distance. Removing
   the viewport spacer can clamp `scrollTop` to the new maximum and make an

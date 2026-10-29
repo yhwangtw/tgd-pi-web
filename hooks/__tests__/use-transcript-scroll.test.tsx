@@ -216,6 +216,38 @@ describe("useTranscriptScroll", () => {
     expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 1_110, behavior: "auto" });
   });
 
+  it.each(["reader", "reply"] as const)("repairs a late viewport resize, then yields to %s", async (stop) => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => { frames.push(callback); return frames.length; }));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    let resize!: () => void;
+    const disconnect = vi.fn();
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: ResizeObserverCallback) { resize = () => callback([], this as unknown as ResizeObserver); }
+      observe() {}
+      disconnect = disconnect;
+    });
+    const { refs, scroller, message } = await sendWithGeometry();
+    let height = 600;
+    scroller.scrollTop = 1370;
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, get: () => height });
+    vi.mocked(scroller.getBoundingClientRect).mockImplementation(() => ({ top: 80, height, bottom: 80 + height }) as DOMRect);
+    vi.mocked(message.getBoundingClientRect).mockImplementation(() => ({ top: 80 + 1520 - scroller.scrollTop, height: 60 }) as DOMRect);
+    scrollTo.mockImplementation(({ top }: ScrollToOptions) => { scroller.scrollTop = top!; });
+    await act(async () => { for (let i = 0; i < 4 && frames.length; i++) frames.shift()!(0); });
+    expect(refs.sentMessageScrollRef.current.settling).toBe(false);
+    height = 573; // The activity dock appears after the initial frame pass.
+    await act(async () => resize());
+    expect(message.getBoundingClientRect().top - 80).toBeCloseTo(height / 4);
+    if (stop === "reader") scroller.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -100 }));
+    else await act(async () => root?.render(<Harness messagesLength={2} running runningRef={{ current: true }} streamingOutput />));
+    expect(disconnect).toHaveBeenCalled();
+    scrollTo.mockClear();
+    height = 500;
+    await act(async () => resize());
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
   it.each(["wheel", "touchstart", "pointerdown", "keydown"])("cancels send settling on reader %s input", async (event) => {
     let settle: FrameRequestCallback | undefined;
     vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => { settle = callback; return 1; }));

@@ -257,6 +257,12 @@ for (const [device, width, height] of [["desktop", 1440, 1000], ["mobile", 390, 
       const bounds = await sentPromptBounds(page);
       return Math.abs(bounds.top - bounds.viewportHeight / 4);
     }).toBeLessThanOrEqual(2);
+    // A dock or viewport can shrink after the initial frame pass.
+    await page.setViewportSize({ width, height: height - 28 });
+    await expect.poll(async () => {
+      const bounds = await sentPromptBounds(page);
+      return Math.abs(bounds.top - bounds.viewportHeight / 4);
+    }).toBeLessThanOrEqual(2);
     await expect(page.locator('.msg-item[data-message-role="assistant"]').first()).toBeInViewport();
     const before = await sentPromptBounds(page);
     await page.screenshot({ path: test.info().outputPath(`send-anchor-${device}.png`) });

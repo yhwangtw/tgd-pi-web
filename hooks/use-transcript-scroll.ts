@@ -58,6 +58,14 @@ export function useTranscriptScroll(
   const latestOutputRef = useRef({ messagesLength, streamingOutput });
   useLayoutEffect(() => { latestOutputRef.current = { messagesLength, streamingOutput }; }, [messagesLength, streamingOutput]);
   const cancelSendSettleRef = useRef<(() => void) | null>(null);
+  const viewportAnchorRef = useRef<{ messagesLength: number; stop: () => void } | null>(null);
+  useLayoutEffect(() => {
+    const anchor = viewportAnchorRef.current;
+    // Let the bounded frame pass handle a fast reply; afterward, viewport
+    // correction belongs only to this send while awaiting its first output.
+    if (anchor && !sentMessageScrollRef.current.settling
+      && (streamingOutput || messagesLength > anchor.messagesLength || !agentRunning)) anchor.stop();
+  }, [messagesLength, streamingOutput, agentRunning]);
   useEffect(() => () => cancelSendSettleRef.current?.(), [memoryKey]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -122,16 +130,21 @@ export function useTranscriptScroll(
           let frame = 0;
           let passes = 0;
           let previous: { height: number; messageTop: number } | null = null;
+          let viewportHeight = container.clientHeight;
+          let observer: ResizeObserver | null = null;
           const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
           const cleanup = (keepScrollTarget = false) => {
             cancelled = true;
             cancelAnimationFrame(frame);
+            observer?.disconnect();
+            if (viewportAnchorRef.current?.stop === stopViewportAnchor) viewportAnchorRef.current = null;
             events.forEach(event => document.removeEventListener(event, cancel, true));
             sentMessageScrollRef.current.settling = false;
             sentMessageScrollRef.current.scrollTop = keepScrollTarget ? container.scrollTop : null;
             if (cancelSendSettleRef.current === cancel) cancelSendSettleRef.current = null;
           };
           const cancel = () => cleanup();
+          const stopViewportAnchor = () => cleanup(true);
           const settle = () => {
             if (cancelled || scrollContainerRef.current !== container || lastUserMsgRef.current !== message) {
               cleanup();
@@ -150,8 +163,31 @@ export function useTranscriptScroll(
             const stable = previous && Math.abs(previous.height - next.height) <= 1 && Math.abs(previous.messageTop - next.messageTop) <= 1;
             previous = next;
             if (++passes < 4 && !stable) frame = requestAnimationFrame(settle);
-            else cleanup(true);
+            else {
+              sentMessageScrollRef.current.settling = false;
+              sentMessageScrollRef.current.scrollTop = container.scrollTop;
+              if (hasReply || mode === "preserve" || !agentRunningRef.current) cleanup(true);
+            }
           };
+          // A monitor/composer may resize after those frames have settled.
+          // Observe only viewport height, never growing transcript content,
+          // and yield permanently to reader input or the first reply.
+          if (typeof ResizeObserver !== "undefined") {
+            observer = new ResizeObserver(() => {
+              if (cancelled || scrollContainerRef.current !== container || lastUserMsgRef.current !== message) return;
+              const height = container.clientHeight;
+              if (Math.abs(height - viewportHeight) <= 1) return;
+              viewportHeight = height;
+              const output = latestOutputRef.current;
+              if (output.streamingOutput || output.messagesLength > messagesLength || getScrollFollowMode() === "preserve") {
+                cleanup(true);
+                return;
+              }
+              revealSentMessage();
+            });
+            observer.observe(container);
+          }
+          viewportAnchorRef.current = { messagesLength, stop: stopViewportAnchor };
           frame = requestAnimationFrame(settle);
           cancelSendSettleRef.current = cancel;
           events.forEach(event => document.addEventListener(event, cancel, { passive: true, capture: true }));
