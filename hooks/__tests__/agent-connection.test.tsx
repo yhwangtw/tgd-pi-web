@@ -64,6 +64,24 @@ describe("agent connection resume", () => {
     expect(events).toHaveBeenCalledWith(expect.objectContaining({ type: "session_snapshot" }));
   });
 
+  it("does not let UI notifications, snapshots or timing receipts hide a quiet model", async () => {
+    void connect("one");
+    const source = FakeEventSource.instances[0];
+    await act(async () => { source.open(); source.message({ type: "session_snapshot" }, "epoch:0"); });
+    await act(async () => vi.advanceTimersByTime(1_000));
+    await act(async () => source.message({ type: "message_update", message: { role: "assistant", content: [{ type: "thinking", thinking: "Provider content" }] } }, "epoch:1"));
+    const meaningful = connection.lastEventAtRef.current;
+    await act(async () => vi.advanceTimersByTime(90_000));
+    await act(async () => {
+      source.message({ type: "extension_ui_request", method: "set_status" }, "epoch:1");
+      source.message({ type: "run_timing", stage: "accepted" }, "epoch:1");
+      source.message({ type: "session_snapshot" }, "epoch:1");
+    });
+    expect(connection.lastEventAtRef.current).toBe(meaningful);
+    await act(async () => source.message({ type: "tool_execution_update", toolCallId: "read-1" }, "epoch:2"));
+    expect(connection.lastEventAtRef.current).toBe(Date.now());
+  });
+
   it("resumes with the last cursor, deduplicates events, and still applies same-cursor snapshots and UI state", async () => {
     void connect("one");
     const first = FakeEventSource.instances[0];

@@ -147,3 +147,14 @@
     min-width: var(--control-touch);
   }
 }
+
+.activeSummary {
+  overflow: hidden;
+  padding: 0 var(--space-2) var(--space-2);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

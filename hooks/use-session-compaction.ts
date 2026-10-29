@@ -45,6 +45,16 @@ export function useSessionCompaction(
     const current = viewRef.current;
     if (!force && awaitingId.current && state.id !== awaitingId.current && state.status !== "running") return;
     if (current?.id === state.id && !["running", "checking", "unknown"].includes(current.status) && state.status === "running") return;
+    const currentRevision = current && "revision" in current ? current.revision : undefined;
+    if (current?.id === state.id && currentRevision !== undefined && state.revision !== undefined && state.revision < currentRevision) return;
+    if (state.status === "running" && Number.isFinite(state.startedAt) && Number.isFinite(state.observedAt)
+      && state.observedAt! >= state.startedAt) {
+      const localStart = Date.now() - (state.observedAt! - state.startedAt);
+      // Preserve monotonic elapsed time when the same run is reconciled again.
+      const previousStart = current?.id === state.id && "observedAt" in current && current.observedAt !== undefined
+        ? current.startedAt : localStart;
+      state = { ...state, startedAt: Math.min(localStart, previousStart) };
+    }
     if (state.id === awaitingId.current || force || state.status === "running") awaitingId.current = null;
     const alreadyShown = hasCompactionNoticeReceipt(sessionIdRef.current, state.id, state.status);
     const stillVisible = current?.id === state.id && current.status === state.status;

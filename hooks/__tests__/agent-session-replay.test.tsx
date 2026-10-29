@@ -168,6 +168,21 @@ describe("session reconciliation and first-prompt ordering", () => {
     expect(prompts[0]).toEqual(["one", expect.objectContaining({ message: "", images: [{ type: "image", data: "cG5n", mimeType: "image/png" }] })]);
   });
 
+  it("restores tool clocks after reconnect and updates reported children by call identity", async () => {
+    vi.setSystemTime(1_000_000);
+    await act(async () => root.render(<Harness selected={session} />));
+    const emit = (event: AgentEvent) => act(async () => current.handleAgentEventRef.current?.(event));
+    const run = { id: "r", startedAt: 10_000, lastProgressAt: 25_000, observedAt: 30_000,
+      phase: { kind: "running_tools", tools: [{ id: "a", name: "subagent", startedAt: 20_000 }] } };
+    await emit({ ...snapshot([], true), state: { isStreaming: true, runState: run } });
+    expect(current.agentPhase).toMatchObject({ tools: [{ id: "a", startedAt: 990_000 }] });
+    await emit({ type: "tool_execution_update", toolCallId: "a", observedAt: 31_000,
+      toolActivity: { id: "a", name: "subagent", startedAt: 20_000, children: [{ id: "0", label: "scout", state: "completed" }] } });
+    expect(current.agentPhase).toMatchObject({ tools: [{ id: "a", startedAt: 990_000, children: [{ state: "completed" }] }] });
+    await emit({ type: "tool_execution_update", toolCallId: "other", toolActivity: { id: "other", name: "read" } });
+    expect(current.agentPhase).toMatchObject({ tools: [{ id: "a" }] });
+  });
+
   it("preserves parallel tools and stop intent across interleaved model messages", async () => {
     await act(async () => root.render(<Harness selected={session} />));
     const emit = (event: AgentEvent) => act(async () => current.handleAgentEventRef.current?.(event));

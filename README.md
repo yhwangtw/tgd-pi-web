@@ -34,7 +34,7 @@ Pi's terminal experience is fast and focused. This project adds the visual conte
 - Review files, diffs, tool calls, and git changes beside the conversation.
 - Track tGD artifacts and the seven delivery phases in the same workspace.
 - Navigate long conversations with search, bookmarks, a minimap, and branches.
-- Work comfortably on phones and desktops with safe-area-aware navigation, a compact pipeline, and touch-friendly message actions.
+- Work comfortably on phones and desktops with safe-area-aware navigation and touch-friendly message actions.
 - Keep execution local-first: external traffic is limited to configured model/MCP endpoints and the optional latest-version check shown in Runtime settings.
 
 ## Who is this for?
@@ -107,19 +107,15 @@ This skips Git synchronization only; npm still needs an internal registry or
 prepared cache. `origin/main` may be newer than the last release. Use a release
 source archive in a new directory when you need an exact released version.
 
-## tGD Workflow in the Browser
+## tGD Documents
 
-The phase bar remains visible above the active session:
+Open the artifact explorer to browse project documents or the complete sibling
+tGD directory, including scans, wiki pages, and prototypes. Document lists load
+when the explorer is opened. Chat sessions do not infer tGD phases or fetch
+artifact status, and the composer has no automatic phase controls.
 
-```text
-Map → Define → Plan → Develop → Verify → Review → Release
-```
-
-- **Artifact-backed status** — Map, Define, and Plan are completed from real files on disk, not optimistic UI state.
-- **Feature-aware progress** — the bar follows the feature named in the latest `/tgd-*` command, or the most recently updated feature.
-- **Artifact explorer** — browse curated phase documents or the complete sibling tGD directory, including scans, wiki pages, and prototypes.
-- **Prompt-first phase actions** — clicking a phase places the matching command in the composer so you can review it before sending.
-- **Git restore points** — the server captures a git-backed snapshot before each run without touching your index or `HEAD`.
+The server captures git-backed restore points before runs without touching your
+index or `HEAD`.
 
 Expected artifact layout:
 
@@ -259,6 +255,7 @@ MCP guide for API revisions, validation limits and saved-but-reload-failed warni
 - Incremental, read-only session index over local Pi `.jsonl` files.
 - Search, tags, pins, archive, auto-naming, HTML/Markdown export, and usage analytics.
 - Conversation find, user-turn navigation, bookmarks, minimap, long-message collapse, and optional always-follow streaming.
+- A run monitor stays beside the composer while browsing earlier messages. It shows the last reported phase, total elapsed time, and age of the last model/tool event. Expand it for full tool targets, individual tool timers and reported subagent states; select a tool to open its work log. Quiet periods remain neutral, and a keepalive is not evidence that the provider is computing.
 - Streaming replies show a rolling estimate of visible-text tokens per second, independently of repeated model labels. Completed replies show their own average using provider output counts when available; estimates are marked. Fully observed measurements survive reloads in the same browser (up to 500 replies for 90 days), without storing response text. Unobserved historical replies have no fabricated timing.
 - Project switcher with recent projects, pins, discovery, filesystem completion, and linked git worktrees.
 - Reusable prompt templates alongside built-in `/tgd-*` commands.

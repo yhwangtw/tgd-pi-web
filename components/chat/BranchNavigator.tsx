@@ -268,7 +268,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
         {open && dropdownPos && typeof document !== "undefined" && createPortal(
           // Portalled to <body>: the top bar has a backdrop-filter, which traps
           // position:fixed children in a stacking context that paints *under*
-          // the chat content (the tGD pipeline bar covered this dropdown).
+          // the chat content.
           <div ref={panelRef} tabIndex={-1} role="dialog" aria-label={t("topbar.branches")} className={styles.inlineDropdown} style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}>
             {hasContent && firstNode ? (
               <div className={styles.dropdownContent} onKeyDown={event => {

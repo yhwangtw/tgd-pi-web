@@ -69,6 +69,8 @@ export function getRunError(event: AgentEvent): string | null {
 export type { AgentPhase } from "@/lib/agent-run-state";
 
 export interface RunProgressState {
+  /** Mapped browser clock of the last model/tool event; never a keepalive. */
+  lastProgressAt?: number;
   idleSeconds: number;
   attention: "normal" | "delayed" | "stalled";
   connection: "connected" | "connecting" | "reconnecting";

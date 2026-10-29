@@ -74,6 +74,7 @@ export default function reconnectFixture(pi) {
     return { compaction: { summary: "Earlier fixture decisions.", firstKeptEntryId: kept.id, tokensBefore: event.preparation.tokensBefore } };
   });
   const provider = "e2e-reconnect-fixture";
+  const compactionAttempts = new Map();
   let outsideReadPath;
   const baseUrl = "https://reconnect-fixture.invalid";
   pi.registerProvider(provider, {
@@ -103,6 +104,36 @@ export default function reconnectFixture(pi) {
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
       queueMicrotask(async () => {
         try {
+          // Pi may make a second summary request for a split turn. It has no
+          // customInstructions marker; recognize only this named probe's input.
+          if (text.startsWith("# Conversation\n") && /E2E_RECONNECT:complete:progress-(?:complete|cancel)-recent/.test(text)) {
+            message.content = [{ type: "text", text: "Offline turn-prefix summary." }];
+            message.usage.output = 6;
+            message.usage.totalTokens = 6;
+            stream.push({ type: "start", partial: message });
+            stream.push({ type: "done", reason: "stop", message });
+            return;
+          }
+          // Exercise Pi's own summary generation and retry callbacks; no Web
+          // status events or summary results are manufactured by this fixture.
+          if (text.startsWith("<conversation>") && text.includes("Additional focus: E2E_COMPACT_PROGRESS")) {
+            if (!options?.sessionId) throw new Error("Summary routing ID is missing");
+            const attempt = (compactionAttempts.get(options.sessionId) ?? 0) + 1;
+            compactionAttempts.set(options.sessionId, attempt);
+            if (attempt === 1) throw new Error("503 service unavailable (offline compaction probe)");
+            await new Promise((resolve, reject) => {
+              const abort = () => { clearTimeout(timer); reject(new Error("Fixture summary aborted")); };
+              const timer = setTimeout(() => { options.signal?.removeEventListener("abort", abort); resolve(); }, 3000);
+              if (options.signal?.aborted) abort();
+              else options.signal?.addEventListener("abort", abort, { once: true });
+            });
+            message.content = [{ type: "text", text: "Offline summary completed after " + attempt + " provider attempts." }];
+            message.usage.output = 12;
+            message.usage.totalTokens = 12;
+            stream.push({ type: "start", partial: message });
+            stream.push({ type: "done", reason: "stop", message });
+            return;
+          }
           if (answerProbe) {
             if (hasAnswerContinuation) {
               message.content = [{ type: "text", text: "ANSWER_COMPLETED:" + answerProbe[1] }];
@@ -456,8 +487,7 @@ export default function reconnectFixture(pi) {
     toolLines.map((l) => JSON.stringify(l)).join("\n") + "\n",
   );
 
-  // tGD-workflow session — ran /tgd-map, /tgd-define, /tgd-plan, so the pipeline
-  // shows map+define done and plan current.
+  // Historical tGD commands remain readable without inferring workflow progress.
   const tgdLines = [
     { type: "session", version: 3, id: "dddd1111-2222-3333-4444-555566667777", timestamp: "2026-07-06T09:00:00.000Z", cwd },
     { type: "message", id: "t1000001", parentId: null, timestamp: "2026-07-06T09:00:05.000Z", message: { role: "user", content: "/tgd-map 理解這個專案", timestamp: 1751792405000 } },

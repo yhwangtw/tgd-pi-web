@@ -141,8 +141,6 @@ export interface ChatInputHandle {
   insertIfEmpty: (text: string) => void;
   /** Forcefully replace the entire input value (no-op on identical value). */
   setText: (text: string) => void;
-  /** Apply a tGD phase without losing the current prompt body. */
-  applyPhase: (command: string) => void;
   addImages: (files: File[]) => void;
   addFiles: (files: File[]) => void;
   openControls?: () => void;
@@ -354,22 +352,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
         if (!ta) return;
         ta.focus();
         resizeTextarea(ta, expandedRef.current);
-      });
-    },
-    applyPhase(command: string) {
-      if (!/^\/tgd-[a-z-]+$/.test(command)) return;
-      // The draft setter reads its current value synchronously, including a
-      // phase applied earlier in the same event before React commits.
-      setValue(current => {
-        const body = current.replace(/^\s*\/tgd-[a-z-]+(?=\s|$)[ \t]*/, "");
-        return `${command} ${body}`;
-      });
-      requestAnimationFrame(() => {
-        const textarea = textareaRef.current;
-        if (!textarea) return;
-        textarea.focus();
-        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-        resizeTextarea(textarea, expandedRef.current);
       });
     },
     setText(text: string) {

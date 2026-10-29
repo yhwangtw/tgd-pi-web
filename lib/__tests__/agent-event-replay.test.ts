@@ -38,7 +38,7 @@ describe("agent SSE replay contract", () => {
       expect(run).toEqual({ ...first, lastProgressAt: 15_000, observedAt: 130_000, phase: { kind: "thinking" } });
       expect(runState(await wrapper.send({ type: "get_state" }))!).toEqual(run);
       emit({ type: "tool_execution_start", toolCallId: "a", toolName: "read" });
-      expect(wrapper.getStreamSnapshot().phase).toEqual({ kind: "running_tools", tools: [{ id: "a", name: "read" }] });
+      expect(wrapper.getStreamSnapshot().phase).toEqual({ kind: "running_tools", tools: [{ id: "a", name: "read", startedAt: 130_000 }] });
       emit({ type: "tool_execution_end", toolCallId: "a" });
       emit({ type: "message_update", message: { role: "assistant", content: [{ type: "text", text: "Answer" }] } });
       expect(wrapper.getStreamSnapshot().phase).toEqual({ kind: "writing" });
@@ -49,6 +49,24 @@ describe("agent SSE replay contract", () => {
       vi.setSystemTime(140_000); emit({ type: "agent_start" });
       const next = runState(wrapper.getStreamSnapshot().state)!;
       expect(next.id).not.toBe(first.id); expect(next.startedAt).toBe(140_000);
+    } finally { wrapper.destroy(); vi.useRealTimers(); }
+  });
+
+  it("replays live compact retry status in snapshots without a second request", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(100_000);
+    const { wrapper, emit } = fixture();
+    try {
+      emit({ type: "compaction_start", reason: "threshold" });
+      vi.setSystemTime(105_000);
+      emit({ type: "summarization_retry_scheduled", attempt: 1, maxAttempts: 3, delayMs: 2000, errorMessage: "temporary failure" });
+      const frames: Array<{ type: string; state?: { compaction?: { startedAt: number; observedAt: number; retry?: { status: string } } } }> = [];
+      const off = wrapper.onStreamEvent(record => frames.push(JSON.parse(record.data)), null); off();
+      expect(frames.find(frame => frame.type === "session_snapshot")?.state?.compaction).toMatchObject({ startedAt: 100_000, observedAt: 105_000, retry: { status: "waiting" } });
+      emit({ type: "summarization_retry_attempt_start", source: "compaction", reason: "threshold" });
+      expect((await wrapper.send({ type: "get_state" }) as { compaction: unknown }).compaction).toMatchObject({ retry: { status: "retrying" } });
+      emit({ type: "summarization_retry_finished" });
+      emit({ type: "compaction_end", result: { tokensBefore: 20, estimatedTokensAfter: 5 } });
+      expect((await wrapper.send({ type: "get_state" }) as { compaction: unknown }).compaction).toMatchObject({ status: "completed" });
     } finally { wrapper.destroy(); vi.useRealTimers(); }
   });
 

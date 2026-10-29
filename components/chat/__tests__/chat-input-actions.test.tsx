@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
-import { act, createRef } from "react";
+import { act } from "react";
 import { readFileSync } from "node:fs";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ChatInput, type ChatInputHandle } from "../ChatInput";
+import { ChatInput } from "../ChatInput";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -169,17 +169,6 @@ describe("ChatInput actions", () => {
     expect(onClearQuote).toHaveBeenCalledOnce();
   });
 
-  it("applies consecutive phases atomically while preserving the draft body", async () => {
-    const handle = createRef<ChatInputHandle>();
-    const textarea = await render({ ref: handle });
-    await fill(textarea, "請保留這段問題\n與第二行 /tgd-review 字樣");
-    await act(async () => { handle.current!.applyPhase("/tgd-plan"); handle.current!.applyPhase("/tgd-develop"); });
-    expect(textarea.value).toBe("/tgd-develop 請保留這段問題\n與第二行 /tgd-review 字樣");
-    await act(async () => handle.current!.applyPhase("/tgd-verify"));
-    expect(textarea.value).toBe("/tgd-verify 請保留這段問題\n與第二行 /tgd-review 字樣");
-    await fill(textarea, "");
-    await act(async () => handle.current!.applyPhase("/tgd-map"));
-    expect(textarea.value).toBe("/tgd-map ");
-  });
+
 
 });

@@ -37,6 +37,42 @@ describe("Pi compaction transport", () => {
     expect(changed).toHaveBeenCalledTimes(2);
   });
 
+  it("retains real retry and clock metadata for reconnects without exposing provider errors", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const controller = new CompactionController(vi.fn(), vi.fn());
+    try {
+      controller.observe({ type: "compaction_start", reason: "threshold" });
+      vi.setSystemTime(15_000);
+      controller.observe({ type: "summarization_retry_scheduled", attempt: 1, maxAttempts: 3, errorMessage: "private provider error" });
+      const waiting = controller.snapshot()!;
+      expect(waiting).toMatchObject({ startedAt: 10_000, observedAt: 15_000, retry: { status: "waiting", attempt: 1, maxAttempts: 3 } });
+      expect(JSON.stringify(waiting)).not.toContain("private provider error");
+      vi.setSystemTime(17_000);
+      controller.observe({ type: "summarization_retry_attempt_start", source: "branchSummary" });
+      expect(controller.state?.retry?.status).toBe("waiting");
+      controller.observe({ type: "summarization_retry_attempt_start", source: "compaction" });
+      expect(controller.snapshot()).toMatchObject({ observedAt: 17_000, retry: { status: "retrying", attempt: 1, maxAttempts: 3 } });
+      expect(controller.state!.revision).toBeGreaterThan(waiting.revision!);
+      controller.observe({ type: "summarization_retry_finished" });
+      expect(controller.state?.retry).toBeUndefined();
+      controller.observe({ type: "compaction_end", result: { tokensBefore: 20, estimatedTokensAfter: 5 } });
+      expect(controller.state).toMatchObject({ status: "completed" });
+      expect(controller.state?.retry).toBeUndefined();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("ignores invalid retry metadata and ignores retry events after completion", () => {
+    const controller = new CompactionController(vi.fn(), vi.fn());
+    controller.observe({ type: "compaction_start", reason: "manual" });
+    controller.observe({ type: "summarization_retry_scheduled", attempt: -1, maxAttempts: 3 });
+    expect(controller.state?.retry).toBeUndefined();
+    controller.observe({ type: "compaction_end", aborted: true });
+    controller.observe({ type: "summarization_retry_scheduled", attempt: 1, maxAttempts: 3 });
+    expect(controller.state).toMatchObject({ status: "cancelled" });
+    expect(controller.state?.retry).toBeUndefined();
+  });
+
   it("tracks automatic compaction, cancellation and failures without inventing success", () => {
     const controller = new CompactionController(vi.fn(), vi.fn());
     controller.observe({ type: "compaction_start", reason: "threshold" });

@@ -120,6 +120,23 @@ describe("compaction client reconciliation", () => {
     expect(api.view).toMatchObject({ id: "manual-job", reason: "manual", startedAt: 1 });
   });
 
+  it("restores the same clock and retry across snapshots with different client and server clocks", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(5_000_000);
+    await render();
+    const waiting: CompactionState = { id: "job", status: "running", reason: "manual", startedAt: 1_000_000,
+      observedAt: 1_015_000, revision: 2, retry: { status: "waiting", attempt: 1, maxAttempts: 3 } };
+    await act(async () => api.reconcile({ compaction: waiting }));
+    expect(api.view).toMatchObject({ startedAt: 4_985_000, retry: { status: "waiting", attempt: 1 } });
+    await act(async () => { vi.setSystemTime(5_005_000); api.reconcile({ compaction: { ...waiting, observedAt: 1_020_000, revision: 3, retry: { ...waiting.retry!, status: "retrying" } } }); });
+    expect(api.view).toMatchObject({ startedAt: 4_985_000, retry: { status: "retrying" }, revision: 3 });
+    await act(async () => api.reconcile({ compaction: waiting }));
+    expect(api.view).toMatchObject({ startedAt: 4_985_000, retry: { status: "retrying" }, revision: 3 });
+    await act(async () => root.render(<Harness key="remounted" />));
+    await act(async () => api.reconcile({ compaction: { ...waiting, observedAt: 1_020_000 } }));
+    expect(api.view).toMatchObject({ startedAt: 4_985_000, retry: { status: "waiting" } });
+    expect(transport.send).not.toHaveBeenCalled();
+  });
+
   it("keeps cancellation pending until the server confirms it", async () => {
     transport.send.mockResolvedValue(null);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(stateResponse(job("running"))));

@@ -1,5 +1,6 @@
 "use client";
 import { toolExecutionState, toolGroupState, toolStateLabel, type ToolExecutionContext } from "@/lib/tool-execution-state";
+import { getToolPreview } from "@/lib/tool-preview";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
@@ -29,6 +30,8 @@ import { getLanguage } from "@/lib/file-mime";
 import { useI18n } from "@/lib/i18n";
 import { ToolRunGroup, type ToolRunItem } from "./ToolRunGroup";
 import { TurnActivityGroup } from "./TurnActivityGroup";
+import { ElapsedTime } from "./ElapsedTime";
+import { useRequestedDisclosure } from "./use-requested-disclosure";
 import { StructuredOutputCard } from "./StructuredOutputCard";
 import { FocusDialog } from "./FocusDialog";
 import type { AssistantUsage } from "@/lib/usage-aggregation";
@@ -502,6 +505,12 @@ function TurnWorkLog({
       filesChanged={files.size}
       failed={failed}
       elapsed={elapsed}
+      startedAt={executionContext?.runStartedAt}
+      revealRequest={toolEntries.some(({ block }) => block.toolCallId === executionContext?.revealRequest?.id) ? executionContext?.revealRequest?.nonce : undefined}
+      activeSummary={toolEntries.filter(({ block }) => {
+        const state = toolExecutionState(block.toolCallId, toolResults?.get(block.toolCallId), executionContext);
+        return state === "running" || state === "preparing";
+      }).map(({ block }) => [block.toolName, getToolPreview(block)].filter(Boolean).join(" · ")).join(" · ")}
       state={executionContext?.running && !executionContext.cancelled ? "running" : failed ? "error" : executionContext?.cancelled ? "cancelled" : toolEntries.length ? toolGroupState(toolEntries.map(({ block }) => toolExecutionState(block.toolCallId, toolResults?.get(block.toolCallId), executionContext))) : "success"}
     >
       {toolEntries.map(({ activityMessage, block }) => {
@@ -713,7 +722,20 @@ function ThinkingBlock({ block, duration }: { block: ThinkingContent; duration?:
 
 
 function ToolCallBlock({ block, result, duration, executionContext }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; executionContext?: ToolExecutionContext }) {
-  const [expanded, setExpanded] = useState(false);
+  const request = executionContext?.revealRequest;
+  const reveal = request?.id === block.toolCallId ? request.nonce : undefined;
+  const [expanded, setExpanded] = useRequestedDisclosure(reveal);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (reveal === undefined || !expanded) return;
+    const frame = requestAnimationFrame(() => {
+      buttonRef.current?.focus({ preventScroll: true });
+      buttonRef.current?.scrollIntoView({ block: "nearest", behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(frame);
+    // A fresh request navigates once; manual disclosure toggles do not scroll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reveal]);
   const [focusOpen, setFocusOpen] = useState(false);
   const { t } = useI18n();
   const inputStr = useMemo(() => expanded ? JSON.stringify(block.input, null, 2) : "", [block.input, expanded]);
@@ -739,11 +761,13 @@ function ToolCallBlock({ block, result, duration, executionContext }: { block: T
   return (
     <div
       data-tool-state={state}
+      data-tool-call-id={block.toolCallId}
       className={`${styles.toolCallContainer} ${isError ? styles.toolCallContainerError : active ? styles.toolCallContainerRunning : state === "success" ? styles.toolCallContainerSuccess : styles.toolCallContainerNeutral}`}
     >
       {/* ── Tool call header ── */}
       <button
         onClick={() => setExpanded((v) => !v)}
+        ref={buttonRef}
         className={styles.toolCallButton}
         aria-expanded={expanded}
       >
@@ -754,9 +778,9 @@ function ToolCallBlock({ block, result, duration, executionContext }: { block: T
           {getToolPreview(block)}
         </span>
         <span className={styles.toolStatusText}>{t(toolStateLabel[state])}</span>
-        {duration !== undefined && (
-          <span className={styles.toolDuration}>{duration}s</span>
-        )}
+        {state === "running" && executionContext?.toolStartedAt?.has(block.toolCallId)
+          ? <ElapsedTime startedAt={executionContext.toolStartedAt.get(block.toolCallId)!} label="chat.runStepElapsed" testId="tool-step-elapsed" />
+          : duration !== undefined && <span className={styles.toolDuration}>{duration}s</span>}
         <ChevronDown size={UI_ICON_SIZE.inline} className={styles.toolChevron} style={{ transform: expanded ? "rotate(180deg)" : "none" }} aria-hidden="true" />
       </button>
 
@@ -862,22 +886,8 @@ function UsageDetails({ usage }: { usage: NonNullable<AssistantMessage["usage"]>
 }
 
 
-export function getToolPreview(block: ToolCallContent): string {
-  const input = block.input;
-  if (!input || typeof input !== "object") return "";
-  const tasks = Array.isArray(input.tasks) ? input.tasks : Array.isArray(input.chain) ? input.chain : null;
-  if (tasks) {
-    const agents = [...new Set(tasks.flatMap(item => item && typeof item === "object" && "agent" in item ? [String(item.agent)] : []))];
-    return `${tasks.length} ${Array.isArray(input.chain) ? "steps" : "tasks"}${agents.length ? ` · ${agents.join(", ")}` : ""}`.slice(0, 120);
-  }
-  const keys = Object.keys(input);
-  if (!keys.length) return "";
-  const key = ["command", "path", "file_path", "pattern", "query", "objective", "title", "task"].find(key => key in input) ?? keys[0];
-  const value = input[key];
-  if (value == null) return key;
-  const text = typeof value === "object" ? `${key}: ${JSON.stringify(value)}` : String(value);
-  return text.length > 120 ? text.slice(0, 119) + "…" : text;
-}
+export { getToolPreview } from "@/lib/tool-preview";
+
 
 function formatUsage(usage: {
   input: number;

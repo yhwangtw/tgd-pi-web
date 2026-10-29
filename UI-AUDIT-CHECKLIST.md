@@ -109,7 +109,7 @@ cross-combinations include XL + Mono + Traditional Chinese at 320, 840, and
 - [ ] Mobile More sheet: grouping, backdrop, close, active and disabled actions
 - [ ] Top bar: repository, branch/detached state, session title and actions
 - [ ] Session menu: Export, Analytics, System and branch availability
-- [ ] tGD pipeline: phases, feature chip, progress, hide and long names
+- [ ] Chat load, session switches and completed turns do not infer tGD progress or display phase controls
 - [ ] Sidebar overlay/backdrop at every 701–1024 breakpoint
 - [ ] Right panel, resizer, open/closed animation and narrow desktop behavior
 - [ ] `TabBar`: active/inactive/dirty/close/reorder/overflow states

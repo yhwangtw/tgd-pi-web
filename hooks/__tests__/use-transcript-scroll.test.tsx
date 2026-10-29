@@ -19,10 +19,11 @@ interface HarnessProps {
   runningRef: React.RefObject<boolean>;
   onRefs?: (refs: ReturnType<typeof useTranscriptScroll>) => void;
   memoryKey?: string;
+  streamingOutput?: boolean;
 }
 
-function Harness({ messagesLength, running, runningRef, onRefs, memoryKey }: HarnessProps) {
-  const refs = useTranscriptScroll(messagesLength, running, runningRef, memoryKey);
+function Harness({ messagesLength, running, runningRef, onRefs, memoryKey, streamingOutput }: HarnessProps) {
+  const refs = useTranscriptScroll(messagesLength, running, runningRef, memoryKey, streamingOutput);
   useEffect(() => onRefs?.(refs), [onRefs, refs]);
   return (
     <div ref={refs.scrollContainerRef}>
@@ -129,22 +130,156 @@ describe("useTranscriptScroll", () => {
     expect(isTranscriptTailOutOfView(597, 500)).toBe(true);
   });
 
-  it("anchors a sent message immediately so a fast reply cannot outrun it", async () => {
+  async function sendWithGeometry({
+    mode = "smart", height = 600, messageHeight = 60, messageTop = 520, scrollTop = 1_000,
+  }: {
+    mode?: "smart" | "always" | "preserve";
+    height?: number; messageHeight?: number; messageTop?: number; scrollTop?: number;
+  } = {}) {
+    localStorage.setItem("pi-scroll-follow-mode", mode);
+    resetScrollFollowModeCache();
     const runningRef = { current: true } as React.RefObject<boolean>;
     let refs: ReturnType<typeof useTranscriptScroll> | null = null;
     const capture = (next: ReturnType<typeof useTranscriptScroll>) => { refs = next; };
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-
     await act(async () => {
       root?.render(<Harness messagesLength={0} running runningRef={runningRef} onRefs={capture} />);
     });
+    const scroller = refs!.scrollContainerRef.current!;
+    const message = refs!.lastUserMsgRef.current!;
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: height });
+    vi.spyOn(scroller, "getBoundingClientRect").mockReturnValue({ top: 80, height, bottom: 80 + height } as DOMRect);
+    vi.spyOn(message, "getBoundingClientRect").mockReturnValue({ top: 80 + messageTop, height: messageHeight, bottom: 80 + messageTop + messageHeight } as DOMRect);
+    scroller.scrollTop = scrollTop;
     refs!.pendingScrollToUserRef.current = true;
     await act(async () => {
       root?.render(<Harness messagesLength={1} running runningRef={runningRef} onRefs={capture} />);
     });
+    return { refs: refs!, scroller, message };
+  }
 
-    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: "auto" }));
+  it.each(["smart", "always"] as const)("%s anchors a short sent message at the upper quarter immediately", async (mode) => {
+    await sendWithGeometry({ mode });
+    expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 1_370, behavior: "auto" });
+  });
+
+  it("gives a tall sent message room to stay fully visible", async () => {
+    await sendWithGeometry({ messageHeight: 550 });
+    expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 1_486, behavior: "auto" });
+  });
+
+  it.each(["smart", "preserve"] as const)("%s reveals the beginning of an oversized prompt", async (mode) => {
+    await sendWithGeometry({ mode, messageHeight: 900, messageTop: 620 });
+    expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 1_604, behavior: "auto" });
+  });
+
+  it("uses the actual short viewport rather than a fixed desktop offset", async () => {
+    await sendWithGeometry({ height: 200, messageHeight: 40, messageTop: 170 });
+    expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 1_120, behavior: "auto" });
+  });
+
+  it("does not scroll above the beginning of a new conversation", async () => {
+    await sendWithGeometry({ scrollTop: 0, messageTop: 16 });
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("preserve leaves a fully visible prompt where it is", async () => {
+    await sendWithGeometry({ mode: "preserve", messageTop: 420 });
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("preserve only reveals the bottom of a partially visible short prompt", async () => {
+    await sendWithGeometry({ mode: "preserve", messageTop: 570 });
+    expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 1_046, behavior: "auto" });
+  });
+
+  it("preserve reveals a prompt above the viewport with the minimum offset", async () => {
+    await sendWithGeometry({ mode: "preserve", messageTop: -60 });
+    expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 924, behavior: "auto" });
+  });
+
+  it("preserve does not reposition an oversized prompt whose beginning is already visible", async () => {
+    await sendWithGeometry({ mode: "preserve", messageHeight: 900, messageTop: 100 });
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("reconciles the anchor once when previous history collapses after send", async () => {
+    let settle: FrameRequestCallback | undefined;
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => { settle = callback; return 1; }));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const { message } = await sendWithGeometry();
+    vi.mocked(message.getBoundingClientRect).mockReturnValue({ top: 80 + 260, height: 60, bottom: 80 + 320 } as DOMRect);
+    scrollTo.mockClear();
+    await act(async () => { settle!(0); });
+    expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 1_110, behavior: "auto" });
+  });
+
+  it.each(["reader", "reply"] as const)("repairs a late viewport resize, then yields to %s", async (stop) => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => { frames.push(callback); return frames.length; }));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    let resize!: () => void;
+    const disconnect = vi.fn();
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: ResizeObserverCallback) { resize = () => callback([], this as unknown as ResizeObserver); }
+      observe() {}
+      disconnect = disconnect;
+    });
+    const { refs, scroller, message } = await sendWithGeometry();
+    let height = 600;
+    scroller.scrollTop = 1370;
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, get: () => height });
+    vi.mocked(scroller.getBoundingClientRect).mockImplementation(() => ({ top: 80, height, bottom: 80 + height }) as DOMRect);
+    vi.mocked(message.getBoundingClientRect).mockImplementation(() => ({ top: 80 + 1520 - scroller.scrollTop, height: 60 }) as DOMRect);
+    scrollTo.mockImplementation(({ top }: ScrollToOptions) => { scroller.scrollTop = top!; });
+    await act(async () => { for (let i = 0; i < 4 && frames.length; i++) frames.shift()!(0); });
+    expect(refs.sentMessageScrollRef.current.settling).toBe(false);
+    height = 573; // The activity dock appears after the initial frame pass.
+    await act(async () => resize());
+    expect(message.getBoundingClientRect().top - 80).toBeCloseTo(height / 4);
+    if (stop === "reader") scroller.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -100 }));
+    else await act(async () => root?.render(<Harness messagesLength={2} running runningRef={{ current: true }} streamingOutput />));
+    expect(disconnect).toHaveBeenCalled();
+    scrollTo.mockClear();
+    height = 500;
+    await act(async () => resize());
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it.each(["wheel", "touchstart", "pointerdown", "keydown"])("cancels send settling on reader %s input", async (event) => {
+    let settle: FrameRequestCallback | undefined;
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => { settle = callback; return 1; }));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const { scroller } = await sendWithGeometry();
+    scroller.dispatchEvent(new Event(event));
+    scrollTo.mockClear();
+    await act(async () => { settle!(0); });
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it.each(["streaming", "committed"])("settling still follows a fast %s reply that has outgrown the viewport", async (phase) => {
+    let settle: FrameRequestCallback | undefined;
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => { settle = callback; return 1; }));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const { refs } = await sendWithGeometry();
+    vi.spyOn(refs.messagesEndRef.current!, "getBoundingClientRect").mockReturnValue({ top: 1_200 } as DOMRect);
+    await act(async () => {
+      root?.render(<Harness messagesLength={phase === "committed" ? 2 : 1} running runningRef={{ current: true }} streamingOutput={phase === "streaming"} />);
+    });
+    scrollIntoView.mockClear();
+    await act(async () => { settle!(0); });
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "end" });
+  });
+
+  it("consumes the send anchor only once while the reply starts", async () => {
+    const { refs } = await sendWithGeometry();
+    expect(refs.pendingScrollToUserRef.current).toBe(false);
+    scrollTo.mockClear();
+    await act(async () => {
+      root?.render(<Harness messagesLength={2} running runningRef={{ current: true }} />);
+    });
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 });

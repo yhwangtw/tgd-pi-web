@@ -5,19 +5,12 @@ import { UI_ICON_SIZE } from "@/lib/ui-icons";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ArrowDown,
-  BadgeCheck,
   Bookmark,
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  Code2,
-  FilePenLine,
   FileUp,
-  ListChecks,
-  Map as MapIcon,
   RotateCcw,
-  Search,
-  Send,
   X,
 } from "lucide-react";
 import type { AgentMessage, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
@@ -37,7 +30,6 @@ import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { MobileTurnNavigator, type MobileTurnItem } from "./MobileTurnNavigator";
 import { BashBlock } from "./BashBlock";
 import { CollapsibleMessage } from "./CollapsibleMessage";
-import { TgdPipeline, type PhaseStatus } from "./TgdPipeline";
 import { CompactionSummary, getCompactionSummary } from "./CompactionSummary";
 import { pickRovingMessageTarget, pickTurnTarget, type MessageFocusDirection } from "./turn-nav";
 import { useScrollFollowMode } from "@/lib/prefs";
@@ -48,7 +40,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import styles from "./ChatWindow.module.css";
 import { WelcomeTypewriter } from "./WelcomeTypewriter";
-import { useI18n, type MsgKey } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { QueuedFollowUps } from "./QueuedFollowUps";
 import { CompactionStatus } from "./CompactionStatus";
 import { CompactionPolicy } from "./CompactionPolicy";
@@ -57,6 +49,7 @@ import { buildConversationLayout } from "./conversation-turns";
 import { buildTranscriptSearchIndex, findTranscriptMatches, messageText, type FindScope } from "./transcript-search";
 import { assistantModelKey, shouldShowAssistantModelLabel } from "./message-chrome";
 import { ProviderRecoveryBanner } from "./ProviderRecoveryBanner";
+import { activeToolDetails } from "@/lib/tool-preview";
 import { RunStatus } from "./RunStatus";
 
 interface Props {
@@ -80,61 +73,6 @@ interface Props {
   /** Wide-layout preference (⌘K → Toggle Wide Chat). */
   wideChat?: boolean;
   onOpenModels?: () => void;
-}
-
-const PHASE_ACTIONS: { cmd: string; label: string; labelKey: MsgKey; descKey: MsgKey; icon: React.ReactNode }[] = [
-  {
-    cmd: "/tgd-map", label: "Map", labelKey: "phase.label.map", descKey: "phase.map" as MsgKey,
-    icon: <MapIcon size={UI_ICON_SIZE.compact} aria-hidden="true" />,
-  },
-  {
-    cmd: "/tgd-define", label: "Define", labelKey: "phase.label.define", descKey: "phase.define" as MsgKey,
-    icon: <FilePenLine size={UI_ICON_SIZE.compact} aria-hidden="true" />,
-  },
-  {
-    cmd: "/tgd-plan", label: "Plan", labelKey: "phase.label.plan", descKey: "phase.plan" as MsgKey,
-    icon: <ListChecks size={UI_ICON_SIZE.compact} aria-hidden="true" />,
-  },
-  {
-    cmd: "/tgd-develop", label: "Develop", labelKey: "phase.label.develop", descKey: "phase.develop" as MsgKey,
-    icon: <Code2 size={UI_ICON_SIZE.compact} aria-hidden="true" />,
-  },
-  {
-    cmd: "/tgd-verify", label: "Verify", labelKey: "phase.label.verify", descKey: "phase.verify" as MsgKey,
-    icon: <BadgeCheck size={UI_ICON_SIZE.compact} aria-hidden="true" />,
-  },
-  {
-    cmd: "/tgd-review", label: "Review", labelKey: "phase.label.review", descKey: "phase.review" as MsgKey,
-    icon: <Search size={UI_ICON_SIZE.compact} aria-hidden="true" />,
-  },
-  {
-    cmd: "/tgd-release", label: "Release", labelKey: "phase.label.release", descKey: "phase.release" as MsgKey,
-    icon: <Send size={UI_ICON_SIZE.compact} aria-hidden="true" />,
-  },
-];
-
-const CMD_ORDER = PHASE_ACTIONS.map((p) => p.cmd);
-
-// Client-side shape of the /api/tgd/artifacts response (subset we use).
-interface TgdArtifactsClient {
-  exists: boolean;
-  top: { name: string; phase?: string }[];
-  features: { name: string; phasesDone: string[]; mtimeMs: number }[];
-}
-
-export function artifactPhaseCommands(
-  top: { name: string; phase?: string }[],
-  currentFeature: { phasesDone: string[] } | null,
-): Set<string> {
-  const evidence = new Set<string>();
-  if (top.some((file) => file.phase === "map")) evidence.add("/tgd-map");
-  if (top.some((file) => file.name === "TRACKING-PLAN.md")) evidence.add("/tgd-plan");
-
-  for (const phase of currentFeature?.phasesDone ?? []) {
-    if (phase !== "develop") evidence.add(`/tgd-${phase}`);
-  }
-
-  return new Set(CMD_ORDER.filter((command) => evidence.has(command)));
 }
 
 const TYPEWRITER_PHRASES = [
@@ -172,10 +110,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     retryInfo, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
     isCompacting, compactError, compactionSettings, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
     compactionStatus, compactionQueue, handleCheckCompaction, handleDismissCompaction, handleClearCompactionQueue, handleRetryCompaction,
-    agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,
+    agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState, lastProgressAtRef,
     isNew,
     messagesEndRef, scrollContainerRef,
-    lastUserMsgRef,
+    lastUserMsgRef, sentMessageScrollRef,
     handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,
     handleUpdateQueued, handleMoveQueued,
@@ -194,107 +132,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const workflowVisibility = useWorkflowVisibility(session?.id);
   const workflowCommand = useWorkflowCommand(session?.id, handleSend);
 
-  // ── tGD pipeline: detect which phases have run in this session ──
-  const [pipelineHidden, setPipelineHidden] = useState(false);
-  const [idlePipelineExpanded, setIdlePipelineExpanded] = useState(false);
-  useEffect(() => { setPipelineHidden(localStorage.getItem("pi-tgd-pipeline-hidden") === "1"); }, []);
-  const hidePipeline = useCallback(() => { setPipelineHidden(true); setIdlePipelineExpanded(false); localStorage.setItem("pi-tgd-pipeline-hidden", "1"); }, []);
-  const showPipeline = useCallback(() => { setPipelineHidden(false); setIdlePipelineExpanded(true); localStorage.removeItem("pi-tgd-pipeline-hidden"); }, []);
-
-  const tgdPhases = useMemo(
-    () => PHASE_ACTIONS.map((p) => ({ cmd: p.cmd, label: t(p.labelKey), desc: t(p.descKey), icon: p.icon })),
-    [t],
-  );
-  // Transcript signal: which /tgd-* were invoked this session, the last one
-  // (live "current"), and the last feature token typed alongside a command.
-  const tgdState = useMemo(() => {
-    const invoked = new Set<string>();
-    let current: string | null = null;
-    let featureToken: string | null = null;
-    for (const m of messages) {
-      if (m.role !== "user") continue;
-      const c = (m as { content?: unknown }).content;
-      const text = typeof c === "string"
-        ? c
-        : Array.isArray(c) ? (c as Array<{ type?: string; text?: string }>).filter((b) => b.type === "text").map((b) => b.text ?? "").join(" ") : "";
-      const match = text.trim().match(/^\/(tgd-\w+)(?:\s+(\S+))?/);
-      if (match) {
-        const cmd = `/${match[1]}`;
-        if (PHASE_ACTIONS.some((p) => p.cmd === cmd)) {
-          invoked.add(cmd);
-          current = cmd;
-          if (match[2]) featureToken = match[2];
-        }
-      }
-    }
-    return { invoked, current, featureToken };
-  }, [messages]);
-
-  // Disk truth: read real tGD artifacts so "done" means the artifact exists,
-  // not merely that the slash command was typed. Only map/define/plan leave
-  // artifacts in the tGD dir; develop/verify/review/release act on the code
-  // repo, so those stay transcript-driven (hybrid below). Refetch on cwd
-  // change and whenever the agent stops (artifacts appear after it writes).
-  const tgdCwd = session?.cwd ?? newSessionCwd ?? null;
-  const [tgdArtifacts, setTgdArtifacts] = useState<TgdArtifactsClient | null>(null);
-  useEffect(() => {
-    if (!tgdCwd) { setTgdArtifacts(null); return; }
-    let cancelled = false;
-    fetch(`/api/tgd/artifacts?cwd=${encodeURIComponent(tgdCwd)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: TgdArtifactsClient | null) => { if (!cancelled) setTgdArtifacts(d && d.exists ? d : null); })
-      .catch(() => { /* leave transcript-only */ });
-    return () => { cancelled = true; };
-  }, [tgdCwd, agentRunning]);
-
-  // The "current feature" whose progress the bar reflects: the one named in the
-  // last /tgd-* command if it matches, else the most-recently-touched feature.
-  const currentFeature = useMemo(() => {
-    const features = tgdArtifacts?.features ?? [];
-    if (features.length === 0) return null;
-    if (tgdState.featureToken) {
-      const hit = features.find((f) => f.name === tgdState.featureToken);
-      if (hit) return hit;
-    }
-    return features.reduce((a, b) => (b.mtimeMs > a.mtimeMs ? b : a));
-  }, [tgdArtifacts, tgdState.featureToken]);
-
-  // Phases with real on-disk evidence for the current feature. Develop remains
-  // transcript-driven because it produces code rather than a tGD document.
-  const diskDone = useMemo(() => {
-    const top = tgdArtifacts?.top ?? [];
-    return artifactPhaseCommands(top, currentFeature);
-  }, [tgdArtifacts, currentFeature]);
-
-  const phaseStatusOf = useCallback((cmd: string): PhaseStatus => {
-    // Evidence = disk artifacts ∪ this session's invoked commands.
-    const done = new Set<string>([...diskDone, ...tgdState.invoked]);
-    // Current = the command you last ran live; else the next phase after the
-    // furthest one with evidence (so a fresh project highlights Map as "start").
-    let current = tgdState.current;
-    if (!current) {
-      let lastIdx = -1;
-      CMD_ORDER.forEach((c, i) => { if (done.has(c)) lastIdx = i; });
-      current = lastIdx + 1 < CMD_ORDER.length ? CMD_ORDER[lastIdx + 1] : null;
-    }
-    if (cmd === current) return "current";
-    return done.has(cmd) ? "done" : "todo";
-  }, [diskDone, tgdState]);
-  const runPhase = useCallback((cmd: string) => {
-    chatInputRef?.current?.applyPhase(cmd);
-  }, [chatInputRef]);
-  const activeTgdRun = useMemo(() => {
-    if (!agentRunning) return false;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role !== "user") continue;
-      return /^\/tgd-\w+\b/.test(messageText(messages[i]).trim());
-    }
-    return false;
-  }, [agentRunning, messages]);
-  const pipelineRelevant = activeTgdRun
-    || tgdState.invoked.size > 0
-    || diskDone.size > 0
-    || currentFeature !== null;
+  const composerCwd = session?.cwd ?? newSessionCwd ?? null;
+  const currentTools = useMemo(() => activeToolDetails(agentPhase, messages, streamState.streamingMessage), [agentPhase, messages, streamState.streamingMessage]);
+  const [toolReveal, setToolReveal] = useState<{ sessionId: string | undefined; id: string; nonce: number } | null>(null);
 
   // Push session stats up to AppShell for the top bar.
   // Compare scalar fields to avoid loops from new object identity each render.
@@ -584,8 +424,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     chatInputRef?.current?.insertIfEmpty(content);
   }, [chatInputRef]);
 
-  // Spacer below the last message lets the newest user message stay anchored
-  // at the top while the answer streams. On completion it shrinks to the
+  // Reserve room for a sent prompt in the upper quarter of the transcript
+  // while its answer streams. On completion it shrinks to the
   // minimum filler needed to preserve that reading position; removing it in
   // the same render would make the browser clamp scrollTop to the new bottom.
   const [spacerHeight, setSpacerHeight] = useState<number | null>(null);
@@ -593,7 +433,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     const container = scrollContainerRef.current;
     if (!container) return;
     if (agentRunning) {
-      const next = container.clientHeight;
+      const next = Math.ceil(container.clientHeight * 0.75);
       setSpacerHeight((current) => current === next ? current : next);
       return;
     }
@@ -659,6 +499,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       if (["ArrowUp", "PageUp", "Home"].includes(event.key)) pauseFollow();
     };
     const onScroll = () => {
+      const sendScroll = sentMessageScrollRef.current;
+      const isSendAnchor = sendScroll.settling || (sendScroll.scrollTop !== null && Math.abs(el.scrollTop - sendScroll.scrollTop) <= 1);
+      sendScroll.scrollTop = null;
       const movedUp = el.scrollTop < lastScrollTop - 1;
       const movedDown = el.scrollTop > lastScrollTop + 1;
       lastScrollTop = el.scrollTop;
@@ -677,7 +520,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           // Turn navigation and the minimap scroll without wheel/touch events.
           // Moving away from the tail must pause those readers too. A layout
           // change alone must not undo an explicit upward-scroll pause.
-          if (movedUp && !atTail) pauseFollow();
+          // A tail above the viewport means blank filler was overshot, not
+          // that the reader navigated into history. Keep following through it.
+          if (movedUp && markerTop > containerBottom + 80 && !isSendAnchor) pauseFollow();
           if (atTail && (!userPausedSmartFollowRef.current || movedDown)) {
             userPausedSmartFollowRef.current = false;
             followStreamRef.current = true;
@@ -704,7 +549,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("keydown", onKeyDown);
     };
-  }, [scrollContainerRef, messagesEndRef, hasMessages, loading, scrollFollowMode, updateJumpVisibility, isPrependingRef]);
+  }, [scrollContainerRef, messagesEndRef, hasMessages, loading, scrollFollowMode, updateJumpVisibility, isPrependingRef, sentMessageScrollRef]);
 
   // Follow policy at run start. Smart mode starts engaged so the reply is
   // visible without manual work, but the user's upward scroll disengages it.
@@ -737,11 +582,18 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   // Reconcile every kind of output with the reader's existing follow intent.
   // message_end clears streamingMessage before committing the last chunk;
   // bash output and async Markdown layout also grow independently of it.
+  // A long prompt can extend past the viewport before the model emits anything.
+  // Keep its send anchor until there is actual reply content to follow.
+  const awaitingFirstOutput = agentRunning && messages.at(-1)?.role === "user"
+    && !streamState.streamingMessage && !bashRun && !pendingQuestion;
   const reconcileTranscriptTail = useCallback(() => {
     const el = scrollContainerRef.current;
     const end = messagesEndRef.current;
     if (!el || !end || isPrependingRef.current) return;
-    if (followStreamRef.current && end.getBoundingClientRect().top > el.getBoundingClientRect().bottom) {
+    const markerTop = end.getBoundingClientRect().top;
+    const viewport = el.getBoundingClientRect();
+    if (followStreamRef.current && !(awaitingFirstOutput && scrollFollowMode === "smart")
+      && (markerTop > viewport.bottom || markerTop < viewport.top)) {
       // Instant automatic scrolling avoids queuing animations at token rate.
       // The marker precedes the run spacer, so short replies keep their anchor.
       end.scrollIntoView({ behavior: "auto", block: "end" });
@@ -756,7 +608,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     const delta = el.scrollHeight - newBaselineRef.current;
     const lines = delta > 12 ? Math.max(1, Math.round(delta / 24)) : 0;
     setNewLines((v) => (v === lines ? v : lines));
-  }, [agentRunning, messagesEndRef, scrollContainerRef, updateJumpVisibility, isPrependingRef]);
+  }, [agentRunning, awaitingFirstOutput, scrollFollowMode, messagesEndRef, scrollContainerRef, updateJumpVisibility, isPrependingRef]);
 
   useLayoutEffect(() => {
     reconcileTranscriptTail();
@@ -1083,7 +935,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onEphemeralChange={isNew ? setEphemeralNewSession : undefined}
       soundEnabled={soundEnabled}
       onSoundToggle={onSoundToggle}
-      cwd={tgdCwd}
+      cwd={composerCwd}
       persistKey={session?.id ?? (newSessionCwd ? `new:${newSessionCwd}` : null)}
       quote={messageQuote}
       onClearQuote={clearComposerQuote}
@@ -1095,7 +947,16 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const toolExecutionContext = useMemo<ToolExecutionContext>(() => ({
     running: agentRunning,
     activeIds: new Set(agentPhase?.kind === "running_tools" ? agentPhase.tools.map(tool => tool.id) : []),
-  }), [agentRunning, agentPhase]);
+    runStartedAt: agentStartedAt,
+    toolStartedAt: new Map(agentPhase?.kind === "running_tools" ? agentPhase.tools.flatMap(tool => typeof tool.startedAt === "number" ? [[tool.id, tool.startedAt] as const] : []) : []),
+    revealRequest: toolReveal?.sessionId === session?.id ? toolReveal ?? undefined : undefined,
+  }), [agentRunning, agentPhase, agentStartedAt, toolReveal, session?.id]);
+
+  const revealCurrentTool = useCallback((id: string) => {
+    if (!currentTools.some(tool => tool.id === id && tool.canReveal)) return;
+    pauseForHistoryNavigation();
+    setToolReveal(previous => ({ sessionId: session?.id, id, nonce: (previous?.nonce ?? 0) + 1 }));
+  }, [currentTools, pauseForHistoryNavigation, session?.id]);
 
   const recoveredOutputIndices = useMemo(() => {
     const indices = new Set<number>();
@@ -1349,33 +1210,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 </span>
               </div>
             </div>
-            {/* tGD Phase Quick Actions — stroke icons to match the app's icon system */}
-            <div className={styles.quickActionsRow}>
-              {PHASE_ACTIONS.map((phase) => (
-                <button
-                  key={phase.cmd}
-                  onClick={() => runPhase(phase.cmd)}
-                  className={`${styles.phaseButton} ${["/tgd-map", "/tgd-plan", "/tgd-develop"].includes(phase.cmd) ? styles.phaseButtonPrimary : ""}`}
-                  title={`${phase.cmd} — ${t(phase.descKey)}`}
-                >
-                  <span className={styles.phaseIcon} aria-hidden>{phase.icon}</span>
-                  <span className={styles.phaseLabel}>{t(phase.labelKey)}</span>
-                </button>
-              ))}
-            </div>
             {chatInputElement}
           </div>
         </div>
       ) : (
       <>
       <style>{`::highlight(conversation-find) { background: var(--color-warning-bg-strong); color: var(--text); text-decoration: underline var(--color-warning-border); text-decoration-thickness: 1px; }`}</style>
-      {pipelineHidden || (!pipelineRelevant && !idlePipelineExpanded) ? (
-        <button onClick={showPipeline} className={styles.pipelineShow} title={t("chat.showPipeline")}>
-          {t("chat.tgdCompact")} · {t("chat.workflow")} ▸
-        </button>
-      ) : (
-        <TgdPipeline phases={tgdPhases} statusOf={phaseStatusOf} onRun={runPhase} onHide={hidePipeline} feature={currentFeature?.name ?? null} active={activeTgdRun} />
-      )}
       <div className={`${styles.transcriptFrame} relative flex flex-1 overflow-hidden`}>
         {findOpen && (
           <div className={`${styles.findBar} glass absolute right-4 top-2 z-20 flex items-center gap-1 rounded-lg border px-2 py-1 shadow-[var(--color-shadow-dropdown)]`}>
@@ -1525,10 +1365,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <UserQuestionCard key={pendingQuestion.id} cardRef={questionCardRef} request={pendingQuestion} pendingCount={extensionUIState.dialogs.length} onRespond={handleExtensionUIResponse} />
             )}
 
-            {agentRunning && !pendingQuestion && (
-              <RunStatus phase={agentPhase} progress={runProgress} startedAt={agentStartedAt} />
-            )}
-
             {/* End marker sits BEFORE the run spacer: follow mode and the jump
                 button pin to the tail of real content. If the marker came
                 after the spacer, following a stream would park the viewport in
@@ -1553,6 +1389,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       </div>
 
       <div className={`${styles.composerDock} relative`}>
+        {agentRunning && !pendingQuestion && !runtimeFailure && (
+          <RunStatus key={session?.id ?? "new"} phase={agentPhase} progress={runProgress} startedAt={agentStartedAt}
+            lastProgressAtRef={lastProgressAtRef} tools={currentTools} onRevealTool={revealCurrentTool} wide={wideChat} />
+        )}
         <div className={styles.jumpControlRow}>
           {!isParallel && <MobileTurnNavigator
             key={session?.id ?? newSessionCwd ?? "new"}

@@ -66,20 +66,6 @@ for (const style of ["original", "trae"]) {
       await page.getByRole("link", { name: "查看程式", exact: true }).click();
       const panel = page.locator(".right-panel-open");
       await expect(panel.getByTestId("file-viewer-toolbar")).toBeVisible();
-      if (width > 700) {
-        const phase = page.locator('[class*="mobileCurrentLabel"]').first();
-        const overlaps = await phase.evaluate(label => {
-          const progress = label.closest("button")!.querySelector('[class*="mobileProgress"]')!;
-          const counter = progress.getBoundingClientRect();
-          const box = label.getBoundingClientRect();
-          const ink = document.createRange(); ink.selectNodeContents(label);
-          const bounds = ink.getBoundingClientRect();
-          const clips = ["hidden", "clip"].includes(getComputedStyle(label).overflowX);
-          const right = clips ? Math.min(bounds.right, box.right) : bounds.right;
-          return right > counter.left && bounds.left < counter.right && bounds.top < counter.bottom && bounds.bottom > counter.top;
-        });
-        expect(overlaps, "The enlarged current phase must not paint over its progress counter beside a file panel").toBe(false);
-      }
 
       const tab = panel.getByRole("tab", { selected: true });
       await expect(tab).toBeVisible();

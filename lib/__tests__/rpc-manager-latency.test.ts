@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentRunState } from "../agent-run-state";
 import type { AgentSessionLike } from "../pi-types";
 import { AgentSessionWrapper, type AgentEvent } from "../rpc-manager";
 import { createRunTimingExtension } from "../pi-runtime";
@@ -30,6 +31,40 @@ describe("runtime latency boundaries", () => {
     expect(callback(event)).toBeUndefined(); expect(observe).toHaveBeenCalledOnce();
     observe.mockImplementation(() => { throw new Error("diagnostic failed"); });
     expect(() => callback(event)).not.toThrow();
+  });
+
+  it("tracks SDK work independently from extension UI events", () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-29T00:00:00Z"));
+    const { wrapper, emit } = fixture();
+    try {
+      emit({ type: "agent_start" });
+      const progressAt = () => (wrapper.getStreamSnapshot().state as { runState: AgentRunState }).runState.lastProgressAt;
+      const started = progressAt();
+      vi.advanceTimersByTime(10_000);
+      emit({ type: "extension_ui_request", method: "set_status" });
+      expect(progressAt()).toBe(started);
+      emit({ type: "tool_execution_update", toolCallId: "read-1" });
+      expect(progressAt()).toBe(Date.now());
+    } finally { wrapper.destroy(); vi.useRealTimers(); }
+  });
+
+  it("retains per-tool starts and upstream child states in snapshots", () => {
+    vi.useFakeTimers(); vi.setSystemTime(100_000);
+    const { wrapper, emit, events } = fixture();
+    try {
+      emit({ type: "agent_start" });
+      emit({ type: "tool_execution_start", toolCallId: "a", toolName: "read" });
+      vi.advanceTimersByTime(5_000);
+      emit({ type: "tool_execution_start", toolCallId: "b", toolName: "subagent" });
+      emit({ type: "tool_execution_update", toolCallId: "b", partialResult: { details: { progress: [{ index: 0, agent: "scout", status: "running" }] } } });
+      const phase = (wrapper.getStreamSnapshot().state as { runState: AgentRunState }).runState.phase;
+      expect(phase).toMatchObject({ kind: "running_tools", tools: [
+        { id: "a", startedAt: 100_000 }, { id: "b", startedAt: 105_000, children: [{ id: "0", label: "scout", state: "running" }] },
+      ] });
+      expect(events.findLast(event => event.type === "tool_execution_update")?.toolActivity).toMatchObject({ id: "b", startedAt: 105_000 });
+      emit({ type: "tool_execution_end", toolCallId: "a" });
+      expect((wrapper.getStreamSnapshot().state as { runState: AgentRunState }).runState.phase).toMatchObject({ tools: [{ id: "b" }] });
+    } finally { wrapper.destroy(); vi.useRealTimers(); }
   });
 
   it("accepts before snapshot and forwards only observed stages without adding timingId to SDK inputs or replay", async () => {

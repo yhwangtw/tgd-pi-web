@@ -12,11 +12,10 @@ test.describe("tGD artifacts panel", () => {
     await openMain(page);
     await page.getByRole("button", { name: "tGD artifacts" }).click();
 
-    // Project-level docs + the feature dir (with its phase evidence)
+    // Project-level documents and the feature directory
     await expect(page.getByText("CONTEXT.md")).toBeVisible();
     await expect(page.getByText("TRACKING-PLAN.md")).toBeVisible();
-    // Scope to the panel's feature name (title="user-login" exactly) — the
-    // always-visible pipeline bar also shows a "user-login" chip.
+    // Feature names identify document groups without workflow progress.
     await expect(page.getByTitle("user-login", { exact: true })).toBeVisible();
     await expect(page.getByText("PRD.md")).toBeVisible();
     await expect(page.getByText("variant-a.html")).toBeVisible();

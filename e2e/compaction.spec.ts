@@ -6,7 +6,7 @@ test.afterEach(async ({ page }) => {
 });
 
 const SESSION = "aaaa1111-2222-3333-4444-555566667777";
-type Job = { id: string; status: string; reason: string; startedAt: number; error?: string; notice?: string; result?: { tokensBefore: number; estimatedTokensAfter: number } };
+type Job = { id: string; status: string; reason: string; startedAt: number; revision?: number; retry?: { status: "waiting" | "retrying"; attempt: number; maxAttempts: number }; error?: string; notice?: string; result?: { tokensBefore: number; estimatedTokensAfter: number } };
 
 async function enterMessage(page: Page, text: string) {
   const input = page.getByRole("textbox", { name: /^(Message…|Queue a message after compaction…)$/ });
@@ -23,7 +23,7 @@ async function fixture(page: Page, initialOutcome = "running", policy?: PolicyFi
   let queue: object[] = [];
   const commands: Record<string, unknown>[] = [];
   const forbidden: string[] = [];
-  const state = () => ({ isStreaming: false, isCompacting: job?.status === "running", compaction: job, compactionQueue: queue, thinkingLevel: "low",
+  const state = () => ({ isStreaming: false, isCompacting: job?.status === "running", compaction: job ? { ...job, observedAt: Date.now() } : null, compactionQueue: queue, thinkingLevel: "low",
     ...(policy ? { compactionSettings: { enabled: policy.enabled, reserveTokens: policy.reserveTokens, keepRecentTokens: policy.keepRecentTokens }, autoCompactionEnabled: policy.enabled,
       contextUsage: { tokens: policy.tokens, contextWindow: policy.contextWindow, percent: policy.tokens / policy.contextWindow * 100 } } : {}) });
   await page.route((url) => url.pathname.startsWith("/api/"), async route => {
@@ -43,7 +43,7 @@ async function fixture(page: Page, initialOutcome = "running", policy?: PolicyFi
     if (path === `/api/agent/${SESSION}`) {
       commands.push(command);
       let data: unknown = null;
-      if (command.type === "compact") { job = { id: command.requestId, status: initialOutcome, reason: "manual", startedAt: Date.now(), ...(initialOutcome === "skipped" ? { notice: "already_compacted" } : {}) }; data = job; }
+      if (command.type === "compact") { job = { id: command.requestId, status: initialOutcome, reason: "manual", startedAt: Date.now(), revision: 1, ...(initialOutcome === "skipped" ? { notice: "already_compacted" } : {}) }; data = job; }
       else if (command.type === "abort_compaction") { if (job) job = { ...job, status: "cancelled" }; }
       else if (command.type === "queue_compaction_prompt") { queue.push({ id: command.id, message: command.message }); data = { queued: true }; }
       else if (command.type === "clear_compaction_queue") queue = [];
@@ -67,7 +67,9 @@ async function fixture(page: Page, initialOutcome = "running", policy?: PolicyFi
     json: { ...sessionData, context: { ...sessionData.context, model: { provider: "fixture", modelId: "model" } }, agentState: { running: true, state: state() } },
   }));
   await page.route(new RegExp(`/api/agent/${SESSION}/events(?:\\?|$)`), route => route.fulfill({ contentType: "text/event-stream", body: `retry: 60000\ndata: ${JSON.stringify({ type: "session_snapshot", sessionId: SESSION, state: state() })}\n\n` }));
-  return { commands, forbidden, loseJob() { job = null; }, finish(status: string) { if (job) job = { ...job, status, ...(status === "failed" ? { error: "429 rate limit; provider detail should stay collapsed" } : { result: { tokensBefore: 30000, estimatedTokensAfter: 9000 } }) }; } };
+  return { commands, forbidden, loseJob() { job = null; },
+    retry(status: "waiting" | "retrying") { if (job) job = { ...job, revision: (job.revision ?? 0) + 1, retry: { status, attempt: 1, maxAttempts: 3 } }; },
+    finish(status: string) { if (job) job = { ...job, status, retry: undefined, revision: (job.revision ?? 0) + 1, ...(status === "failed" ? { error: "429 rate limit; provider detail should stay collapsed" } : { result: { tokensBefore: 30000, estimatedTokensAfter: 9000 } }) }; } };
 }
 
 for (const style of ["original", "trae"]) for (const width of [320, 390, 1440, 1920]) {
@@ -144,6 +146,34 @@ test("resolved policy is user-opened while the warning follows the actual model 
   expect(backend.commands.filter(command => command.type === "compact")).toHaveLength(1);
   expect(backend.forbidden).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});
+
+test("elapsed time and actual retry survive session switches and reload without restarting compact", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("pi-locale", "en"));
+  const backend = await fixture(page);
+  await page.goto(`/?session=${SESSION}`);
+  await enterMessage(page, "/compact preserve context");
+  const status = page.getByTestId("compaction-status");
+  const elapsed = status.getByTestId("compaction-elapsed");
+  await expect(status).toHaveAttribute("data-state", "running");
+  await expect(elapsed).toHaveAttribute("aria-label", /^Elapsed /);
+  await expect(elapsed).not.toHaveText("· 0s", { timeout: 5000 });
+  backend.retry("waiting");
+  await expect(status).toContainText("Waiting to retry (1/3)", { timeout: 6000 });
+  await page.reload();
+  await expect(status).toContainText("Waiting to retry (1/3)");
+  await expect(elapsed).not.toHaveText("· 0s");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByText("專案架構分析", { exact: true }).first().click();
+  await expect(status).toContainText("Waiting to retry (1/3)");
+  await expect(elapsed).not.toHaveText("· 0s");
+  backend.retry("retrying");
+  await expect(status).toContainText("Retrying (1/3)", { timeout: 6000 });
+  backend.finish("completed");
+  await expect(status).toHaveAttribute("data-state", "completed", { timeout: 6000 });
+  await expect(elapsed).toHaveCount(0);
+  expect(backend.commands.filter(command => command.type === "compact")).toHaveLength(1);
+  expect(backend.forbidden).toEqual([]);
 });
 
 test("no-op is neutral and failure details/retry are inline", async ({ page }) => {

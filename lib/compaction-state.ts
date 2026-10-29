@@ -1,8 +1,17 @@
+export interface CompactionRetry {
+  status: "waiting" | "retrying";
+  attempt: number;
+  maxAttempts: number;
+}
+
 export interface CompactionState {
   id: string;
   status: "running" | "completed" | "skipped" | "cancelled" | "failed";
   reason: string;
   startedAt: number;
+  observedAt?: number;
+  revision?: number;
+  retry?: CompactionRetry;
   result?: { tokensBefore: number; estimatedTokensAfter: number };
   notice?: "already_compacted" | "nothing_to_compact";
   error?: string;
