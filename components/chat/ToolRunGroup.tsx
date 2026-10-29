@@ -1,11 +1,12 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Check, ChevronDown, Clock3, CircleMinus, LoaderCircle, TriangleAlert } from "lucide-react";
 import type { ToolCallContent, ToolResultMessage } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { toolExecutionState, toolGroupState, toolStateLabel, type ToolExecutionContext } from "@/lib/tool-execution-state";
+import { useRequestedDisclosure } from "./use-requested-disclosure";
 import styles from "./ToolRunGroup.module.css";
 
 export interface ToolRunItem {
@@ -21,7 +22,8 @@ interface Props {
 }
 
 export function ToolRunGroup({ items, executionContext, children }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const request = executionContext?.revealRequest;
+  const [expanded, setExpanded] = useRequestedDisclosure(items.some(item => item.block.toolCallId === request?.id) ? request?.nonce : undefined);
   const { t } = useI18n();
   const states = items.map(item => toolExecutionState(item.block.toolCallId, item.result, executionContext));
   const state = toolGroupState(states);

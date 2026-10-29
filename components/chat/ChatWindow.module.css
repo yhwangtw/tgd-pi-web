@@ -112,68 +112,13 @@
   color: var(--text);
 }
 
-/* Quick actions */
-.quickActionsRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-bottom: 16px;
-  margin-left: 16px;
-  margin-right: 52px;
-}
 
-.phaseButton {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  color: var(--text);
-  transition:
-    border-color var(--motion-normal) var(--ease-standard),
-    background var(--motion-normal) var(--ease-standard),
-    box-shadow var(--motion-normal) var(--ease-standard),
-    transform var(--motion-fast) var(--ease-standard);
-  min-height: 36px;
-}
 
-.phaseButton:hover {
-  border-color: var(--border-subtle);
-  background: var(--bg-hover);
-}
 
-.phaseButtonPrimary {
-  background: var(--bg-elev-1);
-  border-color: var(--border);
-}
 
-.phaseButtonPrimary:hover {
-  border-color: var(--color-accent-border-focus);
-}
 
-.phaseIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--component-icon-button-glyph-default);
-  height: var(--component-icon-button-glyph-default);
-  border-radius: var(--radius-control-compact);
-  background: transparent;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
 
-.phaseButtonPrimary .phaseIcon {
-  color: var(--accent-text);
-}
 
-.phaseLabel {
-  font-weight: var(--weight-medium);
-}
 
 /* Ripple animation */
 .dropRipple {
@@ -290,23 +235,6 @@
   font-weight: var(--weight-semibold);
 }
 
-/* Collapsed tGD pipeline — click to bring the bar back */
-.pipelineShow {
-  align-self: flex-start;
-  min-height: var(--control-xs);
-  margin: 3px 0 0 12px;
-  font-family: var(--font-ui);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-wide);
-  color: var(--text-dim);
-  background: none;
-  border: none;
-  border-radius: var(--radius-control-compact);
-  cursor: pointer;
-  padding: var(--space-optical) var(--space-1);
-}
-.pipelineShow:hover { background: var(--bg-hover); color: var(--color-accent); }
 
 .emptyNew,
 .emptyNewInner,
@@ -373,27 +301,73 @@
 }
 
 .runStatus {
+  width: 100%;
   min-height: var(--control-md);
-  display: flex;
-  align-items: center;
-  padding: var(--space-2) 0;
+  padding: var(--space-1) var(--component-chat-minimap-gutter) var(--space-1) var(--space-4);
   color: var(--text-muted);
   font-size: var(--text-xs);
   line-height: var(--leading-ui);
 }
 
+.runStatusWide .runStatusVisual { max-width: 1040px; }
+
 .runStatusVisual {
-  display: inline-flex;
+  max-width: 780px;
+  margin-inline: auto;
+  display: flex;
+  flex-wrap: wrap;
+  position: relative;
   min-width: 0;
-  max-width: 100%;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) calc(var(--space-8) + var(--space-2)) var(--space-2) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--bg-elev-1);
+}
+
+.runStatusHeading {
+  display: flex;
+  flex: 1 1 180px;
+  min-width: 0;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-pill);
-  background: var(--bg-elev-1);
-  box-shadow: var(--color-shadow-control);
 }
+
+.runStatusToolPreview {
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: var(--space-1);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 44ch;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: inherit;
+}
+
+.runStatusMeta {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+}
+
+.runStatusMeta > span { min-width: 0; overflow-wrap: anywhere; }
+.runStatusMeta > span + span::before { content: "·"; margin-right: var(--space-2); }
+.runStatusLastProgress { font-variant-numeric: tabular-nums; }
 
 .runStatusIcon {
   flex: 0 0 auto;
@@ -405,13 +379,62 @@
   background: color-mix(in srgb, var(--color-accent-bg-subtle) 55%, var(--bg-elev-1));
 }
 .runStatus[data-progress-state="normal"] .runStatusIcon { color: var(--accent-text); }
-.runStatus[data-progress-state="stalled"] .runStatusVisual,
 .runStatus[data-progress-state="reconnecting"] .runStatusVisual {
   border-color: var(--color-warning-border);
   background: color-mix(in srgb, var(--color-warning-bg) 55%, var(--bg-elev-1));
 }
-.runStatus[data-progress-state="stalled"] .runStatusIcon,
 .runStatus[data-progress-state="reconnecting"] .runStatusIcon { color: var(--color-warning-text); }
+
+.runStatusToggle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+.runStatusToggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.runStatusToggle:hover, .runStatusToolPreview:hover { color: var(--text); background: var(--bg-hover); }
+.runStatus button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.runStatusDetails {
+  flex: 1 0 100%;
+  min-width: 0;
+  max-height: 38dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-2);
+  font-size: var(--text-xs);
+}
+.runStatusDetails p { margin: 0; }
+.runStatusHint { color: var(--text-dim); line-height: var(--leading-body); }
+.runStatusTools, .runStatusChildren { list-style: none; margin: 0; padding: 0; }
+.runStatusTools > li { padding-block: var(--space-2); }
+.runStatusTools > li + li { border-top: 1px solid var(--border-subtle); }
+.runStatusToolHeading { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.runStatusToolHeading button {
+  min-height: 36px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  background: var(--bg-elev-1);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.runStatusToolHeading button:disabled { cursor: default; }
+.runStatusToolHeading span { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.runStatusTarget { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); }
+.runStatusChildren { display: grid; gap: var(--space-2); padding-top: var(--space-2); }
+.runStatusChildren li { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
+.runStatusChildren li > span + span { color: var(--text-dim); }
+.runStatusChildren code { flex: 1 0 100%; overflow-wrap: anywhere; font-family: var(--font-mono); }
 
 .runStatusMessage {
   min-width: 0;
@@ -510,31 +533,9 @@
     display: none;
   }
 
-  .quickActionsRow {
-    flex-wrap: nowrap;
-    gap: var(--space-2);
-    margin: 0 0 12px;
-    padding: 0 var(--space-1) var(--space-1);
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-    scrollbar-width: none;
-  }
 
-  .quickActionsRow::-webkit-scrollbar {
-    display: none;
-  }
 
-  .phaseButton {
-    min-width: max-content;
-    min-height: 40px;
-    padding: var(--space-2) var(--space-2);
-    scroll-snap-align: start;
-  }
 
-  .pipelineShow {
-    min-height: 32px;
-    padding: var(--space-1) var(--space-2);
-  }
 
   .transcriptScroll {
     padding-top: var(--space-2);
@@ -555,8 +556,15 @@
 
   .runStatus {
     min-height: var(--control-touch);
-    padding-right: var(--component-chat-minimap-gutter);
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
   }
+
+  .runStatusHeading { flex-basis: 100%; }
+  .runStatusToolPreview { display: none; }
+  .runStatusToggle { width: 44px; height: 44px; }
+  .runStatusToolHeading button { min-height: 44px; }
+  .runStatusVisual { padding-right: calc(var(--space-8) + var(--space-4)); }
 
   .jumpControlRow { padding-inline: var(--space-2); justify-content: flex-end; }
 
@@ -622,9 +630,7 @@
   }
 }
 
-/* TRAE Work keeps the conversation itself quiet. Hierarchy comes from space,
-   not full-width rules, while the empty-state actions settle near the
-   composer like the mobile launch screen. */
+/* TRAE Work keeps the conversation quiet through spacing. */
 :global(html[data-ui-style="trae"]) .transcriptScroll {
   padding-top: var(--space-4);
   background: var(--bg);
@@ -645,33 +651,10 @@
   box-shadow: none;
 }
 
-:global(html[data-ui-style="trae"]) .quickActionsRow {
-  gap: var(--space-2);
-  margin-bottom: 20px;
-}
 
-:global(html[data-ui-style="trae"]) .phaseButton {
-  min-height: 42px;
-  padding: var(--space-2) var(--space-3);
-  border-color: transparent;
-  border-radius: var(--radius-control-prominent);
-  background: transparent;
-  box-shadow: none;
-}
 
-:global(html[data-ui-style="trae"]) .phaseButton:hover {
-  border-color: var(--border-subtle);
-  background: var(--bg-hover);
-}
 
-:global(html[data-ui-style="trae"]) .phaseButtonPrimary {
-  border-color: var(--border);
-  background: var(--bg-elev-1);
-}
 
-:global(html[data-ui-style="trae"]) .phaseButtonPrimary:hover {
-  border-color: var(--color-accent-border-focus);
-}
 
 :global(html[data-ui-style="trae"]) .unreadDivider {
   justify-content: center;
@@ -698,25 +681,7 @@
     display: none;
   }
 
-  :global(html[data-ui-style="trae"]) .quickActionsRow {
-    width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-1);
-    margin: auto 0 12px;
-    padding: 0 var(--space-2);
-    overflow: visible;
-  }
 
-  :global(html[data-ui-style="trae"]) .phaseButton {
-    min-width: 0;
-    max-width: 100%;
-    min-height: var(--control-touch);
-    padding: var(--space-2);
-    border-radius: var(--radius-control-prominent);
-    scroll-snap-align: unset;
-  }
 
   :global(html[data-ui-style="trae"]) .transcriptScroll {
     padding-top: var(--space-3);
@@ -763,3 +728,14 @@
 }
 .historyControls button:hover { background: var(--bg-hover); color: var(--text); }
 .historyControls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+:global(html[data-ui-style="trae"]) .runStatus {
+  padding-left: var(--space-6);
+  padding-right: var(--component-composer-action-gutter);
+}
+@media (max-width: 700px) {
+  :global(html[data-ui-style="trae"]) .runStatus {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+  }
+}

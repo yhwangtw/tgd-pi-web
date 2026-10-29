@@ -429,10 +429,28 @@ extra poller. Old browser receipts remain usable until confirmed by viewing cont
 - This is an in-process local scheduler: the production Node server must stay
   running for on-time execution. It is intentionally not an OS daemon.
 
+### Run activity
+
+- Total time uses the same authoritative run start in the dock and active work log. Individual tools use their SDK start event; absent timing is omitted instead of inferred from a message timestamp. Reconnect snapshots preserve these starts and map server/browser clock skew.
+- The disclosure lists all active call IDs and accepts only the public `pi-subagents` `Details.progress` states for individual children. Unknown/unreported child states are not inferred from launch arguments. Progress metadata is bounded; it does not introduce provider calls or polling.
+- Selecting a tool explicitly opens the owning work log and that call, focuses its header and pauses history follow. The request is session scoped; user toggles still control disclosures afterward.
+- Quiet/reconnecting headers say “Last state”. Only an actual reconnect gets warning styling. Mobile defaults to phase, total and freshness; full targets and connection meaning are accessible in a keyboard/touch disclosure.
+
+`RunStatus` lives outside the transcript in the composer dock, so it remains
+visible while reading history. Its one-second clock rerenders only the monitor;
+`lastProgressAtRef` tracks received model/tool events independently of SSE
+keepalive comments, extension UI messages and latency receipts. Server snapshots
+and the browser share `isRunProgressEvent`; reconnects restore the run clock.
+An open connection is not proof of provider computation. Quiet status retains
+the last reported phase, and active work-log summaries remain visible while
+parameters, results and provider-supplied reasoning stay expandable.
+
 ### Scroll contract (ChatWindow + useAgentSession)
-- On send: user message anchors to the viewport top immediately (never smooth;
-  fast replies can otherwise finish before the anchor animation); a
-  viewport-height spacer below lets the answer stream in without jumps.
+- On send: smart/always mode anchors a short user message in the upper quarter;
+  tall messages get room for their beginning. Preserve mode reveals only what
+  is needed. Immediate positioning settles after nested layout commits (two
+  stable frames, four at most), cancels on reader input, and is not mistaken
+  for an upward-reading pause. A three-quarter-viewport spacer leaves reply room.
 - End of run: never infer follow intent from the post-layout distance. Removing
   the viewport spacer can clamp `scrollTop` to the new maximum and make an
   anchored reader look like they were at the tail. Shrink the spacer to the
@@ -442,7 +460,10 @@ extra poller. Old browser receipts remain usable until confirmed by viewing cont
   jump button) — content growth never changes engagement. Instant scrolls,
   not smooth (smooth queues jitter at token rate).
 - Jump-to-bottom uses `block:"end"` — `block:"start"` + spacer can scroll the
-  conversation out of the viewport.
+  conversation out of the viewport. When following, correct a tail that shifted
+  above the viewport rather than leaving the reader in blank filler. Do not
+  mistake that overshoot for reading earlier history; real upward input and
+  navigation with the tail below the viewport still pause smart following.
 - **The end marker renders BEFORE the run spacer.** Follow mode and the jump
   button pin to the marker; if it sat after the spacer, following a stream
   would park the viewport in the spacer's blank space instead of on the text.
@@ -527,34 +548,18 @@ PRD/SPEC/DESIGN/TASKS/TEST-REPORT/REVIEW/METRICS + `prototype/*.html`; release
 also maintains top-level `CHANGELOG.md` and optional `REGRESSION-CATALOG.md`.
 `resolveTgdDir(cwd)` finds it;
 `getAllowedRoots()` adds it so the file viewer can open those docs. The `tgd`
-rail view lists them and maps docs → phases (PRD/SPEC→define, TASKS→plan,
-TEST-REPORT→verify, REVIEW→review, METRICS→release) for the pipeline echo.
+rail view lists these documents on demand without computing phase completion.
 `.scans/` and dot-dirs are infra, excluded. API: `GET /api/tgd/artifacts`.
 The panel has two views (toggle persisted in `localStorage["pi-tgd-artifacts-view"]`):
-**Artifacts** (the curated per-feature/phase view above) and **Files** — a lazy
+**Artifacts** (the curated per-feature document view above) and **Files** — a lazy
 tree of the *whole* tGD dir (nothing excluded: `.scans/`, `wiki/docs/`, prototypes),
 built on the existing `GET /api/files/<abs>?type=list` endpoint (the tGD dir is an
 allowed root, so its subtree lists/reads without extra wiring).
 
-### tGD pipeline (`components/chat/TgdPipeline.tsx`)
-Always-visible phase bar at the top of the session view. `PHASE_ACTIONS`
-(ChatWindow) is the source of the seven phases. Status is **hybrid**: ChatWindow
-fetches `/api/tgd/artifacts?cwd=` and marks `map`/`define`/`plan` done from real
-on-disk artifacts (same truth as the artifacts panel — `map` = CONTEXT/wiki
-exists, `define`/`plan` = the current feature's `phasesDone`, plan also if
-`TRACKING-PLAN.md` exists). Verify/review/release also use the current feature's
-TEST-REPORT/REVIEW/METRICS evidence; `develop` remains transcript-driven because
-it produces code rather than a tGD document. Disk evidence is unioned with the
-session's invoked `/tgd-*`. `current` = the last `/tgd-*` typed this session, else the next phase
-after the furthest with evidence (so a fresh project highlights `map`). The bar
-is **feature-aware**: the tracked feature is the one named in the last `/tgd-*`
-command if it matches a feature dir, else the most-recently-touched feature
-(`TgdFeature.mtimeMs`), shown as a chip. Artifacts are refetched on cwd change
-and whenever the agent stops. Clicking a phase calls
-`chatInputRef.setText("/tgd-x ")` (no auto-send). Dismiss state is
-`localStorage["pi-tgd-pipeline-hidden"]`. The current phase carries
-`aria-current="step"` (stable test hook); the feature chip is
-`[class*="TgdPipeline_feature"]`.
+Chat sessions do not scan transcripts for `/tgd-*` commands or request the
+artifact endpoint to infer workflow progress. There is no phase bar, restore chip,
+or phase action row in the welcome composer. Manually invoking an available
+slash command still follows the normal Pi command path.
 
 ### Prompt templates
 User-defined reusable prompts. Server (`/api/prompts`, `<agent-dir>/prompts.json`)

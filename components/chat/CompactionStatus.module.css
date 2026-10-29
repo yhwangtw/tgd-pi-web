@@ -34,6 +34,7 @@
 .panel summary { cursor: pointer; margin-top: var(--space-1); }
 .panel pre { max-height: 120px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 .tokens { font-variant-numeric: tabular-nums; }
+.elapsed { flex-shrink: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .dismiss { flex-shrink: 0; display: grid; place-items: center; width: 32px; }
 .spinner { animation: spin 1s linear var(--motion-loop-count, infinite); }
 @keyframes spin { to { transform: rotate(360deg); } }

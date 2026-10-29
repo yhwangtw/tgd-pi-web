@@ -1,5 +1,6 @@
 "use client";
 
+import { localToolClock, type ActiveTool } from "@/lib/tool-activity";
 import { keepActivePhase, phaseForMessage, restoreRunClock, type AgentRunState } from "@/lib/agent-run-state";
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useReducer, useMemo } from "react";
 import type { AgentMessage } from "@/lib/types";
@@ -188,16 +189,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     runIdRef.current = clock.id;
     // A slower reconnect response must never make the same run count backwards.
     setAgentStartedAt(current => sameRun && current !== null ? Math.min(current, clock.startedAt) : clock.startedAt);
-    setAgentPhase(run.phase);
-    agentPhaseRef.current = run.phase;
+    const phase = run.phase?.kind === "running_tools"
+      ? { ...run.phase, tools: run.phase.tools.map(tool => localToolClock(tool, run.observedAt)) } : run.phase;
+    setAgentPhase(phase);
+    agentPhaseRef.current = phase;
     lastEventAtRef.current = clock.lastProgressAt;
     resetRunProgress(classifyRunProgress(Math.max(0, Math.floor((Date.now() - clock.lastProgressAt) / 1000)), run.phase, connectionState));
     return true;
   }, [connectionState, lastEventAtRef, resetRunProgress]);
   const {
     initialScrollDoneRef, lastUserMsgRef, pendingScrollToUserRef,
-    messagesEndRef, scrollContainerRef,
-  } = useTranscriptScroll(messages.length, agentRunning, agentRunningRef, session?.id ?? null);
+    messagesEndRef, scrollContainerRef, sentMessageScrollRef,
+  } = useTranscriptScroll(messages.length, agentRunning, agentRunningRef, session?.id ?? null, streamState.streamingMessage !== null);
   const {
     modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps,
     newSessionModel, setNewSessionModel,
@@ -670,8 +673,27 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setAgentPhase((prev) => {
           if (prev?.kind === "stopping") return prev;
           const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
-          if (!tools.some((t) => t.id === id)) tools.push({ id, name, ...(label ? { label } : {}) });
+          const observed = event.toolActivity as ActiveTool | undefined;
+          const activity = observed?.id === id && observed.name === name
+            ? localToolClock(observed, Number(event.observedAt))
+            : { id, name, startedAt: event.replayed ? undefined : Date.now(), ...(label ? { label } : {}) };
+          if (!tools.some((t) => t.id === id)) tools.push(activity);
           return { kind: "running_tools", tools };
+        });
+        break;
+      }
+      case "tool_execution_update": {
+        const observed = event.toolActivity as ActiveTool | undefined;
+        if (!observed || observed.id !== event.toolCallId) break;
+        setAgentPhase(previous => {
+          if (previous?.kind !== "running_tools") return previous;
+          const index = previous.tools.findIndex(tool => tool.id === observed.id && tool.name === observed.name);
+          if (index < 0) return previous;
+          const current = previous.tools[index];
+          if (JSON.stringify(current.children) === JSON.stringify(observed.children)) return previous;
+          const tools = [...previous.tools];
+          tools[index] = { ...localToolClock(observed, Number(event.observedAt)), startedAt: current.startedAt };
+          return { ...previous, tools };
         });
         break;
       }
@@ -738,7 +760,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, []);
 
-  // Shared by the tGD-command and plain-prompt paths of handleSend: create a
+  // Shared by slash-command and plain-prompt paths of handleSend: create a
   // new agent session with the current model/tool/thinking selections, wire up
   // SSE, and notify the parent.
   const createNewSession = useCallback(async (
@@ -1420,10 +1442,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleRetryCompaction: compaction.retry,
     handleCheckCompaction: compaction.check, handleDismissCompaction: compaction.dismiss, handleClearCompactionQueue: compaction.clearQueue,
     agentPhase, agentStartedAt, queuedFollowUps, queueUpdating, bashRun, runProgress, extensionUIState,
+    lastProgressAtRef: lastEventAtRef,
     isNew,
     // Refs
     sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
-    lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef,
+    lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef, sentMessageScrollRef,
     // Actions
     handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,

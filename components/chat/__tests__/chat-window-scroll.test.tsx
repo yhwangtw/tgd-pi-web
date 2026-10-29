@@ -22,10 +22,12 @@ const fixture = vi.hoisted(() => ({
   getGenerationMetrics: vi.fn(() => undefined),
   openQuote: null as ((entryId: string) => void) | null,
   quote: null as { entryId: string; role: "user" | "assistant"; text: string } | null,
+  sentScroll: null as React.RefObject<{ settling: boolean; scrollTop: number | null }> | null,
 }));
 vi.mock("@/hooks/useAgentSession", () => ({ useAgentSession: () => {
   const running = useRef(fixture.state.agentRunning); running.current = fixture.state.agentRunning;
-  const refs = useTranscriptScroll(fixture.state.messages.length, fixture.state.agentRunning, running);
+  const refs = useTranscriptScroll(fixture.state.messages.length, fixture.state.agentRunning, running, undefined, fixture.state.streamState.streamingMessage !== null);
+  fixture.sentScroll = refs.sentMessageScrollRef;
   const handler = useRef(null);
   return { ...fixture.state, ...refs, handleAgentEventRef: handler, getGenerationMetrics: fixture.getGenerationMetrics };
 } }));
@@ -49,7 +51,6 @@ vi.mock("@/components/chat/UserQuestionCard", () => ({ UserQuestionCard: () => n
 vi.mock("@/components/chat/ChatMinimap", () => ({ ChatMinimap: () => null, useMessageRefs: () => useRef([]) }));
 vi.mock("@/components/chat/BashBlock", () => ({ BashBlock: () => <div>bash</div> }));
 vi.mock("@/components/chat/CollapsibleMessage", () => ({ CollapsibleMessage: ({ children }: { children: ReactNode }) => children }));
-vi.mock("@/components/chat/TgdPipeline", () => ({ TgdPipeline: () => null }));
 vi.mock("@/components/chat/QueuedFollowUps", () => ({ QueuedFollowUps: () => null }));
 vi.mock("@/components/chat/CompactionStatus", () => ({ CompactionStatus: () => null }));
 vi.mock("@/components/chat/ProviderRecoveryBanner", () => ({ ProviderRecoveryBanner: () => null }));
@@ -105,6 +106,16 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); resizeObservers.clear(); });
 
+it("keeps a long sent prompt anchored while waiting for the first model output", async () => {
+  fixture.state.streamState = { isStreaming: true, streamingMessage: null };
+  await render(); scrollIntoView.mockClear(); markerTop = 1_400;
+  await resize();
+  expect(scrollIntoView).not.toHaveBeenCalled();
+  fixture.state.streamState = { isStreaming: true, streamingMessage: answer("First reply text") };
+  await render();
+  expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "end" });
+});
+
 it("follows a growing text stream", async () => {
   await render(); scrollIntoView.mockClear(); markerTop = 800;
   fixture.state.streamState = { isStreaming: true, streamingMessage: answer("longer") };
@@ -153,6 +164,29 @@ it("follows bash output even in always mode", async () => {
   fixture.state.bashRun = { command: "fixture", output: "line1\nline2", running: true };
   await render(); expect(scrollIntoView).toHaveBeenCalled();
 });
+it("does not mistake the send anchor correction for a reader scrolling upward", async () => {
+  await render();
+  await act(async () => { scroller().scrollTop = 400; scroller().dispatchEvent(new Event("scroll")); });
+  markerTop = 1_000;
+  fixture.sentScroll!.current.settling = false;
+  fixture.sentScroll!.current.scrollTop = 200;
+  await act(async () => { scroller().scrollTop = 200; scroller().dispatchEvent(new Event("scroll")); });
+  scrollIntoView.mockClear();
+  fixture.state.streamState = { isStreaming: true, streamingMessage: answer("Output after send correction") };
+  await render();
+  expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "end" });
+});
+
+it("still honors an upward wheel while a sent message is settling", async () => {
+  await render();
+  fixture.sentScroll!.current.settling = true;
+  scrollIntoView.mockClear(); markerTop = 1_000;
+  await act(async () => { scroller().dispatchEvent(new WheelEvent("wheel", { deltaY: -100 })); scroller().dispatchEvent(new Event("scroll")); });
+  fixture.state.streamState = { isStreaming: true, streamingMessage: answer("Reader paused this output") };
+  await render();
+  expect(scrollIntoView).not.toHaveBeenCalled();
+});
+
 it("upward wheel pauses smart follow", async () => {
   await render(); scrollIntoView.mockClear(); markerTop = 900;
   await act(async () => { scroller().dispatchEvent(new WheelEvent("wheel", { deltaY: -200 })); scroller().dispatchEvent(new Event("scroll")); });
@@ -168,6 +202,29 @@ it("Latest resumes smart follow for subsequent text", async () => {
   await render(); expect(scrollIntoView).toHaveBeenCalled();
 });
 
+
+it("keeps Latest on real content when late history layout overshoots into the spacer", async () => {
+  await render(); markerTop = 900;
+  await act(async () => { scroller().dispatchEvent(new WheelEvent("wheel", { deltaY: -200 })); scroller().dispatchEvent(new Event("scroll")); });
+  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Jump to bottom"]')!.click());
+  await act(async () => { scroller().scrollTop = 400; scroller().dispatchEvent(new Event("scroll")); });
+  scrollIntoView.mockClear(); markerTop = -120;
+  await act(async () => { scroller().scrollTop = 100; scroller().dispatchEvent(new Event("scroll")); });
+  await resize();
+  expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "end" });
+});
+
+it("reader pointer navigation still pauses after an explicit Latest request", async () => {
+  await render(); markerTop = 900;
+  await act(async () => { scroller().dispatchEvent(new WheelEvent("wheel", { deltaY: -200 })); scroller().dispatchEvent(new Event("scroll")); });
+  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Jump to bottom"]')!.click());
+  await act(async () => { scroller().scrollTop = 400; scroller().dispatchEvent(new Event("scroll")); });
+  await act(async () => scroller().dispatchEvent(new Event("pointerdown", { bubbles: true })));
+  scrollIntoView.mockClear(); markerTop = 1_000;
+  await act(async () => { scroller().scrollTop = 100; scroller().dispatchEvent(new Event("scroll")); });
+  await resize();
+  expect(scrollIntoView).not.toHaveBeenCalled();
+});
 
 it("follows tool-result commits while no text stream is active", async () => {
   fixture.state.messages.push({ ...answer(""), content: [{ type: "toolCall", toolCallId: "tool1", toolName: "read", input: { path: "fixture.txt" } }] });

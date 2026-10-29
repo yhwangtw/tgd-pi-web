@@ -1,10 +1,12 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Check, ChevronDown, Clock3, CircleMinus, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { toolStateLabel, type ToolExecutionState } from "@/lib/tool-execution-state";
+import { ElapsedTime } from "./ElapsedTime";
+import { useRequestedDisclosure } from "./use-requested-disclosure";
 import styles from "./TurnActivityGroup.module.css";
 
 interface Props {
@@ -14,11 +16,14 @@ interface Props {
   failed: number;
   elapsed?: number;
   state?: ToolExecutionState;
+  activeSummary?: string;
+  startedAt?: number | null;
+  revealRequest?: number;
   children: ReactNode;
 }
 
-export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed, state = failed ? "error" : "success", children }: Props) {
-  const [expanded, setExpanded] = useState(false);
+export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed, state = failed ? "error" : "success", activeSummary, startedAt, revealRequest, children }: Props) {
+  const [expanded, setExpanded] = useRequestedDisclosure(revealRequest);
   const rootRef = useRef<HTMLElement | null>(null);
   const pendingScrollRef = useRef<{
     container: HTMLElement;
@@ -39,7 +44,7 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
     `${steps} ${stepLabel}`,
     tools > 0 ? `${tools} ${toolLabel}` : null,
     filesChanged > 0 ? `${filesChanged} ${fileLabel}` : null,
-    elapsed !== undefined && elapsed > 0 ? `${elapsed}s` : null,
+    !active && elapsed !== undefined && elapsed > 0 ? `${elapsed}s` : null,
   ].filter(Boolean).join(" · ");
 
   const toggleExpanded = () => {
@@ -99,10 +104,14 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
         <span className={styles.meta}>
           {tools > 0 ? <span>{tools} {toolLabel}</span> : <span>{steps} {stepLabel}</span>}
           {filesChanged > 0 && <span>{filesChanged} {fileLabel}</span>}
-          {elapsed !== undefined && elapsed > 0 && <span>{elapsed}s</span>}
+          {active && startedAt != null ? <ElapsedTime startedAt={startedAt} label="chat.runElapsed" testId="work-log-elapsed" />
+            : !active && elapsed !== undefined && elapsed > 0 && <span>{elapsed}s</span>}
         </span>
         <ChevronDown className={styles.chevron} size={UI_ICON_SIZE.inline} aria-hidden />
       </button>
+      {active && !expanded && activeSummary && (
+        <div className={styles.activeSummary} data-testid="active-work-summary" title={activeSummary}>{activeSummary}</div>
+      )}
       {expanded && <div className={styles.body}>{children}</div>}
     </section>
   );

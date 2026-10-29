@@ -444,7 +444,7 @@
 .exportMenu {
   /* Portalled to <body> and positioned from the button rect (inline style) —
      inside the top bar the backdrop-filter stacking context painted it under
-     the tGD pipeline bar, and .chatActions' overflow-x clipped it. */
+     the chat content, and .chatActions' overflow-x clipped it. */
   position: fixed;
   box-sizing: border-box;
   background: var(--bg-elev-2);

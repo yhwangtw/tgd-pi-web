@@ -11,14 +11,12 @@ import s from "./TgdArtifactsPanel.module.css";
 interface ArtifactFile {
   name: string;
   path: string;
-  phase?: string;
 }
 interface Feature {
   name: string;
   path: string;
   docs: ArtifactFile[];
   prototypes: ArtifactFile[];
-  phasesDone: string[];
 }
 interface Artifacts {
   exists: boolean;
@@ -33,8 +31,6 @@ interface Props {
   onOpenFile: (filePath: string, fileName: string) => void;
 }
 
-// The 7 phases in order, with which artifact-derived evidence marks them done.
-const PHASES = ["map", "define", "plan", "develop", "verify", "review", "release"] as const;
 function fileIcon(name: string) {
   return name.endsWith(".html")
     ? <FileCode2 size={UI_ICON_SIZE.compact} aria-hidden="true" />
@@ -194,18 +190,6 @@ export function TgdArtifactsPanel({ cwd, refreshKey, onOpenFile }: Props) {
             <div key={feat.path} className={s.feature}>
               <div className={s.featureHead}>
                 <span className={s.featureName} title={feat.name}>{feat.name}</span>
-              </div>
-              {/* phase correspondence — which phases this feature has evidence for */}
-              <div className={s.phases}>
-                {PHASES.map((p) => {
-                  const done = feat.phasesDone.includes(p);
-                  const label = t(`phase.label.${p}` as "phase.label.map" | "phase.label.define" | "phase.label.plan" | "phase.label.develop" | "phase.label.verify" | "phase.label.review" | "phase.label.release");
-                  return (
-                    <span key={p} className={`${s.phaseChip} ${done ? s.phaseDone : s.phaseTodo}`} title={done ? `${label} — ${t("tgd.hasArtifacts")}` : label}>
-                      {label}
-                    </span>
-                  );
-                })}
               </div>
               {feat.docs.map(fileRow)}
               {feat.prototypes.length > 0 && (

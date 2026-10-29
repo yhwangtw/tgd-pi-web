@@ -31,8 +31,6 @@ export function resolveTgdDir(cwd: string): string | null {
 export interface TgdArtifactFile {
   name: string;
   path: string;
-  /** which tGD phase produced it (for pipeline correspondence) */
-  phase?: string;
 }
 
 export interface TgdFeature {
@@ -40,10 +38,6 @@ export interface TgdFeature {
   path: string;
   docs: TgdArtifactFile[];
   prototypes: TgdArtifactFile[];
-  /** phase slugs this feature has completed evidence for */
-  phasesDone: string[];
-  /** newest mtime across the feature's docs — used to pick the "current" feature */
-  mtimeMs: number;
 }
 
 export interface TgdArtifacts {
@@ -54,16 +48,6 @@ export interface TgdArtifacts {
   features: TgdFeature[];
 }
 
-// Which document maps to which phase — used for the pipeline correspondence.
-const DOC_PHASE: Record<string, string> = {
-  "PRD.md": "define",
-  "SPEC.md": "define",
-  "DESIGN.md": "define",
-  "TASKS.md": "plan",
-  "TEST-REPORT.md": "verify",
-  "REVIEW.md": "review",
-  "METRICS.md": "release",
-};
 const FEATURE_DOC_ORDER = [
   "PRD.md",
   "SPEC.md",
@@ -101,7 +85,6 @@ function readPrototypeFiles(protoDir: string): TgdArtifactFile[] {
         prototypes.push({
           name: relativePath.split(sep).join("/"),
           path: join(protoDir, relativePath),
-          phase: "define",
         });
       }
     }
@@ -115,16 +98,11 @@ export function readTgdArtifacts(cwd: string): TgdArtifacts {
   if (!tgdDir) return { exists: false, tgdDir: null, top: [], features: [] };
 
   const top: TgdArtifactFile[] = [];
-  for (const [name, phase] of [
-    ["CONTEXT.md", "map"],
-    ["TRACKING-PLAN.md", "plan"],
-    ["CHANGELOG.md", "release"],
-    ["REGRESSION-CATALOG.md", "release"],
-  ] as const) {
-    if (existsSync(join(tgdDir, name))) top.push({ name, path: join(tgdDir, name), phase });
+  for (const name of ["CONTEXT.md", "TRACKING-PLAN.md", "CHANGELOG.md", "REGRESSION-CATALOG.md"]) {
+    if (existsSync(join(tgdDir, name))) top.push({ name, path: join(tgdDir, name) });
   }
   const wiki = join(tgdDir, "wiki", "wiki.html");
-  if (existsSync(wiki)) top.push({ name: "wiki.html", path: wiki, phase: "map" });
+  if (existsSync(wiki)) top.push({ name: "wiki.html", path: wiki });
 
   const features: TgdFeature[] = [];
   let entries: string[] = [];
@@ -138,20 +116,15 @@ export function readTgdArtifacts(cwd: string): TgdArtifacts {
     if (!isDir || !isFeatureDir(dir)) continue;
 
     const docs: TgdArtifactFile[] = [];
-    const phasesDone = new Set<string>();
-    let mtimeMs = 0;
     for (const doc of FEATURE_DOC_ORDER) {
       const p = join(dir, doc);
       if (existsSync(p)) {
-        const phase = DOC_PHASE[doc];
-        docs.push({ name: doc, path: p, phase });
-        if (phase) phasesDone.add(phase);
-        try { mtimeMs = Math.max(mtimeMs, statSync(p).mtimeMs); } catch { /* ignore */ }
+        docs.push({ name: doc, path: p });
       }
     }
     const protoDir = join(dir, "prototype");
     const prototypes = existsSync(protoDir) ? readPrototypeFiles(protoDir) : [];
-    features.push({ name, path: dir, docs, prototypes, phasesDone: [...phasesDone], mtimeMs });
+    features.push({ name, path: dir, docs, prototypes });
   }
 
   return { exists: true, tgdDir, top, features };

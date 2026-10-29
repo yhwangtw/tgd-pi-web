@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { phaseForMessage, type AgentPhase, type AgentRunState } from "./agent-run-state";
+import { subagentProgress, type ActiveTool } from "./tool-activity";
+import { isRunProgressEvent, phaseForMessage, type AgentPhase, type AgentRunState } from "./agent-run-state";
 import { getAssistantFailure } from "./assistant-outcome";
 import { hasUpstreamSubagentWork } from "./upstream-subagents";
 import {
@@ -137,7 +138,7 @@ export class AgentSessionWrapper {
   private liveRun: { id: string; startedAt: number; lastProgressAt: number; stopping: boolean } | null = null;
   private lastRunError: string | null = null;
   private lastAgentEndCursor: string | null = null;
-  private activeTools = new Map<string, { id: string; name: string; label?: string }>();
+  private activeTools = new Map<string, ActiveTool>();
   private streamBash: { command: string; output: string; running: boolean } | null = null;
   private unsubscribe: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -691,7 +692,7 @@ export class AgentSessionWrapper {
       isStreaming: this.runActive ?? this.inner.isStreaming,
       runState: this.getRunState(),
       isCompacting: this.inner.isCompacting || this.compaction.state?.status === "running",
-      compaction: this.compaction.state,
+      compaction: this.compaction.snapshot(),
       compactionQueue: this.compactionQueue,
       autoCompactionEnabled: this.inner.autoCompactionEnabled,
       compactionSettings: this.inner.settingsManager?.getCompactionSettings?.(model),
@@ -742,6 +743,8 @@ export class AgentSessionWrapper {
     if (["compaction_start", "compaction_end", "auto_compaction_start", "auto_compaction_end"].includes(event.type)) {
       this.compaction.observe(event as AgentEvent);
       event = { ...event, webManaged: true } as AgentEvent;
+    } else if (["summarization_retry_scheduled", "summarization_retry_attempt_start", "summarization_retry_finished"].includes(event.type)) {
+      this.compaction.observe(event as AgentEvent);
     }
     const message = "message" in event ? event.message : undefined;
     // Prompt/tool declarations are persisted by Pi, but are not chat bubbles.
@@ -773,7 +776,21 @@ export class AgentSessionWrapper {
       if (workflow?.type === "custom" && readWorkflow(workflow.data)?.goal?.status === "active") event = { ...event, goalActive: true };
     } else if (event.type === "tool_execution_start") {
       const tool = event as AgentEvent;
-      this.activeTools.set(String(tool.toolCallId), { id: String(tool.toolCallId), name: String(tool.toolName), ...(typeof tool.toolLabel === "string" ? { label: tool.toolLabel } : {}) });
+      const id = String(tool.toolCallId);
+      const activity: ActiveTool = { id, name: String(tool.toolName), startedAt: this.activeTools.get(id)?.startedAt ?? Date.now(), ...(typeof tool.toolLabel === "string" ? { label: tool.toolLabel } : {}) };
+      this.activeTools.set(id, activity);
+      event = { ...event, toolActivity: activity, observedAt: Date.now() };
+    } else if (event.type === "tool_execution_update") {
+      const tool = event as AgentEvent;
+      const activity = this.activeTools.get(String(tool.toolCallId));
+      if (activity?.name === "subagent") {
+        const children = subagentProgress(tool.partialResult);
+        if (children !== undefined) {
+          const updated = { ...activity, children };
+          this.activeTools.set(activity.id, updated);
+          event = { ...event, toolActivity: updated, observedAt: Date.now() };
+        }
+      }
     } else if (event.type === "tool_execution_end") {
       this.activeTools.delete(String((event as AgentEvent).toolCallId));
     } else if (event.type === "bash_start") {
@@ -783,7 +800,7 @@ export class AgentSessionWrapper {
     } else if (event.type === "bash_end") {
       this.streamBash = null;
     }
-    if (this.liveRun && /^(?:message_(?:start|update|end)|tool_execution_(?:start|update|end)|turn_(?:start|end)|auto_(?:retry|compaction)_(?:start|end))$/.test(event.type)) {
+    if (this.liveRun && isRunProgressEvent(event.type)) {
       this.liveRun.lastProgressAt = Math.max(this.liveRun.lastProgressAt, Date.now());
     }
     if (event.type === "agent_start") event = { ...event, runState: this.getRunState() };

@@ -24,8 +24,8 @@ export function preservedRunSpacerHeight(
  * Whether the real transcript tail is meaningfully below the viewport.
  *
  * This deliberately uses marker geometry instead of scrollHeight: an active
- * run adds a viewport-sized spacer after the marker so a sent message can be
- * anchored near the top. Counting that spacer makes the "Latest" affordance
+ * run adds a spacer after the marker so a sent message can be anchored in the
+ * upper reading area. Counting that spacer makes the "Latest" affordance
  * appear even while the newest real content is still visible.
  */
 export function isTranscriptTailOutOfView(
@@ -38,8 +38,8 @@ export function isTranscriptTailOutOfView(
 
 /**
  * Transcript scroll management: owns the anchor refs and decides when the
- * view follows new content — initial jump to bottom, scroll-sent-message-
- * to-top, and conditional follow at end of a run.
+ * view follows new content — initial jump to bottom, revealing a sent message,
+ * and conditional follow at end of a run.
  */
 export function useTranscriptScroll(
   messagesLength: number,
@@ -47,26 +47,61 @@ export function useTranscriptScroll(
   agentRunningRef: React.RefObject<boolean>,
   /** Session id — enables per-session scroll restore across switches. */
   memoryKey?: string | null,
+  streamingOutput = false,
 ) {
   const initialScrollDoneRef = useRef(false);
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToUserRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const sentMessageScrollRef = useRef({ settling: false, scrollTop: null as number | null });
+  const latestOutputRef = useRef({ messagesLength, streamingOutput });
+  useLayoutEffect(() => { latestOutputRef.current = { messagesLength, streamingOutput }; }, [messagesLength, streamingOutput]);
+  const cancelSendSettleRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => cancelSendSettleRef.current?.(), [memoryKey]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     messagesEndRef.current?.scrollIntoView({ behavior: motionScrollBehavior(behavior), block: "end" });
   }, []);
 
-  const scrollUserMsgToTop = useCallback(() => {
+  const revealSentMessage = useCallback(() => {
     const container = scrollContainerRef.current;
-    const el = lastUserMsgRef.current;
-    if (!container || !el) return;
-    const elAbsTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-    // This must be immediate. A short response can finish before a smooth
-    // animation reaches the anchor; the end-of-run spacer calculation would
-    // then preserve the old near-bottom position instead of the sent message.
-    container.scrollTo({ top: elAbsTop - 16, behavior: "auto" });
+    const message = lastUserMsgRef.current;
+    if (!container || !message || container.clientHeight <= 0) return;
+    const viewport = container.getBoundingClientRect();
+    const bounds = message.getBoundingClientRect();
+    const height = container.clientHeight;
+    const margin = Math.min(16, height / 4);
+    const relativeTop = bounds.top - viewport.top;
+    const absoluteTop = relativeTop + container.scrollTop;
+    let top: number;
+
+    if (getScrollFollowMode() === "preserve") {
+      // Move only enough to reveal the sent message. For an oversized prompt,
+      // reveal its beginning rather than jumping to the end of the text.
+      if (bounds.height > height - 2 * margin) {
+        if (relativeTop >= margin && relativeTop < height - margin) return;
+        top = absoluteTop - margin;
+      } else if (relativeTop < margin) {
+        top = absoluteTop - margin;
+      } else if (relativeTop + bounds.height > height - margin) {
+        top = absoluteTop + bounds.height - height + margin;
+      } else {
+        return;
+      }
+    } else {
+      // Leave some previous context above a short prompt. Taller messages get
+      // more room, and prompts larger than the viewport start near its top.
+      const offset = Math.max(margin, Math.min(height / 4, height - bounds.height - margin));
+      top = absoluteTop - offset;
+    }
+    top = Math.max(0, top);
+    // Immediate anchoring lets completion preserve the correct reading position
+    // even when a reply finishes before a smooth animation would have settled.
+    if (Math.abs(top - container.scrollTop) > 1) {
+      container.scrollTo({ top, behavior: "auto" });
+      sentMessageScrollRef.current.scrollTop = container.scrollTop;
+    }
   }, []);
 
   useLayoutEffect(() => {
@@ -74,7 +109,55 @@ export function useTranscriptScroll(
       if (pendingScrollToUserRef.current) {
         pendingScrollToUserRef.current = false;
         initialScrollDoneRef.current = true;
-        scrollUserMsgToTop();
+        cancelSendSettleRef.current?.();
+        sentMessageScrollRef.current.settling = true;
+        revealSentMessage();
+        // Previous turns, the cleared composer and Latest can change layout in
+        // nested commits. Settle across two stable frames (at most four total),
+        // yielding immediately to any reader input.
+        const container = scrollContainerRef.current;
+        const message = lastUserMsgRef.current;
+        if (container && message) {
+          let cancelled = false;
+          let frame = 0;
+          let passes = 0;
+          let previous: { height: number; messageTop: number } | null = null;
+          const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+          const cleanup = (keepScrollTarget = false) => {
+            cancelled = true;
+            cancelAnimationFrame(frame);
+            events.forEach(event => document.removeEventListener(event, cancel, true));
+            sentMessageScrollRef.current.settling = false;
+            sentMessageScrollRef.current.scrollTop = keepScrollTarget ? container.scrollTop : null;
+            if (cancelSendSettleRef.current === cancel) cancelSendSettleRef.current = null;
+          };
+          const cancel = () => cleanup();
+          const settle = () => {
+            if (cancelled || scrollContainerRef.current !== container || lastUserMsgRef.current !== message) {
+              cleanup();
+              return;
+            }
+            revealSentMessage();
+            const mode = getScrollFollowMode();
+            const output = latestOutputRef.current;
+            const hasReply = output.streamingOutput || output.messagesLength > messagesLength;
+            if (mode !== "preserve" && (hasReply || mode === "always")
+              && messagesEndRef.current && messagesEndRef.current.getBoundingClientRect().top > container.getBoundingClientRect().bottom) {
+              scrollToBottom("auto");
+            }
+            const next = { height: container.clientHeight,
+              messageTop: message.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop };
+            const stable = previous && Math.abs(previous.height - next.height) <= 1 && Math.abs(previous.messageTop - next.messageTop) <= 1;
+            previous = next;
+            if (++passes < 4 && !stable) frame = requestAnimationFrame(settle);
+            else cleanup(true);
+          };
+          frame = requestAnimationFrame(settle);
+          cancelSendSettleRef.current = cancel;
+          events.forEach(event => document.addEventListener(event, cancel, { passive: true, capture: true }));
+        } else {
+          sentMessageScrollRef.current.settling = false;
+        }
       } else if (!initialScrollDoneRef.current) {
         initialScrollDoneRef.current = true;
         // Restore where this session was left (unless the reader was at the
@@ -112,7 +195,7 @@ export function useTranscriptScroll(
         scrollToBottom("smooth");
       }
     }
-  }, [messagesLength, agentRunning, agentRunningRef, scrollToBottom, scrollUserMsgToTop, memoryKey]);
+  }, [messagesLength, agentRunning, agentRunningRef, scrollToBottom, revealSentMessage, memoryKey]);
 
   // Record the position (throttled) so switching away and back restores it.
   const hasMessages = messagesLength > 0;
@@ -149,7 +232,7 @@ export function useTranscriptScroll(
 
   return {
     initialScrollDoneRef, lastUserMsgRef, pendingScrollToUserRef,
-    messagesEndRef, scrollContainerRef,
-    scrollToBottom, scrollUserMsgToTop,
+    messagesEndRef, scrollContainerRef, sentMessageScrollRef,
+    scrollToBottom, revealSentMessage,
   };
 }

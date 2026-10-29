@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { AgentEvent, AgentPhase, RunProgressState } from "./use-agent-session-types";
+import { isRunProgressEvent, runProgressAttention } from "@/lib/agent-run-state";
 import { AGENT_STREAM_DELTA_FORMAT, AgentStreamDecoder } from "@/lib/agent-stream-wire";
 
 const HEALTHY_PROGRESS: RunProgressState = {
@@ -132,7 +133,7 @@ export function useAgentEvents(
             reconnectAttemptRef.current = 0;
             reconnectStartedAtRef.current = null;
             settle(true);
-          } else if (event.type !== "connected" && event.type !== "agent_start") {
+          } else if (isRunProgressEvent(event.type)) {
             // Transport/bootstrap snapshots are not meaningful model progress.
             lastEventAtRef.current = Date.now();
           }
@@ -207,15 +208,7 @@ export function classifyRunProgress(
   phase: AgentPhase,
   connection: RunProgressState["connection"],
 ): RunProgressState {
-  const toolRun = phase?.kind === "running_tools";
-  const delayedAfter = toolRun ? 180 : 90;
-  const stalledAfter = toolRun ? 300 : 180;
-  const attention = idleSeconds >= stalledAfter
-    ? "stalled"
-    : idleSeconds >= delayedAfter
-      ? "delayed"
-      : "normal";
-  return { idleSeconds, attention, connection };
+  return { idleSeconds, attention: runProgressAttention(idleSeconds, phase), connection };
 }
 
 export function useRunProgress(
@@ -233,7 +226,7 @@ export function useRunProgress(
     }
     const update = () => {
       const idle = Math.max(0, Math.floor((Date.now() - lastEventAtRef.current) / 1000));
-      setRunProgress(classifyRunProgress(idle, agentPhaseRef.current, connectionState));
+      setRunProgress({ ...classifyRunProgress(idle, agentPhaseRef.current, connectionState), lastProgressAt: lastEventAtRef.current });
     };
     update();
     const id = setInterval(() => {
@@ -243,8 +236,8 @@ export function useRunProgress(
   }, [agentRunning, agentPhaseRef, connectionState, lastEventAtRef]);
 
   const resetRunProgress = useCallback((progress: RunProgressState = HEALTHY_PROGRESS) => {
-    setRunProgress(progress);
-  }, []);
+    setRunProgress({ ...progress, lastProgressAt: lastEventAtRef.current });
+  }, [lastEventAtRef]);
 
   return { runProgress, resetRunProgress };
 }

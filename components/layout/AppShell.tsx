@@ -607,7 +607,7 @@ export function AppShell() {
   const exportMenuPanelRef = useRef<HTMLDivElement>(null);
   // Portalled to <body> (same lesson as the Branches dropdown, PR #34): the
   // top bar's backdrop-filter traps its stacking context, so a menu hanging
-  // below the bar paints *under* the tGD pipeline bar / chat content.
+  // below the bar paints *under* the chat content.
   const [exportMenuPos, setExportMenuPos] = useState<{ top: number; right: number } | null>(null);
   const [sessionMenuOpen, setSessionMenuOpen] = useState(false);
   const sessionMenuRef = useRef<HTMLDivElement>(null);

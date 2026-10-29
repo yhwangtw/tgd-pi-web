@@ -7,6 +7,9 @@ export interface ToolExecutionContext {
   activeIds?: ReadonlySet<string>;
   preparingId?: string;
   cancelled?: boolean;
+  runStartedAt?: number | null;
+  toolStartedAt?: ReadonlyMap<string, number>;
+  revealRequest?: { id: string; nonce: number };
 }
 
 export function toolExecutionState(id: string, result?: ToolResultMessage, context?: ToolExecutionContext): ToolExecutionState {

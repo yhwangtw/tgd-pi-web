@@ -1,11 +1,22 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, CircleAlert, LoaderCircle, Shrink, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { CompactionView } from "@/hooks/use-session-compaction";
 import styles from "./CompactionStatus.module.css";
+
+function Elapsed({ since, label }: { since: number; label: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.max(0, Math.floor((now - since) / 1000));
+  const duration = seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
+  return <span className={styles.elapsed} data-testid="compaction-elapsed" aria-label={label.replace("{time}", duration)}>· {duration}</span>;
+}
 
 export function CompactionStatus({ state, queued, wide, onCancel, onCheck, onRetry, onDismiss, onClear }: {
   state: CompactionView | null; queued: number; wide?: boolean;
@@ -17,6 +28,7 @@ export function CompactionStatus({ state, queued, wide, onCancel, onCheck, onRet
   const [actionFailed, setActionFailed] = useState(false);
   if (!state && !queued) return null;
   const running = state?.status === "running" || state?.status === "checking";
+  const retry = state?.status === "running" && "retry" in state ? state.retry : undefined;
   const title = state?.status === "running" ? t("chat.compacting")
     : state?.status === "checking" ? t("compact.checking")
     : state?.status === "unknown" ? t("compact.unknown")
@@ -41,11 +53,13 @@ export function CompactionStatus({ state, queued, wide, onCancel, onCheck, onRet
         : state?.status === "failed" || state?.status === "unknown" ? <CircleAlert size={UI_ICON_SIZE.compact} aria-hidden />
         : <Shrink size={UI_ICON_SIZE.compact} aria-hidden />}
       <span className={styles.label} role="status">{title}</span>
+      {running && state && Number.isFinite(state.startedAt) && <Elapsed since={state.startedAt} label={t("compact.elapsed")} />}
       {running && <button disabled={busy} onClick={() => void action(onCancel)}>{t("compact.cancel")}</button>}
       {(state?.status === "checking" || state?.status === "unknown") && <button disabled={busy} onClick={() => void action(onCheck)}>{t("compact.check")}</button>}
       {(state?.status === "failed" || state?.status === "unknown") && <button disabled={busy} onClick={() => void action(onRetry)}>{t("compact.retry")}</button>}
       {!running && state && <button className={styles.dismiss} onClick={onDismiss} aria-label={t("compact.dismiss")}><X size={UI_ICON_SIZE.control} /></button>}
     </div>
+    {retry && <p role="status">{t(retry.status === "waiting" ? "compact.retryWaiting" : "compact.retrying").replace("{attempt}", String(retry.attempt)).replace("{max}", String(retry.maxAttempts))}</p>}
     {state?.status === "checking" && <p>{t("compact.reconciling")}</p>}
     {state?.status === "unknown" && <p>{t("compact.unknownHint")}</p>}
     {state?.status === "completed" && state.result && Number.isFinite(state.result.tokensBefore) && Number.isFinite(state.result.estimatedTokensAfter) && <p className={styles.tokens}>{t("compact.tokens").replace("{before}", state.result.tokensBefore.toLocaleString()).replace("{after}", state.result.estimatedTokensAfter.toLocaleString())}</p>}

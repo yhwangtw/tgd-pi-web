@@ -112,28 +112,6 @@
   font-family: var(--font-mono);
 }
 
-.phases {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  padding: var(--space-optical) var(--space-3) var(--space-2);
-}
-.phaseChip {
-  font-size: var(--text-2xs);
-  padding: var(--space-optical) var(--space-2);
-  border-radius: var(--radius-pill);
-  border: 1px solid transparent;
-  font-weight: var(--weight-medium);
-}
-.phaseDone {
-  background: var(--color-accent-bg);
-  color: var(--color-accent);
-  border-color: var(--color-accent-border);
-}
-.phaseTodo {
-  color: var(--text-dim);
-  border-color: var(--border);
-}
 
 .protoGroup { padding: var(--space-optical) 0 0 var(--space-3); }
 .protoLabel {
