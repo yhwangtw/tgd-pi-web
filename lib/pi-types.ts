@@ -1,4 +1,5 @@
 import type {
+  AgentSession,
   AgentSessionEvent,
   ExtensionCommandContextActions,
   ExtensionError,
@@ -37,6 +38,7 @@ export interface AgentSessionLike {
   readonly sessionId: string;
   readonly sessionFile: string | undefined;
   readonly isStreaming: boolean;
+  readonly isIdle?: boolean;
   readonly pendingMessageCount?: number;
   readonly isCompacting: boolean;
   readonly autoCompactionEnabled: boolean;
@@ -49,6 +51,7 @@ export interface AgentSessionLike {
 
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
   prompt(text: string, options?: { images?: Array<{ type: "image"; data: string; mimeType: string }> }): Promise<void>;
+  sendCustomMessage: AgentSession["sendCustomMessage"];
   abort(): Promise<void>;
   waitForIdle(): Promise<void>;
   setModel(model: ModelLike): Promise<void>;

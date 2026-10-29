@@ -101,7 +101,7 @@ export class RunLatencyTracker {
     if (["message_start", "message_update", "message_end"].includes(event.type) && hasText(event.message) && value.firstContentMs === undefined) {
       value.firstContentMs = this.elapsed(); current.pendingCommit = true; this.changed();
     }
-    if (event.type === "agent_end") {
+    if (event.type === "agent_end" && event.willRetry !== true) {
       const messages = Array.isArray(event.messages) ? event.messages : [];
       const assistant = [...messages].reverse().find(message => message?.role === "assistant");
       this.finish(getAssistantFailure(assistant) ? "failed" : assistant?.stopReason === "aborted" ? "aborted" : "completed");

@@ -24,7 +24,7 @@ export async function sendAgentCommand<T = unknown>(
 ): Promise<T> {
   // Keep the receipt on the action object so a lost-ACK retry of that action
   // cannot admit another model run.
-  if (["prompt", "steer", "follow_up", "queue_compaction_prompt", "compact", "bash"].includes(String(command.type)) && !command.requestId) {
+  if (["prompt", "resume", "steer", "follow_up", "queue_compaction_prompt", "compact", "bash"].includes(String(command.type)) && !command.requestId) {
     command.requestId = forkRequestKey();
   }
   const res = await fetch(`/api/agent/${encodeURIComponent(sessionId)}`, {

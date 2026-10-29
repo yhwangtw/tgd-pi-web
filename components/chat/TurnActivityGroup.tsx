@@ -2,7 +2,7 @@
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import { useLayoutEffect, useRef, type ReactNode } from "react";
-import { Check, ChevronDown, Clock3, CircleMinus, LoaderCircle, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, Clock3, CircleMinus, Info, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { toolStateLabel, type ToolExecutionState } from "@/lib/tool-execution-state";
 import { ElapsedTime } from "./ElapsedTime";
@@ -15,7 +15,7 @@ interface Props {
   filesChanged: number;
   failed: number;
   elapsed?: number;
-  state?: ToolExecutionState;
+  state?: ToolExecutionState | "issues";
   activeSummary?: string;
   startedAt?: number | null;
   revealRequest?: number;
@@ -31,7 +31,7 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
     overflowAnchor: string;
   } | null>(null);
   const { t } = useI18n();
-  const statusText = failed > 0
+  const statusText = state === "issues" ? t("chat.workHistoricalFailures").replace("{count}", String(failed)) : failed > 0
     ? state === "error" ? `${t("chat.workNeedsAttention")} · ${failed}` : `${t(toolStateLabel[state])} · ${failed} ${t("chat.failed")}`
     : t(toolStateLabel[state]);
   const active = state === "running" || state === "preparing";
@@ -93,7 +93,7 @@ export function TurnActivityGroup({ steps, tools, filesChanged, failed, elapsed,
         aria-label={summaryLabel}
       >
         <span className={styles.stateIcon} aria-hidden>
-          {active ? <LoaderCircle className={styles.spinner} size={UI_ICON_SIZE.compact} /> : state === "error" ? <TriangleAlert size={UI_ICON_SIZE.compact} /> : state === "success" ? <Check size={UI_ICON_SIZE.compact} /> : state === "cancelled" ? <CircleMinus size={UI_ICON_SIZE.compact} /> : <Clock3 size={UI_ICON_SIZE.compact} />}
+          {active ? <LoaderCircle className={styles.spinner} size={UI_ICON_SIZE.compact} /> : state === "issues" ? <Info size={UI_ICON_SIZE.compact} /> : state === "error" ? <TriangleAlert size={UI_ICON_SIZE.compact} /> : state === "success" ? <Check size={UI_ICON_SIZE.compact} /> : state === "cancelled" ? <CircleMinus size={UI_ICON_SIZE.compact} /> : <Clock3 size={UI_ICON_SIZE.compact} />}
         </span>
         <span className={styles.title}>{t("chat.workLog")}</span>
         {(state !== "success" || failed > 0) && (

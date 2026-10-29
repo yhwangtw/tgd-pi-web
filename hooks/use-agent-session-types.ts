@@ -1,6 +1,6 @@
 "use client";
 
-import type { AgentMessage, SessionInfo, SessionTreeNode } from "@/lib/types";
+import type { AgentMessage, SessionInfo, SessionTreeNode, SessionContext } from "@/lib/types";
 import { getAssistantFailure } from "@/lib/assistant-outcome";
 import type { ToolSelectionMode } from "@/lib/tool-selection";
 import type { ResolvedCompactionSettings } from "@/lib/compaction-policy";
@@ -10,12 +10,7 @@ export interface SessionData {
   filePath: string;
   tree: SessionTreeNode[];
   leafId: string | null;
-  context: {
-    messages: AgentMessage[];
-    entryIds: string[];
-    thinkingLevel: string;
-    model: { provider: string; modelId: string } | null;
-  };
+  context: SessionContext;
   compactionSettings?: ResolvedCompactionSettings;
 }
 

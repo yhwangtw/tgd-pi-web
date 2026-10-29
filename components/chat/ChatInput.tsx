@@ -100,7 +100,6 @@ interface Props {
   onThinkingLevelChange?: (level: ThinkingLevelOption) => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
-  retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   ephemeral?: boolean;
   onEphemeralChange?: (enabled: boolean) => void;
   soundEnabled?: boolean;
@@ -213,7 +212,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   modelCatalogStatus, modelCatalogError, modelCatalogDiagnostics, onRetryModelCatalog, onOpenModels,
   onCompact, onAbortCompaction, isCompacting, compactionPolicy, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, availableTools, customToolNames, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
-  retryInfo,
   ephemeral = false, onEphemeralChange,
   soundEnabled, onSoundToggle,
   cwd,
@@ -973,13 +971,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
             <button type="button" onClick={toggleExpanded} aria-label={t("input.collapseComposer")} title={t("input.collapseComposer")}>
               <Minimize2 size={UI_ICON_SIZE.compact} aria-hidden="true" />
             </button>
-          </div>
-        )}
-        {/* Retry banner */}
-        {retryInfo && (
-          <div className={styles.retryBanner}>
-            <RefreshCw size={UI_ICON_SIZE.inline} className={styles.retryIcon} aria-hidden="true" />
-            {t("input.retrying")} ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span className={styles.retryErrorText}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
         {submissions.length > 0 && <div className={styles.deliveryNotices}>

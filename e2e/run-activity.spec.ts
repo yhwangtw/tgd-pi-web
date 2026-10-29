@@ -192,6 +192,7 @@ for (const [label, width, height, style, theme] of [
     await expect(log).toHaveAttribute("data-work-log-expanded", "false");
     activity.finish();
     await expect(monitor).toHaveCount(0);
+    await expect(monitor.getByTestId("streaming-speed")).toHaveCount(0);
     await expect(page.getByTestId("active-work-summary")).toHaveCount(0);
     await expect(log).toHaveCount(0);
     await expect(page.getByText("Finished the offline activity fixture.", { exact: true })).toBeAttached();

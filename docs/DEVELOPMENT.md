@@ -116,6 +116,18 @@ successful answer quiets earlier output-limit notices without losing partial tex
 Unrecovered outcomes retain an explicit explanation and manual retry controls.
 Goals judge the final response at `agent_settled`, after official recovery.
 
+The run monitor distinguishes SDK retry backoff from model output and restores
+its deadline across reconnects. An `agent_end` with `willRetry` is an intermediate
+attempt, not a completed run. Stopped and unknown outcomes never produce success
+notifications. Continuation is labeled only after the official boundary marker
+is committed; incomplete output remains neutral while the run is active.
+Steering messages remain queued until the SDK emits the user message. Rerun
+replays the prompt; it does not undo external actions. A completed visible answer
+may coexist with earlier failed tools: the work log preserves those failures
+without claiming they were repaired. Live speed estimates visible text; the
+whole-response average may use provider counts including reasoning. Both scopes
+have touch/keyboard-accessible explanations.
+
 ## Workflow and delegation
 
 The empty composer can suggest a next message after a completed assistant turn.
@@ -625,10 +637,27 @@ slots available when several conversations also hold agent event streams;
 file contents reload only after change. The revision includes inode and ctime,
 so equal-size writes and replacements preserving mtime still invalidate it.
 
-Generation timing is measured only for fully observed live replies and saved
-in `pi-generation-metrics-v1` in browser storage (500 records, 90 days). Keys
-include session/model/timestamp and a content fingerprint; response text is
-never persisted by this feature. Storage failures fall back to memory.
+Live generation speed uses the original inline model/status row above the
+streaming response: a down-arrow token estimate and the original coloured badge
+(red below 15, yellow from 15, green from 30, cyan from 50 token/s). The colours
+indicate speed only. During streaming the badge is hidden when no current rate
+is measurable; no thinking or tool-execution throughput is invented. Completed
+responses retain the same coloured badge in their footer, explicitly labelled
+as an average. Even sub-second or buffered replies can therefore show a badge
+without pretending they had an observable live interval. There is no separate
+speed row in the composer dock or expanded explanation.
+The rolling visible-text rate is an estimate, sampled every 250 ms with at least
+250 ms of observed time and new text before displaying a value. Thinking,
+tool work, reconnects and quiet streams do not claim stale text throughput.
+The server measures each response interval and persists `pi-web-generation-metrics`
+custom metadata linked to the assistant entry and content fingerprint. This is
+not a chat message and never enters model context. Provider output usage divided
+by the observed response duration is a response average, including waiting and
+thinking; missing usage falls back to a labelled visible-text estimate. Short or
+buffered responses can retain this average after reload or session switching.
+Historical replies without a measured interval cannot acquire a retrospective rate.
+Browser-only fully observed measurements remain a compatibility fallback in
+`pi-generation-metrics-v1` (500 records, 90 days); storage failures use memory.
 
 ### Git worktrees (`lib/worktrees.ts`, `/api/worktrees`)
 `git worktree list --porcelain` parsed by `parseWorktreePorcelain` (unit-
@@ -832,3 +861,26 @@ they never synthesize usage records or rewrite session history. The patch is
 idempotent and refuses unreviewed SDK versions or source layouts. Verify/remove
 it when adopting an upstream fix. Regression coverage uses the actual SDK and
 a browser continuation with historical usage omitted.
+
+### Manual task recovery
+
+`Resume task` sends a deduplicated `resume` command. The server preserves the
+current branch and invokes Pi's public `sendCustomMessage(..., { triggerTurn:
+true })` with a hidden `pi-web-task-resume` entry, retaining the usual SDK
+preparation, compaction, extension and retry lifecycle. It never navigates back
+or resends the original user message. Provider adapters may encode this control
+entry as a user-role item; the saved transcript remains a custom message.
+
+Pi filters error/aborted assistant messages from provider context. Recovery
+therefore includes their visible text since the last user/recovery boundary,
+excluding private thinking and unfinished tool arguments. Existing tool results
+stay in context. Recovery instructions require inspecting uncertain side effects
+before repeating actions; this is not restoration of hidden reasoning, an
+in-flight tool or an exactly-once guarantee. The secondary `Rerun original
+request` action explicitly retains the old full-turn replay behavior.
+
+The server rejects busy/stale/completed recoveries, checks the branch again
+after snapshot preparation, and honors Stop during preparation. A request ID is
+deduplicated both during admission and from persisted recovery entries after a
+runtime reload. `task_resume_started` exposes continuation only after Pi has
+persisted its recovery entry; an accepted HTTP response alone is not completion.

@@ -7,6 +7,13 @@ export type AgentPhase =
   | { kind: "running_tools"; tools: ActiveTool[] }
   | null;
 
+export interface RunRetryInfo {
+  attempt: number;
+  maxAttempts: number;
+  retryAt: number;
+  errorMessage?: string;
+}
+
 /** Authoritative metadata for one live SDK run, independent of browser subscriptions. */
 export interface AgentRunState {
   id: string;
@@ -14,6 +21,8 @@ export interface AgentRunState {
   lastProgressAt: number;
   observedAt: number;
   phase: AgentPhase;
+  retry?: RunRetryInfo;
+  continuing?: boolean;
 }
 
 const PROGRESS_EVENTS = new Set([

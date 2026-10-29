@@ -79,6 +79,21 @@ describe("useTranscriptScroll", () => {
     expect(scroller.scrollTop).toBe(380);
   });
 
+  it.each(["pointerdown", "keydown"])("yields delayed restore to %s navigation from the composer dock", async event => {
+    vi.useFakeTimers(); saveScrollPosition("reading", 480, 200);
+    container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => root?.render(<Harness memoryKey="reading" messagesLength={10} running={false} runningRef={{ current: false }} />));
+    const scroller = container.firstElementChild as HTMLElement;
+    const dockButton = document.createElement("button"); document.body.appendChild(dockButton);
+    try {
+      expect(scroller.scrollTop).toBe(480);
+      dockButton.dispatchEvent(new Event(event));
+      scroller.scrollTop = 900; // Tool reveal navigated outside the initial viewport.
+      await act(async () => vi.advanceTimersByTime(100));
+      expect(scroller.scrollTop).toBe(900);
+    } finally { dockButton.remove(); }
+  });
+
   async function renderRun(mode: "smart" | "always" | "preserve") {
     localStorage.setItem("pi-scroll-follow-mode", mode);
     resetScrollFollowModeCache();
@@ -122,6 +137,12 @@ describe("useTranscriptScroll", () => {
   it("keeps only the filler required to prevent end-of-run scroll clamping", () => {
     expect(preservedRunSpacerHeight(1_000, 800, 2_080, 800)).toBe(520);
     expect(preservedRunSpacerHeight(400, 800, 2_080, 800)).toBe(0);
+  });
+
+  it("never grows retired filler when fractional scroll geometry overshoots the rounded maximum", () => {
+    expect(preservedRunSpacerHeight(1_280.25, 800, 2_080, 800)).toBe(800);
+    expect(preservedRunSpacerHeight(1_280.75, 800, 2_080, 800)).toBe(800);
+    expect(preservedRunSpacerHeight(-0.5, 800, 2_080, 800)).toBe(0);
   });
 
   it("shows Latest from the real message tail instead of the run spacer", () => {

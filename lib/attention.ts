@@ -67,6 +67,13 @@ export function setDoneTitle(sessionName?: string | null): void {
   resetTimer = setTimeout(() => setIdleTitle(sessionName), 8000);
 }
 
+/** Cancellation is terminal but is never a successful answer. */
+export function setStoppedTitle(sessionName?: string | null): void {
+  set(`⏹ ${sessionName ?? "Stopped"} — ${BASE_TITLE}`);
+  if (resetTimer) clearTimeout(resetTimer);
+  resetTimer = setTimeout(() => setIdleTitle(sessionName), 8000);
+}
+
 /** Flash a ⚠ title for a failed run. */
 export function setErrorTitle(sessionName?: string | null): void {
   set(`⚠ ${sessionName ?? "Failed"} — ${BASE_TITLE}`);

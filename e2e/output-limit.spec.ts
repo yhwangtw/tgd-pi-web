@@ -82,8 +82,11 @@ for (const style of ["original", "trae"]) for (const variant of variants) {
     }
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(fixture.commands.filter(command => command.type === "prompt")).toHaveLength(0);
-    const retry = page.getByRole("button", { name: "Retry last run", exact: true });
+    await expect(page.getByRole("button", { name: "Resume task", exact: true })).toBeVisible();
+    await page.getByText("Rerun this turn", { exact: true }).click();
+    const retry = page.getByRole("button", { name: "Rerun original request", exact: true });
     await retry.scrollIntoViewIfNeeded();
+    await expect(page.getByText("Sends the original request again. Completed actions are not undone and may run again.", { exact: true })).toBeVisible();
     await page.screenshot({ path: test.info().outputPath(`output-${style}-${variant.name}.png`) });
     await retry.click();
     await expect.poll(() => fixture.commands.filter(command => command.type === "prompt").length).toBe(1);
@@ -108,7 +111,7 @@ for (const width of [390, 1440]) {
     await expect(page.getByRole("log", { name: "Conversation" }).getByText(`ANSWER_COMPLETED:auto-${width}`, { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('[data-output-recovered="true"]')).toHaveCount(1);
     await expect(page.locator('[data-output-issue]')).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Retry last run", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Resume task", exact: true })).toHaveCount(0);
     const persisted = await request.get(`/api/sessions/${sessionId}`);
     const { context } = await persisted.json();
     expect(context.messages.filter((message: { role: string }) => message.role === "user")).toHaveLength(1);

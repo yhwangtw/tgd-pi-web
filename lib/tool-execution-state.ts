@@ -4,6 +4,7 @@ import type { MsgKey } from "./i18n";
 export type ToolExecutionState = "preparing" | "pending" | "running" | "success" | "error" | "cancelled" | "unknown";
 export interface ToolExecutionContext {
   running: boolean;
+  continuing?: boolean;
   activeIds?: ReadonlySet<string>;
   preparingId?: string;
   cancelled?: boolean;

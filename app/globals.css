@@ -286,6 +286,7 @@
   --color-info-border: rgba(59,130,246,0.2);
   --color-diff-add: #4ade80;
   --color-diff-remove: #f87171;
+  --color-tps-text: #161616;
   --color-tps-fast: #53b3cb;
   --color-tps-good: #9bc53d;
   --color-tps-mid: #f9c22e;

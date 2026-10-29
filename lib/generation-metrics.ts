@@ -4,6 +4,9 @@ export interface GenerationMetrics {
   tokens: number;
   seconds: number;
   estimated: boolean;
+  source?: "server" | "browser";
+  /** Observed first content (text, thinking or tool declaration), not just answer text. */
+  firstContentSeconds?: number;
 }
 
 /** Display estimate only: tokenization varies by model, especially for Unicode. */
@@ -17,7 +20,7 @@ export function messageText(message: Partial<AssistantMessage>): string {
 }
 
 const messageKeys = new WeakMap<AgentMessage, string>();
-function messageKey(message: AgentMessage): string | null {
+function legacyMessageKey(message: AgentMessage): string | null {
   if (message.role !== "assistant" || !message.timestamp) return null;
   const cached = messageKeys.get(message);
   if (cached) return cached;
@@ -27,6 +30,33 @@ function messageKey(message: AgentMessage): string | null {
   const key = `${message.provider}:${message.model}:${message.timestamp}:${hash >>> 0}`;
   messageKeys.set(message, key);
   return key;
+}
+
+/** Shared by SDK persistence and normalized UI messages; no answer text is stored in the key. */
+export function generationMessageKey(message: AgentMessage | undefined | null): string | null {
+  if (message?.role !== "assistant" || !message.timestamp || !Array.isArray(message.content)) return null;
+  const content = message.content.map(block => {
+    const value = block as unknown as Record<string, unknown>;
+    if (value.type === "toolCall") return { type: "toolCall", id: value.toolCallId ?? value.id,
+      name: value.toolName ?? value.name, input: value.input ?? value.arguments };
+    if (value.type === "text") return { type: "text", text: value.text };
+    if (value.type === "thinking") return { type: "thinking", thinking: value.thinking };
+    return value;
+  });
+  let hash = 2166136261;
+  for (const char of JSON.stringify(content)) hash = Math.imul(hash ^ char.codePointAt(0)!, 16777619);
+  const key = `v2:${message.provider}:${message.model}:${message.timestamp}:${hash >>> 0}`;
+  return key;
+}
+
+export function validGenerationMetrics(value: unknown): value is GenerationMetrics {
+  if (!value || typeof value !== "object") return false;
+  const m = value as GenerationMetrics;
+  return Number.isFinite(m.tokens) && m.tokens > 0 && Number.isFinite(m.seconds) && m.seconds > 0
+    && Number.isFinite(m.tokens / m.seconds) && typeof m.estimated === "boolean"
+    && (m.source === undefined || m.source === "server" || m.source === "browser")
+    && (m.firstContentSeconds === undefined || (Number.isFinite(m.firstContentSeconds)
+      && m.firstContentSeconds >= 0 && m.firstContentSeconds <= m.seconds));
 }
 
 const STORAGE_KEY = "pi-generation-metrics-v1";
@@ -45,7 +75,7 @@ function readMetrics(storage?: MetricsStorage): Map<string, StoredMetrics> {
       if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string" || entry[0].length > 1024) return false;
       const value = entry[1] as StoredMetrics | null;
       return !!value && Number.isFinite(value.tokens) && value.tokens > 0
-        && Number.isFinite(value.seconds) && value.seconds >= 1 && typeof value.estimated === "boolean"
+        && validGenerationMetrics(value)
         && Number.isFinite(value.savedAt) && value.savedAt > Date.now() - MAX_AGE_MS && value.savedAt <= Date.now();
     }).slice(-MAX_RECORDS));
   } catch { return new Map(); }
@@ -55,13 +85,15 @@ export function browserMetricsStorage(): MetricsStorage | undefined {
   try { return typeof window === "undefined" ? undefined : window.localStorage; } catch { return undefined; }
 }
 
-/** Client-observed full generations only. Replayed/snapshot streams have no timing. */
+/** Prefer server records; browser timing is a fallback for fully observed live replies. */
 export class GenerationMetricsTracker {
   private sessionId: string | null = null;
   private live = false;
   private active: { start: number; text: string; updates: number } | null = null;
   private completed: Map<string, StoredMetrics>;
   private views = new Map<string, GenerationMetrics>();
+  private serverSessionId: string | null = null;
+  private authoritative = new Map<string, GenerationMetrics>();
 
   constructor(private storage?: MetricsStorage) { this.completed = readMetrics(storage); }
 
@@ -78,7 +110,17 @@ export class GenerationMetricsTracker {
     try { this.storage?.setItem(STORAGE_KEY, JSON.stringify([...this.completed])); } catch { /* memory-only if storage is unavailable/full */ }
   }
 
-  record(sessionId: string | null, event: { type: string; message?: unknown }, now: number): void {
+  /** Authoritative records travel with the selected transcript, independently of browser timing. */
+  restore(sessionId: string, records: unknown): void {
+    this.serverSessionId = sessionId;
+    this.authoritative.clear();
+    if (!records || typeof records !== "object" || Array.isArray(records)) return;
+    for (const [key, value] of Object.entries(records)) {
+      if (key.length <= 1024 && validGenerationMetrics(value) && value.source === "server") this.authoritative.set(key, value);
+    }
+  }
+
+  record(sessionId: string | null, event: { type: string; message?: unknown; generationMetrics?: unknown }, now: number): void {
     if (sessionId !== this.sessionId) {
       this.sessionId = sessionId;
       this.live = false;
@@ -86,6 +128,18 @@ export class GenerationMetricsTracker {
     }
     if (event.type === "connected") { this.live = false; this.active = null; return; }
     if (event.type === "session_snapshot") { this.live = true; this.active = null; return; }
+    // Server-observed end metadata is trustworthy even when this browser joined
+    // mid-stream or is replaying the terminal frame. Never time that replay locally.
+    if (event.type === "message_end" && sessionId && validGenerationMetrics(event.generationMetrics)
+      && event.generationMetrics.source === "server") {
+      const key = generationMessageKey(event.message as AgentMessage);
+      if (key) {
+        if (this.serverSessionId !== sessionId) { this.authoritative.clear(); this.serverSessionId = sessionId; }
+        this.authoritative.set(key, event.generationMetrics);
+        this.active = null;
+        return;
+      }
+    }
     if (!this.live) return;
     if (["agent_end", "auto_retry_start"].includes(event.type)) { this.active = null; return; }
     const message = event.message as AssistantMessage | undefined;
@@ -99,22 +153,26 @@ export class GenerationMetricsTracker {
     } else if (event.type === "message_end") {
       const active = this.active;
       this.active = null;
-      const key = messageKey(message);
+      const key = generationMessageKey(message);
       const seconds = active ? (now - active.start) / 1000 : 0;
-      if (!active || !key || seconds < 1 || active.updates < 2 || !messageText(message)
+      if (!active || !key || seconds <= 0 || !messageText(message).trim()
         || message.errorMessage || ["error", "aborted"].includes(message.stopReason ?? "")
         || message.content.some((block) => block.type === "toolCall")) return;
       const output = message.usage?.output;
       const estimated = !(typeof output === "number" && Number.isFinite(output) && output > 0);
-      const tokens = estimated ? Math.round(estimateTextTokens(messageText(message))) : output!;
+      const tokens = estimated ? Math.max(1, Math.round(estimateTextTokens(messageText(message)))) : output!;
       if (tokens > 0 && sessionId) this.save(sessionId, key, { tokens, seconds, estimated });
     }
   }
 
   get(sessionId: string | null, message: AgentMessage): GenerationMetrics | undefined {
-    const key = messageKey(message);
+    const key = generationMessageKey(message);
     const storedKey = key && sessionId ? JSON.stringify([sessionId, key]) : "";
-    const stored = this.completed.get(storedKey);
+    if (this.serverSessionId === sessionId && key && this.authoritative.has(key)) return this.authoritative.get(key);
+    // Preserve pre-upgrade measurements whose keys covered only visible text.
+    const legacyKey = legacyMessageKey(message);
+    const stored = this.completed.get(storedKey) ?? (legacyKey && sessionId
+      ? this.completed.get(JSON.stringify([sessionId, legacyKey])) : undefined);
     if (!stored) return undefined;
     const existing = this.views.get(storedKey);
     if (existing) return existing;
@@ -138,7 +196,7 @@ export class TextRateWindow {
     while (this.samples.length > 1 && this.samples[1].time <= now - 3000) this.samples.shift();
     const first = this.samples[0];
     const seconds = (now - first.time) / 1000;
-    if (seconds < 1 || now - this.lastChange >= 2000 || tokens <= first.tokens) return null;
+    if (seconds < 0.25 || now - this.lastChange >= 2000 || tokens <= first.tokens) return null;
     return (tokens - first.tokens) / seconds;
   }
 }

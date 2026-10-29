@@ -2,6 +2,7 @@ import { buildContextEntries, buildSessionContext as piBuildSessionContext, sess
 import type { AgentMessage, SessionContext, SessionEntry } from "./types";
 import { normalizeToolCalls } from "./normalize";
 import { COMPACTION_MESSAGE_TYPE } from "./compaction-message";
+import { readGenerationMetrics } from "./server-generation-metrics";
 
 export function buildSessionContext(entries: SessionEntry[], leafId?: string | null): SessionContext {
   const byId = new Map<string, SessionEntry>();
@@ -71,5 +72,8 @@ export function buildSessionTranscript(entries: SessionEntry[], leafId?: string 
       entryIds.push(entry.id);
     }
   }
-  return { messages, entryIds, thinkingLevel: settings.thinkingLevel, model: settings.model };
+  const generationMetrics = readGenerationMetrics(path);
+  return { messages, entryIds, thinkingLevel: settings.thinkingLevel, model: settings.model,
+    ...(Object.keys(generationMetrics).length ? { generationMetrics } : {}),
+  };
 }

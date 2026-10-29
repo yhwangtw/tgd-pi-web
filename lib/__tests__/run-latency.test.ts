@@ -20,6 +20,25 @@ describe("content-free run latency", () => {
       firstContentMs: 200, firstCommitMs: 204, displayLagMs: 4, completedMs: 600, server: { provider_request: 5 } });
     expect(JSON.stringify(t.output)).not.toContain("private response");
   });
+  it("keeps the original client clock through a failed attempt and records only the recovered final outcome", () => {
+    const t = setup(); t.at(1000); t.tracker.begin("retrying");
+    t.at(1010); t.tracker.requestSent("retrying");
+    t.at(1050); t.tracker.record({ type: "agent_start" });
+    const failed = { role: "assistant", content: [], stopReason: "error", errorMessage: "503 Service unavailable" };
+    t.at(1100); t.tracker.record({ type: "message_end", message: failed });
+    t.at(1101); t.tracker.record({ type: "agent_end", messages: [failed], willRetry: true });
+    expect(t.last()).toMatchObject({ timingId: "retrying", status: "running", requestSentMs: 10, firstEventMs: 50 });
+    expect(t.last().completedMs).toBeUndefined();
+    t.at(1200); t.tracker.record({ type: "auto_retry_start" });
+    t.at(1600); t.tracker.record({ type: "agent_start" });
+    t.at(1700); t.tracker.record({ type: "message_update", message });
+    t.at(1704); t.tracker.committed(message);
+    t.at(1900); t.tracker.record({ type: "agent_end", messages: [failed, { ...message, stopReason: "stop" }], willRetry: false });
+    expect(t.last()).toEqual({ timingId: "retrying", status: "completed", requestSentMs: 10, firstEventMs: 50,
+      firstContentMs: 700, firstCommitMs: 704, displayLagMs: 4, completedMs: 900, server: {} });
+    expect(t.output.filter(record => record.status !== "running")).toHaveLength(1);
+  });
+
   it.each(["length", "stop"])("does not report a no-answer %s run as completed", stopReason => {
     const t = setup(); t.tracker.begin("limited"); t.tracker.requestSent("limited");
     t.tracker.record({ type: "agent_end", messages: [{ ...message, stopReason, content: [] }] });

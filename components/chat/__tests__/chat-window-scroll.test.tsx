@@ -8,18 +8,22 @@ import { ChatWindow } from "@/components/chat/ChatWindow";
 import { useTranscriptScroll } from "@/hooks/use-transcript-scroll";
 import { resetScrollFollowModeCache, setScrollFollowMode } from "@/lib/prefs";
 import type { useAgentSession } from "@/hooks/useAgentSession";
-import type { AssistantMessage } from "@/lib/types";
+import type { GenerationMetrics } from "@/lib/generation-metrics";
+import type { AgentMessage, AssistantMessage } from "@/lib/types";
 import { getSessionReadReceipt, mergeSessionReadSnapshot } from "@/lib/session-read-state";
 
 type SessionFixture = Pick<ReturnType<typeof useAgentSession>,
   "messages" | "entryIds" | "streamState" | "agentRunning" | "extensionUIState" |
   "modelNames" | "modelList" | "modelThinkingLevels" | "modelThinkingLevelMaps" |
-  "compactionQueue" | "queuedFollowUps" | "runProgress" | "bashRun" | "loading">;
+  "compactionQueue" | "queuedFollowUps" | "runProgress" | "bashRun" | "loading">
+  & Partial<Pick<ReturnType<typeof useAgentSession>, "runOutcome" | "handleResume" | "handleRetry" | "handleSend">>;
 
 const fixture = vi.hoisted(() => ({
   state: {} as SessionFixture,
   messageRenders: new Map<string, number>(),
-  getGenerationMetrics: vi.fn(() => undefined),
+  getGenerationMetrics: vi.fn((_message: AgentMessage): GenerationMetrics | undefined => undefined),
+  runStatusProps: null as Parameters<typeof import("../RunStatus").RunStatus>[0] | null,
+  resume: vi.fn(), retry: vi.fn(), send: vi.fn(),
   openQuote: null as ((entryId: string) => void) | null,
   quote: null as { entryId: string; role: "user" | "assistant"; text: string } | null,
   sentScroll: null as React.RefObject<{ settling: boolean; scrollTop: number | null }> | null,
@@ -39,11 +43,13 @@ vi.mock("@/components/chat/ChatInput", () => ({ ChatInput: ({ quote, onOpenQuote
 } }));
 vi.mock("@/components/chat/MessageView", () => ({ MessageView: memo(function MockMessageView(props: {
   entryId?: string;
+  isStreaming?: boolean;
+  streamingSpeedEnabled?: boolean;
   message: { role: string };
   onQuote?: (entryId: string, role: string, text: string) => void;
 }) {
   if (props.entryId) fixture.messageRenders.set(props.entryId, (fixture.messageRenders.get(props.entryId) ?? 0) + 1);
-  return <button data-quote-entry={props.entryId} onClick={() => props.onQuote?.(props.entryId!, props.message.role, "quoted text")}>message</button>;
+  return <button data-streaming={props.isStreaming ? "true" : undefined} data-speed-enabled={props.streamingSpeedEnabled} data-quote-entry={props.entryId} onClick={() => props.onQuote?.(props.entryId!, props.message.role, "quoted text")}>message</button>;
 }) }));
 vi.mock("@/components/chat/AssistantMessageView", () => ({ isProviderAuthError: () => false }));
 vi.mock("@/components/chat/ExtensionUIPanel", () => ({ ExtensionUIPanel: () => null, ExtensionWidgets: () => null, PendingQuestionNotice: () => null, WorkflowToolbar: () => null }));
@@ -54,7 +60,7 @@ vi.mock("@/components/chat/CollapsibleMessage", () => ({ CollapsibleMessage: ({ 
 vi.mock("@/components/chat/QueuedFollowUps", () => ({ QueuedFollowUps: () => null }));
 vi.mock("@/components/chat/CompactionStatus", () => ({ CompactionStatus: () => null }));
 vi.mock("@/components/chat/ProviderRecoveryBanner", () => ({ ProviderRecoveryBanner: () => null }));
-vi.mock("@/components/chat/RunStatus", () => ({ RunStatus: () => null }));
+vi.mock("@/components/chat/RunStatus", () => ({ RunStatus: (props: Parameters<typeof import("../RunStatus").RunStatus>[0]) => { fixture.runStatusProps = props; return null; } }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement;
@@ -83,6 +89,8 @@ const scroller = () => host.querySelector("[data-transcript-scroll]")!;
 
 beforeEach(() => {
   localStorage.clear(); resetScrollFollowModeCache(); fixture.messageRenders.clear(); fixture.quote = null; fixture.openQuote = null;
+  fixture.resume.mockReset(); fixture.retry.mockReset(); fixture.send.mockReset();
+  fixture.getGenerationMetrics.mockReset(); fixture.runStatusProps = null;
   mergeSessionReadSnapshot({ scope: `scroll-fixture-${++readScope}`, receipts: {} });
   vi.spyOn(document, "hasFocus").mockReturnValue(true);
   vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 503 })));
@@ -90,6 +98,7 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   fixture.state = {
     messages: [{ role: "user", content: "Question", timestamp: 1 }], entryIds: ["user1"],
+    handleResume: fixture.resume, handleRetry: fixture.retry, handleSend: fixture.send,
     streamState: { isStreaming: true, streamingMessage: answer("partial") },
     agentRunning: true, extensionUIState: { dialogs: [], widgets: {}, statuses: {} },
     modelNames: {}, modelList: [], modelThinkingLevels: {}, modelThinkingLevelMaps: {},
@@ -282,6 +291,24 @@ it("applies preserve mode immediately to late layout in an idle conversation", a
   expect(scrollIntoView).not.toHaveBeenCalled();
 });
 
+it("finishes a run without a render loop at a fractional scroll boundary", async () => {
+  localStorage.setItem("pi-scroll-follow-mode", "preserve"); resetScrollFollowModeCache();
+  await render();
+  const container = scroller();
+  const spacer = container.lastElementChild!.lastElementChild as HTMLElement;
+  expect(spacer.style.height).toBe("450px");
+  // Browsers expose fractional scrollTop but rounded scrollHeight/clientHeight.
+  // Model a reader at a bottom offset that is 0.25px beyond the rounded maximum.
+  Object.defineProperty(container, "scrollHeight", { configurable: true, get: () => 1_200 + Number.parseFloat(spacer.style.height) });
+  Object.defineProperty(container, "scrollTop", { configurable: true, get: () => container.scrollHeight - container.clientHeight + 0.25, set: () => {} });
+  fixture.state.messages = [...fixture.state.messages, answer("complete")];
+  fixture.state.streamState = { isStreaming: false, streamingMessage: null };
+  fixture.state.agentRunning = false;
+  await render();
+  expect(spacer.isConnected).toBe(true);
+  expect(spacer.style.height).toBe("450px");
+});
+
 it("keeps a short reply at its top anchor without scrolling into the spacer", async () => {
   await render(); scrollIntoView.mockClear(); markerTop = 350;
   fixture.state.streamState = { isStreaming: true, streamingMessage: answer("short") }; await render();
@@ -466,4 +493,61 @@ it("reveals an unmounted assistant bookmark selected from the mobile turn sheet"
   await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
   expect(host.querySelector('[data-entry-id="entry-20"]')).not.toBeNull();
   expect(scrollIntoView.mock.instances.some(element => (element as HTMLElement).dataset.entryId === "entry-20")).toBe(true);
+});
+
+
+it.each(["error", "aborted", "length", "empty"])("offers Resume task before explicit rerun for a %s outcome", async outcome => {
+  fixture.state.messages.push({ ...answer(outcome === "empty" ? "" : "Saved partial work"), stopReason: outcome === "empty" ? "stop" : outcome } as AssistantMessage);
+  fixture.state.entryIds.push("interrupted-answer");
+  fixture.state.streamState = { isStreaming: false, streamingMessage: null };
+  fixture.state.agentRunning = false;
+  await render();
+  const resume = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Resume task")!;
+  const options = host.querySelector<HTMLDetailsElement>("details")!;
+  const summary = options.querySelector("summary")!;
+  const rerun = [...options.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Rerun original request")!;
+  expect(resume).toBeDefined();
+  expect(rerun).toBeDefined();
+  expect(resume.closest('[role="group"]')?.getAttribute("aria-label")).toBe("Recovery options");
+  expect(options.open).toBe(false);
+  expect(summary.textContent).toBe("Rerun this turn");
+  expect(resume.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(resume.title).toContain("saved progress");
+  expect(rerun.title).toContain("Completed actions are not undone and may run again");
+  await act(async () => resume.click());
+  expect(fixture.resume).toHaveBeenCalledOnce();
+  expect(fixture.send).not.toHaveBeenCalled();
+  expect(fixture.retry).not.toHaveBeenCalled();
+  await act(async () => summary.click());
+  expect(options.open).toBe(true);
+  await act(async () => rerun.click());
+  expect(fixture.retry).toHaveBeenCalledOnce();
+});
+
+
+it("keeps the original message speed separate from the monitor and disables it during reconnect", async () => {
+  const currentAnswer = answer("The completed current response");
+  const metrics: GenerationMetrics = { tokens: 24, seconds: 0.4, estimated: false, source: "server" };
+  fixture.state.messages = [{ role: "user", content: "Current question" }, currentAnswer];
+  fixture.state.entryIds = ["current-user", "current-answer"];
+  fixture.state.agentRunning = false;
+  fixture.state.streamState = { isStreaming: false, streamingMessage: null };
+  fixture.getGenerationMetrics.mockImplementation(message => message === currentAnswer ? metrics : undefined);
+  await render();
+  expect(fixture.runStatusProps).toBeNull();
+  // A newly sent request must never inherit that average while waiting.
+  fixture.state.messages = [...fixture.state.messages, { role: "user", content: "A new question" }];
+  fixture.state.entryIds = [...fixture.state.entryIds, "next-user"];
+  fixture.state.agentRunning = true;
+  fixture.state.streamState = { isStreaming: true, streamingMessage: null };
+  await render();
+  expect(fixture.runStatusProps?.active).toBe(true);
+  expect(host.querySelector('[data-streaming="true"]')).toBeNull();
+  const streaming = answer("New text");
+  fixture.state.streamState = { isStreaming: true, streamingMessage: streaming };
+  await render();
+  expect(host.querySelector('[data-streaming="true"]')?.getAttribute("data-speed-enabled")).toBe("true");
+  fixture.state.runProgress = { idleSeconds: 0, attention: "normal", connection: "reconnecting" };
+  await render();
+  expect(host.querySelector('[data-streaming="true"]')?.getAttribute("data-speed-enabled")).toBe("false");
 });

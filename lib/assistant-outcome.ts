@@ -26,6 +26,16 @@ export function getAssistantOutputIssue(value: unknown): AssistantOutputIssue | 
   return typeof message.content === "string" ? "empty_output" : null;
 }
 
+export type AssistantOutcome = "completed" | "stopped" | "failed" | "unknown";
+
+export function getAssistantOutcome(value: unknown): AssistantOutcome {
+  const message = value as OutcomeMessage | null | undefined;
+  if (message?.role !== "assistant") return "unknown";
+  if (message.stopReason === "aborted") return "stopped";
+  if (getAssistantFailure(message)) return "failed";
+  return message.stopReason === "stop" && hasVisibleAssistantAnswer(message) ? "completed" : "unknown";
+}
+
 export function getAssistantFailure(value: unknown): string | null {
   const message = value as OutcomeMessage | null | undefined;
   if (message?.role !== "assistant") return null;

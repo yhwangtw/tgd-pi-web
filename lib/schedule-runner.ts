@@ -258,6 +258,7 @@ export class ScheduleRunner {
           return;
         }
         if (event.type === "agent_end") {
+          if (event.willRetry === true) return;
           const error = eventRunError(event);
           if (error) void import("./web-push").then(({ sendWebPush }) => sendWebPush(`/?session=${encodeURIComponent(started.realSessionId)}`)).catch(() => {});
           finish(error ? "failed" : "completed", error ?? undefined);

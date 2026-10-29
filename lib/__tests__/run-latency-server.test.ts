@@ -26,6 +26,30 @@ describe("server run latency observations", () => {
     expect(JSON.stringify(events)).not.toContain("private");
   });
 
+  it("keeps one server trace through retry backoff and completes from the original acceptance clock", () => {
+    let now = 1000;
+    const events: RunTimingEvent[] = [];
+    const trace = new RunLatencyServer(event => events.push(event), () => now);
+    const token = trace.accept(FIRST)!;
+    now = 1050; trace.mark("provider_request");
+    now = 1100; trace.observe({ type: "agent_end", willRetry: true });
+    expect(trace.isActive(token)).toBe(true);
+    expect(trace.has("completed")).toBe(false);
+    expect(trace.accept(SECOND)).toBeNull();
+    expect(events.map(event => event.stage)).toEqual(["accepted", "provider_request"]);
+    now = 1600; trace.observe({ type: "agent_start" }); trace.mark("provider_request");
+    now = 1700; trace.observe({ type: "message_update", message: { role: "assistant", content: [{ type: "text", text: "Recovered answer" }] } });
+    now = 1900; trace.observe({ type: "agent_end", willRetry: false });
+    expect(trace.isActive(token)).toBe(false);
+    trace.observe({ type: "agent_end" }); trace.complete(token);
+    expect(events).toEqual([
+      { type: "run_timing", timingId: FIRST, stage: "accepted", elapsedMs: 0 },
+      { type: "run_timing", timingId: FIRST, stage: "provider_request", elapsedMs: 50 },
+      { type: "run_timing", timingId: FIRST, stage: "first_content", elapsedMs: 700 },
+      { type: "run_timing", timingId: FIRST, stage: "completed", elapsedMs: 900 },
+    ]);
+  });
+
   it.each([undefined, null, "", "bad", "00000000-0000-0000-0000-000000000000", "88deba82-f371-4f25-bd5d-cab39107d41f extra"])("does no tracing/content inspection for invalid or absent UUID %j", id => {
     const emit = vi.fn(); const clock = vi.fn(() => 0);
     const trace = new RunLatencyServer(emit, clock);

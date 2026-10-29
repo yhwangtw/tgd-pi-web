@@ -8,11 +8,12 @@ import type { AgentEvent, SessionData } from "../use-agent-session-types";
 const harness = vi.hoisted(() => ({ send: vi.fn(), toast: vi.fn(), created: vi.fn(), fetch: vi.fn(), rejectModel: vi.fn(), complete: vi.fn(), branchDataChange: vi.fn() }));
 vi.mock("@/lib/agent-client", () => ({ sendAgentCommand: harness.send }));
 vi.mock("@/hooks/useToast", () => ({ showToast: harness.toast }));
-vi.mock("@/lib/attention", () => ({ setIdleTitle: vi.fn(), setRunningTitle: vi.fn(), setDoneTitle: vi.fn(), setErrorTitle: vi.fn(), setExtensionTitle: vi.fn(), notifyDone: vi.fn(), requestNotifyPermission: vi.fn() }));
+vi.mock("@/lib/attention", () => ({ setIdleTitle: vi.fn(), setRunningTitle: vi.fn(), setDoneTitle: vi.fn(), setStoppedTitle: vi.fn(), setErrorTitle: vi.fn(), setExtensionTitle: vi.fn(), notifyDone: vi.fn(), requestNotifyPermission: vi.fn() }));
 vi.mock("../use-model-catalog", () => ({ useModelCatalog: () => ({ modelNames: {}, modelList: [], modelThinkingLevels: {}, modelThinkingLevelMaps: {}, newSessionModel: { provider: "fixture", modelId: "instant" }, setNewSessionModel: vi.fn(), catalogStatus: "ready", catalogDiagnostics: [], retryModelCatalog: vi.fn(), reportModelUnavailable: harness.rejectModel }) }));
 import { useAgentSession } from "../useAgentSession";
-import { setIdleTitle, setRunningTitle, setDoneTitle, setErrorTitle, notifyDone } from "@/lib/attention";
+import { setIdleTitle, setRunningTitle, setDoneTitle, setStoppedTitle, setErrorTitle, notifyDone } from "@/lib/attention";
 import { encodeSessionData } from "@/lib/session-tree-wire";
+import { generationMessageKey } from "@/lib/generation-metrics";
 import { readRunLatencyRecords } from "@/lib/run-latency";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -62,6 +63,28 @@ describe("session reconciliation and first-prompt ordering", () => {
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it("restores server speed on GET, reconnect and remount without local storage timing", async () => {
+    const metrics = { tokens: 20, seconds: 0.5, estimated: false, source: "server" as const };
+    const record = { [generationMessageKey(assistant)!]: metrics };
+    const payload = data([user, assistant]);
+    payload.context.generationMetrics = record;
+    harness.fetch.mockImplementation(async () => new Response(JSON.stringify(payload)));
+    await act(async () => root.render(<Harness key="one" selected={session} />));
+    expect(current.getGenerationMetrics(assistant)).toEqual(metrics);
+    expect(localStorage.getItem("pi-generation-metrics-v1")).toBeNull();
+    const restored = snapshot([user, assistant]);
+    restored.sessionData = payload;
+    await act(async () => current.handleAgentEventRef.current?.(restored));
+    expect(current.getGenerationMetrics(assistant)).toEqual(metrics);
+    await act(async () => root.render(<Harness key="remounted" selected={session} />));
+    expect(current.getGenerationMetrics(assistant)).toEqual(metrics);
+    const emptySnapshot = snapshot([user, assistant]);
+    await act(async () => current.handleAgentEventRef.current?.(emptySnapshot));
+    expect(current.getGenerationMetrics(assistant)).toBeUndefined();
+    await act(async () => current.handleAgentEventRef.current?.({ type: "message_end", message: assistant, generationMetrics: metrics }));
+    expect(current.getGenerationMetrics(assistant)).toEqual(metrics);
+  });
 
   it("restores the same run and quiet duration on remount, reload and reconnect without sending a prompt", async () => {
     vi.setSystemTime(1_000_000);
@@ -168,6 +191,189 @@ describe("session reconciliation and first-prompt ordering", () => {
     expect(prompts[0]).toEqual(["one", expect.objectContaining({ message: "", images: [{ type: "image", data: "cG5n", mimeType: "image/png" }] })]);
   });
 
+  it.each(["error", "aborted", "length", "empty"])("resumes a %s outcome from saved progress without a user submission or stale leaf", async outcome => {
+    const completedTool = { role: "toolResult", toolCallId: "done", toolName: "write", content: [{ type: "text", text: "Saved" }], isError: false } as AgentMessage;
+    const failed = { ...assistant, stopReason: outcome === "empty" ? "stop" : outcome, content: outcome === "empty" ? [] : [{ type: "text", text: "Saved partial answer" }] } as AgentMessage;
+    serverMessages = [user, completedTool, failed];
+    localStorage.setItem("pi-draft:one", "Unsaved composer draft");
+    await act(async () => root.render(<Harness selected={session} />));
+    const source = FakeEventSource.instances[0];
+    const checkpoint = snapshot(serverMessages);
+    (checkpoint.sessionData as SessionData).leafId = "old-visible-leaf";
+    await act(async () => { source.open(); source.message(checkpoint, "resume:0"); });
+    harness.send.mockClear();
+    harness.send.mockImplementation(async (_sid, command) => command.type === "resume" ? { accepted: true } : null);
+    await act(async () => { expect(await current.handleResume()).toBe(true); });
+    expect(harness.send).toHaveBeenCalledExactlyOnceWith("one", { type: "resume", timingId: expect.stringMatching(/^[0-9a-f-]{36}$/) });
+    expect(current.messages).toEqual(serverMessages);
+    expect(current.entryIds).toEqual(["e0", "e1", "e2"]);
+    expect(current.activeLeafId).toBe("old-visible-leaf");
+    expect(localStorage.getItem("pi-draft:one")).toBe("Unsaved composer draft");
+    expect(current.agentRunning).toBe(true);
+    expect(current.agentPhase).toEqual({ kind: "waiting_model" });
+    const timingId = harness.send.mock.calls[0][1].timingId;
+    expect(readRunLatencyRecords().find(record => record.timingId === timingId)).toMatchObject({ status: "running", requestSentMs: expect.any(Number) });
+  });
+
+  it("shows continuation only after the persisted resume event and preserves live request timing", async () => {
+    serverMessages = [user, { ...assistant, stopReason: "aborted" } as AgentMessage];
+    await act(async () => root.render(<Harness selected={session} />));
+    const source = FakeEventSource.instances[0];
+    await act(async () => source.message(snapshot(serverMessages), "resume:0"));
+    harness.send.mockImplementation(async (_sid, command) => command.type === "resume" ? { accepted: true } : null);
+    await act(async () => { await current.handleResume(); });
+    expect(current.continuingOutput).toBe(false);
+    const timingId = harness.send.mock.calls.find(([, command]) => command.type === "resume")![1].timingId;
+    const run = { id: "resume-run", startedAt: 10_000, lastProgressAt: 10_000, observedAt: 10_000, phase: { kind: "waiting_model" }, continuing: true };
+    await act(async () => source.message({ type: "task_resume_started", runState: run }, "resume:1"));
+    expect(current.continuingOutput).toBe(true);
+    expect(current.messages).toEqual(serverMessages);
+    expect(current.agentPhase).toEqual({ kind: "waiting_model" });
+    const timing = readRunLatencyRecords().find(record => record.timingId === timingId);
+    expect(timing?.status).toBe("running");
+    expect(timing?.firstContentMs).toBeUndefined();
+  });
+
+  it("keeps a pending resume stoppable through bootstrap and suppresses duplicate clicks", async () => {
+    serverMessages = [user, { ...assistant, stopReason: "aborted" } as AgentMessage];
+    await act(async () => root.render(<Harness selected={session} />));
+    let resume!: Promise<boolean>;
+    await act(async () => { resume = current.handleResume(); });
+    expect(current.agentRunning).toBe(true);
+    await act(async () => { expect(await current.handleResume()).toBe(false); });
+    harness.send.mockImplementation(async (_sid, command) => command.type === "resume" ? { accepted: true } : null);
+    await act(async () => { const source = FakeEventSource.instances[0]; source.open(); source.message(snapshot(serverMessages), "resume:0"); await resume; });
+    expect(current.agentRunning).toBe(true);
+    expect(current.agentPhase).toEqual({ kind: "waiting_model" });
+    expect(current.messages).toEqual(serverMessages);
+    expect(harness.send.mock.calls.filter(([, command]) => command.type === "resume")).toHaveLength(1);
+    await act(async () => { expect(await current.handleResume()).toBe(false); });
+  });
+
+  it("cancels resume before readiness without posting it when a later snapshot arrives", async () => {
+    serverMessages = [user, { ...assistant, stopReason: "aborted" } as AgentMessage];
+    await act(async () => root.render(<Harness selected={session} />));
+    let resume!: Promise<boolean>;
+    await act(async () => { resume = current.handleResume(); });
+    const timingId = readRunLatencyRecords().at(-1)!.timingId;
+    await act(async () => { await current.handleAbort(); await resume; });
+    await act(async () => FakeEventSource.instances[0].message(snapshot(serverMessages), "resume:0"));
+    expect(harness.send.mock.calls.some(([, command]) => ["resume", "prompt", "navigate_tree"].includes(command.type))).toBe(false);
+    expect(current.messages).toEqual(serverMessages);
+    expect(current.agentRunning).toBe(false);
+    expect(harness.toast).not.toHaveBeenCalled();
+    expect(readRunLatencyRecords().find(record => record.timingId === timingId)?.status).toBe("aborted");
+    await expect(resume).resolves.toBe(false);
+  });
+
+  it("repeats stop after a delayed resume receipt so late admission cannot escape cancellation", async () => {
+    await act(async () => root.render(<Harness selected={session} />));
+    await act(async () => FakeEventSource.instances[0].message(snapshot([user]), "resume:0"));
+    let acknowledge!: () => void;
+    harness.send.mockImplementation((_sid, command) => command.type === "resume"
+      ? new Promise(resolve => { acknowledge = () => resolve({ accepted: true }); }) : Promise.resolve(null));
+    let resume!: Promise<boolean>;
+    await act(async () => { resume = current.handleResume(); });
+    await act(async () => current.handleAbort());
+    await act(async () => { acknowledge(); await resume; });
+    expect(harness.send.mock.calls.map(([, command]) => command.type).filter(type => type !== "get_tools")).toEqual(["resume", "abort", "abort"]);
+    expect(current.messages).toEqual([user]);
+    expect(current.agentRunning).toBe(false);
+    expect(current.runOutcome).toBe("stopped");
+    await expect(resume).resolves.toBe(false);
+  });
+
+  it("retains the interrupted conversation and recovery action when resume admission fails", async () => {
+    const failed = { ...assistant, stopReason: "length", content: [] } as AgentMessage;
+    serverMessages = [user, failed];
+    await act(async () => root.render(<Harness selected={session} />));
+    await act(async () => FakeEventSource.instances[0].message(snapshot(serverMessages), "resume:0"));
+    harness.send.mockImplementation(async (_sid, command) => { if (command.type === "resume") throw new Error("Session changed"); return null; });
+    await act(async () => { expect(await current.handleResume()).toBe(false); });
+    expect(current.messages).toEqual(serverMessages);
+    expect(current.agentRunning).toBe(false);
+    expect(current.runOutcome).toBe("failed");
+    expect(harness.toast).toHaveBeenCalledWith("Could not resume the task: Session changed", { type: "error" });
+  });
+
+  it.each([true, false])("retains Stop after a lost resume receipt with live SSE and state read success=%s", async readable => {
+    serverMessages = [user, { ...assistant, stopReason: "aborted" } as AgentMessage];
+    await act(async () => root.render(<Harness selected={session} />));
+    const source = FakeEventSource.instances[0];
+    await act(async () => source.message(snapshot(serverMessages), "resume:0"));
+    const run = { id: "accepted-resume", startedAt: 10_000, lastProgressAt: 10_000, observedAt: 10_000, phase: { kind: "thinking" }, continuing: true };
+    const originalFetch = harness.fetch.getMockImplementation()!;
+    harness.fetch.mockImplementation(async (url: string) => {
+      if (url === "/api/agent/one") {
+        if (!readable) throw new Error("State connection unavailable");
+        return new Response(JSON.stringify({ running: true, state: { isStreaming: true, runState: run } }));
+      }
+      return originalFetch(url);
+    });
+    harness.send.mockImplementation(async (_sid, command) => {
+      if (command.type === "resume") {
+        source.message({ type: "agent_start", runState: run }, "resume:1");
+        throw new Error("Lost acknowledgement");
+      }
+      return null;
+    });
+    await act(async () => { expect(await current.handleResume()).toBe(false); });
+    expect(harness.fetch).toHaveBeenCalledWith("/api/agent/one");
+    expect(harness.send.mock.calls.filter(([, command]) => command.type === "resume")).toHaveLength(1);
+    expect(current.agentRunning).toBe(true);
+    expect(current.agentPhase).toEqual({ kind: "thinking" });
+    expect(current.messages).toEqual(serverMessages);
+    expect(harness.toast).not.toHaveBeenCalled();
+    await act(async () => current.handleAbort());
+    expect(harness.send).toHaveBeenLastCalledWith("one", { type: "abort" });
+  });
+
+  it.each([
+    { outcome: "completed", lostReceipt: false },
+    { outcome: "failed", lostReceipt: false },
+    { outcome: "completed", lostReceipt: true },
+  ])("keeps a fast $outcome resume settled before its HTTP receipt (lost=$lostReceipt)", async ({ outcome, lostReceipt }) => {
+    serverMessages = [user, { ...assistant, stopReason: "aborted" } as AgentMessage];
+    await act(async () => root.render(<Harness selected={session} />));
+    const source = FakeEventSource.instances[0];
+    await act(async () => source.message(snapshot(serverMessages), "resume:0"));
+    let finish!: () => void;
+    harness.send.mockImplementation((_sid, command) => command.type === "resume" ? new Promise((resolve, reject) => {
+      finish = () => lostReceipt ? reject(new Error("Lost receipt after completion")) : resolve({ accepted: true });
+    }) : Promise.resolve(null));
+    let resume!: Promise<boolean>;
+    await act(async () => { resume = current.handleResume(); });
+    const final = outcome === "completed" ? assistant : { ...assistant, stopReason: "error", errorMessage: "Final error" } as AgentMessage;
+    serverMessages = [...serverMessages, final];
+    await act(async () => {
+      source.message({ type: "agent_start" }, "resume:1");
+      source.message({ type: "message_end", message: final }, "resume:2");
+      source.message({ type: "agent_end", messages: [final] }, "resume:3");
+      source.message(snapshot(serverMessages), "resume:3");
+    });
+    expect(current.agentRunning).toBe(false);
+    expect(current.agentPhase).toBeNull();
+    expect(current.runOutcome).toBe(outcome);
+    await act(async () => { finish(); await resume; });
+    expect(current.agentRunning).toBe(false);
+    expect(current.runOutcome).toBe(outcome);
+    expect(current.messages).toEqual(serverMessages);
+    expect(harness.send.mock.calls.filter(([, command]) => command.type === "resume")).toHaveLength(1);
+    expect(harness.send.mock.calls.some(([, command]) => command.type === "abort")).toBe(false);
+    expect(harness.toast).not.toHaveBeenCalled();
+  });
+
+  it("resumes saved progress after switching the recovery model", async () => {
+    serverMessages = [user, { ...assistant, stopReason: "error", errorMessage: "Unavailable" } as AgentMessage];
+    await act(async () => root.render(<Harness selected={session} />));
+    await act(async () => FakeEventSource.instances[0].message(snapshot(serverMessages), "resume:0"));
+    harness.send.mockClear();
+    harness.send.mockImplementation(async (_sid, command) => command.type === "resume" ? { accepted: true } : null);
+    await act(async () => current.handleRetryWithModel({ provider: "alternate", modelId: "other", name: "Other model" }));
+    expect(harness.send.mock.calls.map(([, command]) => command.type)).toEqual(["set_model", "resume"]);
+    expect(current.messages).toEqual(serverMessages);
+  });
+
   it("restores tool clocks after reconnect and updates reported children by call identity", async () => {
     vi.setSystemTime(1_000_000);
     await act(async () => root.render(<Harness selected={session} />));
@@ -231,6 +437,56 @@ describe("session reconciliation and first-prompt ordering", () => {
     await emit({ type: "agent_start" });
     await emit({ type: "agent_end", messages: [assistant], replayed: true });
     expect(harness.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["aborted", "cancelled-backoff"])("never reports a %s run as a completed answer", async kind => {
+    await act(async () => root.render(<Harness selected={session} />));
+    const emit = (event: AgentEvent) => act(async () => current.handleAgentEventRef.current?.(event));
+    await emit(snapshot([]));
+    await emit({ type: "agent_start" });
+    vi.mocked(setDoneTitle).mockClear(); vi.mocked(setStoppedTitle).mockClear(); vi.mocked(notifyDone).mockClear();
+    const stopped = { ...assistant, stopReason: kind === "aborted" ? "aborted" : "error", errorMessage: "temporary error" } as AgentMessage;
+    await emit({ type: "agent_end", messages: [stopped], ...(kind === "cancelled-backoff" ? { runOutcome: "stopped" } : {}) });
+    expect(setDoneTitle).not.toHaveBeenCalled(); expect(notifyDone).not.toHaveBeenCalled();
+    expect(setStoppedTitle).toHaveBeenCalled(); expect(harness.complete).not.toHaveBeenCalled();
+    await emit({ ...snapshot([stopped]), lastRunOutcome: "stopped" });
+    expect(setDoneTitle).not.toHaveBeenCalled(); expect(current.providerRecovery).toBeNull();
+  });
+
+  it("keeps SDK retry attempts active, restores backoff across clock skew, and notifies once at completion", async () => {
+    vi.setSystemTime(1_000_000);
+    await act(async () => root.render(<Harness selected={session} />));
+    const emit = (event: AgentEvent) => act(async () => current.handleAgentEventRef.current?.(event));
+    const run = { id: "retry-run", startedAt: 10_000, lastProgressAt: 15_000, observedAt: 20_000, phase: { kind: "waiting_model" } };
+    await emit({ ...snapshot([], true), state: { isStreaming: true, runState: run } });
+    vi.mocked(setDoneTitle).mockClear(); vi.mocked(setErrorTitle).mockClear(); vi.mocked(notifyDone).mockClear();
+    const failed = { ...assistant, stopReason: "error", errorMessage: "503" } as AgentMessage;
+    await emit({ type: "agent_end", messages: [failed], willRetry: true });
+    expect(current.agentRunning).toBe(true); expect(current.providerRecovery).toBeNull(); expect(notifyDone).not.toHaveBeenCalled();
+    const retry = { attempt: 1, maxAttempts: 3, retryAt: 25_000 };
+    await emit({ type: "auto_retry_start", runState: { ...run, retry } });
+    expect(current.retryInfo).toMatchObject({ retryAt: 1_005_000 });
+    await emit({ ...snapshot([failed], true), state: { isStreaming: true, runState: { ...run, retry } } });
+    expect(current.agentStartedAt).toBe(990_000); expect(current.retryInfo?.retryAt).toBe(1_005_000);
+    await emit({ type: "agent_end", messages: [assistant] });
+    await emit({ type: "agent_end", messages: [assistant], replayed: true });
+    expect(current.retryInfo).toBeNull(); expect(notifyDone).toHaveBeenCalledTimes(1); expect(harness.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps steering in the queue until the SDK delivers the user message", async () => {
+    serverMessages = [user]; serverStreaming = true;
+    await act(async () => root.render(<Harness selected={session} />));
+    const emit = (event: AgentEvent) => act(async () => current.handleAgentEventRef.current?.(event));
+    await emit(snapshot([user], true));
+    await act(async () => { await current.handleSteer("Change direction"); });
+    expect(current.messages).toEqual([user]);
+    expect(current.queuedFollowUps).toMatchObject([{ message: "Change direction", deliveryMode: "steer" }]);
+    const delivered = { role: "user", content: "Change direction", timestamp: 33 } as AgentMessage;
+    serverMessages = [user, delivered];
+    await emit({ type: "queue_update", items: [] });
+    await emit({ type: "message_end", message: delivered });
+    expect(current.queuedFollowUps).toHaveLength(0); expect(current.messages).toEqual([user, delivered]);
+    expect(current.messages.some(message => JSON.stringify(message).includes("[steer]"))).toBe(false);
   });
 
   it("decodes the compact REST and SSE tree while preserving context and branch targets", async () => {

@@ -200,7 +200,7 @@ for (const partial of [false, true]) test(`Pi subagent ${partial ? "partial fail
       expect(summary.workflowState).toBe("completed");
       expect([...summary.children].sort((a, b) => a.childId.localeCompare(b.childId)).map(child => ({ childId: child.childId, runId: child.runId, state: child.state }))).toEqual(children.map(child => ({ childId: child.workflowKey, runId: child.runId, state: "completed" })));
     }
-    await expect(page.getByRole("region", { name: "Work log", exact: true }).getByRole("button", { name: partial ? /Needs attention/ : /Completed/ })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Work log", exact: true }).getByRole("button", { name: partial ? /Answer received/ : /Completed/ })).toBeVisible();
     expect(await page.locator("body").textContent()).not.toContain("[object Object]");
   } finally {
     const observed = await page.evaluate(() => {
@@ -244,7 +244,7 @@ test("Steer remains usable during a reply", async ({ page }) => {
   await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture progress steer-before.` })).toBeVisible();
   await page.getByRole("group", { name: "Message delivery mode" }).getByRole("button", { name: "Steer", exact: true }).click();
   await input.fill(`E2E_RECONNECT:complete:steer-after`);
-  await page.getByRole("button", { name: "Interrupt the current run and inject now (Option+Enter)", exact: true }).click();
+  await page.getByRole("button", { name: "Queue for the next model call (Option+Enter)", exact: true }).click();
   await expect(page.getByTestId("assistant-message").filter({ hasText: `Fixture completed steer-after.` })).toHaveCount(1, { timeout: 20_000 });
   await expect(page.getByRole("button", { name: "Send", exact: true })).toBeVisible();
 });
