@@ -9,6 +9,9 @@ import { useI18n, type MsgKey } from "@/lib/i18n";
 import type { activeToolDetails } from "@/lib/tool-preview";
 import type { ChildActivity } from "@/lib/tool-activity";
 import { formatRunDuration } from "./ElapsedTime";
+import type { GenerationSettingsState } from "@/lib/generation-settings";
+import type { AgentMessage, AssistantMessage } from "@/lib/types";
+import { StreamingSpeed } from "./GenerationSpeed";
 import styles from "./ChatWindow.module.css";
 
 export function phaseLabel(phase: AgentPhase, translate?: (key: MsgKey) => string): string {
@@ -69,7 +72,7 @@ const childStateLabel: Record<ChildActivity["state"], MsgKey> = {
   failed: "chat.toolFailed", detached: "chat.runChildDetached",
 };
 
-export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools = [], onRevealTool, wide = false, retry, continuing = false, active = true, compacting = false }: {
+export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools = [], onRevealTool, wide = false, retry, continuing = false, active = true, compacting = false, streamingMessage, generationSettings, settingsUpdating = false, settingsRestarting = false, onApplySettingsNow }:  {
   phase: AgentPhase;
   progress: RunProgressState;
   startedAt: number | null;
@@ -81,6 +84,11 @@ export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools
   continuing?: boolean;
   active?: boolean;
   compacting?: boolean;
+  streamingMessage?: AgentMessage | null;
+  generationSettings?: GenerationSettingsState | null;
+  settingsUpdating?: boolean;
+  settingsRestarting?: boolean;
+  onApplySettingsNow?: () => void;
 }) {
   const { t } = useI18n();
   const clock = useRunClock(progress, lastProgressAtRef, active);
@@ -96,7 +104,8 @@ export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools
   const retrySeconds = retry ? Math.max(0, Math.ceil((retry.retryAt - clock.now) / 1000)) : 0;
   const retryLabel = retry ? t(retrySeconds > 0 ? "chat.retryCountdown" : "chat.retryActive")
     .replace("{seconds}", String(retrySeconds)).replace("{attempt}", String(retry.attempt)).replace("{max}", String(retry.maxAttempts)).replace("{phase}", reportedPhase) : null;
-  const operation = compacting ? t("chat.compacting") : phase?.kind === "stopping" ? reportedPhase : retryLabel
+  const restarting = settingsRestarting || generationSettings?.restarting;
+  const operation = restarting ? t("input.settingsRestarting") : compacting ? t("chat.compacting") : phase?.kind === "stopping" ? reportedPhase : retryLabel
     ?? (continuing ? `${t("chat.outputContinuing")} · ${reportedPhase}` : reportedPhase);
   const label = unconfirmed && (!retryLabel || state === "reconnecting" || state === "connecting") ? t("chat.runLastState").replace("{state}", operation) : operation;
   const connection = state === "connecting" ? t("chat.connecting")
@@ -128,6 +137,11 @@ export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools
             <Icon size={UI_ICON_SIZE.compact} aria-hidden="true"
               className={`${styles.runStatusIcon} ${state === "normal" || state === "reconnecting" || state === "connecting" ? styles.runStatusSpin : ""}`} />
             <span className={styles.runStatusMessage}>{label}</span>
+            {streamingMessage?.role === "assistant" && <span className={styles.runStatusGeneration}>
+              <StreamingSpeed message={streamingMessage as AssistantMessage} resetKey={startedAt} showStatus={false}
+                enabled={!restarting && !compacting && !retry && progress.connection === "connected"
+                  && phase?.kind !== "running_tools" && phase?.kind !== "stopping"} />
+            </span>}
             {first?.preview && <button type="button" className={styles.runStatusToolPreview}
               disabled={!first.canReveal || !onRevealTool} onClick={() => reveal(first.id)}
               aria-label={t("chat.runRevealTool").replace("{tool}", first.label ?? first.name)} data-testid="run-tool-preview">
@@ -147,8 +161,23 @@ export function RunStatus({ phase, progress, startedAt, lastProgressAtRef, tools
             <ChevronDown size={UI_ICON_SIZE.compact} aria-hidden="true" />
           </button>
         </>}
+        {(generationSettings?.pending || restarting || settingsUpdating) && <div className={styles.runSettings} data-testid="generation-settings-status">
+          <span role="status">{t(restarting ? "input.settingsRestarting" : settingsUpdating ? "input.settingsSaving" : "input.settingsPending")}</span>
+          {generationSettings?.pending && !restarting && onApplySettingsNow && <button type="button"
+            disabled={settingsUpdating || !generationSettings.canRestart || progress.connection !== "connected"}
+            title={t(generationSettings.canRestart ? "input.settingsApplyNowHelp" : "input.settingsWaitBoundary")}
+            onClick={onApplySettingsNow} data-testid="apply-generation-settings">
+            {t("input.settingsApplyNow")}
+          </button>}
+        </div>}
         {active && expanded && <div id={detailsId} className={styles.runStatusDetails} data-testid="run-details">
           <p data-testid="run-connection">{connection}</p>
+          {generationSettings?.active && <p data-testid="generation-settings-current">
+            {t("input.settingsCurrent")} {generationSettings.active.modelId} · {generationSettings.active.thinkingLevel}
+          </p>}
+          {generationSettings?.pending && generationSettings.selected && <p data-testid="generation-settings-selected">
+            {t("input.settingsSelected")} {generationSettings.selected.modelId} · {generationSettings.selected.thinkingLevel}
+          </p>}
           <p className={styles.runStatusHint}>{t("chat.runQuietHint")}</p>
           {tools.length > 0 && <ul className={styles.runStatusTools}>
             {tools.map(tool => <li key={tool.id} data-testid="run-tool-row" data-active-tool={tool.id}>

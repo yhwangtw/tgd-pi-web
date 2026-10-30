@@ -36,6 +36,7 @@ interface ModelSelectorProps {
   currentName: string | null;
   model?: { provider: string; modelId: string } | null;
   isStreaming: boolean;
+  disabled?: boolean;
   onModelChange?: (provider: string, modelId: string) => void;
   catalogStatus?: ModelCatalogStatus;
   catalogError?: string | null;
@@ -51,7 +52,7 @@ export const ModelSelector = React.memo(function ModelSelector({
   modelsByProvider,
   currentName,
   model,
-  isStreaming,
+  disabled = false,
   onModelChange,
   catalogStatus,
   catalogError,
@@ -90,6 +91,7 @@ export const ModelSelector = React.memo(function ModelSelector({
   }, []);
 
   const openMenu = (button: HTMLButtonElement) => {
+    if (disabled) return;
     onOpen?.();
     button.focus();
     setQuery("");
@@ -153,11 +155,11 @@ export const ModelSelector = React.memo(function ModelSelector({
   }, [open, useDialog]);
 
   useEffect(() => {
-    // A recovered catalog changes the recovery dialog into a picker. Close the old surface
-    // first, and never leave live options clickable after a run starts.
+    // A recovered catalog changes the recovery dialog into a picker. Close the old
+    // surface, or close options when the caller explicitly locks model changes.
     setOpen(false);
     setQuery("");
-  }, [needsRecovery, isStreaming]);
+  }, [needsRecovery, disabled]);
 
   const rememberModel = useCallback((option: ModelOption) => {
     setRecentRefs((current) => {
@@ -168,12 +170,12 @@ export const ModelSelector = React.memo(function ModelSelector({
   }, []);
 
   const selectModel = useCallback((option: ModelOption, restoreFocus = true) => {
-    if (option.available === false) return;
+    if (disabled || option.available === false) return;
     const isActive = option.modelId === model?.modelId && option.provider === model?.provider;
     rememberModel(option);
     closeMenu(restoreFocus && !isMobile);
     if (!isActive) onModelChange?.(option.provider, option.modelId);
-  }, [closeMenu, isMobile, model?.modelId, model?.provider, onModelChange, rememberModel]);
+  }, [closeMenu, disabled, isMobile, model?.modelId, model?.provider, onModelChange, rememberModel]);
 
   const togglePin = useCallback((option: ModelOption) => {
     setPinnedRefs((current) => {
@@ -382,7 +384,7 @@ export const ModelSelector = React.memo(function ModelSelector({
           event.preventDefault();
           openMenu(event.currentTarget);
         }}
-        disabled={isStreaming || (!needsRecovery && !onModelChange)}
+        disabled={disabled || (!needsRecovery && !onModelChange)}
         className={`${styles.trigger} ${open ? styles.triggerOpen : ""}`}
       >
         {status === "loading"

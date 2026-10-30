@@ -26,6 +26,8 @@ type OutputFeedbackFixture = {
   deliverSteering: () => void;
   failTool: () => void;
   write: (text: string) => void;
+  think: (text: string) => void;
+  prepare: (text: string) => void;
   finish: () => void;
   compact: () => void;
   finishCompact: () => void;
@@ -175,6 +177,21 @@ const test = base.extend<{ feedback: OutputFeedbackFixture }>({
           persist(result); send({ type: "tool_execution_end", toolCallId: "offline-read", toolName: "read", result });
           phase = { kind: "waiting_model" };
         },
+        think: text => {
+          const updating = phase.kind === "thinking" && streamingMessage !== null;
+          streamingMessage = updating ? { ...streamingMessage, content: [{ type: "thinking", thinking: text }] } : assistant([{ type: "thinking", thinking: text }]);
+          phase = { kind: "thinking" }; lastProgressAt = Date.now();
+          if (!updating) send({ type: "message_start", message: streamingMessage });
+          send({ type: "message_update", message: streamingMessage });
+        },
+        prepare: text => {
+          const content = [{ type: "toolCall", toolCallId: "offline-command", toolName: "bash", input: { command: text } }];
+          const updating = phase.kind === "preparing_tools" && streamingMessage !== null;
+          streamingMessage = updating ? { ...streamingMessage, content } : assistant(content);
+          phase = { kind: "preparing_tools" }; lastProgressAt = Date.now();
+          if (!updating) send({ type: "message_start", message: streamingMessage });
+          send({ type: "message_update", message: streamingMessage });
+        },
         write: text => {
           const updating = phase.kind === "writing" && streamingMessage !== null;
           streamingMessage = updating ? { ...streamingMessage, content: [{ type: "text", text }] } : assistant([{ type: "text", text }]);
@@ -216,7 +233,7 @@ for (const [label, width, height] of [["desktop", 1440, 960], ["mobile", 390, 85
   test(`${label}: live speed measures new text, expires when quiet, and persists a buffered average`, async ({ page, feedback }) => {
     await page.setViewportSize({ width, height }); await feedback.open();
     const monitor = page.getByTestId("run-monitor");
-    const speed = page.getByRole("log", { name: "Conversation", exact: true }).getByTestId("streaming-speed");
+    const speed = monitor.getByTestId("streaming-speed");
     feedback.write("Starting visible output.");
     await expect(speed).toHaveAttribute("data-rate-available", "false");
     // Exercise the real 250 ms rolling sampler over an observation interval.
@@ -241,7 +258,8 @@ for (const [label, width, height] of [["desktop", 1440, 960], ["mobile", 390, 85
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
     await page.screenshot({ animations: "disabled", path: test.info().outputPath(`live-speed-${label}.png`) });
     await expect(speed).toHaveAttribute("data-rate-available", "false", { timeout: 5000 });
-    await expect(speed).toContainText("speed unavailable");
+    await expect(speed.locator("[data-speed-tier]")).toHaveCount(0);
+    await expect(monitor).toContainText("Writing");
     feedback.failTool();
     await expect(speed).toHaveCount(0);
     feedback.write("A short buffered final answer."); feedback.finish();
@@ -249,14 +267,53 @@ for (const [label, width, height] of [["desktop", 1440, 960], ["mobile", 390, 85
     const average = page.getByTestId("assistant-message-footer").getByTestId("completed-speed").last();
     await expect(average).toHaveText("24 tokens · avg 60 token/s");
     await expect(average).toHaveAttribute("data-metrics-source", "server");
-    await expect(average.locator('[data-speed-tier="fast"]')).toHaveText("avg 60 token/s");
+    await expect(average.locator("[data-speed-tier]")).toHaveCount(0);
     await page.evaluate(() => localStorage.removeItem("pi-generation-metrics-v1"));
     await page.reload();
     await expect(average).toHaveText("24 tokens · avg 60 token/s");
     await expect(average).toBeInViewport();
-    await expect(average.locator('[data-speed-tier="fast"]')).toBeVisible();
+    await expect(average.locator("[data-speed-tier]")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
     expect(feedback.commands.filter(command => command.type === "prompt")).toHaveLength(0);
+  });
+
+  test(`${label}: received thinking and tool arguments keep the live badge updating while long content scrolls`, async ({ page, feedback }) => {
+    await page.setViewportSize({ width, height }); await feedback.open();
+    const monitor = page.getByTestId("run-monitor");
+    const speed = monitor.getByTestId("streaming-speed");
+    const conversation = page.getByRole("log", { name: "Conversation", exact: true });
+    feedback.think("");
+    let count = 0;
+    await expect.poll(async () => {
+      feedback.think("Observed reasoning continues. ".repeat(++count));
+      return speed.getAttribute("data-rate-available");
+    }, { intervals: [300], timeout: 5000 }).toBe("true");
+    await expect(monitor).toContainText("Thinking");
+    await expect(speed).toContainText(/~ [\d.,]+ token\/s/);
+    feedback.prepare("");
+    count = 0;
+    await expect.poll(async () => {
+      feedback.prepare("echo received-arguments; ".repeat(++count));
+      return speed.getAttribute("data-rate-available");
+    }, { intervals: [300], timeout: 5000 }).toBe("true");
+    await expect(monitor).toHaveAttribute("data-run-phase", "preparing_tools");
+    await expect(speed).toBeInViewport();
+    feedback.write("A long response line.\n\n".repeat(120));
+    count = 120;
+    await expect.poll(async () => {
+      feedback.write("A long response line.\n\n".repeat(++count));
+      return speed.getAttribute("data-rate-available");
+    }, { intervals: [300], timeout: 5000 }).toBe("true");
+    await conversation.evaluate(element => { const scroll = element.closest("[data-transcript-scroll]"); if (scroll) scroll.scrollTop = scroll.scrollHeight; });
+    await expect(speed).toBeInViewport();
+    await expect(conversation.getByTestId("streaming-speed")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    await page.screenshot({ animations: "disabled", path: test.info().outputPath(`live-generation-${label}.png`) });
+    feedback.finish();
+    await expect(monitor).toHaveCount(0);
+    const average = page.getByTestId("completed-speed").last();
+    await expect(average).toHaveText("24 tokens · avg 60 token/s");
+    await expect(average.locator("[data-speed-tier]")).toHaveCount(0);
   });
 
   test(`${label}: retry backoff survives reload and Stop has one honest terminal outcome`, async ({ page, feedback }) => {
@@ -324,10 +381,11 @@ for (const [label, width, height] of [["desktop", 1440, 960], ["mobile", 390, 85
     await expect(conversation).not.toContainText("[steer]");
     feedback.failTool(); feedback.write("A visible answer is still available after the earlier file check failed.");
     const monitor = page.getByTestId("run-monitor");
-    const speed = conversation.getByTestId("streaming-speed");
-    await expect(speed).toContainText("speed unavailable");
+    const speed = monitor.getByTestId("streaming-speed");
+    await expect(speed.locator("[data-speed-tier]")).toHaveCount(0);
+    await expect(monitor).toContainText("Writing");
     await expect(speed).toBeInViewport();
-    await expect(monitor.getByTestId("streaming-speed")).toHaveCount(0);
+    await expect(conversation.getByTestId("streaming-speed")).toHaveCount(0);
     expect(await speed.evaluate(element => element.closest("details"))).toBeNull();
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
     feedback.finish();
@@ -376,12 +434,12 @@ for (const [label, width, height] of [["desktop", 1440, 960], ["mobile", 390, 85
     const compact = page.getByTestId("compaction-status");
     await expect(compact).toHaveAttribute("data-state", "running");
     await expect(monitor).toHaveAttribute("data-run-phase", "compacting");
-    await expect(page.getByTestId("streaming-speed")).toHaveAttribute("data-rate-available", "false");
+    await expect(page.locator('[data-testid="streaming-speed"][data-rate-available="true"]')).toHaveCount(0);
     await expect(compact).toBeInViewport();
     await page.reload();
     await expect(compact).toHaveAttribute("data-state", "running");
     await expect(monitor).toHaveAttribute("data-run-phase", "compacting");
-    await expect(page.getByTestId("streaming-speed")).toHaveAttribute("data-rate-available", "false");
+    await expect(page.locator('[data-testid="streaming-speed"][data-rate-available="true"]')).toHaveCount(0);
     await expect(compact.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
     await page.screenshot({ animations: "disabled", path: test.info().outputPath(`compact-feedback-${label}.png`) });

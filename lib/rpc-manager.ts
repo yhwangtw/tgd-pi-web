@@ -3,6 +3,8 @@ import { subagentProgress, type ActiveTool } from "./tool-activity";
 import { isRunProgressEvent, phaseForMessage, type AgentPhase, type AgentRunState, type RunRetryInfo } from "./agent-run-state";
 import { getAssistantFailure } from "./assistant-outcome";
 import { createTaskResumeMessage, hasTaskResumeReceipt, TASK_RESUME_ENTRY } from "./task-resume";
+import { sameGenerationSelection, type GenerationSelection, type GenerationSettingsState } from "./generation-settings";
+import { THINKING_LEVEL_OPTIONS } from "./thinking-levels";
 import { hasUpstreamSubagentWork } from "./upstream-subagents";
 import {
   createAgentSessionFromServices,
@@ -139,7 +141,12 @@ export class AgentSessionWrapper {
   private pendingQueueItem: QueuedFollowUp | null = null;
   private queueCommandTail: Promise<void> = Promise.resolve();
   private runActive: boolean | null = null;
-  private pendingResume: { cancelled: boolean } | null = null;
+  private pendingResume: { cancelled: boolean; restarting?: boolean } | null = null;
+  private settingsCommandTail: Promise<void> = Promise.resolve();
+  private settingsRevision = 0;
+  private appliedSettingsRevision = 0;
+  private activeSettings: GenerationSelection | null = null;
+  private restoreRequestObserver: (() => void) | null = null;
   private readonly resumeRequests = new Map<string, Promise<unknown>>();
   private liveRun: { id: string; startedAt: number; lastProgressAt: number; stopping: boolean } | null = null;
   private lastRunError: string | null = null;
@@ -266,6 +273,7 @@ export class AgentSessionWrapper {
   }
 
   private subscribeCurrentSession(): void {
+    this.installRequestObserver();
     this.unsubscribe?.();
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
       this.resetIdleTimer();
@@ -333,6 +341,8 @@ export class AgentSessionWrapper {
   private prepareForSessionReplacement(): void {
     this.runTiming.cancel();
     this.generationMetrics.reset();
+    this.activeSettings = null;
+    this.appliedSettingsRevision = this.settingsRevision;
     this.compactionQueue = [];
     this.compactionQueueIds.clear();
     this.compaction = this.createCompactionController();
@@ -690,6 +700,119 @@ export class AgentSessionWrapper {
     return phaseForMessage(this.streamingMessage as Partial<AgentMessage> | undefined);
   }
 
+  private selectedGeneration(): GenerationSelection | null {
+    const model = this.inner.model;
+    return model ? { provider: model.provider, modelId: model.id, thinkingLevel: this.inner.agent?.state?.thinkingLevel ?? "off" } : null;
+  }
+
+  private generationSettings(): GenerationSettingsState {
+    const running = !!(this.runActive ?? this.inner.isStreaming);
+    return {
+      selected: this.selectedGeneration(), active: this.activeSettings,
+      revision: this.settingsRevision,
+      pending: running && this.settingsRevision !== this.appliedSettingsRevision,
+      restarting: this.pendingResume?.restarting === true,
+      runId: this.liveRun?.id ?? null,
+      canRestart: running && !!this.liveRun && !this.liveRun.stopping && !this.pendingResume
+        && !this.inner.isCompacting && this.compaction.state?.status !== "running" && !this.activeTools.size
+        && !this.bashRunning && !this.inner.pendingMessageCount && !this.queuedMessages.length
+        && !this.compactionQueue.length && !this.flushingCompactionQueue && !this.isReplacementPending()
+        && !hasUpstreamSubagentWork(this.sessionId),
+    };
+  }
+
+  private publishGenerationSettings(): GenerationSettingsState {
+    const settings = this.generationSettings();
+    this.emitEvent({ type: "generation_settings_changed", settings });
+    return settings;
+  }
+
+  private installRequestObserver(): void {
+    this.restoreRequestObserver?.();
+    this.restoreRequestObserver = null;
+    const inner = this.inner;
+    const agent = inner.agent;
+    if (!agent) return;
+    const previous = agent.prepareRequest;
+    const observe: NonNullable<typeof previous> = async (request, signal) => {
+      const revision = this.settingsRevision;
+      const prepared = (await previous?.(request, signal)) || undefined;
+      if (this._alive && this.inner === inner && (this.runActive ?? inner.isStreaming)
+        && !inner.isCompacting && this.compaction.state?.status !== "running") {
+        const model = prepared?.model ?? request.model;
+        this.activeSettings = { provider: model.provider, modelId: model.id,
+          thinkingLevel: prepared?.thinkingLevel ?? request.thinkingLevel };
+        // A selection changed while a prior hook awaited: only acknowledge the
+        // new revision when its effective settings really reached this request.
+        this.appliedSettingsRevision = sameGenerationSelection(this.selectedGeneration(), this.activeSettings)
+          ? this.settingsRevision : revision;
+        this.publishGenerationSettings();
+      }
+      return prepared;
+    };
+    agent.prepareRequest = observe;
+    this.restoreRequestObserver = () => { if (agent.prepareRequest === observe) agent.prepareRequest = previous; };
+  }
+
+  private setGenerationThinking(level: string): void {
+    if (!(THINKING_LEVEL_OPTIONS as readonly string[]).includes(level)) throw new Error("Unknown thinking level");
+    const model = this.inner.model;
+    if (!model) throw new Error("Select a model before changing thinking level");
+    const settings = this.inner.settingsManager;
+    // Pi 1.3's public settings getters, then its documented medium fallback.
+    // Auto resets the selection; it never silently retains a manual level.
+    const resolved = level === "auto"
+      ? settings.getModelThinkingLevel(model.provider, model.id) ?? settings.getDefaultThinkingLevel() ?? "medium"
+      : level;
+    this.inner.setThinkingLevel(resolved);
+  }
+
+  private async configureGeneration(command: Record<string, unknown>): Promise<GenerationSettingsState> {
+    if (this.pendingResume || this.inner.isCompacting || this.compaction.state?.status === "running" || this.isReplacementPending()) {
+      throw new Error("Wait for the current settings operation or compaction to finish");
+    }
+    const modelChoice = command.model as { provider?: unknown; modelId?: unknown } | undefined;
+    const thinking = command.thinkingLevel;
+    if (!modelChoice && thinking === undefined) throw new Error("A model or thinking level is required");
+    if (thinking !== undefined && (typeof thinking !== "string" || !(THINKING_LEVEL_OPTIONS as readonly string[]).includes(thinking))) {
+      throw new Error("Unknown thinking level");
+    }
+    const inner = this.inner;
+    const before = this.selectedGeneration();
+    if (modelChoice) {
+      if (typeof modelChoice.provider !== "string" || typeof modelChoice.modelId !== "string") throw new Error("Invalid model selection");
+      await this.refreshModels();
+      if (!this._alive || this.inner !== inner || this.isReplacementPending()) throw new Error("Session changed before settings were applied");
+      const model = this.modelRegistry?.find(modelChoice.provider, modelChoice.modelId);
+      if (!model) throw new Error("Selected model is unavailable");
+      await inner.setModel(model);
+    }
+    if (!this._alive || this.inner !== inner) throw new Error("Session changed before settings were applied");
+    if (typeof thinking === "string") this.setGenerationThinking(thinking);
+    if (!sameGenerationSelection(before, this.selectedGeneration())) {
+      this.settingsRevision++;
+      if (!(this.runActive ?? inner.isStreaming) || sameGenerationSelection(this.selectedGeneration(), this.activeSettings)) {
+        this.appliedSettingsRevision = this.settingsRevision;
+      }
+    }
+    return this.publishGenerationSettings();
+  }
+
+  private async abortRun(): Promise<void> {
+    this.runTiming.cancel();
+    const runner = this.inner.extensionRunner;
+    const goal = runner?.getCommand("goal");
+    const run = this.liveRun;
+    if (run) run.stopping = true;
+    try {
+      if (runner && goal) await goal.handler("pause", runner.createCommandContext());
+      await this.inner.abort();
+    } catch (error) {
+      if (run && this.liveRun === run) run.stopping = false;
+      throw error;
+    }
+  }
+
   private getRunState(): AgentRunState | null {
     if (!this.liveRun || !this.runActive) return null;
     const { id, startedAt, lastProgressAt } = this.liveRun;
@@ -704,6 +827,7 @@ export class AgentSessionWrapper {
       sessionFile: this.inner.sessionFile ?? "",
       isStreaming: this.runActive ?? this.inner.isStreaming,
       runState: this.getRunState(),
+      generationSettings: this.generationSettings(),
       isCompacting: this.inner.isCompacting || this.compaction.state?.status === "running",
       compaction: this.compaction.snapshot(),
       compactionQueue: this.compactionQueue,
@@ -816,6 +940,7 @@ export class AgentSessionWrapper {
       }
       this.lastRunError = null;
       this.lastRunOutcome = null;
+      this.activeSettings = null;
       this.streamingMessage = null;
       this.activeTools.clear();
     } else if (event.type === "turn_start") {
@@ -843,6 +968,8 @@ export class AgentSessionWrapper {
       const stopped = this.liveRun?.stopping || event.runOutcome === "stopped";
       if (stopped) event = { ...event, runOutcome: "stopped" };
       this.lastRunOutcome = stopped ? "stopped" : null;
+      this.appliedSettingsRevision = this.settingsRevision;
+      this.activeSettings = null;
       this.retryInfo = null;
       this.continuingOutput = false;
       this.runActive = false;
@@ -885,6 +1012,9 @@ export class AgentSessionWrapper {
       this.liveRun.lastProgressAt = Math.max(this.liveRun.lastProgressAt, Date.now());
     }
     if (["agent_start", "turn_start", "auto_retry_start"].includes(event.type)) event = { ...event, runState: this.getRunState() };
+    if (["agent_start", "agent_end", "tool_execution_start", "tool_execution_end", "queue_update", "bash_start", "bash_end"].includes(event.type)) {
+      event = { ...event, generationSettings: this.generationSettings() };
+    }
     const record: AgentStreamRecord = (event.type.startsWith("extension_ui_") || event.type === "run_timing")
       ? { type: event.type, data: JSON.stringify(event) }
       : this.eventLog.append(event);
@@ -951,6 +1081,11 @@ export class AgentSessionWrapper {
         this.queueCommandTail = operation.then(() => {}, () => {});
         return await operation;
       }
+      if (["configure_generation", "set_model", "set_thinking_level"].includes(String(command.type))) {
+        const operation = this.settingsCommandTail.then(() => this.performCommand(command));
+        this.settingsCommandTail = operation.then(() => {}, () => {});
+        return await operation;
+      }
       if (command.type === "resume") {
         const requestId = command.requestId;
         if (typeof requestId !== "string" || !/^[\w-]{1,128}$/.test(requestId)) throw new Error("A valid resume request ID is required");
@@ -960,7 +1095,10 @@ export class AgentSessionWrapper {
         // The persisted SDK entry also deduplicates a lost acknowledgement after
         // a runtime reload. It is a receipt of admission, not proof of completion.
         if (hasTaskResumeReceipt(this.inner.sessionManager.getEntries(), requestId)) return { accepted: true };
-        const operation = this.performCommand(command);
+        const operation = command.stopCurrentRun === true
+          ? this.settingsCommandTail.then(() => this.performCommand(command))
+          : this.performCommand(command);
+        if (command.stopCurrentRun === true) this.settingsCommandTail = operation.then(() => {}, () => {});
         this.resumeRequests.set(receiptKey, operation);
         // In-flight admission is protected by pendingResume and the SDK busy guard.
         while (this.resumeRequests.size > 128) this.resumeRequests.delete(this.resumeRequests.keys().next().value!);
@@ -976,6 +1114,59 @@ export class AgentSessionWrapper {
       this.emitEvent({ type: "queue_update", steering: sdk.steeringMessages, followUp: sdk.followUpMessages });
     }
   }
+  private async resumeTask(command: Record<string, unknown>, admission?: { cancelled: boolean; restarting?: boolean }): Promise<unknown> {
+    if ((this.pendingResume && this.pendingResume !== admission) || this.runActive || this.inner.isStreaming || this.inner.isIdle === false
+      || this.inner.isCompacting || this.compaction.state?.status === "running" || this.bashRunning
+      || this.flushingCompactionQueue || this.compactionQueue.length || this.inner.pendingMessageCount
+      || this.isReplacementPending() || hasUpstreamSubagentWork(this.sessionId)) {
+      throw new Error("Wait for the current activity to finish before resuming this task");
+    }
+    if (!this.inner.model) throw new Error("Select a model before resuming this task");
+    const inner = this.inner;
+    const sourceLeafId = inner.sessionManager.getLeafId();
+    if (command.expectedLeafId !== undefined && command.expectedLeafId !== sourceLeafId) {
+      throw new Error("The conversation changed; refresh it before resuming");
+    }
+    const message = createTaskResumeMessage(inner.sessionManager.getBranch(), command.requestId as string,
+      this.lastRunOutcome === "stopped" || !!this.lastRunError);
+    const pending = admission ?? { cancelled: false };
+    this.pendingResume = pending;
+    const timing = this.runTiming.accept(command.timingId);
+    try {
+      if (this.cwd) await createSnapshot(this.cwd, inner.sessionId, "Before task resume").catch(() => {});
+      if (pending.cancelled || !this._alive || this.inner !== inner) throw new Error("Task recovery was cancelled");
+      if (inner.sessionManager.getLeafId() !== sourceLeafId || inner.isStreaming || inner.isIdle === false || inner.isCompacting) {
+        throw new Error("The conversation changed; refresh it before resuming");
+      }
+      const previousEnd = this.lastAgentEndCursor;
+      // This supported SDK entry point runs the usual preparation, extension
+      // hooks, compaction and retries. No tree navigation or user replay.
+      const running = inner.sendCustomMessage(message, { triggerTurn: true });
+      this.pendingResume = null;
+      const settled = () => {
+        if (!inner.isStreaming && !this.runActive && this.inner === inner) {
+          if (timing) this.runTiming.complete(timing);
+          this.emitEvent(this.getStreamSnapshot());
+        }
+      };
+      const rejected = (error: unknown) => {
+        if (timing) this.runTiming.complete(timing);
+        if (this.inner === inner && this.lastAgentEndCursor === previousEnd) this.emitEvent({
+          type: "agent_end", messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage: this.errorMessage(error) }],
+        });
+      };
+      if (command.awaitCompletion === true) {
+        try { await running; settled(); } catch (error) { rejected(error); throw error; }
+      } else void running.then(settled, rejected);
+      return { accepted: true };
+    } catch (error) {
+      if (timing) this.runTiming.complete(timing);
+      throw error;
+    } finally {
+      if (this.pendingResume === pending) this.pendingResume = null;
+    }
+  }
+
   private async performCommand(command: Record<string, unknown>): Promise<unknown> {
     this.resetIdleTimer();
     const type = command.type as string;
@@ -1022,55 +1213,23 @@ export class AgentSessionWrapper {
       }
 
       case "resume": {
-        if (this.pendingResume || this.runActive || this.inner.isStreaming || this.inner.isIdle === false
-          || this.inner.isCompacting || this.compaction.state?.status === "running" || this.bashRunning
-          || this.flushingCompactionQueue || this.compactionQueue.length || this.inner.pendingMessageCount
-          || this.isReplacementPending() || hasUpstreamSubagentWork(this.sessionId)) {
-          throw new Error("Wait for the current activity to finish before resuming this task");
+        if (command.stopCurrentRun !== true) return this.resumeTask(command);
+        const settings = this.generationSettings();
+        if (!settings.canRestart || !settings.pending || command.expectedRunId !== settings.runId
+          || command.expectedSettingsRevision !== settings.revision) {
+          throw new Error("The run or selected settings changed; refresh before stopping and resuming");
         }
-        if (!this.inner.model) throw new Error("Select a model before resuming this task");
         const inner = this.inner;
-        const sourceLeafId = inner.sessionManager.getLeafId();
-        if (command.expectedLeafId !== undefined && command.expectedLeafId !== sourceLeafId) {
-          throw new Error("The conversation changed; refresh it before resuming");
-        }
-        const message = createTaskResumeMessage(inner.sessionManager.getBranch(), command.requestId as string,
-          this.lastRunOutcome === "stopped" || !!this.lastRunError);
-        const pending = { cancelled: false };
+        const pending = { cancelled: false, restarting: true };
         this.pendingResume = pending;
-        const timing = this.runTiming.accept(command.timingId);
+        this.publishGenerationSettings();
         try {
-          if (this.cwd) await createSnapshot(this.cwd, inner.sessionId, "Before task resume").catch(() => {});
-          if (pending.cancelled || !this._alive || this.inner !== inner) throw new Error("Task recovery was cancelled");
-          if (inner.sessionManager.getLeafId() !== sourceLeafId || inner.isStreaming || inner.isIdle === false || inner.isCompacting) {
-            throw new Error("The conversation changed; refresh it before resuming");
-          }
-          const previousEnd = this.lastAgentEndCursor;
-          // This supported SDK entry point runs the usual preparation, extension
-          // hooks, compaction and retries. No tree navigation or user replay.
-          const running = inner.sendCustomMessage(message, { triggerTurn: true });
-          this.pendingResume = null;
-          const settled = () => {
-            if (!inner.isStreaming && !this.runActive && this.inner === inner) {
-              if (timing) this.runTiming.complete(timing);
-              this.emitEvent(this.getStreamSnapshot());
-            }
-          };
-          const rejected = (error: unknown) => {
-            if (timing) this.runTiming.complete(timing);
-            if (this.inner === inner && this.lastAgentEndCursor === previousEnd) this.emitEvent({
-              type: "agent_end", messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage: this.errorMessage(error) }],
-            });
-          };
-          if (command.awaitCompletion === true) {
-            try { await running; settled(); } catch (error) { rejected(error); throw error; }
-          } else void running.then(settled, rejected);
-          return { accepted: true };
-        } catch (error) {
-          if (timing) this.runTiming.complete(timing);
-          throw error;
+          await this.abortRun(); // Official SDK acknowledgment waits for settlement.
+          if (pending.cancelled || !this._alive || this.inner !== inner) throw new Error("Settings recovery was cancelled");
+          return await this.resumeTask(command, pending);
         } finally {
           if (this.pendingResume === pending) this.pendingResume = null;
+          if (this._alive && this.inner === inner) this.publishGenerationSettings();
         }
       }
 
@@ -1090,26 +1249,15 @@ export class AgentSessionWrapper {
 
       case "abort": {
         if (this.pendingResume) this.pendingResume.cancelled = true;
-        this.runTiming.cancel();
-        // Stop also revokes automatic Goal continuation, including the gap
-        // between two SDK runs when abort alone has nothing to cancel.
-        const runner = this.inner.extensionRunner;
-        const goal = runner?.getCommand("goal");
-        const run = this.liveRun;
-        if (run) run.stopping = true;
-        try {
-          if (runner && goal) await goal.handler("pause", runner.createCommandContext());
-          await this.inner.abort();
-        } catch (error) {
-          if (run && this.liveRun === run) run.stopping = false;
-          throw error;
-        }
+        await this.abortRun();
         return null;
       }
 
       case "get_state": {
         return this.getLiveState();
       }
+
+      case "configure_generation": return this.configureGeneration(command);
 
       case "set_model": {
         const { provider, modelId } = command as { provider: string; modelId: string };
@@ -1118,7 +1266,10 @@ export class AgentSessionWrapper {
         if (!registry) throw new Error("Model registry is unavailable");
         const model = registry.find(provider, modelId);
         if (!model) throw new Error(`Model not found: ${provider}/${modelId}`);
+        const before = this.selectedGeneration();
         await this.inner.setModel(model);
+        if (!sameGenerationSelection(before, this.selectedGeneration())) this.settingsRevision++;
+        this.publishGenerationSettings();
         return { id: model.id, provider: model.provider };
       }
 
@@ -1173,14 +1324,10 @@ export class AgentSessionWrapper {
       }
 
       case "set_thinking_level": {
-        const level = command.level as string;
-        this.inner.setThinkingLevel(level);
-        // setThinkingLevel clamps xhigh→high for models where supportsXhigh()===false.
-        // If the model has DeepSeek thinking compat (reasoningEffortMap maps xhigh→max),
-        // force the state back so the compat layer can use it correctly.
-        if (level === "xhigh" && (this.inner.model as { compat?: { thinkingFormat?: string } } | null)?.compat?.thinkingFormat === "deepseek" && this.inner.agent?.state) {
-          this.inner.agent.state.thinkingLevel = "xhigh";
-        }
+        const before = this.selectedGeneration();
+        this.setGenerationThinking(String(command.level));
+        if (!sameGenerationSelection(before, this.selectedGeneration())) this.settingsRevision++;
+        this.publishGenerationSettings();
         return null;
       }
 
@@ -1395,6 +1542,9 @@ export class AgentSessionWrapper {
   destroy(): void {
     if (!this._alive) return;
     this._alive = false;
+    this.restoreRequestObserver?.();
+    this.restoreRequestObserver = null;
+    if (this.pendingResume) this.pendingResume.cancelled = true;
     this.runTiming.cancel();
     this.generationMetrics.reset();
     this.streamAliases.clear();

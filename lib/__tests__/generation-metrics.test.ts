@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateTextTokens, GenerationMetricsTracker, TextRateWindow, generationMessageKey, validGenerationMetrics } from "../generation-metrics";
+import { estimateTextTokens, estimateStreamTokens, GenerationMetricsTracker, TextRateWindow, generationMessageKey, validGenerationMetrics } from "../generation-metrics";
 import type { AssistantMessage } from "../types";
 
 const message = (text: string): AssistantMessage => ({ role: "assistant", timestamp: 123, provider: "test", model: "test", content: [{ type: "text", text }] });
@@ -72,6 +72,21 @@ describe("generation metrics", () => {
     expect(tracker.get("session", message("answer"))).toBeUndefined();
   });
 });
+describe("received generation content", () => {
+  it("counts received text, thinking and generated arguments without signatures or hidden output", () => {
+    const sample = { ...message("answer"), content: [
+      { type: "text" as const, text: "a".repeat(40) },
+      { type: "thinking" as const, thinking: "b".repeat(80), thinkingSignature: "private".repeat(1000) },
+      { type: "toolCall" as const, toolCallId: "1", toolName: "bash", input: { command: "echo test" } },
+    ] };
+    expect(estimateStreamTokens(sample)).toBe(30 + estimateTextTokens(JSON.stringify({ command: "echo test" })));
+    expect(estimateStreamTokens(message(""))).toBe(0);
+    const hidden = { type: "thinking" as const, thinking: "", thinkingSignature: "hidden" };
+    expect(estimateStreamTokens({ ...message(""), content: [hidden] })).toBe(0);
+    expect(estimateStreamTokens({ ...message(""), content: [{ type: "toolCall", toolCallId: "1", toolName: "bash", input: {} }] })).toBe(0);
+  });
+});
+
 describe("rolling live speed", () => {
   it("measures short streams without requiring a full second, but not an instantaneous burst", () => {
     const window = new TextRateWindow();

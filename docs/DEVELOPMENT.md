@@ -637,18 +637,18 @@ slots available when several conversations also hold agent event streams;
 file contents reload only after change. The revision includes inode and ctime,
 so equal-size writes and replacements preserving mtime still invalidate it.
 
-Live generation speed uses the original inline model/status row above the
-streaming response: a down-arrow token estimate and the original coloured badge
-(red below 15, yellow from 15, green from 30, cyan from 50 token/s). The colours
-indicate speed only. During streaming the badge is hidden when no current rate
-is measurable; no thinking or tool-execution throughput is invented. Completed
-responses retain the same coloured badge in their footer, explicitly labelled
-as an average. Even sub-second or buffered replies can therefore show a badge
-without pretending they had an observable live interval. There is no separate
-speed row in the composer dock or expanded explanation.
-The rolling visible-text rate is an estimate, sampled every 250 ms with at least
-250 ms of observed time and new text before displaying a value. Thinking,
-tool work, reconnects and quiet streams do not claim stale text throughput.
+Live generation speed uses the original down-arrow count and coloured badge
+(red below 15, yellow from 15, green from 30, cyan from 50 token/s), inline with
+the existing run-status heading. It remains visible as a long answer scrolls;
+there is one live sampler and no separate speed panel. It estimates the actual
+received text, thinking and generated tool arguments, sampled every 250 ms over
+a three-second window. Hidden reasoning and tool execution/results are never
+inferred. Initial snapshots are baselines; reconnects reset measurement and
+quiet streams stop displaying stale rates. Waiting, retry, compaction, Stop and
+tool execution retain their existing status labels without a fabricated speed.
+Completed responses retain a quiet, uncoloured count and labelled response
+average in their footer. This average includes the full response interval and
+may use provider usage; it is distinct from the live content estimate.
 The server measures each response interval and persists `pi-web-generation-metrics`
 custom metadata linked to the assistant entry and content fingerprint. This is
 not a chat message and never enters model context. Provider output usage divided
@@ -884,3 +884,26 @@ after snapshot preparation, and honors Stop during preparation. A request ID is
 deduplicated both during admission and from persisted recovery entries after a
 runtime reload. `task_resume_started` exposes continuation only after Pi has
 persisted its recovery entry; an accepted HTTP response alone is not completion.
+
+
+### Model and reasoning changes during a run
+
+`configure_generation` serializes model/thinking changes and returns the SDK's
+accepted selection, including capability clamping. The chained public
+`agent.prepareRequest` records the settings prepared for each model request;
+`generation_settings_changed` and stream snapshots distinguish this active
+request from a pending selection. An in-flight provider request keeps its
+original settings. Pi rereads the selection for the next request, including
+requests following tool results in the same run.
+
+`auto` is a reset action: per-model configured level, then global default, then
+Pi 1.3's documented `medium` fallback, clamped by `setThinkingLevel`. It is not a
+frontend-only mode and does not retain the previous manual choice.
+
+The explicit Stop and continue action uses a deduplicated `resume` request,
+guarded by run ID and settings revision. It awaits the SDK's `abort()` settlement
+before using the normal saved-branch recovery path above. Ordinary model changes
+do not stop the run. Compaction, active tools, queued work and pending recovery
+block explicit restart; the next provider request can still adopt saved settings.
+A second Stop cancels a pending restart, including a late HTTP admission. The
+composer preserves drafts and scopes delayed selection responses to their view.

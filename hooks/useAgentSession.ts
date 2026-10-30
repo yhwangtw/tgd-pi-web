@@ -4,6 +4,7 @@ import { localToolClock, type ActiveTool } from "@/lib/tool-activity";
 import { keepActivePhase, phaseForMessage, restoreRunClock, type AgentRunState, type RunRetryInfo } from "@/lib/agent-run-state";
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useReducer, useMemo } from "react";
 import type { AgentMessage } from "@/lib/types";
+import type { GenerationSettingsState } from "@/lib/generation-settings";
 import { browserMetricsStorage, GenerationMetricsTracker } from "@/lib/generation-metrics";
 import { getAssistantOutputIssue, getAssistantOutcome } from "@/lib/assistant-outcome";
 import { RunLatencyTracker } from "@/lib/run-latency";
@@ -56,6 +57,7 @@ import {
 export type { SessionData, AgentPhase, ThinkingLevelOption, ChatInputHandle, AttachedImage };
 
 interface LiveAgentState extends CompactionLiveState {
+  generationSettings?: GenerationSettingsState;
   runState?: AgentRunState | null;
   queuedFollowUps?: QueuedFollowUp[];
   isStreaming?: boolean;
@@ -117,6 +119,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
   const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
+  const [generationSettings, setGenerationSettings] = useState<GenerationSettingsState | null>(null);
+  const generationSettingsRef = useRef<GenerationSettingsState | null>(null);
+  const settingsEventVersion = useRef(0);
+  const [settingsUpdating, setSettingsUpdating] = useState(false);
+  const [settingsRestarting, setSettingsRestarting] = useState(false);
+  const settingsOperationRef = useRef<object | null>(null);
+  const settingsRestartRef = useRef<AbortController | null>(null);
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
   const [isCompacting, setIsCompacting] = useState(false);
   const [autoCompactionEnabled, setAutoCompactionEnabled] = useState<boolean | null>(null);
@@ -154,6 +163,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   useLayoutEffect(() => {
     const scope = {};
     viewScope.current = scope;
+    generationSettingsRef.current = null;
+    settingsEventVersion.current++;
+    settingsOperationRef.current = null;
+    settingsRestartRef.current = null;
+    setGenerationSettings(null);
+    setSettingsUpdating(false);
+    setSettingsRestarting(false);
     return () => { if (viewScope.current === scope) viewScope.current = null; };
   }, [session?.id, newSessionCwd]);
   const abortInFlightRef = useRef(false);
@@ -231,8 +247,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const sessionStats = useMemo(() => computeSessionStats(messages), [messages]);
 
+  const acceptGenerationSettings = useCallback((settings: GenerationSettingsState) => {
+    generationSettingsRef.current = settings;
+    setGenerationSettings(settings);
+    if (settings.selected) {
+      setCurrentModelOverride({ provider: settings.selected.provider, modelId: settings.selected.modelId });
+      setThinkingLevel(settings.selected.thinkingLevel as ThinkingLevelOption);
+    }
+  }, []);
+
+
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
     const requestId = ++sessionLoadRequestRef.current;
+    const settingsVersion = settingsEventVersion.current;
+    const scope = viewScope.current;
+    const isCurrent = () => viewScope.current === scope && sessionIdRef.current === sid;
     try {
       if (showLoading) setLoading(true);
       const url = includeState
@@ -240,7 +269,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         : `/api/sessions/${encodeURIComponent(sid)}`;
       const res = await fetch(url, { headers: { "X-Pi-Session-Tree": "flat-v2" } });
       if (res.status === 404) {
-        if (showLoading && shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
+        if (isCurrent() && showLoading && shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
           setData(null);
           setActiveLeafId(null);
           setMessages([]);
@@ -250,7 +279,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const wire = await res.json() as Omit<SessionData, "tree"> & { tree: SessionData["tree"] | SessionTreeWire; agentState?: AgentStateEnvelope };
-      if (!shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
+      if (!isCurrent() || !shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
         // Callers also reconcile running/thinking state from this return
         // value. Do not let an obsolete fetch resurrect a completed run.
         return null;
@@ -269,22 +298,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (d.agentState?.state?.autoCompactionEnabled !== undefined) {
         setAutoCompactionEnabled(d.agentState.state.autoCompactionEnabled);
       }
-      setCurrentModelOverride(null);
       setError(null);
-      // Model changes can clamp the previous thinking level. Reflect the
-      // runtime's accepted value, including "off", instead of a stale choice.
-      const acceptedThinking = d.agentState?.state?.thinkingLevel ?? d.context.thinkingLevel;
-      if (acceptedThinking) setThinkingLevel(acceptedThinking as ThinkingLevelOption);
+      // A newer live observation or selection wins over a delayed file read.
+      if (settingsEventVersion.current === settingsVersion && !settingsOperationRef.current) {
+        if (d.agentState?.state?.generationSettings) acceptGenerationSettings(d.agentState.state.generationSettings);
+        else if (!generationSettingsRef.current) {
+          setCurrentModelOverride(null);
+          const acceptedThinking = d.agentState?.state?.thinkingLevel ?? d.context.thinkingLevel;
+          if (acceptedThinking) setThinkingLevel(acceptedThinking as ThinkingLevelOption);
+        }
+      }
       return d.agentState ?? null;
     } catch (e) {
-      if (shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
+      if (isCurrent() && shouldApplySessionLoad(requestId, sessionLoadRequestRef.current)) {
         setError(String(e));
       }
       return null;
     } finally {
-      if (showLoading) setLoading(false);
+      if (showLoading && isCurrent()) setLoading(false);
     }
-  }, [generationMetrics]);
+  }, [generationMetrics, acceptGenerationSettings]);
 
   const compaction = useSessionCompaction(sessionIdRef, setIsCompacting, () => {
     const sid = sessionIdRef.current;
@@ -338,6 +371,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   agentPhaseRef.current = agentPhase;
 
   const handleAgentEvent = useCallback((event: AgentEvent) => {
+    if (event.type === "generation_settings_changed" || event.generationSettings) {
+      settingsEventVersion.current++;
+      const settings = (event.settings ?? event.generationSettings) as GenerationSettingsState;
+      if (settings) acceptGenerationSettings(settings);
+      if (event.type === "generation_settings_changed") return;
+    }
     if (event.type !== "session_snapshot" || event.sessionId === sessionIdRef.current) {
       generationMetrics.record(sessionIdRef.current, event, performance.now());
       runLatency.record(event);
@@ -358,6 +397,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sessionLoadRequestRef.current += 1;
       streamScheduler.cancel();
       const state = event.state as LiveAgentState | undefined;
+      if (state?.generationSettings) {
+        settingsEventVersion.current++;
+        acceptGenerationSettings(state.generationSettings);
+      }
       runObservationRef.current = { active: state?.isStreaming === true, version: runObservationRef.current.version + 1 };
       const wire = event.sessionData as (Omit<SessionData, "tree"> & { tree: SessionData["tree"] | SessionTreeWire }) | undefined;
       if (wire?.context && Array.isArray(wire.context.messages)) {
@@ -395,10 +438,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (state?.autoCompactionEnabled !== undefined) setAutoCompactionEnabled(state.autoCompactionEnabled);
       if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage);
       if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt);
-      if (state?.thinkingLevel !== undefined) setThinkingLevel(state.thinkingLevel as ThinkingLevelOption);
+      if (!state?.generationSettings && state?.thinkingLevel !== undefined) setThinkingLevel(state.thinkingLevel as ThinkingLevelOption);
       if (state?.queuedFollowUps) setQueuedFollowUps(previous => normalizeQueuedFollowUps({ items: state.queuedFollowUps }, previous));
       const model = (event.state as { model?: { provider: string; id: string } } | undefined)?.model;
-      if (model) setCurrentModelOverride({ provider: model.provider, modelId: model.id });
+      if (model && !state?.generationSettings) setCurrentModelOverride({ provider: model.provider, modelId: model.id });
       setBashRun((event.bashRun as { command: string; output: string; running: boolean } | null) ?? null);
       if (running && event.streamingMessage) streamScheduler.start({ sessionId: sessionIdRef.current, message: event.streamingMessage as AgentMessage });
       else dispatch({ type: running ? "start" : "end" });
@@ -576,7 +619,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (event.willRetry === true) { streamScheduler.flush(); break; }
         // A live terminal event settles an admitted start even when its HTTP
         // receipt is still pending. Bootstrap replay must not cancel a start.
-        if (!event.replayed && pendingPromptMessageRef.current === null) pendingSendRef.current = null;
+        if (!event.replayed && pendingPromptMessageRef.current === null && !settingsRestartRef.current) pendingSendRef.current = null;
         runObservationRef.current = { active: false, version: runObservationRef.current.version + 1 };
         const stopped = event.runOutcome === "stopped" || agentPhaseRef.current?.kind === "stopping";
         runIdRef.current = null;
@@ -769,7 +812,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setRetryInfo(null);
         break;
     }
-  }, [connectEvents, eventSourceRef, loadSession, onAgentEnd, onAgentComplete, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef, reportModelUnavailable, handleCompactionEvent, reconcileCompaction, generationMetrics, streamScheduler, runLatency, restoreLiveRun]);
+  }, [acceptGenerationSettings, connectEvents, eventSourceRef, loadSession, onAgentEnd, onAgentComplete, onSessionForked, onSessionNamed, lastEventAtRef, resetRunProgress, opts.chatInputRef, reportModelUnavailable, handleCompactionEvent, reconcileCompaction, generationMetrics, streamScheduler, runLatency, restoreLiveRun]);
   handleAgentEventRef.current = handleAgentEvent;
 
   useEffect(() => {
@@ -1105,29 +1148,43 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [loadContext]);
 
-  const handleModelChange = useCallback(async (provider: string, modelId: string): Promise<boolean> => {
-    if (modelListRef.current.some((model) => model.provider === provider && model.id === modelId && model.available === false)) return false;
-    if (isNew) {
-      setNewSessionModel({ provider, modelId });
-      return true;
-    }
+  const configureGeneration = useCallback(async (choice: Record<string, unknown>): Promise<boolean> => {
     const sid = sessionIdRef.current;
-    if (!sid) return false;
+    if (!sid || settingsOperationRef.current || isCompacting) return false;
+    const operation = {};
+    const scope = viewScope.current;
+    const isCurrent = () => viewScope.current === scope && sessionIdRef.current === sid;
+    settingsOperationRef.current = operation;
+    const version = settingsEventVersion.current;
+    setSettingsUpdating(true);
     try {
-      await sendAgentCommand(sid, { type: "set_model", provider, modelId });
-      // Any session fetch already in flight was started before this model
-      // change and must not overwrite the optimistic selection when it lands.
-      sessionLoadRequestRef.current += 1;
-      setCurrentModelOverride({ provider, modelId });
-      await loadSession(sid, false, true);
-      setProviderRecovery(null);
+      const accepted = await sendAgentCommand<GenerationSettingsState>(sid, { type: "configure_generation", ...choice });
+      if (!isCurrent()) return false;
+      sessionLoadRequestRef.current++;
+      if (accepted && (version === settingsEventVersion.current || accepted.revision > (generationSettingsRef.current?.revision ?? -1))) {
+        acceptGenerationSettings(accepted);
+      }
+      setProviderRecovery(current => choice.model || current?.kind === "unsupported_setting" ? null : current);
       return true;
-    } catch (e) {
-      console.error("Failed to set model:", e);
-      showToast(`${translate("recovery.switchFailed")}: ${e instanceof Error ? e.message : e}`, { type: "error" });
+    } catch (reason) {
+      if (isCurrent()) {
+        const message = reason instanceof Error ? reason.message : String(reason);
+        showToast(`${translate("input.settingsFailed")}: ${message}`, { type: "error" });
+      }
       return false;
+    } finally {
+      if (settingsOperationRef.current === operation) {
+        settingsOperationRef.current = null;
+        if (isCurrent()) setSettingsUpdating(false);
+      }
     }
-  }, [isNew, setNewSessionModel, loadSession]);
+  }, [isCompacting, acceptGenerationSettings]);
+
+  const handleModelChange = useCallback(async (provider: string, modelId: string): Promise<boolean> => {
+    if (modelListRef.current.some(model => model.provider === provider && model.id === modelId && model.available === false)) return false;
+    if (isNew) { setNewSessionModel({ provider, modelId }); return true; }
+    return configureGeneration({ model: { provider, modelId } });
+  }, [isNew, setNewSessionModel, configureGeneration]);
 
   const handleAutoCompactionChange = useCallback(async (enabled: boolean) => {
     const sid = sessionIdRef.current;
@@ -1258,15 +1315,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   // Resume is a runtime action, not a composer submission: preserve the
   // transcript, saved draft and current branch while Pi starts a recovery run.
-  const handleResume = useCallback(async (): Promise<boolean> => {
+  const handleResume = useCallback(async (restart?: GenerationSettingsState): Promise<boolean> => {
     const sid = sessionIdRef.current;
-    if (!sid || isNew || agentRunningRef.current || pendingSendRef.current || isCompacting || bashRun?.running) return false;
+    if (!sid || isNew || pendingSendRef.current || isCompacting || bashRun?.running || settingsOperationRef.current) return false;
+    if (restart ? !agentRunningRef.current || !restart.pending || !restart.canRestart : agentRunningRef.current) return false;
     const scope = viewScope.current;
     const isCurrent = () => viewScope.current === scope && sessionIdRef.current === sid;
     const previousOutcome = runOutcome;
     const start = new AbortController();
     const timingId = runLatency.begin();
     pendingSendRef.current = start;
+    const operation = {};
+    if (restart) {
+      settingsRestartRef.current = start;
+      settingsOperationRef.current = operation;
+      setSettingsRestarting(true);
+      setSettingsUpdating(true);
+    }
     const fallbackRetry = autoFallbackInFlightRef.current;
     autoFallbackInFlightRef.current = false;
     if (!fallbackRetry) autoFallbackAttemptedRef.current = false;
@@ -1278,9 +1343,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setContinuingOutput(false);
     setRetryInfo(null);
     setAgentRunning(true);
-    setAgentPhase({ kind: "waiting_model" });
-    setAgentStartedAt(Date.now());
-    dispatch({ type: "start" });
+    if (!restart) {
+      setAgentPhase({ kind: "waiting_model" });
+      setAgentStartedAt(Date.now());
+      dispatch({ type: "start" });
+    }
     try {
       if (!(await connectEvents(sid, false, start.signal))) {
         start.signal.throwIfAborted();
@@ -1291,7 +1358,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       runLatency.requestSent(timingId);
       // Live hidden entries can advance the leaf beyond activeLeafId. Let the
       // server validate its authoritative recovery checkpoint instead.
-      const receipt = await sendAgentCommand<{ accepted: boolean }>(sid, { type: "resume", timingId });
+      const receipt = await sendAgentCommand<{ accepted: boolean }>(sid, {
+        type: "resume", timingId,
+        ...(restart ? { stopCurrentRun: true, expectedRunId: restart.runId, expectedSettingsRevision: restart.revision } : {}),
+      });
       if (start.signal.aborted) {
         // Stop may have reached the server before resume was admitted. Repeat
         // it after the receipt so a late admission cannot escape the stop.
@@ -1321,11 +1391,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (!isCurrent()) return false;
         // Newer SSE state or a stop action wins over an in-flight state read.
         if (runObservationRef.current.version !== observedVersion) return false;
-        if (live?.running && live.state?.isStreaming) {
+        if (live?.running && (live.state?.isStreaming || live.state?.generationSettings?.restarting)) {
           runObservationRef.current = { active: true, version: observedVersion + 1 };
           agentRunningRef.current = true;
           setAgentRunning(true);
           restoreLiveRun(live.state.runState);
+          if (live.state.generationSettings) acceptGenerationSettings(live.state.generationSettings);
           dispatch({ type: "start" });
           return false;
         }
@@ -1348,8 +1419,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return false;
     } finally {
       if (pendingSendRef.current === start) pendingSendRef.current = null;
+      if (settingsRestartRef.current === start) {
+        settingsRestartRef.current = null;
+        if (isCurrent()) setSettingsRestarting(false);
+      }
+      if (settingsOperationRef.current === operation) {
+        settingsOperationRef.current = null;
+        if (isCurrent()) setSettingsUpdating(false);
+      }
     }
-  }, [isNew, isCompacting, bashRun?.running, runOutcome, runLatency, lastEventAtRef, resetRunProgress, connectEvents, streamScheduler, restoreLiveRun]);
+  }, [acceptGenerationSettings, isNew, isCompacting, bashRun?.running, runOutcome, runLatency, lastEventAtRef, resetRunProgress, connectEvents, streamScheduler, restoreLiveRun]);
+
+  const handleApplySettingsNow = useCallback(() => {
+    const settings = generationSettingsRef.current;
+    return settings ? handleResume(settings) : Promise.resolve(false);
+  }, [handleResume]);
 
   /**
    * Re-run the last failed exchange: roll back to the node before the last
@@ -1426,20 +1510,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
-    setThinkingLevel(level);
-    if (level === "auto") return; // "auto" leaves pi's current setting untouched
-    const sid = sessionIdRef.current;
-    if (!sid) return;
-    try {
-      await sendAgentCommand(sid, { type: "set_thinking_level", level });
-      await loadSession(sid, false, true);
-      setProviderRecovery((current) => current?.kind === "unsupported_setting" ? null : current);
-    } catch (e) {
-      console.error("Failed to set thinking level:", e);
-      await loadSession(sid, false, true);
-      showToast(translate("recovery.thinkingFailed"), { type: "error" });
-    }
-  }, [loadSession]);
+    if (isNew) { setThinkingLevel(level); return; }
+    await configureGeneration({ thinkingLevel: level });
+  }, [isNew, configureGeneration]);
 
   const handleToolPresetChange = useCallback(async (preset: ToolSelectionMode, selectedNames: string[] = []) => {
     const toolNames = namesForToolSelection(preset, selectedNames);
@@ -1574,7 +1647,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     data, loading, error, runtimeFailure, activeLeafId, messages, entryIds, streamState,
-    getGenerationMetrics,
+    getGenerationMetrics, generationSettings, settingsUpdating, settingsRestarting,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, continuingOutput, runOutcome, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, systemPrompt, forkingEntryId,
@@ -1590,7 +1663,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef, sentMessageScrollRef,
     // Actions
-    handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
+    handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange, handleApplySettingsNow,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,
     handleToolPresetChange, handleThinkingLevelChange, setEphemeralNewSession, handleClearQueue, handleRemoveQueued, handleUpdateQueued, handleMoveQueued, handleResume, handleRetry, handleRetryWithModel, handleAutoProviderFallbackChange, setProviderRecovery, handleEditRerun, handleAbortBash, handleExtensionUIResponse, loadTools, setActiveLeafId, setData, setMessages,
     dispatch, setAgentRunning, setForkingEntryId,

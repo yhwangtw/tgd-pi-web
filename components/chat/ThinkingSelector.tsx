@@ -36,6 +36,7 @@ interface ThinkingSelectorProps {
   thinkingLevelMap?: Record<string, string | null> | null;
   availableThinkingLevels?: string[] | null;
   isStreaming: boolean;
+  disabled?: boolean;
   presentation?: "popover" | "inline";
   iconOnly?: boolean;
   onThinkingLevelChange?: (level: ThinkingLevelOption) => void;
@@ -45,7 +46,7 @@ export function ThinkingSelector({
   thinkingLevel,
   thinkingLevelMap,
   availableThinkingLevels,
-  isStreaming,
+  disabled = false,
   presentation = "popover",
   iconOnly = false,
   onThinkingLevelChange,
@@ -58,6 +59,10 @@ export function ThinkingSelector({
   const panelRef = useComposerPopupPosition(open && presentation === "popover", triggerRef);
 
   useEffect(() => onAnotherComposerSelectorOpen(listboxId, () => setOpen(false)), [listboxId]);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   // Close on outside click
   useEffect(() => {
@@ -93,11 +98,11 @@ export function ThinkingSelector({
       <button
         ref={triggerRef}
         onClick={() => {
-          if (isStreaming) return;
+          if (disabled) return;
           if (!open) announceComposerSelectorOpen(listboxId);
           setOpen(!open);
         }}
-        disabled={isStreaming}
+        disabled={disabled}
         type="button"
         aria-label={t("input.thinkingTitle")}
         aria-expanded={open}
@@ -136,6 +141,7 @@ export function ThinkingSelector({
                 role="option"
                 aria-selected={isActive}
                 onClick={() => {
+                  if (disabled) return;
                   setOpen(false);
                   if (!isActive) onThinkingLevelChange(lvl);
                   requestAnimationFrame(() => triggerRef.current?.focus());

@@ -370,7 +370,7 @@ describe("session reconciliation and first-prompt ordering", () => {
     harness.send.mockClear();
     harness.send.mockImplementation(async (_sid, command) => command.type === "resume" ? { accepted: true } : null);
     await act(async () => current.handleRetryWithModel({ provider: "alternate", modelId: "other", name: "Other model" }));
-    expect(harness.send.mock.calls.map(([, command]) => command.type)).toEqual(["set_model", "resume"]);
+    expect(harness.send.mock.calls.map(([, command]) => command.type)).toEqual(["configure_generation", "resume"]);
     expect(current.messages).toEqual(serverMessages);
   });
 
@@ -633,9 +633,10 @@ describe("session reconciliation and first-prompt ordering", () => {
 
   it("reads the accepted thinking level back after changing models", async () => {
     await act(async () => root.render(<Harness selected={session} />));
-    harness.fetch.mockResolvedValue(new Response(JSON.stringify({ ...data(), agentState: { running: true, state: { isStreaming: false, thinkingLevel: "low" } } })));
+    harness.send.mockResolvedValue({ selected: { provider: "fixture", modelId: "reasoning-only", thinkingLevel: "low" }, active: null, pending: false, restarting: false, revision: 1, runId: null, canRestart: false });
     await act(async () => { await current.handleModelChange("fixture", "reasoning-only"); });
-    expect(harness.send).toHaveBeenCalledWith("one", { type: "set_model", provider: "fixture", modelId: "reasoning-only" });
+    expect(harness.send).toHaveBeenCalledWith("one", { type: "configure_generation", model: { provider: "fixture", modelId: "reasoning-only" } });
+    expect(current.currentModel).toEqual({ provider: "fixture", modelId: "reasoning-only" });
     expect(current.thinkingLevel).toBe("low");
     expect(harness.send.mock.calls.some(([, command]) => command.type === "prompt")).toBe(false);
   });

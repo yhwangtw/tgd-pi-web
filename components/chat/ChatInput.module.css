@@ -796,6 +796,8 @@
 .bottomBarRightStreaming {
   position: static;
   display: flex;
+  align-items: center;
+  gap: var(--space-optical);
   flex: 0 0 auto;
   margin-left: auto;
 }
@@ -1187,7 +1189,7 @@
 
   .bottomBarStreaming .modelControl {
     display: block;
-    grid-column: 1 / -1;
+    grid-column: 1;
     grid-row: 1;
     justify-self: start;
     max-width: 100%;
@@ -1209,6 +1211,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  .bottomBarStreaming .mobileToolsButton { grid-column: 2; grid-row: 1; }
 
   .bottomBarStreaming .bottomBarRightStreaming {
     grid-column: 2;

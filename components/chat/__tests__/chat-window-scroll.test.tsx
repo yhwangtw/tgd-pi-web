@@ -546,7 +546,7 @@ it("keeps the original message speed separate from the monitor and disables it d
   const streaming = answer("New text");
   fixture.state.streamState = { isStreaming: true, streamingMessage: streaming };
   await render();
-  expect(host.querySelector('[data-streaming="true"]')?.getAttribute("data-speed-enabled")).toBe("true");
+  expect(host.querySelector('[data-streaming="true"]')?.getAttribute("data-speed-enabled")).toBe("false");
   fixture.state.runProgress = { idleSeconds: 0, attention: "normal", connection: "reconnecting" };
   await render();
   expect(host.querySelector('[data-streaming="true"]')?.getAttribute("data-speed-enabled")).toBe("false");

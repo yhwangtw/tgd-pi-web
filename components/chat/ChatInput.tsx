@@ -69,6 +69,7 @@ interface Props {
   onSteer?: (message: string, images?: AttachedImage[]) => Promise<boolean>;
   onFollowUp?: (message: string, images?: AttachedImage[]) => Promise<boolean>;
   isStreaming: boolean;
+  settingsUpdating?: boolean;
   hintMessages?: ComposerHintMessage[] | null;
   hintContext?: ComposerHintContext;
   hintTurnKey?: string | null;
@@ -169,12 +170,12 @@ function ResponsiveComposerControls({
   children: ReactNode;
 }) {
   const { t } = useI18n();
-  if (isMobile && !isStreaming) {
+  if (isMobile) {
     return (
       <DialogShell
         open={open}
         title={title}
-        description={t("input.settingsImmediate")}
+        description={t(isStreaming ? "input.settingsNextRequestHint" : "input.settingsImmediate")}
         onClose={() => onClose(false)}
         initialFocusRef={initialFocusRef}
         bodyClassName={styles.composerSettingsSheetBody}
@@ -197,9 +198,9 @@ function ResponsiveComposerControls({
   return (
     <div
       id="composer-secondary-tools"
-      className={`${styles.bottomBarRight} ${open ? styles.bottomBarRightMobileOpen : ""} ${isStreaming ? styles.bottomBarRightStreaming : ""}`}
-      role={open && !isStreaming ? "region" : undefined}
-      aria-label={open && !isStreaming ? title : undefined}
+      className={`${styles.bottomBarRight} ${open ? styles.bottomBarRightMobileOpen : ""}`}
+      role={open ? "region" : undefined}
+      aria-label={open ? title : undefined}
     >
       {children}
     </div>
@@ -208,7 +209,7 @@ function ResponsiveComposerControls({
 
 
 export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
+  onSend, onAbort, onSteer, onFollowUp, isStreaming, settingsUpdating = false, model, modelNames, modelList, onModelChange,
   modelCatalogStatus, modelCatalogError, modelCatalogDiagnostics, onRetryModelCatalog, onOpenModels,
   onCompact, onAbortCompaction, isCompacting, compactionPolicy, autoCompactionEnabled, autoCompactionUpdating, onAutoCompactionChange, toolPreset, availableTools, customToolNames, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
@@ -1232,14 +1233,15 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                 >{t("input.steer")}</button>
               </div>
             )}
-            {/* Model selector — visible always, disabled during streaming */}
+            {/* Model selection stays available during generation. */}
             <ModelSelector
               onOpen={closeMobileTools}
               modelOptions={modelOptions}
               modelsByProvider={modelsByProvider}
               currentName={currentName}
               model={model}
-              isStreaming={isStreaming || !!isCompacting}
+              isStreaming={isStreaming}
+              disabled={!!isCompacting || settingsUpdating}
               onModelChange={onModelChange}
               catalogStatus={modelCatalogStatus}
               catalogError={modelCatalogError}
@@ -1254,7 +1256,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
 
           {workflowControls}
 
-          {!isStreaming && (
             <button
               ref={mobileToolsButtonRef}
               type="button"
@@ -1271,7 +1272,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
             >
               <SlidersHorizontal size={UI_ICON_SIZE.control} aria-hidden="true" />
             </button>
-          )}
 
           {/* RIGHT: thinking + tools preset + compact + sound (idle) | Stop + sound (streaming) */}
           <ResponsiveComposerControls
@@ -1313,7 +1313,8 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                 thinkingLevel={thinkingLevel}
                 thinkingLevelMap={thinkingLevelMap}
                 availableThinkingLevels={availableThinkingLevels}
-                isStreaming={isStreaming || !!isCompacting}
+                isStreaming={isStreaming}
+                disabled={!!isCompacting || settingsUpdating}
                 presentation={isMobileViewport ? "inline" : "popover"}
                 iconOnly={!isMobileViewport}
                 onThinkingLevelChange={onThinkingLevelChange}
@@ -1409,19 +1410,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
               </>
             )}
 
-            {isStreaming && (
-              <button
-                type="button"
-                onClick={onAbort}
-                title={t("input.stopTitle")}
-                className={styles.stopButton}
-              >
-                <Square size={UI_ICON_SIZE.inline} fill="currentColor" aria-hidden="true" />
-                {t("input.stop")}
-              </button>
-            )}
-
-            {onSoundToggle !== undefined && (
+            {!isStreaming && onSoundToggle !== undefined && (
               <div className={`${styles.mobileLabeledControl} ${styles.mobileSoundControl}`}>
                 <span className={styles.mobileControlLabel}>{t("input.sound")}</span>
                 <button
@@ -1446,6 +1435,40 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
               <div className={styles.compactionPolicyControl}>{compactionPolicy}</div>
             )}
           </ResponsiveComposerControls>
+          {isStreaming && <div className={styles.bottomBarRightStreaming}>
+
+              <button
+                type="button"
+                onClick={onAbort}
+                title={t("input.stopTitle")}
+                className={styles.stopButton}
+              >
+                <Square size={UI_ICON_SIZE.inline} fill="currentColor" aria-hidden="true" />
+                {t("input.stop")}
+              </button>
+            {onSoundToggle !== undefined && (
+              <div className={`${styles.mobileLabeledControl} ${styles.mobileSoundControl}`}>
+                <span className={styles.mobileControlLabel}>{t("input.sound")}</span>
+                <button
+                  type="button"
+                  onClick={onSoundToggle}
+                  aria-pressed={soundEnabled}
+                  aria-label={soundEnabled ? t("input.soundOnTitle") : t("input.soundOffTitle")}
+                  title={soundEnabled ? t("input.soundOnTitle") : t("input.soundOffTitle")}
+                  className={soundEnabled ? styles.soundButtonEnabled : styles.soundButtonDisabled}
+
+                >
+                  {soundEnabled ? (
+                    <Volume2 size={UI_ICON_SIZE.control} aria-hidden="true" />
+                  ) : (
+                    <VolumeX size={UI_ICON_SIZE.control} aria-hidden="true" />
+                  )}
+                  <span className={styles.mobileControlValue}>{t(soundEnabled ? "chat.on" : "chat.off")}</span>
+                </button>
+              </div>
+            )}
+          </div>}
+
 
         </div>
 

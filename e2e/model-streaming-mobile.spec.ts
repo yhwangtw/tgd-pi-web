@@ -143,7 +143,7 @@ for (const style of ["original", "trae"] as const) {
       await expect(identity).toHaveAttribute("data-catalog-status", "ready");
       await expect(identity).toHaveAccessibleName(`Model: ${MODEL_NAME}`);
       await expect(identity).toContainText(MODEL_NAME);
-      await expect(identity).toBeDisabled();
+      await expect(identity).toBeEnabled();
       await expectInsideViewport(page, identity);
 
       const delivery = page.getByRole("group", { name: "Message delivery mode", exact: true });
@@ -194,7 +194,7 @@ for (const style of ["original", "trae"] as const) {
       await leaveComposerWithKeyboard(page);
       await page.screenshot({ path: test.info().outputPath(`streaming-nav-restored-${style}-${width}-xl.png`) });
 
-      // Attach / Models are disabled while streaming. Re-load a controlled idle
+      // Re-load a controlled idle
       // snapshot to cover their first clicks from outside without any real run.
       await installStreamingFixture(page, false);
       await page.reload();

@@ -19,6 +19,25 @@ export function messageText(message: Partial<AssistantMessage>): string {
   return (message.content ?? []).filter((block) => block.type === "text").map((block) => block.text).join("");
 }
 
+/** Live display only: count provider content actually received, never tool results
+ * or inferred hidden reasoning. Completed usage keeps its separate provider basis.
+ */
+export function estimateStreamTokens(message: Partial<AssistantMessage>): number {
+  let tokens = 0;
+  for (const block of message.content ?? []) {
+    if (block.type === "text") tokens += estimateTextTokens(block.text ?? "");
+    else if (block.type === "thinking") tokens += estimateTextTokens(block.thinking ?? "");
+    else if (block.type === "toolCall") {
+      const call = block as unknown as { input?: unknown; arguments?: unknown };
+      const input = call.input ?? call.arguments;
+      if (input && typeof input === "object" && Object.keys(input).length) {
+        tokens += estimateTextTokens(JSON.stringify(input));
+      }
+    }
+  }
+  return tokens;
+}
+
 const messageKeys = new WeakMap<AgentMessage, string>();
 function legacyMessageKey(message: AgentMessage): string | null {
   if (message.role !== "assistant" || !message.timestamp) return null;
@@ -183,7 +202,7 @@ export class GenerationMetricsTracker {
   }
 }
 
-/** Three-second rolling text delta; an initial buffered frame is only a baseline. */
+/** Three-second rolling content delta; an initial buffered frame is only a baseline. */
 export class TextRateWindow {
   private samples: Array<{ time: number; tokens: number }> = [];
   private lastChange = 0;
