@@ -305,13 +305,21 @@ test.describe("responsive shell", () => {
   test("AC-RWD-7: reasoning controls use Traditional Chinese without simplified Chinese", async ({ page }) => {
     // Other specs change the shared fixture session to a non-reasoning model.
     // This case checks localized labels, so supply an explicit full capability
-    // catalog without changing the persisted model or contacting a provider.
+    // catalog for both the saved selection and available runtime models, without
+    // changing the persisted model or contacting a provider.
+    const sessionResponse = await page.request.get(`/api/sessions/${MAIN_ID}`);
+    expect(sessionResponse.ok()).toBe(true);
+    const { context } = await sessionResponse.json();
+    const savedModel = context.model as { provider: string; modelId: string } | null;
     await page.route(/\/api\/models(?:\?|$)/, async (route) => {
       const response = await route.fetch();
       const catalog = await response.json();
       const levels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
       await route.fulfill({ response, json: { ...catalog,
-        thinkingLevels: Object.fromEntries(catalog.modelList.map((model: { provider: string; id: string }) => [`${model.provider}:${model.id}`, levels])),
+        thinkingLevels: {
+          ...Object.fromEntries(catalog.modelList.map((model: { provider: string; id: string }) => [`${model.provider}:${model.id}`, levels])),
+          ...(savedModel ? { [`${savedModel.provider}:${savedModel.modelId}`]: levels } : {}),
+        },
         thinkingLevelMaps: {},
       } });
     });
