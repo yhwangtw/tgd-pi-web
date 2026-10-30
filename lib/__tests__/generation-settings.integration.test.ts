@@ -82,6 +82,7 @@ function receipts(session: AgentSession) {
 async function fixture(parts: ResponsePart[], options: {
   settings?: Parameters<typeof SettingsManager.inMemory>[0];
   holdAbortedSettlement?: boolean;
+  holdResumedPreparation?: boolean;
 } = {}) {
   // All model/auth/session paths and traffic are confined to this disposable fixture.
   const root = mkdtempSync(join(tmpdir(), "pi-generation-settings-")); roots.push(root);
@@ -89,7 +90,9 @@ async function fixture(parts: ResponsePart[], options: {
   const requests: Array<Record<string, unknown>> = [];
   const gates = parts.map(() => gate());
   const settlement = gate();
+  const preparation = gate();
   let settlementEntered = false;
+  let preparationEntered = false;
   const server = createServer(async (request, response) => {
     let body = ""; for await (const chunk of request) body += chunk;
     const index = requests.length;
@@ -147,6 +150,16 @@ async function fixture(parts: ResponsePart[], options: {
       });
     },
   }] : [];
+  if (options.holdResumedPreparation) extensionFactories.push({
+    name: "Fixture resumed preparation barrier", factory(pi) {
+      let starts = 0;
+      pi.on("before_agent_start", async () => {
+        if (++starts !== 2) return;
+        preparationEntered = true;
+        await preparation.ready;
+      });
+    },
+  });
   const services = await createAgentSessionServices({
     cwd, agentDir, modelRuntime,
     settingsManager: SettingsManager.inMemory({
@@ -172,6 +185,7 @@ async function fixture(parts: ResponsePart[], options: {
     session, wrapper, requests, events, release: (index: number) => gates[index].release(),
     toolExecutions: () => toolExecutions, settlementEntered: () => settlementEntered,
     releaseSettlement: settlement.release,
+    preparationEntered: () => preparationEntered, releasePreparation: preparation.release,
   };
 }
 
@@ -336,6 +350,50 @@ describe("generation settings through the real Pi SDK and loopback provider", ()
     await expect(resumed).rejects.toThrow(/cancelled/i); await original;
     expect(f.requests).toHaveLength(1); expect(receipts(f.session)).toHaveLength(0);
     expect(f.session.isIdle).toBe(true); expect(snapshot(f.wrapper).restarting).toBe(false);
+    expect(f.session.messages.filter(message => message.role === "user")).toHaveLength(1);
+  });
+
+  it("keeps stop-and-resume active during delayed preparation and honors Stop before its next request", async () => {
+    const f = await fixture([
+      { text: "Saved work before settings restart", hold: "after_delta" },
+      { text: "This request must not run after Stop" },
+    ], { holdResumedPreparation: true });
+    const original = prompt(f.wrapper);
+    await waitForText(f.events, "Saved work before settings restart");
+    await configure(f.wrapper, "high", "beta");
+    const abort = vi.spyOn(f.session, "abort");
+    const resumed = track(f.wrapper.send({
+      ...restartCommand(f.wrapper, "stop-during-resumed-preparation"), awaitCompletion: false,
+    }));
+    await vi.waitFor(() => expect(f.preparationEntered()).toBe(true));
+    await expect(resumed).resolves.toMatchObject({ accepted: true });
+    await original;
+    expect(f.session.isStreaming).toBe(true);
+    expect(f.requests).toHaveLength(1);
+    expect(abort).toHaveBeenCalledTimes(1);
+    const expectedPreparing = {
+      isStreaming: true, generationSettings: { restarting: true, canRestart: false },
+    };
+    // Keep exercising Stop even when the state assertion reproduces the bug.
+    expect.soft(await f.wrapper.send({ type: "get_state" })).toMatchObject(expectedPreparing);
+    expect.soft(f.wrapper.getStreamSnapshot()).toMatchObject({ state: expectedPreparing });
+
+    let stopSettled = false;
+    const stopped = track(f.wrapper.send({ type: "abort" }).then(result => {
+      stopSettled = true;
+      return result;
+    }));
+    await vi.waitFor(() => expect(abort).toHaveBeenCalledTimes(2));
+    expect(stopSettled).toBe(false);
+    expect(f.requests).toHaveLength(1);
+    f.releasePreparation();
+    await stopped;
+    await vi.waitFor(() => expect(f.session.isIdle).toBe(true));
+    expect(f.wrapper.getStreamSnapshot()).toMatchObject({
+      state: { isStreaming: false, generationSettings: { restarting: false } },
+    });
+    expect(f.requests).toHaveLength(1);
+    expect(f.toolExecutions()).toBe(0);
     expect(f.session.messages.filter(message => message.role === "user")).toHaveLength(1);
   });
 });
