@@ -297,9 +297,9 @@ export function AssistantMessageView({
 
   return (
     <div ref={rootRef} data-testid="assistant-message" className={`hover-group ${styles.messageContainer}`}>
-      {isStreaming && <div className={styles.modelLabel}>
+      {isStreaming && (streamingSpeedEnabled || (showModelLabel && resolvedModelName)) && <div className={styles.modelLabel}>
         {showModelLabel && resolvedModelName && <span className={styles.modelName}>{resolvedModelName}</span>}
-        <StreamingSpeed message={message} enabled={streamingSpeedEnabled} resetKey={toolExecutionContext?.runStartedAt} />
+        {streamingSpeedEnabled && <StreamingSpeed message={message} resetKey={toolExecutionContext?.runStartedAt} />}
       </div>}
 
       <div className={styles.blocksContainer}>

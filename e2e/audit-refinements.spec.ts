@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { GenerationSettingsState } from "../lib/generation-settings";
 const MAIN = "/?session=aaaa1111-2222-3333-4444-555566667777";
 
 async function open(page: Page, width = 1280) {
@@ -13,13 +14,23 @@ async function open(page: Page, width = 1280) {
     modelList: [{ provider: "anthropic", id: "claude-sonnet-5", name: "A deliberately long descriptive current model (anthropic)", available: true },
       { provider: "fixture", id: "alternate", name: "Alternate fixture model", available: true }], thinkingLevels: {}, thinkingLevelMaps: {},
   } }));
-  let selectedModel: { provider: string; modelId: string } | null = null;
+  const selections: Record<string, unknown>[] = [];
+  let settings: GenerationSettingsState = {
+    selected: null, active: null, revision: 0, pending: false, restarting: false, runId: null, canRestart: false,
+  };
   await page.route("**/api/agent/*", route => {
     if (route.request().method() === "POST") {
       const command = route.request().postDataJSON();
-      if (command?.type === "set_model") {
-        selectedModel = { provider: command.provider, modelId: command.modelId };
-        return route.fulfill({ json: { success: true } });
+      const model = command?.model;
+      if (new URL(route.request().url()).pathname === "/api/agent/aaaa1111-2222-3333-4444-555566667777"
+        && command?.type === "configure_generation" && Object.keys(command).length === 2
+        && model && Object.keys(model).length === 2
+        && (model.provider === "anthropic" && model.modelId === "claude-sonnet-5"
+          || model.provider === "fixture" && model.modelId === "alternate")) {
+        selections.push(command);
+        settings = { ...settings, selected: { provider: model.provider, modelId: model.modelId, thinkingLevel: "off" },
+          revision: settings.revision + 1 };
+        return route.fulfill({ json: { success: true, data: settings } });
       }
       if (command?.type === "get_tools") return route.fulfill({ json: { success: true, data: [] } });
       return route.fulfill({ status: 403, json: { error: "Audit fixture forbids agent execution" } });
@@ -30,11 +41,14 @@ async function open(page: Page, width = 1280) {
     const response = await route.fetch();
     const data = await response.json();
     await route.fulfill({ response, json: {
-      ...data, context: { ...data.context, model: selectedModel ?? data.context.model }, agentState: { running: false },
+      ...data, context: { ...data.context,
+        model: settings.selected ? { provider: settings.selected.provider, modelId: settings.selected.modelId } : data.context.model,
+        thinkingLevel: settings.selected?.thinkingLevel ?? data.context.thinkingLevel }, agentState: { running: false },
     } });
   });
   await page.goto(MAIN);
   await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeVisible();
+  return selections;
 }
 async function nav(page: Page, label: string) {
   if (page.viewportSize()!.width <= 700 && !["Files", "Sessions", "Chat"].includes(label)) await page.getByRole("button", { name: "More", exact: true }).click();
@@ -42,7 +56,7 @@ async function nav(page: Page, label: string) {
 }
 
 for (const width of [390, 883, 1280]) test(`${width}: composer stays on one action row; search, pins and controls preserve state`, async ({ page }, info) => {
-  await open(page, width);
+  const selections = await open(page, width);
   const trigger = page.getByTestId("model-selector-trigger");
   await trigger.click();
   await page.getByRole("dialog", { name: "Choose a model", exact: true }).getByRole("button", { name: /A deliberately long descriptive current model/ }).click();
@@ -75,6 +89,14 @@ for (const width of [390, 883, 1280]) test(`${width}: composer stays on one acti
   await expect(controls).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("region", { name: "Composer controls", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(controls).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("region", { name: "Composer controls", exact: true })).toBeHidden();
+  const selectionsBeforeAlternate = selections.length;
+  await trigger.click();
+  await page.getByRole("dialog", { name: "Choose a model", exact: true }).getByRole("button", { name: /Alternate fixture model/ }).click();
+  await expect(trigger).toContainText("Alternate fixture model");
+  expect(selections.slice(selectionsBeforeAlternate)).toEqual([{ type: "configure_generation", model: { provider: "fixture", modelId: "alternate" } }]);
 });
 
 test("sorting and appearance expose readable single choices", async ({ page }, info) => {

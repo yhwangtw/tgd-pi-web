@@ -36,6 +36,7 @@ interface ThinkingSelectorProps {
   thinkingLevelMap?: Record<string, string | null> | null;
   availableThinkingLevels?: string[] | null;
   isStreaming: boolean;
+  disabled?: boolean;
   presentation?: "popover" | "inline";
   iconOnly?: boolean;
   onThinkingLevelChange?: (level: ThinkingLevelOption) => void;
@@ -45,7 +46,7 @@ export function ThinkingSelector({
   thinkingLevel,
   thinkingLevelMap,
   availableThinkingLevels,
-  isStreaming,
+  disabled = false,
   presentation = "popover",
   iconOnly = false,
   onThinkingLevelChange,
@@ -54,10 +55,22 @@ export function ThinkingSelector({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const selectionFocusPending = useRef(false);
   const listboxId = useId();
   const panelRef = useComposerPopupPosition(open && presentation === "popover", triggerRef);
 
   useEffect(() => onAnotherComposerSelectorOpen(listboxId, () => setOpen(false)), [listboxId]);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  useEffect(() => {
+    if (open || disabled || !selectionFocusPending.current) return;
+    selectionFocusPending.current = false;
+    const active = document.activeElement;
+    if (!active || active === document.body || ref.current?.contains(active)) triggerRef.current?.focus();
+  }, [open, disabled]);
 
   // Close on outside click
   useEffect(() => {
@@ -92,12 +105,13 @@ export function ThinkingSelector({
     >
       <button
         ref={triggerRef}
-        onClick={() => {
-          if (isStreaming) return;
+        onClick={(event) => {
+          if (disabled) return;
+          event.currentTarget.focus();
           if (!open) announceComposerSelectorOpen(listboxId);
           setOpen(!open);
         }}
-        disabled={isStreaming}
+        disabled={disabled}
         type="button"
         aria-label={t("input.thinkingTitle")}
         aria-expanded={open}
@@ -136,9 +150,10 @@ export function ThinkingSelector({
                 role="option"
                 aria-selected={isActive}
                 onClick={() => {
+                  if (disabled) return;
+                  selectionFocusPending.current = true;
                   setOpen(false);
                   if (!isActive) onThinkingLevelChange(lvl);
-                  requestAnimationFrame(() => triggerRef.current?.focus());
                 }}
                 className={`${styles.option} ${isActive ? styles.optionActive : ""}`}
               >

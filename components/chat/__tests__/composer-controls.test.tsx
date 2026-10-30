@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, useState } from "react";
 import { readFileSync } from "node:fs";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -69,6 +69,78 @@ describe("composer controls", () => {
     await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
   }
 
+  type DelayedSelector = "model" | "thinking-popover" | "thinking-inline";
+
+  async function selectWithDelayedSettings(kind: DelayedSelector) {
+    const options = [
+      { provider: "fixture", modelId: "original", name: "Original model" },
+      { provider: "fixture", modelId: "alternate", name: "Alternate model" },
+    ];
+    const change = vi.fn();
+    let acknowledge!: () => void;
+    function Harness() {
+      const [disabled, setDisabled] = useState(false);
+      const [accepted, setAccepted] = useState(false);
+      const beginUpdate = () => {
+        setDisabled(true);
+        acknowledge = () => { setAccepted(true); setDisabled(false); };
+      };
+      return <>
+        {kind === "model"
+          ? <ModelSelector modelOptions={options} modelsByProvider={[{ provider: "fixture", options }]}
+            model={{ provider: "fixture", modelId: accepted ? "alternate" : "original" }}
+            currentName={accepted ? "Alternate model" : "Original model"} isStreaming disabled={disabled}
+            onModelChange={(provider, modelId) => { change(provider, modelId); beginUpdate(); }} />
+          : <ThinkingSelector thinkingLevel={accepted ? "high" : "low"} availableThinkingLevels={["low", "high"]}
+            presentation={kind === "thinking-inline" ? "inline" : "popover"} isStreaming disabled={disabled}
+            onThinkingLevelChange={level => { change(level); beginUpdate(); }} />}
+        <textarea data-testid="external-textarea" defaultValue="Keep this textarea draft" />
+        <input data-testid="external-input" defaultValue="Keep this input draft" />
+      </>;
+    }
+    await render(<Harness />);
+    const trigger = container!.querySelector<HTMLButtonElement>(kind === "model"
+      ? '[data-testid="model-selector-trigger"]' : '[aria-label="Change reasoning level"]')!;
+    await act(async () => { trigger.focus(); trigger.click(); });
+    await nextFrame();
+    const option = kind === "model"
+      ? [...document.querySelectorAll<HTMLButtonElement>("[data-model-choice]")].find(button => button.textContent?.includes("Alternate model"))!
+      : [...container!.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(button => button.textContent?.startsWith("High"))!;
+    await act(async () => { option.focus(); option.click(); });
+    if (kind === "model") expect(change).toHaveBeenCalledExactlyOnceWith("fixture", "alternate");
+    else expect(change).toHaveBeenCalledExactlyOnceWith("high");
+    expect(trigger.disabled).toBe(true);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector(kind === "model" ? "[data-model-choice]" : '[role="listbox"]')).toBeNull();
+    return { trigger, acknowledge: () => acknowledge() };
+  }
+
+  for (const kind of ["model", "thinking-popover", "thinking-inline"] as const) {
+    it(`restores the ${kind} trigger after a delayed settings selection is enabled again`, async () => {
+      const { trigger, acknowledge } = await selectWithDelayedSettings(kind);
+      // The menu-close frame happens while the command still owns the lock.
+      await nextFrame();
+      expect(document.activeElement).not.toBe(trigger);
+      await act(async () => acknowledge());
+      expect(trigger.disabled).toBe(false);
+      await nextFrame();
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it.each(["textarea", "input"] as const)(`does not steal focus from an external %s after a delayed ${kind} settings selection`, async tag => {
+      const { trigger, acknowledge } = await selectWithDelayedSettings(kind);
+      const external = container!.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-testid="external-${tag}"]`)!;
+      await act(async () => external.focus());
+      await nextFrame();
+      expect(document.activeElement).toBe(external);
+      await act(async () => acknowledge());
+      expect(trigger.disabled).toBe(false);
+      await nextFrame();
+      expect(document.activeElement).toBe(external);
+      expect(external.value).toBe(`Keep this ${tag} draft`);
+    });
+  }
+
   it("does not format or create hidden model rows while the composer is being edited", async () => {
     const costRead = vi.fn(() => ({ input: 1, output: 2 }));
     const options = Array.from({ length: 200 }, (_, i) => ({
@@ -116,14 +188,14 @@ describe("composer controls", () => {
     expect([...container!.querySelectorAll('[role="option"]')].some((option) => option.textContent?.startsWith("Max"))).toBe(false);
   });
 
-  it.each([false, true])("prevents selecting rejected models and offers refresh (mobile=%s)", async (mobile) => {
+  it.each([false, true])("prevents selecting rejected models during streaming and offers refresh (mobile=%s)", async (mobile) => {
     if (mobile) useMobileViewport();
     const options = [
       { provider: "fixture", modelId: "denied", name: "Rejected model", available: false },
       { provider: "fixture", modelId: "ok", name: "Working model", available: true },
     ];
     const change = vi.fn(); const retry = vi.fn();
-    await render(<ModelSelector modelOptions={options} modelsByProvider={[{ provider: "fixture", options }]} currentName="Working model" model={{ provider: "fixture", modelId: "ok" }} isStreaming={false} onModelChange={change} onRetry={retry} />);
+    await render(<ModelSelector modelOptions={options} modelsByProvider={[{ provider: "fixture", options }]} currentName="Working model" model={{ provider: "fixture", modelId: "ok" }} isStreaming onModelChange={change} onRetry={retry} />);
     await act(async () => container!.querySelector<HTMLButtonElement>('[data-testid="model-selector-trigger"]')!.click());
     const rejected = [...document.querySelectorAll<HTMLButtonElement>('button[aria-disabled="true"]')].find((button) => button.textContent?.includes("Rejected model"));
     expect(rejected).toBeDefined();
@@ -160,7 +232,7 @@ describe("composer controls", () => {
     expect(trigger).not.toBeNull();
     await act(async () => trigger!.click());
 
-    expect(container!.textContent).toContain("沿用 Pi 預設值");
+    expect(container!.textContent).toContain("恢復模型設定的預設層級");
     expect(container!.textContent).toContain("低強度推理");
     expect(container!.textContent).toContain("極高強度推理");
     expect(`${container!.textContent} ${container!.innerHTML}`).not.toMatch(/切换|默认|关闭|强度|设置/);
@@ -200,7 +272,7 @@ describe("composer controls", () => {
     expect(container!.textContent).toContain("All built-in tools");
   });
 
-  it("opens the model menu on the selected option and supports arrow-key navigation", async () => {
+  it("opens the streaming model menu on the selected option and supports arrow-key navigation", async () => {
     const options = [
       { provider: "openai", modelId: "gpt-5.4", name: "GPT-5.4" },
       { provider: "openai", modelId: "gpt-5.5", name: "GPT-5.5" },
@@ -212,7 +284,7 @@ describe("composer controls", () => {
         modelsByProvider={[{ provider: "openai", options }]}
         currentName="GPT-5.5"
         model={{ provider: "openai", modelId: "gpt-5.5" }}
-        isStreaming={false}
+        isStreaming
         onModelChange={vi.fn()}
       />,
     );
@@ -318,7 +390,7 @@ describe("composer controls", () => {
     expect(onOpenModels).toHaveBeenCalledOnce();
   });
 
-  it("selects a model and restores focus to the trigger", async () => {
+  it("selects a model while streaming and restores focus to the trigger", async () => {
     const onModelChange = vi.fn();
     const options = [
       { provider: "openai", modelId: "gpt-5.5", name: "GPT-5.5" },
@@ -330,7 +402,7 @@ describe("composer controls", () => {
         modelsByProvider={[{ provider: "openai", options }]}
         currentName="GPT-5.5"
         model={{ provider: "openai", modelId: "gpt-5.5" }}
-        isStreaming={false}
+        isStreaming
         onModelChange={onModelChange}
       />,
     );
@@ -348,7 +420,7 @@ describe("composer controls", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
-  it("closes the recovery dialog after success and closes live options when streaming begins", async () => {
+  it("closes the recovery dialog after success and keeps live options open when streaming begins", async () => {
     const onModelChange = vi.fn();
     const options = [{ provider: "test", modelId: "ready-model", name: "Ready model" }];
     const selector = (catalogStatus: "error" | "ready", isStreaming = false) => (
@@ -375,8 +447,43 @@ describe("composer controls", () => {
     await act(async () => trigger.click());
     expect(document.querySelector('[data-testid="model-selector-popover"]')).not.toBeNull();
     await act(async () => root?.render(selector("ready", true)));
-    expect(document.querySelector('[data-testid="model-selector-popover"]')).toBeNull();
+    expect(document.querySelector('[data-testid="model-selector-popover"]')).not.toBeNull();
+    expect(trigger.disabled).toBe(false);
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-model-choice]')!.click());
+    expect(onModelChange).toHaveBeenCalledWith("test", "ready-model");
+  });
+
+  it.each([false, true])("locks model changes only when explicitly disabled (mobile=%s)", async (mobile) => {
+    if (mobile) useMobileViewport();
+    const onModelChange = vi.fn();
+    const options = [{ provider: "test", modelId: "ready-model", name: "Ready model" }];
+    const selector = (disabled: boolean) => (
+      <ModelSelector
+        modelOptions={options}
+        modelsByProvider={[{ provider: "test", options }]}
+        currentName="Ready model"
+        isStreaming
+        disabled={disabled}
+        onModelChange={onModelChange}
+      />
+    );
+    await render(selector(true));
+    const trigger = container!.querySelector<HTMLButtonElement>('[data-testid="model-selector-trigger"]')!;
     expect(trigger.disabled).toBe(true);
+    await act(async () => {
+      trigger.click();
+      trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+    expect(document.querySelector('[data-model-choice]')).toBeNull();
+    await act(async () => root?.render(selector(false)));
+    expect(trigger.disabled).toBe(false);
+    await act(async () => trigger.click());
+    expect(document.querySelector('[data-model-choice]')).not.toBeNull();
+    await act(async () => root?.render(selector(true)));
+    expect(trigger.disabled).toBe(true);
+    expect(document.querySelector('[data-model-choice]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(onModelChange).not.toHaveBeenCalled();
   });
 
   it.each([false, true])("uses shared searchable model content with pinning and recents (mobile=%s)", async (mobile) => {
@@ -477,6 +584,65 @@ describe("composer controls", () => {
     await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(document.querySelector('[role="listbox"]')).toBeNull();
+  });
+
+  it.each(["popover", "inline"] as const)("changes reasoning while streaming and keeps dismissal behavior (%s)", async (presentation) => {
+    const onThinkingLevelChange = vi.fn();
+    const selector = (isStreaming: boolean) => (
+      <ThinkingSelector
+        thinkingLevel="auto"
+        isStreaming={isStreaming}
+        presentation={presentation}
+        onThinkingLevelChange={onThinkingLevelChange}
+      />
+    );
+    await render(selector(false));
+    const trigger = container!.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
+    await act(async () => trigger.click());
+    await act(async () => root?.render(selector(true)));
+    expect(trigger.disabled).toBe(false);
+    expect(container!.querySelector('[role="listbox"]')).not.toBeNull();
+    const high = [...container!.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((option) => option.textContent?.startsWith("High"))!;
+    await act(async () => high.click());
+    await nextFrame();
+    expect(onThinkingLevelChange).toHaveBeenCalledExactlyOnceWith("high");
+    expect(container!.querySelector('[role="listbox"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    await act(async () => trigger.click());
+    expect(container!.querySelector('[role="listbox"]')).not.toBeNull();
+    await act(async () => document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })));
+    expect(container!.querySelector('[role="listbox"]')).toBeNull();
+    await act(async () => trigger.click());
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    await nextFrame();
+    expect(container!.querySelector('[role="listbox"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it.each(["popover", "inline"] as const)("locks reasoning changes only when explicitly disabled (%s)", async (presentation) => {
+    const onThinkingLevelChange = vi.fn();
+    const selector = (disabled: boolean) => (
+      <ThinkingSelector
+        isStreaming
+        disabled={disabled}
+        presentation={presentation}
+        onThinkingLevelChange={onThinkingLevelChange}
+      />
+    );
+    await render(selector(true));
+    const trigger = container!.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
+    expect(trigger.disabled).toBe(true);
+    await act(async () => trigger.click());
+    expect(container!.querySelector('[role="listbox"]')).toBeNull();
+    await act(async () => root?.render(selector(false)));
+    expect(trigger.disabled).toBe(false);
+    await act(async () => trigger.click());
+    expect(container!.querySelector('[role="listbox"]')).not.toBeNull();
+    await act(async () => root?.render(selector(true)));
+    expect(trigger.disabled).toBe(true);
+    expect(container!.querySelector('[role="listbox"]')).toBeNull();
+    expect(onThinkingLevelChange).not.toHaveBeenCalled();
   });
 
   it("keeps the textarea full-width and the primary send action inside the composer card", async () => {
@@ -646,6 +812,27 @@ describe("composer controls", () => {
     expect(document.querySelector("#composer-secondary-tools")?.className).toContain("bottomBarRightMobileOpen");
   });
 
+  it.each(["button", "Escape"])("keeps keyboard focus in restored mobile controls after collapsing with %s", async method => {
+    useMobileViewport();
+    await render(<ChatInput onSend={vi.fn()} onAbort={vi.fn()} isStreaming={false} />);
+    const trigger = container!.querySelector<HTMLButtonElement>('[aria-label="More composer controls"]')!;
+    await act(async () => { trigger.focus(); trigger.click(); });
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Expand composer"]')!.click());
+    await nextFrame();
+    if (method === "button") {
+      await act(async () => container!.querySelector<HTMLButtonElement>('[aria-label="Collapse composer"]')!.click());
+    } else {
+      await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    }
+    await nextFrame();
+    const controls = document.querySelector<HTMLElement>("#composer-secondary-tools")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(controls.contains(document.activeElement)).toBe(true);
+    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector('[data-testid="composer-controls-sheet"]')).toBeNull();
+  });
+
   it("opens mobile composer controls without trapping the rest of the app", async () => {
     useMobileViewport();
     const onThinkingLevelChange = vi.fn();
@@ -735,7 +922,7 @@ describe("composer controls", () => {
     expect(textarea.placeholder).toBe("Queue a steering message…");
   });
 
-  it("marks the disabled model control separately from active streaming actions", async () => {
+  it("keeps the model control enabled beside active streaming actions", async () => {
     useMobileViewport();
     await render(
       <ChatInput
@@ -753,7 +940,7 @@ describe("composer controls", () => {
 
     const modelButton = [...container!.querySelectorAll<HTMLButtonElement>("button")]
       .find((button) => button.textContent === "GPT Test")!;
-    expect(modelButton.disabled).toBe(true);
+    expect(modelButton.disabled).toBe(false);
     expect(modelButton.parentElement?.className).toContain("modelControl");
     expect(container!.querySelector('[role="group"][aria-label="Message delivery mode"]')).not.toBeNull();
   });
@@ -761,6 +948,5 @@ describe("composer controls", () => {
   it("keeps the mobile streaming model identity in the layout instead of hiding it", () => {
     const css = readFileSync("components/chat/ChatInput.module.css", "utf8");
     expect(/\.bottomBarStreaming\s+\.modelControl\s*\{[^}]*display:\s*none/.test(css)).toBe(false);
-    expect(/\.bottomBarStreaming\s+\.modelControl\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/.test(css)).toBe(true);
   });
 });

@@ -104,8 +104,7 @@ describe("AssistantMessageView conversation chrome", () => {
     expect(speed.querySelector("[data-speed-tier]")?.getAttribute("data-speed-tier")).toBe("mid");
     expect(speed.parentElement?.nextElementSibling?.textContent).toContain("a".repeat(80));
     await act(async () => root!.render(<AssistantMessageView {...props} streamingSpeedEnabled={false} message={{ ...baseMessage, content: [{ type: "text", text: "a".repeat(1000) }] }} />));
-    expect(speed.getAttribute("data-rate-available")).toBe("false");
-    expect(speed.textContent).not.toContain("token/s");
+    expect(container!.querySelector('[data-testid="streaming-speed"]')).toBeNull();
   });
 
   it("never treats an absent result as success and follows parallel lifecycle evidence", async () => {

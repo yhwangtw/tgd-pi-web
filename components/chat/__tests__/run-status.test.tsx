@@ -176,4 +176,31 @@ describe("RunStatus", () => {
     expect(container!.querySelector('[data-testid="completed-speed"]')).toBeNull();
   });
 
+  it("keeps one updating live badge beside the current phase and clears it on reconnect or tool execution", async () => {
+    vi.useFakeTimers();
+    const progress = { idleSeconds: 0, attention: "normal" as const, connection: "connected" as const };
+    await render(progress);
+    const props = { progress, startedAt: 1000, phase: { kind: "thinking" as const } };
+    const message = (length: number) => ({ role: "assistant" as const, provider: "test", model: "test", timestamp: 1000,
+      content: [{ type: "thinking" as const, thinking: "a".repeat(length) }] });
+    await act(async () => root!.render(<RunStatus {...props} streamingMessage={message(0)} />));
+    await act(async () => root!.render(<RunStatus {...props} streamingMessage={message(40)} />));
+    await act(async () => vi.advanceTimersByTime(500));
+    expect(container!.querySelectorAll('[data-testid="streaming-speed"]')).toHaveLength(1);
+    expect(container!.textContent).toContain("Thinking");
+    const firstRate = container!.querySelector('[data-speed-tier]')!.textContent;
+    await act(async () => root!.render(<RunStatus {...props} streamingMessage={message(240)} />));
+    await act(async () => vi.advanceTimersByTime(250));
+    expect(container!.querySelector('[data-speed-tier]')!.textContent).not.toBe(firstRate);
+    await act(async () => root!.render(<RunStatus {...props} progress={{ ...progress, connection: "reconnecting" }} streamingMessage={message(240)} />));
+    expect(container!.querySelector('[data-speed-tier]')).toBeNull();
+    await act(async () => root!.render(<RunStatus {...props} streamingMessage={message(240)} />));
+    await act(async () => vi.advanceTimersByTime(500));
+    expect(container!.querySelector('[data-speed-tier]')).toBeNull();
+    await act(async () => root!.render(<RunStatus {...props} phase={{ kind: "running_tools", tools: [] }} streamingMessage={message(800)} />));
+    expect(container!.querySelector('[data-testid="streaming-speed"]')).toBeNull();
+    await act(async () => root!.render(<RunStatus {...props} active={false} streamingMessage={message(800)} />));
+    expect(container!.querySelector('[data-testid="run-monitor"]')).toBeNull();
+  });
+
 });

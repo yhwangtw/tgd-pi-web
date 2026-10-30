@@ -337,10 +337,16 @@
 
 .runStatusHeading {
   display: flex;
+  flex-wrap: wrap;
   flex: 1 1 180px;
   min-width: 0;
   align-items: center;
   gap: var(--space-2);
+}
+
+.runStatusGeneration {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .runStatusToolPreview {
@@ -750,3 +756,9 @@
 }
 
 .recoveryHint { flex-basis: 100%; margin: 0; max-width: 60ch; color: var(--text-muted); font-size: var(--text-xs); line-height: var(--leading-ui); }
+
+.runSettings { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); color: var(--text-muted); overflow-wrap: anywhere; }
+.runSettings button { min-height: var(--control-md); padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--accent-text); background: var(--bg-elev-1); font-size: var(--text-xs); cursor: pointer; }
+.runSettings button:hover:not(:disabled) { background: var(--bg-hover); }
+.runSettings button:disabled { color: var(--text-dim); cursor: default; }
+@media (max-width: 700px) { .runSettings button { min-height: var(--control-touch); } }

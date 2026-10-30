@@ -1,6 +1,7 @@
 import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { withFixtureMessages } from "./session-response-fixture";
+import type { GenerationSettingsState } from "../lib/generation-settings";
 
 test.afterEach(async ({ page }) => {
   // Let in-flight fixture reads finish before Playwright disposes responses.
@@ -19,19 +20,30 @@ async function installFailure(page: Page, rejected = false) {
   const messages = [{ role: "user", content: "Hello", timestamp: 1_780_000_000_000 }, failed];
   const forbidden: string[] = [];
   await page.addInitScript(() => localStorage.setItem("pi-composer-hints", "off"));
-  let thinkingLevel = "low";
+  const settingsCommands: Record<string, unknown>[] = [];
+  let settings: GenerationSettingsState = {
+    selected: { provider, modelId, thinkingLevel: "low" }, active: null, revision: 0,
+    pending: false, restarting: false, runId: null, canRestart: false,
+  };
+  const state = () => ({ isStreaming: false, thinkingLevel: settings.selected!.thinkingLevel,
+    model: { provider, id: modelId }, generationSettings: settings });
   // No user data, credentials, or real provider request is used by this spec.
   await page.route((url) => url.pathname.startsWith("/api/"), async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
-    if (["GET", "HEAD"].includes(request.method())) return route.continue();
+    if (["GET", "HEAD"].includes(request.method())) {
+      if (pathname === `/api/agent/${SESSION}`) return route.fulfill({ json: { running: true, state: state() } });
+      return route.continue();
+    }
     const body = request.postDataJSON();
     if (pathname === "/api/worktrees" && Array.isArray(body?.cwds) && Object.keys(body).length === 1) return route.continue();
     if (pathname.endsWith("/summarize")) return route.fulfill({ json: {} });
     if (pathname === `/api/agent/${SESSION}` && body?.type === "get_tools") return route.fulfill({ json: { success: true, data: [] } });
-    if (pathname === `/api/agent/${SESSION}` && body?.type === "set_thinking_level" && body.level === "max") {
-      thinkingLevel = "max";
-      return route.fulfill({ json: { success: true, data: null } });
+    if (request.method() === "POST" && pathname === `/api/agent/${SESSION}`
+      && body?.type === "configure_generation" && body.thinkingLevel === "max" && Object.keys(body).length === 2) {
+      settingsCommands.push(body);
+      settings = { ...settings, selected: { ...settings.selected!, thinkingLevel: "max" }, revision: settings.revision + 1 };
+      return route.fulfill({ json: { success: true, data: settings } });
     }
     if (isFixtureReadReceipt(request)) return route.continue();
     forbidden.push(`${request.method()} ${pathname}`);
@@ -51,19 +63,19 @@ async function installFailure(page: Page, rejected = false) {
     const data = withFixtureMessages(await response.json(), messages, ["fixture-user", "fixture-error"]);
     await route.fulfill({ response, json: {
       ...data, info: { ...data.info, name: "Provider recovery fixture" },
-      context: { ...data.context, model: { provider, modelId }, thinkingLevel },
-      agentState: { running: true, state: { isStreaming: false, thinkingLevel, model: { provider, id: modelId } } },
+      context: { ...data.context, model: { provider, modelId }, thinkingLevel: settings.selected!.thinkingLevel },
+      agentState: { running: true, state: state() },
     } });
   });
   await page.route(new RegExp(`/api/agent/${SESSION}/events(?:\\?|$)`), (route) => {
     const events = [
       { type: "connected", sessionId: SESSION },
-      { type: "session_snapshot", sessionId: SESSION, state: { isStreaming: false, thinkingLevel: "low", model: { provider, id: modelId } }, lastRunError: error },
-      { type: "agent_end", messages: [failed] },
+      { type: "session_snapshot", sessionId: SESSION, state: state(), lastRunError: error },
+      { type: "agent_end", messages: [failed], generationSettings: settings },
     ];
     return route.fulfill({ contentType: "text/event-stream", body: `retry: 60000\n${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")}` });
   });
-  return forbidden;
+  return { forbidden, settingsCommands };
 }
 
 for (const style of ["original", "trae"] as const) {
@@ -75,7 +87,7 @@ for (const style of ["original", "trae"] as const) {
         localStorage.setItem("pi-ui-style", style);
         localStorage.setItem("pi-font-size", width === 320 ? "xlarge" : "default");
       }, { style, width });
-      const forbidden = await installFailure(page);
+      const { forbidden, settingsCommands } = await installFailure(page);
       await page.goto(`/?session=${SESSION}`);
       const error = page.getByRole("alert").filter({ hasText: "This model does not support the selected thinking level." });
       await expect(error).toHaveCount(1);
@@ -119,6 +131,7 @@ for (const style of ["original", "trae"] as const) {
       await page.screenshot({ path: test.info().outputPath(`thinking-${style}-${width}.png`) });
       await max.click();
       await expect(page.getByRole("button", { name: "Change reasoning level", exact: true })).toHaveAttribute("title", "Reasoning: max");
+      expect(settingsCommands).toEqual([{ type: "configure_generation", thinkingLevel: "max" }]);
       expect(forbidden).toEqual([]);
     });
   }
@@ -128,7 +141,7 @@ for (const width of [390, 1440]) {
   test(`${width}px: rejected model is disabled until an explicit catalog refresh`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.addInitScript(() => localStorage.setItem("pi-locale", "en"));
-    const forbidden = await installFailure(page, true);
+    const { forbidden, settingsCommands } = await installFailure(page, true);
     await page.goto(`/?session=${SESSION}`);
     await expect(page.getByRole("alert").filter({ hasText: "This model was rejected for the current connection." })).toHaveCount(1);
     await page.getByTestId("model-selector-trigger").click();
@@ -138,6 +151,7 @@ for (const width of [390, 1440]) {
     await page.getByTestId("model-selector-trigger").click();
     const refreshed = page.getByRole("dialog", { name: "Choose a model", exact: true }).getByRole("button", { name: /Fixture Spark/ });
     await expect(refreshed).not.toHaveAttribute("aria-disabled", "true");
+    expect(settingsCommands).toEqual([]);
     expect(forbidden).toEqual([]);
   });
 }

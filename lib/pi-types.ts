@@ -47,7 +47,7 @@ export interface AgentSessionLike {
   readonly model: ModelLike | undefined;
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
-  readonly agent: { state?: { systemPrompt?: string; thinkingLevel?: string } };
+  readonly agent: { state?: { systemPrompt?: string; thinkingLevel?: string }; prepareRequest?: AgentSession["agent"]["prepareRequest"] };
 
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
   prompt(text: string, options?: { images?: Array<{ type: "image"; data: string; mimeType: string }> }): Promise<void>;

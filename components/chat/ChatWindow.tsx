@@ -105,7 +105,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const chatInputRef = providedChatInputRef ?? localChatInputRef;
   const {
     loading, error, runtimeFailure, messages, entryIds, streamState, getGenerationMetrics,
-    agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, availableTools, customToolNames, thinkingLevel,
+    agentRunning, generationSettings, settingsUpdating, settingsRestarting, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, availableTools, customToolNames, thinkingLevel,
     catalogStatus, catalogError, catalogDiagnostics, retryModelCatalog,
     retryInfo, continuingOutput, runOutcome, providerRecovery, autoProviderFallback, ephemeralNewSession, contextUsage, forkingEntryId,
     isCompacting, compactError, compactionSettings, autoCompactionEnabled, autoCompactionUpdating, displayModel: displayModelValue, sessionStats,
@@ -114,7 +114,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     isNew,
     messagesEndRef, scrollContainerRef,
     lastUserMsgRef, sentMessageScrollRef,
-    handleSend, handleAbort, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
+    handleSend, handleAbort, handleApplySettingsNow, handleRuntimeReconnect, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleAutoCompactionChange, handleSteer, handleFollowUp, handleAbortCompaction,
     handleUpdateQueued, handleMoveQueued,
     handleToolPresetChange, handleThinkingLevelChange, setEphemeralNewSession, handleClearQueue, handleRemoveQueued, handleResume, handleRetry,
@@ -126,6 +126,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   });
 
   const { t } = useI18n();
+  const changingRunSettings = settingsRestarting || generationSettings?.restarting === true;
   const scrollFollowMode = useScrollFollowMode();
   const questionCardRef = useRef<UserQuestionCardHandle>(null);
   const pendingQuestion = extensionUIState.dialogs[0];
@@ -858,7 +859,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       setRunAnnouncement(t("chat.responseInProgress"));
       return;
     }
-    if (!agentRunning && wasRunning) {
+    if (!agentRunning && !changingRunSettings && wasRunning) {
       if (runOutcome === "stopped") {
         setRunAnnouncement(t("chat.responseStopped"));
       } else if (lastOutputIssue) {
@@ -873,7 +874,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         setRunAnnouncement(t("chat.responseEnded"));
       }
     }
-  }, [agentRunning, runOutcome, lastAssistantOutcome, lastOutputIssue, t]);
+  }, [agentRunning, changingRunSettings, runOutcome, lastAssistantOutcome, lastOutputIssue, t]);
 
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
@@ -900,7 +901,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onAbort={handleAbort}
       onSteer={agentRunning ? handleSteer : undefined}
       onFollowUp={agentRunning ? handleFollowUp : undefined}
-      isStreaming={agentRunning}
+      isStreaming={agentRunning || changingRunSettings}
+      settingsUpdating={settingsUpdating || generationSettings?.restarting}
       hintMessages={hintMessages}
       hintContext={hintContext}
       hintTurnKey={entryIds.at(-1) ?? `${messages.length}:${messages.at(-1)?.timestamp ?? ""}`}
@@ -1316,7 +1318,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
             {/* Recovery actions stay next to the interrupted outcome. Earlier
                 turns already expose edit/rerun + fork from the user message. */}
-            {!agentRunning && (runOutcome === "stopped" || lastOutputIssue || lastAssistantOutcome?.stopReason === "error" || lastAssistantOutcome?.stopReason === "aborted") && (
+            {!agentRunning && !changingRunSettings && (runOutcome === "stopped" || lastOutputIssue || lastAssistantOutcome?.stopReason === "error" || lastAssistantOutcome?.stopReason === "aborted") && (
               <div className={styles.recoveryActions} data-outcome={runOutcome ?? undefined} role="group" aria-label={t("recovery.options")}>
                 {runOutcome === "stopped" && <p className={styles.recoveryHint} role="status">{t("chat.responseStopped")}</p>}
                 <button type="button" className={styles.resumeButton} onClick={() => void handleResume()} title={t("chat.resumeHelp")}>
@@ -1338,7 +1340,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               </div>
             )}
 
-            {providerRecovery && !agentRunning && (
+            {providerRecovery && !agentRunning && !changingRunSettings && (
               <ProviderRecoveryBanner
                 recovery={{ ...providerRecovery, automatic: autoProviderFallback }}
                 busy={false}
@@ -1362,8 +1364,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <MessageView
                 message={streamState.streamingMessage as AgentMessage}
                 isStreaming
-                streamingSpeedEnabled={!isCompacting && !retryInfo && runProgress.connection === "connected"
-                  && (!agentPhase || agentPhase.kind === "writing" || agentPhase.kind === "waiting_model")}
+                streamingSpeedEnabled={false}
                 toolExecutionContext={toolExecutionContext}
                 modelNames={modelNames}
                 toolResults={toolResultsMap}
@@ -1399,10 +1400,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       </div>
 
       <div className={`${styles.composerDock} relative`}>
-        {(agentRunning || isCompacting) && (
+        {(agentRunning || isCompacting || changingRunSettings) && (
           <RunStatus key={session?.id ?? "new"} phase={agentPhase} progress={runProgress} startedAt={agentStartedAt}
             lastProgressAtRef={lastProgressAtRef} tools={currentTools} onRevealTool={revealCurrentTool} wide={wideChat} retry={retryInfo} continuing={continuingOutput}
-            active={!!(agentRunning || isCompacting)} compacting={isCompacting}
+            generationSettings={generationSettings} settingsUpdating={settingsUpdating} settingsRestarting={changingRunSettings} onApplySettingsNow={() => void handleApplySettingsNow()}
+            active={!!(agentRunning || isCompacting || changingRunSettings)} compacting={isCompacting} streamingMessage={streamState.streamingMessage as AgentMessage | null}
             />
         )}
         <div className={styles.jumpControlRow}>

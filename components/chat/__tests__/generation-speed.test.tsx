@@ -54,7 +54,7 @@ describe("generation speed scope and help", () => {
     expect(speed("completed-speed").dataset.rateKind).toBe("estimated-average");
   });
 
-  it.each(["en", "zh"] as const)("labels a rolling visible-text estimate and removes a stale rate (%s)", async locale => {
+  it.each(["en", "zh"] as const)("labels a rolling generation estimate and removes a stale rate (%s)", async locale => {
     vi.useFakeTimers();
     await render(<StreamingSpeed message={baseMessage} />, locale);
     expect(speed("streaming-speed").dataset.rateAvailable).toBe("false");
@@ -83,28 +83,47 @@ describe("generation speed scope and help", () => {
     expect(speed("streaming-speed").querySelector("[data-speed-tier]")?.textContent).toBe("~ 20.0 token/s");
   });
 
-  it.each([[1, "slow"], [20, "mid"], [40, "good"], [60, "fast"]] as const)("keeps a coloured average after a buffered reply ends (%s token/s)", async (rate, tier) => {
+  it.each([1, 20, 40, 60] as const)("keeps a quiet average after a buffered reply ends (%s token/s)", async (rate) => {
     vi.useFakeTimers();
     await render(<StreamingSpeed message={{ ...baseMessage, content: [{ type: "text", text: "你好" }] }} />);
     await act(async () => vi.advanceTimersByTime(10));
     expect(speed("streaming-speed").dataset.rateAvailable).toBe("false");
     await render(<CompletedSpeed metrics={{ tokens: rate * 2, seconds: 2, estimated: false, source: "server" }} />);
     const badge = speed("completed-speed").querySelector("[data-speed-tier]");
-    expect(badge?.getAttribute("data-speed-tier")).toBe(tier);
-    expect(badge?.textContent).toBe(`avg ${rate} token/s`);
+    expect(badge).toBeNull();
+    expect(speed("completed-speed").textContent).toContain(`avg ${rate} token/s`);
     expect(container!.querySelector('[data-testid="streaming-speed"]')).toBeNull();
   });
 
-  it("keeps buffered, thinking and tool content from claiming visible-text throughput", async () => {
+  it("uses buffered text, thinking and tool arguments only as baselines", async () => {
     vi.useFakeTimers();
-    await render(<StreamingSpeed message={{ ...baseMessage, content: [{ type: "text", text: "a".repeat(1000) }] }} />);
-    await act(async () => vi.advanceTimersByTime(1500));
+    const blocks = [
+      { type: "text" as const, text: "a".repeat(1000) },
+      { type: "thinking" as const, thinking: "b".repeat(1000) },
+      { type: "toolCall" as const, toolCallId: "tool-1", toolName: "bash", input: { command: "c".repeat(1000) } },
+    ];
+    for (const [timestamp, block] of blocks.entries()) {
+      await render(<StreamingSpeed message={{ ...baseMessage, timestamp, content: [block] }} />);
+      await act(async () => vi.advanceTimersByTime(1500));
+      expect(speed("streaming-speed").dataset.rateAvailable).toBe("false");
+      expect(container!.querySelector("[data-speed-tier]")).toBeNull();
+    }
+  });
+
+  it.each(["thinking", "toolCall"] as const)("updates a coloured live rate as %s content arrives", async kind => {
+    vi.useFakeTimers();
+    const block = (length: number) => kind === "thinking"
+      ? { type: "thinking" as const, thinking: "a".repeat(length) }
+      : { type: "toolCall" as const, toolCallId: "tool-1", toolName: "bash", input: { command: "a".repeat(length) } };
+    await render(<StreamingSpeed message={{ ...baseMessage, content: [block(0)] }} />);
+    for (let step = 1; step <= 2; step++) {
+      await render(<StreamingSpeed message={{ ...baseMessage, content: [block(step * 40)] }} />);
+      await act(async () => vi.advanceTimersByTime(500));
+    }
+    expect(speed("streaming-speed").querySelector("[data-speed-tier]")?.textContent).toBe("~ 20.0 token/s");
+    await act(async () => vi.advanceTimersByTime(2000));
     expect(speed("streaming-speed").dataset.rateAvailable).toBe("false");
-    expect(speed("streaming-speed").dataset.rateAvailable).toBe("false");
-    await render(<StreamingSpeed message={{ ...baseMessage, content: [{ type: "thinking", thinking: "a".repeat(2000) }] }} />);
-    expect(speed("streaming-speed").textContent).toBe("Thinking");
-    await render(<StreamingSpeed message={{ ...baseMessage, content: [{ type: "toolCall", toolCallId: "tool-1", toolName: "bash", input: { command: "a".repeat(3000) } }] }} />);
-    expect(speed("streaming-speed").textContent).toBe("Preparing tool");
+    expect(container!.querySelector("[data-speed-tier]")).toBeNull();
   });
 
   it("preserves positive rates below one token per second", async () => {
