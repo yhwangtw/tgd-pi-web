@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, useState } from "react";
 import { readFileSync } from "node:fs";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -67,6 +67,78 @@ describe("composer controls", () => {
 
   async function nextFrame() {
     await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  }
+
+  type DelayedSelector = "model" | "thinking-popover" | "thinking-inline";
+
+  async function selectWithDelayedSettings(kind: DelayedSelector) {
+    const options = [
+      { provider: "fixture", modelId: "original", name: "Original model" },
+      { provider: "fixture", modelId: "alternate", name: "Alternate model" },
+    ];
+    const change = vi.fn();
+    let acknowledge!: () => void;
+    function Harness() {
+      const [disabled, setDisabled] = useState(false);
+      const [accepted, setAccepted] = useState(false);
+      const beginUpdate = () => {
+        setDisabled(true);
+        acknowledge = () => { setAccepted(true); setDisabled(false); };
+      };
+      return <>
+        {kind === "model"
+          ? <ModelSelector modelOptions={options} modelsByProvider={[{ provider: "fixture", options }]}
+            model={{ provider: "fixture", modelId: accepted ? "alternate" : "original" }}
+            currentName={accepted ? "Alternate model" : "Original model"} isStreaming disabled={disabled}
+            onModelChange={(provider, modelId) => { change(provider, modelId); beginUpdate(); }} />
+          : <ThinkingSelector thinkingLevel={accepted ? "high" : "low"} availableThinkingLevels={["low", "high"]}
+            presentation={kind === "thinking-inline" ? "inline" : "popover"} isStreaming disabled={disabled}
+            onThinkingLevelChange={level => { change(level); beginUpdate(); }} />}
+        <textarea data-testid="external-textarea" defaultValue="Keep this textarea draft" />
+        <input data-testid="external-input" defaultValue="Keep this input draft" />
+      </>;
+    }
+    await render(<Harness />);
+    const trigger = container!.querySelector<HTMLButtonElement>(kind === "model"
+      ? '[data-testid="model-selector-trigger"]' : '[aria-label="Change reasoning level"]')!;
+    await act(async () => { trigger.focus(); trigger.click(); });
+    await nextFrame();
+    const option = kind === "model"
+      ? [...document.querySelectorAll<HTMLButtonElement>("[data-model-choice]")].find(button => button.textContent?.includes("Alternate model"))!
+      : [...container!.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(button => button.textContent?.startsWith("High"))!;
+    await act(async () => { option.focus(); option.click(); });
+    if (kind === "model") expect(change).toHaveBeenCalledExactlyOnceWith("fixture", "alternate");
+    else expect(change).toHaveBeenCalledExactlyOnceWith("high");
+    expect(trigger.disabled).toBe(true);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector(kind === "model" ? "[data-model-choice]" : '[role="listbox"]')).toBeNull();
+    return { trigger, acknowledge: () => acknowledge() };
+  }
+
+  for (const kind of ["model", "thinking-popover", "thinking-inline"] as const) {
+    it(`restores the ${kind} trigger after a delayed settings selection is enabled again`, async () => {
+      const { trigger, acknowledge } = await selectWithDelayedSettings(kind);
+      // The menu-close frame happens while the command still owns the lock.
+      await nextFrame();
+      expect(document.activeElement).not.toBe(trigger);
+      await act(async () => acknowledge());
+      expect(trigger.disabled).toBe(false);
+      await nextFrame();
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it.each(["textarea", "input"] as const)(`does not steal focus from an external %s after a delayed ${kind} settings selection`, async tag => {
+      const { trigger, acknowledge } = await selectWithDelayedSettings(kind);
+      const external = container!.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-testid="external-${tag}"]`)!;
+      await act(async () => external.focus());
+      await nextFrame();
+      expect(document.activeElement).toBe(external);
+      await act(async () => acknowledge());
+      expect(trigger.disabled).toBe(false);
+      await nextFrame();
+      expect(document.activeElement).toBe(external);
+      expect(external.value).toBe(`Keep this ${tag} draft`);
+    });
   }
 
   it("does not format or create hidden model rows while the composer is being edited", async () => {

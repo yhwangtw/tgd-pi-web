@@ -71,6 +71,7 @@ export const ModelSelector = React.memo(function ModelSelector({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const selectionFocusPending = useRef(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const panelId = useId();
   const status = catalogStatus ?? (modelOptions.length ? "ready" : "empty");
@@ -161,6 +162,15 @@ export const ModelSelector = React.memo(function ModelSelector({
     setQuery("");
   }, [needsRecovery, disabled]);
 
+  useEffect(() => {
+    if (open || disabled || !selectionFocusPending.current) return;
+    selectionFocusPending.current = false;
+    // Saving can temporarily disable the launcher. Restore selection focus only
+    // after it is usable, without taking focus from a new user interaction.
+    const active = document.activeElement;
+    if (!active || active === document.body || dropdownRef.current?.contains(active)) triggerRef.current?.focus();
+  }, [open, disabled]);
+
   const rememberModel = useCallback((option: ModelOption) => {
     setRecentRefs((current) => {
       const next = rememberRecentModel(current, option);
@@ -173,9 +183,10 @@ export const ModelSelector = React.memo(function ModelSelector({
     if (disabled || option.available === false) return;
     const isActive = option.modelId === model?.modelId && option.provider === model?.provider;
     rememberModel(option);
-    closeMenu(restoreFocus && !isMobile);
+    selectionFocusPending.current = restoreFocus;
+    closeMenu();
     if (!isActive) onModelChange?.(option.provider, option.modelId);
-  }, [closeMenu, disabled, isMobile, model?.modelId, model?.provider, onModelChange, rememberModel]);
+  }, [closeMenu, disabled, model?.modelId, model?.provider, onModelChange, rememberModel]);
 
   const togglePin = useCallback((option: ModelOption) => {
     setPinnedRefs((current) => {

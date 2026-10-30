@@ -55,6 +55,7 @@ export function ThinkingSelector({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const selectionFocusPending = useRef(false);
   const listboxId = useId();
   const panelRef = useComposerPopupPosition(open && presentation === "popover", triggerRef);
 
@@ -63,6 +64,13 @@ export function ThinkingSelector({
   useEffect(() => {
     if (disabled) setOpen(false);
   }, [disabled]);
+
+  useEffect(() => {
+    if (open || disabled || !selectionFocusPending.current) return;
+    selectionFocusPending.current = false;
+    const active = document.activeElement;
+    if (!active || active === document.body || ref.current?.contains(active)) triggerRef.current?.focus();
+  }, [open, disabled]);
 
   // Close on outside click
   useEffect(() => {
@@ -97,8 +105,9 @@ export function ThinkingSelector({
     >
       <button
         ref={triggerRef}
-        onClick={() => {
+        onClick={(event) => {
           if (disabled) return;
+          event.currentTarget.focus();
           if (!open) announceComposerSelectorOpen(listboxId);
           setOpen(!open);
         }}
@@ -142,9 +151,9 @@ export function ThinkingSelector({
                 aria-selected={isActive}
                 onClick={() => {
                   if (disabled) return;
+                  selectionFocusPending.current = true;
                   setOpen(false);
                   if (!isActive) onThinkingLevelChange(lvl);
-                  requestAnimationFrame(() => triggerRef.current?.focus());
                 }}
                 className={`${styles.option} ${isActive ? styles.optionActive : ""}`}
               >
