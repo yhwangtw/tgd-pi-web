@@ -60,9 +60,12 @@ async function reconnectRelay(baseURL: string) {
       }
       if (incoming.method === "POST" && /^\/api\/agent\/(?:new|[^/]+)$/.test(url.pathname)) {
         const fixturePrompt = typeof body?.message === "string" && /^\/e2e-reconnect-(complete|delayed|error) [a-z0-9-]{1,80}$/.test(body.message);
+        const fixtureSettings = url.pathname !== "/api/agent/new" && body?.type === "configure_generation" && Object.keys(body).length === 2
+          && ((body.model && Object.keys(body.model).length === 2 && body.model.provider === PROVIDER && body.model.modelId === "deterministic")
+            || ["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(body.thinkingLevel));
         const safe = (body?.type === "prompt" && fixturePrompt && (url.pathname !== "/api/agent/new" || (body.deferPrompt === true && body.provider === PROVIDER && body.modelId === "deterministic")))
-          || ["get_tools", "get_state", "set_tools", "set_thinking_level", "set_auto_compaction", "abort", "fork"].includes(body?.type)
-          || (body?.type === "set_model" && body.provider === PROVIDER && body.modelId === "deterministic");
+          || ["get_tools", "get_state", "set_tools", "set_auto_compaction", "abort", "fork"].includes(body?.type)
+          || fixtureSettings;
         if (!safe) {
           forbidden.push(`${incoming.method} ${url.pathname} ${body?.type}`);
           outgoing.writeHead(403).end("Only offline reconnect fixture commands are allowed"); return;

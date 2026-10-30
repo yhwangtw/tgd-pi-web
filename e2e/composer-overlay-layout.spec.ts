@@ -1,13 +1,18 @@
 import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
+import type { GenerationSettingsState } from "../lib/generation-settings";
 
 const SESSION = "ffff1111-2222-3333-4444-555566667777";
 const LONG_MODEL = "Fixture model with a deliberately long descriptive name for constrained composer layouts";
 const MODEL_API = /\/api\/models(?:\?|$)/;
 
-const test = base.extend<{ layoutNetworkSafety: void }>({
+const test = base.extend<{ layoutNetworkSafety: GenerationSettingsState }>({
   layoutNetworkSafety: [async ({ page }, use) => {
     const forbidden: string[] = [];
+    const settings: GenerationSettingsState = {
+      selected: { provider: "anthropic", modelId: "claude-sonnet-5", thinkingLevel: "off" },
+      active: null, revision: 0, pending: false, restarting: false, runId: null, canRestart: false,
+    };
     // Background suggestions have their own tests; layout actions must remain model-free.
     await page.addInitScript(() => localStorage.setItem("pi-composer-hints", "off"));
     await page.route((url) => url.pathname.startsWith("/api/"), async (route) => {
@@ -39,14 +44,17 @@ const test = base.extend<{ layoutNetworkSafety: void }>({
     await page.route(/\/api\/sessions\/[^/?]+\?includeState$/, async (route) => {
       const response = await route.fetch();
       const data = await response.json();
+      if (settings.revision === 0) settings.selected!.thinkingLevel = data.context.thinkingLevel ?? "off";
       await route.fulfill({ response, json: {
         ...data,
-        context: { ...data.context, model: { provider: "anthropic", modelId: "claude-sonnet-5" } },
+        context: { ...data.context,
+          model: { provider: settings.selected!.provider, modelId: settings.selected!.modelId },
+          thinkingLevel: settings.selected!.thinkingLevel },
         compactionSettings: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 },
         agentState: { running: false },
       } });
     });
-    await use();
+    await use(settings);
     await page.unrouteAll({ behavior: "wait" });
     expect(forbidden, "Opening, resizing, and closing composer controls must not call a model or mutate a session").toEqual([]);
   }, { auto: true }],
@@ -156,15 +164,19 @@ for (const style of ["original", "trae"] as const) {
     await expect(panel).toBeHidden();
   });
 
-  test(`${style}: desktop model popup follows resizing and the sidebar beside an open file preview`, async ({ page }) => {
+  test(`${style}: desktop model popup follows resizing and the sidebar beside an open file preview`, async ({ page, layoutNetworkSafety: settings }) => {
     const selections: unknown[] = [];
     await page.route(`**/api/agent/${SESSION}`, route => {
       const request = route.request();
       if (request.method() !== "POST") return route.fallback();
       const command = request.postDataJSON();
-      if (command.type !== "set_model") return route.fallback();
+      if (command.type !== "configure_generation" || Object.keys(command).length !== 2
+        || command.model?.provider !== "fixture-layout" || command.model?.modelId !== "short-model"
+        || Object.keys(command.model).length !== 2) return route.fallback();
       selections.push(command);
-      return route.fulfill({ json: { success: true } });
+      settings.selected = { provider: "fixture-layout", modelId: "short-model", thinkingLevel: "off" };
+      settings.revision++;
+      return route.fulfill({ json: { success: true, data: settings } });
     });
     await openFixture(page, style, 1440);
     await page.getByRole("link", { name: "查看成果", exact: true }).click();
@@ -184,7 +196,8 @@ for (const style of ["original", "trae"] as const) {
     expect(selections).toEqual([]);
     await trigger.click();
     await page.getByTestId("model-selector-popover").getByRole("button", { name: /Fixture short model/ }).click();
-    await expect.poll(() => selections).toEqual([{ type: "set_model", provider: "fixture-layout", modelId: "short-model" }]);
+    await expect.poll(() => selections).toEqual([{ type: "configure_generation", model: { provider: "fixture-layout", modelId: "short-model" } }]);
+    await expect(trigger).toContainText("Fixture short model");
     await expect(page.getByTestId("model-selector-popover")).toBeHidden();
     await expect(trigger).toBeFocused();
     await trigger.click();
