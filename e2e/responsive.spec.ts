@@ -324,7 +324,7 @@ test.describe("responsive shell", () => {
 
     await page.getByRole("button", { name: "更多輸入框設定" }).click();
     await page.getByRole("button", { name: "切換推理層級" }).click();
-    await expect(page.getByText("沿用 Pi 預設值", { exact: true })).toBeVisible();
+    await expect(page.getByText("恢復模型設定的預設層級；未設定時使用 Pi 預設值", { exact: true })).toBeVisible();
     await expect(page.getByText("低強度推理", { exact: true })).toBeVisible();
     await expect(page.getByText("極高強度推理", { exact: true })).toBeVisible();
     await expect(page.getByText("最高強度推理", { exact: true })).toBeVisible();

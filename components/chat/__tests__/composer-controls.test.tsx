@@ -812,6 +812,27 @@ describe("composer controls", () => {
     expect(document.querySelector("#composer-secondary-tools")?.className).toContain("bottomBarRightMobileOpen");
   });
 
+  it.each(["button", "Escape"])("keeps keyboard focus in restored mobile controls after collapsing with %s", async method => {
+    useMobileViewport();
+    await render(<ChatInput onSend={vi.fn()} onAbort={vi.fn()} isStreaming={false} />);
+    const trigger = container!.querySelector<HTMLButtonElement>('[aria-label="More composer controls"]')!;
+    await act(async () => { trigger.focus(); trigger.click(); });
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Expand composer"]')!.click());
+    await nextFrame();
+    if (method === "button") {
+      await act(async () => container!.querySelector<HTMLButtonElement>('[aria-label="Collapse composer"]')!.click());
+    } else {
+      await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    }
+    await nextFrame();
+    const controls = document.querySelector<HTMLElement>("#composer-secondary-tools")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(controls.contains(document.activeElement)).toBe(true);
+    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector('[data-testid="composer-controls-sheet"]')).toBeNull();
+  });
+
   it("opens mobile composer controls without trapping the rest of the app", async () => {
     useMobileViewport();
     const onThinkingLevelChange = vi.fn();

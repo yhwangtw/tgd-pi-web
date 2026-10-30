@@ -513,6 +513,13 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
     if (restoreFocus) requestAnimationFrame(() => mobileToolsButtonRef.current?.focus());
   }, []);
 
+  const focusComposerAfterResize = useCallback(() => {
+    // Restoring the mobile sheet must also restore its keyboard focus. A late
+    // editor-focus frame would otherwise send Escape outside that sheet.
+    const restoredControls = !expandedRef.current && isMobileViewport && controlsBeforeExpandRef.current;
+    (restoredControls ? mobileControlsInitialRef.current ?? textareaRef.current : textareaRef.current)?.focus();
+  }, [isMobileViewport]);
+
   useEffect(() => {
     const media = window.matchMedia?.("(max-width: 700px)");
     const update = () => setIsMobileViewport(media?.matches ?? false);
@@ -543,14 +550,14 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
 
   useEffect(() => {
     if (!expanded) return;
-    requestAnimationFrame(() => textareaRef.current?.focus());
+    const focusFrame = requestAnimationFrame(focusComposerAfterResize);
     const handleExpandedKeys = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         if (showSlashMenu || mention) return;
         event.preventDefault();
         setExpanded(false);
         setMobileToolsOpen(controlsBeforeExpandRef.current);
-        requestAnimationFrame(() => textareaRef.current?.focus());
+        requestAnimationFrame(focusComposerAfterResize);
         return;
       }
       if (event.key !== "Tab") return;
@@ -571,8 +578,11 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
       }
     };
     document.addEventListener("keydown", handleExpandedKeys);
-    return () => document.removeEventListener("keydown", handleExpandedKeys);
-  }, [expanded, mention, showSlashMenu]);
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleExpandedKeys);
+    };
+  }, [expanded, mention, showSlashMenu, focusComposerAfterResize]);
 
   const submit = useCallback(async (deliver: Props["onSend"]) => {
     const draft = readDraft() ?? "";
@@ -661,6 +671,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
         e.preventDefault();
         setExpanded(false);
         setMobileToolsOpen(controlsBeforeExpandRef.current);
+        requestAnimationFrame(focusComposerAfterResize);
         return;
       }
 
@@ -794,7 +805,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
         }
       }
     },
-    [isStreaming, isCompacting, onAbortCompaction, onSteer, onFollowUp, sendQueued, handleSend, showSlashMenu, slashFilter, slashSelectedIndex, slashItems, value, mention, mentionItems, mentionIndex, applyMention, onAbort, t, expanded, streamingSendMode, setValue, hint, acceptHint, dismissHint]
+    [isStreaming, isCompacting, onAbortCompaction, onSteer, onFollowUp, sendQueued, handleSend, showSlashMenu, slashFilter, slashSelectedIndex, slashItems, value, mention, mentionItems, mentionIndex, applyMention, onAbort, t, expanded, streamingSendMode, setValue, hint, acceptHint, dismissHint, focusComposerAfterResize]
   );
 
   const handleInput = useCallback(() => {
@@ -883,8 +894,8 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
       setMobileToolsOpen(controlsBeforeExpandRef.current);
     }
     setExpanded(!expanded);
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [expanded, isMobileViewport, mobileToolsOpen]);
+    requestAnimationFrame(focusComposerAfterResize);
+  }, [expanded, isMobileViewport, mobileToolsOpen, focusComposerAfterResize]);
 
 
 
