@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const MAIN = "/?session=aaaa1111-2222-3333-4444-555566667777";
 
-for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
+for (const style of ["original", "trae"]) for (const width of [320, 390, 1440]) {
   test(`${style} ${width}: review updates never steal the file panel`, async ({ page }, info) => {
     await page.addInitScript(style => {
       localStorage.setItem("pi-ui-style", style);
@@ -68,6 +68,18 @@ for (const style of ["original", "trae"]) for (const width of [390, 1440]) {
     await expect.poll(() => content.evaluate(element => element.scrollTop)).toBe(savedScrollTop);
     const review = panel.getByRole("button", { name: /\d+ to review/ });
     await expect(review).toBeVisible();
+    await expect.poll(() => panel.evaluate(element => [element, ...element.parentElement!.children]
+      .flatMap(node => node.getAnimations()).some(animation => animation instanceof CSSTransition && animation.playState === "running"))).toBe(false);
+    const chrome = panel.getByTestId("right-panel-tab-bar");
+    const strip = chrome.getByTestId("file-tab-strip");
+    for (const control of [review, active, chrome.getByRole("button", { name: "Panel layout", exact: true })]) {
+      await expect(control).toBeInViewport();
+      const bounds = (await chrome.boundingBox())!;
+      const box = (await control.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(bounds.x - 1);
+      expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+    }
+    expect((await strip.boundingBox())!.width).toBeGreaterThanOrEqual(80);
     await page.screenshot({ path: info.outputPath("passive-review.png") });
     // A review file can still be opened, but only through the review button.
     await review.click();

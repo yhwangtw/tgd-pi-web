@@ -15,19 +15,18 @@ import {
   Menu,
   Maximize2,
   Minimize2,
-  MessageSquare,
   PanelRightClose,
   PanelRightOpen,
-  Plus,
-  RotateCcw,
   X,
 } from "lucide-react";
 import { SessionSidebar } from "../sidebar/SessionSidebar";
 import { ChatWindow } from "../chat/ChatWindow";
+import { WelcomeScreen } from "./WelcomeScreen";
 import type { DiffAnnotation } from "./DiffView";
 import { IconRail, type PanelView } from "./IconRail";
 import { MobileNavigation } from "./MobileNavigation";
 import { TabBar, fileTabId, filePanelId } from "./TabBar";
+import { FilePanelLayoutMenu } from "./FilePanelLayoutMenu";
 import { BranchNavigator, hasSessionBranches } from "../chat/BranchNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppShellState } from "@/hooks/useAppShellState";
@@ -1356,51 +1355,11 @@ export function AppShell() {
               onSessionNamed={actions.bumpRefreshKey}
               onOpenModels={handleOpenModels}
             />
-          ) : centerView === "project" ? (
-              <div className={s.placeholderContainer}>
-                <div className={s.placeholderIconBg}>
-                  <MessageSquare size={28} color="var(--accent)" className={s.placeholderIcon} aria-hidden="true" />
-                </div>
-                <div className={s.placeholderText}>
-                  <div className={s.placeholderTitle}>{t("welcome.selectSession")}</div>
-                  <div className={s.placeholderSubtitle}>
-                    {t("welcome.chooseFromSidebar")}
-                  </div>
-                </div>
-              </div>
-          ) : centerView === "welcome" ? (
-              <div className={s.welcomeContainer}>
-                <div className={s.welcomeIconBg}>
-                  <MessageSquare size={32} color="var(--accent)" aria-hidden="true" />
-                </div>
-                <div className={s.placeholderText}>
-                  <div className={s.welcomeTitle}>
-                    <span className={s.piSymbol}>π</span>
-                    <span className={s.titleText}>with tGD</span>
-                  </div>
-                  <div className={s.welcomeSubtitle}>
-                    {t("welcome.subtitle")}
-                  </div>
-                </div>
-                <button type="button" className={s.welcomeStartButton} onClick={handleStartNewSession}>
-                  <Plus size={UI_ICON_SIZE.control} aria-hidden="true" />
-                  {t("welcome.startConversation")}
-                </button>
-                <div className={s.welcomeSteps}>
-                  <div className={s.welcomeStep}>
-                    <span className={s.welcomeStepNumber}>1</span>
-                    <span className={s.welcomeStepText}>{t("welcome.step1")}</span>
-                  </div>
-                  <div className={s.welcomeStep}>
-                    <span className={s.welcomeStepNumber}>2</span>
-                    <span className={s.welcomeStepText}>{t("welcome.chooseProject")}</span>
-                  </div>
-                  <div className={s.welcomeStep}>
-                    <span className={s.welcomeStepNumber}>3</span>
-                    <span className={s.welcomeStepText}>{t("welcome.step3pre")} <button type="button" className={s.welcomeModelsButton} onClick={handleOpenModels}>{t("sidebar.models")}</button> {t("welcome.step3post")}</span>
-                  </div>
-                </div>
-              </div>
+          ) : centerView === "loading" ? (
+            <WelcomeScreen variant="loading" />
+          ) : centerView === "project" || centerView === "welcome" ? (
+            <WelcomeScreen variant={centerView} projectPath={state.activeCwd}
+              onStart={handleStartNewSession} onOpenModels={handleOpenModels} />
           ) : null}
         </div>
       </div>
@@ -1448,26 +1407,23 @@ export function AppShell() {
               splitTabId={splitFileTabId}
             />
           </div>}
-          {(activeFileOrigin?.kind === "message" || activeFileOrigin?.kind === "search") && (
-            <button
-              type="button"
-              className={s.fileOriginButton}
-              onClick={() => void handleReturnToFileOrigin()}
-              title={t(activeFileOrigin.kind === "message" ? "files.backToMessage" : "files.backToSearch")}
-            >
-              <ArrowLeft size={UI_ICON_SIZE.compact} aria-hidden />
-              <span>{t(activeFileOrigin.kind === "message" ? "files.message" : "files.search")}</span>
-            </button>
-          )}
           {pendingReviewFiles.length > 0 && (
-            <button type="button" className={s.reviewQueueButton} onClick={openNextReviewFile} title={t("files.reviewNext")}>
-              {t("files.reviewCount").replace("{count}", pendingReviewFiles.length.toLocaleString())}
+            <button type="button" className={s.reviewQueueButton} onClick={openNextReviewFile} title={t("files.reviewNext")}
+              aria-label={t("files.reviewCount").replace("{count}", pendingReviewFiles.length.toLocaleString())}>
+              <span className={s.reviewQueueLabel}>{t("files.reviewCount").replace("{count}", pendingReviewFiles.length.toLocaleString())}</span>
+              <span className={s.reviewQueueCompactCount} aria-hidden>{pendingReviewFiles.length.toLocaleString()}</span>
             </button>
           )}
-          <button type="button" className={`${s.filePanelControl} ${s.filePanelResizeControl}`}
-            onClick={resetRightWidth} title={t("topbar.resetFilePanel")} aria-label={t("topbar.resetFilePanel")}>
-            <RotateCcw size={UI_ICON_SIZE.compact} aria-hidden />
-          </button>
+          {rightPanelOpen && <FilePanelLayoutMenu
+            className={s.filePanelControl}
+            expanded={filePanelExpanded}
+            onToggleExpanded={() => setFilePanelExpanded(value => !value)}
+            onResetWidth={resetRightWidth}
+            returnAction={(activeFileOrigin?.kind === "message" || activeFileOrigin?.kind === "search") ? {
+              label: t(activeFileOrigin.kind === "message" ? "files.backToMessage" : "files.backToSearch"),
+              onReturn: () => void handleReturnToFileOrigin(),
+            } : undefined}
+          />}
           <button type="button" className={`${s.filePanelControl} ${s.filePanelResizeControl}`}
             aria-pressed={filePanelExpanded} onClick={() => setFilePanelExpanded(value => !value)}
             title={t(filePanelExpanded ? "topbar.restoreFilePanel" : "topbar.expandFilePanel")}
@@ -1478,6 +1434,7 @@ export function AppShell() {
             type="button"
             onClick={() => setRightPanelOpen(false)}
             title={t("topbar.hideFilePanel")}
+            aria-label={t("topbar.hideFilePanel")}
             className={`${s.mobileFilePanelClose} hover-text`}
           >
             <PanelRightClose size={UI_ICON_SIZE.compact} aria-hidden />
@@ -1500,6 +1457,7 @@ export function AppShell() {
                 <FileViewer
                   filePath={activeFileTab.filePath}
                   visible={rightPanelOpen}
+                  showFilePath={Boolean(splitFileTab)}
                   cwd={state.activeCwd ?? undefined}
                   gotoLine={activeFileTab.gotoLine}
                   gotoNonce={activeFileTab.gotoNonce}
@@ -1516,6 +1474,7 @@ export function AppShell() {
                   <FileViewer
                     filePath={splitFileTab.filePath}
                     visible={rightPanelOpen}
+                    showFilePath
                     cwd={state.activeCwd ?? undefined}
                     gotoLine={splitFileTab.gotoLine}
                     gotoNonce={splitFileTab.gotoNonce}

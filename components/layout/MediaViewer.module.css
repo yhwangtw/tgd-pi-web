@@ -1,6 +1,8 @@
-.root { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--bg-panel); }
-.toolbar { min-height: 38px; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3); border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: var(--text-xs); background: var(--bg); }
-.path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.root { display: flex; flex-direction: column; height: 100%; min-width: 0; overflow: hidden; background: var(--bg-panel); }
+.toolbar { min-height: 38px; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; flex-shrink: 0; gap: var(--space-1) var(--space-2); padding: var(--space-1) var(--space-3); border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: var(--text-xs); background: var(--bg); }
+.toolbar > span { max-width: 100%; overflow-wrap: anywhere; }
+.path { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.live, .static { display: inline-flex; align-items: center; gap: var(--space-1); flex-shrink: 0; white-space: nowrap; }
 .live { color: var(--color-success-text); }
 .static { color: var(--text-dim); }
 .watchDot {
@@ -16,7 +18,7 @@
 .error { color: var(--color-error-text); }
 
 @media (max-width: 700px) {
-  .toolbar { min-height: var(--control-touch); flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
+  .toolbar { min-height: var(--control-touch); }
   .stage { padding: var(--space-2); }
 }
 

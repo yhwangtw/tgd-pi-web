@@ -4,7 +4,7 @@
   max-height: min(var(--radix-dropdown-menu-content-available-height), calc(100dvh - 24px));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: var(--space-1);
+  padding: var(--space-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-menu);
   background: var(--bg-elev-2);
@@ -25,8 +25,8 @@
   background: transparent;
   color: var(--text);
   font-family: inherit;
-  font-size: var(--text-sm);
-  line-height: var(--leading-snug);
+  font-size: var(--type-label-size);
+  line-height: var(--type-ui-leading);
   text-align: start;
   text-decoration: none;
   white-space: normal;

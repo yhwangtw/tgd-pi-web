@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectPanelExpanded, selectPanelLayoutAction } from "./file-preview-actions";
 
 const SESSION = "ffff1111-2222-3333-4444-555566667777";
 async function session(page: Page) {
@@ -50,12 +51,12 @@ for (const style of ["original", "trae"]) {
     await fits(page);
     const frameBox = (await panel.locator('iframe[title="HTML preview"]').boundingBox())!;
     expect(frameBox.width).toBeLessThanOrEqual((await panel.boundingBox())!.width);
-    await panel.getByRole("button", { name: "Expand file panel", exact: true }).click();
-    await expect(panel.getByRole("button", { name: "Restore file panel", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await selectPanelLayoutAction(page, panel, "Expand file panel");
+    await expectPanelExpanded(page, panel, true);
     await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(730);
     await page.keyboard.press("Escape");
-    await expect(panel.getByRole("button", { name: "Expand file panel", exact: true })).toBeVisible();
-    await panel.getByRole("button", { name: "Reset file panel width", exact: true }).click();
+    await expectPanelExpanded(page, panel, false);
+    await selectPanelLayoutAction(page, panel, "Reset file panel width");
     expect(await page.evaluate(() => localStorage.getItem("pi-right-width"))).toBeNull();
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.getByRole("button", { name: /^(Explorer|Files)$/ }).first().click();
@@ -66,15 +67,15 @@ for (const style of ["original", "trae"]) {
     await expect(panel.locator('iframe[title="HTML preview"]')).toBeVisible();
     await fits(page);
     // The existing file Focus mode owns Escape before the expanded outer pane.
-    await panel.getByRole("button", { name: "Expand file panel", exact: true }).click();
+    await selectPanelLayoutAction(page, panel, "Expand file panel");
     await panel.getByRole("button", { name: "More file actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Focus mode", exact: true }).click();
     await expect(page.locator('[data-file-focus-mode="true"]')).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.locator('[data-file-focus-mode="true"]')).toBeHidden();
-    await expect(panel.getByRole("button", { name: "Restore file panel", exact: true })).toBeVisible();
+    await expectPanelExpanded(page, panel, true);
     await page.keyboard.press("Escape");
-    await expect(panel.getByRole("button", { name: "Expand file panel", exact: true })).toBeVisible();
+    await expectPanelExpanded(page, panel, false);
     await page.screenshot({ path: test.info().outputPath(`preview-desktop-${style}.png`) });
   });
 
@@ -101,8 +102,12 @@ for (const style of ["original", "trae"]) {
       const frame = (await panel.locator('iframe[title="HTML preview"]').boundingBox())!;
       expect(frame.height).toBeGreaterThan(80);
       expect(frame.y + frame.height).toBeLessThanOrEqual(page.viewportSize()!.height + 1);
-      const controls = panel.locator('[class*="HtmlPreview_toolbar"] button');
-      for (const control of await controls.all()) expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      const toolbar = panel.getByTestId("file-viewer-toolbar");
+      for (const label of ["Code", "Preview", "Isolated preview", "Reload preview", "Add to composer", "More file actions"]) {
+        const control = toolbar.getByRole("button", { name: label, exact: true });
+        await expect(control).toBeVisible();
+        expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      }
       if ([390, 768, 1440].includes(width)) await page.screenshot({ path: test.info().outputPath(`preview-${width}-${style}.png`) });
       await panel.getByRole("button", { name: /^(Hide file panel|Back to chat)$/ }).tap();
       await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeVisible();

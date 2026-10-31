@@ -5,12 +5,13 @@ import * as Menu from "@radix-ui/react-dropdown-menu";
 import styles from "./ActionMenu.module.css";
 
 /** Shared, portalled action menu. Geometry never inherits a clipped toolbar. */
-export function ActionMenu({ open, onOpenChange, label, trigger, children }: {
+export function ActionMenu({ open, onOpenChange, label, trigger, children, onCloseAutoFocus }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   label: string;
   trigger: ReactElement;
   children: ReactNode;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const tabTarget = useRef<HTMLElement | null>(null);
@@ -44,7 +45,7 @@ export function ActionMenu({ open, onOpenChange, label, trigger, children }: {
               event.preventDefault();
               tabTarget.current.focus({ preventScroll: true });
               tabTarget.current = null;
-            }
+            } else onCloseAutoFocus?.(event);
           }}
         >{children}</Menu.Content>
       </Menu.Portal>

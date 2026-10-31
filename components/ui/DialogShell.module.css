@@ -20,6 +20,8 @@
   border-radius: var(--radius-dialog);
   outline: none;
   background: var(--bg-elev-1);
+  color: var(--text);
+  font-family: var(--font-ui);
   box-shadow: var(--color-shadow-modal);
 }
 .dialog[data-size="compact"] { width: min(520px, 100%); }
@@ -36,13 +38,13 @@
   padding: var(--space-4) var(--component-dialog-padding);
   background: transparent;
 }
-.header { padding-bottom: var(--space-3); }
+.header { padding-bottom: var(--space-3); border-bottom: 1px solid var(--border-subtle); }
 .footer { justify-content: flex-end; padding-block: var(--space-3); border-top: 1px solid var(--border-subtle); }
 .header > div { min-width: 0; }
 .headerActions { display: flex; flex: 0 0 auto; align-items: center; gap: var(--space-2); }
 .headerActions:empty { display: none; }
 .headerActions .close { color: var(--text); }
-.header h2 { margin: 0; overflow-wrap: anywhere; color: var(--text); font-size: var(--type-title-size); font-weight: var(--weight-semibold); line-height: var(--type-title-leading); }
+.header h2 { margin: 0; overflow-wrap: anywhere; color: var(--text); font-size: var(--type-title-size); font-weight: var(--weight-semibold); line-height: var(--type-title-leading); letter-spacing: var(--tracking-tight); text-wrap: balance; }
 .header p { max-width: 68ch; margin: var(--space-1) 0 0; overflow-wrap: anywhere; color: var(--text-muted); font-size: var(--type-label-size); line-height: var(--leading-copy); }
 
 .body { min-height: 0; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; padding: var(--space-3) var(--component-dialog-padding) var(--space-4); }

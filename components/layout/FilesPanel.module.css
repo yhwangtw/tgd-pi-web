@@ -9,9 +9,11 @@
 .header {
   flex-shrink: 0;
   padding: var(--space-3) var(--space-3) var(--space-2);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   color: var(--text-muted);
-  font-size: var(--text-xs);
+  font-size: var(--type-label-size);
+  font-weight: var(--weight-semibold);
+  line-height: var(--type-ui-leading);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

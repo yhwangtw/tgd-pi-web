@@ -25,7 +25,7 @@
 
 .sidebarContainer {
   background: var(--bg-panel);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -145,7 +145,7 @@
   height: 50px;
   padding: 0 var(--space-3) 0 var(--space-4);
   background: var(--glass-bg);
-  box-shadow: 0 12px 28px -30px color-mix(in srgb, var(--text) 42%, transparent);
+  border-bottom: 1px solid var(--border-subtle);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
   backdrop-filter: blur(14px) saturate(1.4);
 }
@@ -677,156 +677,6 @@
   overflow: hidden;
 }
 
-/* ── Placeholder (session selected but no chat) ── */
-.placeholderContainer {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
-  padding: var(--space-8);
-}
-
-.placeholderIconBg {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius-control-prominent);
-  background: var(--bg-hover);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.placeholderIcon {
-  opacity: 0.8;
-}
-
-.placeholderText {
-  text-align: center;
-}
-
-.placeholderTitle {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
-  color: var(--text);
-  margin-bottom: 6px;
-}
-
-.placeholderSubtitle {
-  font-size: var(--text-md);
-  color: var(--text-muted);
-  line-height: var(--leading-relaxed);
-}
-
-/* ── Welcome (no session, no cwd) ── */
-.welcomeContainer {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-6);
-  padding: var(--space-8);
-  max-width: 400px;
-}
-
-.welcomeIconBg {
-  width: 72px;
-  height: 72px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, var(--color-accent-bg-strong), var(--color-accent-bg-subtle));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--color-accent-border-subtle);
-}
-
-.welcomeTitle {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: var(--space-2);
-  margin-bottom: 12px;
-}
-
-.piSymbol {
-  font-size: var(--text-3xl);
-  font-weight: var(--weight-bold);
-  letter-spacing: var(--tracking-title);
-  color: var(--text);
-  line-height: var(--leading-none);
-}
-
-.titleText {
-  font-size: var(--text-2xl);
-  font-weight: var(--weight-bold);
-  letter-spacing: var(--tracking-tight);
-  color: var(--text);
-}
-
-.welcomeSubtitle {
-  font-size: var(--text-md);
-  color: var(--text-muted);
-  line-height: var(--leading-body);
-}
-
-.welcomeSteps {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  width: 100%;
-}
-
-.welcomeStartButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-height: 44px;
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--color-accent-border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--color-accent-bg-strong);
-  color: var(--accent-text);
-  font: inherit;
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-}
-
-.welcomeStartButton:hover { background: var(--bg-hover); }
-.welcomeStartButton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-.welcomeStep {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  background: var(--bg-hover);
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border);
-}
-
-.welcomeStepNumber {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-control-compact);
-  background: var(--color-accent-bg-strong);
-  color: var(--accent-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  flex-shrink: 0;
-}
-
-.welcomeStepText {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-}
-
 /* ── Right panel ── */
 .rightPanelContainer {
   display: flex;
@@ -842,7 +692,7 @@
   container-type: inline-size;
   container-name: file-panel;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   align-items: center;
   flex-shrink: 0;
@@ -874,25 +724,7 @@
   cursor: pointer;
 }
 
-.fileOriginButton {
-  flex: 0 1 auto;
-  min-width: 0;
-  min-height: 28px;
-  margin-right: var(--space-1);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 0 var(--space-2);
-  border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  cursor: pointer;
-}
-
-.fileOriginButton:hover { background: var(--bg-hover); color: var(--text); }
-.fileOriginButton span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reviewQueueCompactCount { display: none; }
 
 .rightPanelContent {
   flex: 1;
@@ -1181,7 +1013,6 @@
   }
 
   .reviewQueueButton { min-height: var(--control-touch); margin-right: 4px; }
-  .fileOriginButton { min-width: var(--control-touch); min-height: var(--control-touch); padding-inline: var(--space-2); }
   .fileWorkspaceSplit { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; }
   .fileWorkspaceSplit .fileWorkspacePane { flex: 0 0 100%; scroll-snap-align: start; }
   .fileWorkspaceSplit .fileWorkspacePane + .fileWorkspacePane { border-left: 0; }
@@ -1766,19 +1597,21 @@
   .rightPanelExpanded { position: fixed !important; inset: var(--space-3); z-index: 1250; width: auto !important; max-width: none !important; margin: 0 !important; border: 1px solid var(--border) !important; border-radius: var(--radius-card); box-shadow: var(--color-shadow-raised); }
   .rightPanelExpanded .rightPanelTabBar, .rightPanelExpanded .rightPanelContent { padding-left: 0; }
 }
-@media (pointer: coarse) {
+@media (max-width: 700px), (pointer: coarse) {
   .filePanelControl { width: 44px; height: 44px; }
   .rightPanelTabBar { min-height: 44px; }
+  .reviewQueueButton { min-width: var(--control-touch); min-height: var(--control-touch); }
   .rightPanelContainer :global(.right-panel-resizer) { width: 24px; }
 }
 @media (min-width: 701px) and (pointer: coarse) { .rightPanelTabBar, .rightPanelContent { padding-left: var(--space-6); } }
 @media (max-width: 700px) { .filePanelResizeControl { display: none; } }
 @container file-panel (max-width: 420px) {
-  /* Keep a whole row for tabs instead of squeezing them between tools. */
-  .rightPanelTabBarInner { flex: 1 0 100%; order: 1; }
-  .fileOriginButton { margin-right: auto; }
-  .fileOriginButton span { display: none; }
-  .fileOriginButton { flex-shrink: 0; min-width: 36px; padding-inline: var(--space-1); }
+  /* Reserve this row for the current file, all files, layout, and close. */
+  .filePanelResizeControl { display: none; }
+  .reviewQueueLabel { display: none; }
+  .reviewQueueCompactCount { display: inline; }
+  .rightPanelTabBar .mobileFilePanelClose { width: var(--control-touch); padding-inline: 0; }
+  .rightPanelTabBar .fileBackLabel { display: none; }
 }
 
 /* Split previews follow the pane's measured width, not the entire browser. */
@@ -1805,8 +1638,6 @@
 
 .shortcutsHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: 12px; }
 .shortcutsHeader .shortcutsTitle { margin: 0; }
-.welcomeModelsButton { display: inline; border: 0; background: none; padding: 0 var(--space-1); color: var(--accent-text); font: inherit; font-weight: var(--weight-semibold); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-@media (max-width: 700px), (pointer: coarse) { .welcomeModelsButton { min-height: var(--control-touch); } }
 
 @media (pointer: coarse) {
   :global(html[data-ui-style="trae"]) .railButton { min-width: var(--control-touch); min-height: var(--control-touch); }

@@ -103,7 +103,8 @@
 }
 
 .tabIconInactive {
-  opacity: 0.7;
+  color: var(--text-dim);
+  opacity: 1;
 }
 
 .tabLabel {
@@ -256,6 +257,16 @@
 .fileOptionName { color: var(--text); }
 .fileOptionPath { color: var(--text-muted); font-size: var(--text-xs); }
 .selectionMark { display: inline-flex; flex: 0 0 var(--component-icon-button-glyph-compact); color: var(--color-accent); }
+.compactNavigation .tabBar {
+  --file-tab-min-width: min(112px, 100%);
+  --file-tab-max-width: min(180px, 100%);
+}
+.compactMenuActions {
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--border-subtle);
+}
+.compactMenuActions svg { width: var(--component-icon-button-glyph-compact); height: var(--component-icon-button-glyph-compact); }
 @media (max-width: 700px), (pointer: coarse) {
   .navigationButton { min-width: var(--control-touch); height: var(--control-touch); }
 }

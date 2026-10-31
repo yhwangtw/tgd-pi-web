@@ -14,6 +14,7 @@ import type { FileOpenMode, FileViewState } from "@/lib/file-open";
 interface Props {
   filePath: string;
   visible?: boolean;
+  showFilePath?: boolean;
   cwd?: string;
   /** Jump to this 1-based line on open (from a search hit). */
   gotoLine?: number;
@@ -86,7 +87,7 @@ export function formatDuration(seconds: number): string {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
-export function FileViewer({ filePath, visible, cwd, gotoLine, gotoNonce, onSendToAgent, sessionId, initialMode, initialViewState, onViewStateChange, onNavigationConsumed }: Props) {
+export function FileViewer({ filePath, visible, showFilePath, cwd, gotoLine, gotoNonce, onSendToAgent, sessionId, initialMode, initialViewState, onViewStateChange, onNavigationConsumed }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} visible={visible} />;
   }
@@ -102,5 +103,5 @@ export function FileViewer({ filePath, visible, cwd, gotoLine, gotoNonce, onSend
   if (isBinaryPath(filePath)) {
     return <BinaryViewer filePath={filePath} cwd={cwd} />;
   }
-  return <TextFileViewer filePath={filePath} visible={visible} cwd={cwd} gotoLine={gotoLine} gotoNonce={gotoNonce} onSendToAgent={onSendToAgent} sessionId={sessionId} initialMode={initialMode} initialViewState={initialViewState} onViewStateChange={onViewStateChange} onNavigationConsumed={onNavigationConsumed} />;
+  return <TextFileViewer filePath={filePath} visible={visible} showFilePath={showFilePath} cwd={cwd} gotoLine={gotoLine} gotoNonce={gotoNonce} onSendToAgent={onSendToAgent} sessionId={sessionId} initialMode={initialMode} initialViewState={initialViewState} onViewStateChange={onViewStateChange} onNavigationConsumed={onNavigationConsumed} />;
 }

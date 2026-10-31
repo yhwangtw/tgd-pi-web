@@ -59,7 +59,7 @@
   flex: 1;
   min-width: 0;
   font-size: var(--text-md);
-  line-height: var(--leading-snug);
+  line-height: var(--leading-ui);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -173,6 +173,7 @@
 .workspaceMeta {
   min-width: 0;
   max-width: 38%;
+  font-size: var(--type-meta-size);
   flex: 0 0 auto;
   overflow: hidden;
   color: var(--text-dim);

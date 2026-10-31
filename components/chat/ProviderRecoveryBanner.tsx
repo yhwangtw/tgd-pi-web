@@ -22,11 +22,23 @@ interface Props {
   onAutomaticChange: (enabled: boolean) => void;
   onDismiss: () => void;
   onAdjustThinking?: () => void;
+  onOpenModels?: () => void;
 }
 
-export function ProviderRecoveryBanner({ recovery, busy, onRetryWithModel, onAutomaticChange, onDismiss, onAdjustThinking }: Props) {
+export function ProviderRecoveryBanner({ recovery, busy, onRetryWithModel, onAutomaticChange, onDismiss, onAdjustThinking, onOpenModels }: Props) {
   const { t } = useI18n();
   const canFallback = classifyProviderError(recovery.message).recoverableWithFallback;
+  const hintKeys = {
+    authentication: "recovery.authHint",
+    billing: "recovery.billingHint",
+    context: "recovery.contextHint",
+    rate_limit: "recovery.rateHint",
+    network: "recovery.connectionHint",
+    unavailable: "recovery.connectionHint",
+    unknown: "recovery.detailsHint",
+    unsupported_setting: "recovery.unsupportedThinking",
+    model_unavailable: "recovery.chooseModel",
+  } as const;
   return (
     <section className={s.root} aria-label={t("recovery.options")}>
       <div className={s.body}>
@@ -34,9 +46,12 @@ export function ProviderRecoveryBanner({ recovery, busy, onRetryWithModel, onAut
           <strong>{t("recovery.options")}</strong>
           <button type="button" className={s.dismiss} onClick={onDismiss} aria-label={t("common.close")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>
         </div>
-        {recovery.kind === "model_unavailable" && <p>{t("recovery.chooseModel")}</p>}
+        <p>{t(hintKeys[recovery.kind])}</p>
         {recovery.retryAfterSeconds !== null && <span className={s.retryAfter}>{t("recovery.retryAfter").replace("{seconds}", String(recovery.retryAfterSeconds))}</span>}
         <div className={s.actions}>
+          {onOpenModels && ["authentication", "billing", "model_unavailable", "unknown"].includes(recovery.kind) && (
+            <button type="button" className={s.primary} disabled={busy} onClick={onOpenModels}>{t("recovery.openModels")}</button>
+          )}
           {recovery.kind === "unsupported_setting" && onAdjustThinking && (
             <button type="button" className={s.primary} disabled={busy} onClick={onAdjustThinking}>{t("recovery.adjustThinking")}</button>
           )}

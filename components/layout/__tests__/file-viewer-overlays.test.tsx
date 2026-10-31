@@ -14,7 +14,7 @@ vi.mock("../FileInspectorDrawer", () => ({
   FileInspectorDrawer: ({ onGotoLine, onClose }: { onGotoLine: (line: number) => void; onClose: () => void }) => <div data-testid="file-inspector"><button onClick={onClose}>Close Inspector</button><button onClick={() => onGotoLine(2)}>Jump to line</button></div>,
 }));
 vi.mock("@/components/ui/ActionMenu", () => ({
-  ActionMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ActionMenu: ({ children, trigger }: { children: ReactNode; trigger: ReactNode }) => <div>{trigger}{children}</div>,
   ActionMenuItem: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -51,7 +51,7 @@ describe("file viewer overlay ownership", () => {
     expect((await escape()).defaultPrevented).toBe(true);
     expect(container.querySelector('[data-testid="file-inspector"]')).toBeNull();
     expect(container.querySelector('[data-file-focus-mode="true"]')).not.toBeNull();
-    expect(document.activeElement?.textContent).toBe("files.inspector");
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("files.moreActions");
     await escape();
     expect(container.querySelector('[data-file-focus-mode="true"]')).toBeNull();
   });
@@ -69,7 +69,7 @@ describe("file viewer overlay ownership", () => {
     expect(container.querySelector('[data-testid="file-inspector"]')).not.toBeNull();
     otherPaneInput.remove();
     await click("Close Inspector");
-    expect(document.activeElement?.textContent).toBe("files.inspector");
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("files.moreActions");
   });
 
   it("closes an overlay after navigation but preserves a spacious inline Inspector", async () => {
@@ -86,26 +86,41 @@ describe("file viewer overlay ownership", () => {
 
   it("portals metadata out of the clipped viewer and dismisses it before Inspector", async () => {
     await click("files.inspector");
-    const info = container.querySelector<HTMLDetailsElement>("details")!;
-    await act(async () => {
-      info.open = true;
-      info.dispatchEvent(new Event("toggle"));
-    });
+    await click("files.info");
     expect(container.querySelector('[role="region"][aria-label="files.info"]')).toBeNull();
     expect(document.body.querySelector('[role="region"][aria-label="files.info"]')).not.toBeNull();
     await escape();
-    expect(info.open).toBe(false);
     expect(document.body.querySelector('[role="region"][aria-label="files.info"]')).toBeNull();
     expect(container.querySelector('[data-testid="file-inspector"]')).not.toBeNull();
   });
 
 
+  it("shows the full path in metadata and dismisses on outside pointer input without stealing focus", async () => {
+    await click("files.info");
+    const info = document.body.querySelector<HTMLElement>('[role="region"][aria-label="files.info"]')!;
+    expect(info.textContent).toContain("/project/a.txt");
+    expect(info.textContent).toContain("files.lines2");
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    await act(async () => {
+      outside.focus();
+      outside.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    expect(document.body.querySelector('[role="region"][aria-label="files.info"]')).toBeNull();
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+
+  it("labels split panes without duplicating the filename in a single viewer", async () => {
+    expect(container.querySelector('[title="/project/a.txt"]')).toBeNull();
+    await act(async () => root.render(<TextFileViewer filePath="/project/a.txt" showFilePath />));
+    expect(container.querySelector('[title="/project/a.txt"]')?.textContent).toBe("/project/a.txt");
+  });
+
   it("does not reopen metadata after the file pane was hidden", async () => {
-    const info = container.querySelector<HTMLDetailsElement>("details")!;
-    await act(async () => { info.open = true; info.dispatchEvent(new Event("toggle")); });
+    await click("files.info");
     await act(async () => root.render(<TextFileViewer filePath="/project/a.txt" visible={false} />));
     await act(async () => root.render(<TextFileViewer filePath="/project/a.txt" />));
-    expect(info.open).toBe(false);
     expect(document.body.querySelector('[role="region"][aria-label="files.info"]')).toBeNull();
   });
 });

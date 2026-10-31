@@ -11,17 +11,18 @@ interface Props {
   /** Absolute path of the previewed file — HTML preview renders via URL. */
   filePath?: string;
   revision?: string | number;
+  reloadKey?: number;
   /** Fires after the lazy preview component commits its first rendered frame. */
   onRendered?: () => void;
 }
 
-export function PreviewView({ content, language, filePath, revision, onRendered }: Props) {
+export function PreviewView({ content, language, filePath, revision, reloadKey, onRendered }: Props) {
   useEffect(() => {
     if (language !== "html") onRendered?.();
   }, [content, filePath, language, onRendered]);
 
   if (language === "html") {
-    return <HtmlPreview content={content} filePath={filePath} revision={revision} onRendered={onRendered} />;
+    return <HtmlPreview content={content} filePath={filePath} revision={revision} reloadKey={reloadKey} showToolbar={false} onRendered={onRendered} />;
   }
   if (language === "markdown") {
     // Same renderer as chat messages — math, mermaid, code highlighting,

@@ -1,11 +1,10 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { X } from "lucide-react";
+import { Info, MessageSquarePlus, MoreHorizontal, RotateCw, ShieldCheck, X } from "lucide-react";
 
 import { lazy, Suspense, useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Info, MoreHorizontal } from "lucide-react";
 import { encodeFilePathForApi, getRelativeFilePath } from "@/lib/file-paths";
 import { useI18n } from "@/lib/i18n";
 import type { FileOpenMode, FileViewState } from "@/lib/file-open";
@@ -27,6 +26,7 @@ const LazyPreviewView = lazy(() => import("./text-viewer/PreviewView").then((mod
 interface Props {
   filePath: string;
   visible?: boolean;
+  showFilePath?: boolean;
   cwd?: string;
   /** Jump to this 1-based line on open (from a search hit). */
   gotoLine?: number;
@@ -42,7 +42,7 @@ interface Props {
 
 type InspectorTab = "outline" | "problems" | "history" | "blame" | "notes";
 
-export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLineProp, gotoNonce, onSendToAgent, sessionId, initialMode = "auto", initialViewState, onViewStateChange, onNavigationConsumed }: Props) {
+export function TextFileViewer({ filePath, visible = true, showFilePath = false, cwd, gotoLine: gotoLineProp, gotoNonce, onSendToAgent, sessionId, initialMode = "auto", initialViewState, onViewStateChange, onNavigationConsumed }: Props) {
   const { t } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
@@ -63,10 +63,12 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
   const [version, setVersion] = useState<{ ref: string; label: string; content: string } | null>(null);
   const [diagnostics, setDiagnostics] = useState<Array<{ line: number; severity: "error" | "warning" }>>([]);
   const viewerRef = useRef<HTMLDivElement>(null);
-  const inspectorButtonRef = useRef<HTMLButtonElement>(null);
-  const fileInfoRef = useRef<HTMLDetailsElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const policyButtonRef = useRef<HTMLButtonElement>(null);
+  const menuFocusTargetRef = useRef<"info" | "inspector" | null>(null);
   const fileInfoPanelRef = useRef<HTMLDivElement>(null);
-  const [infoOpen, setInfoOpen] = useState(false);
+  const [infoPanel, setInfoPanel] = useState<"info" | "policy" | null>(null);
+  const [previewReloadKey, setPreviewReloadKey] = useState(0);
   const [infoPosition, setInfoPosition] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null);
   const previewStartedAtRef = useRef<number | null>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
@@ -223,7 +225,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
     setStructuredMode(false);
     setChangeCount(0);
     setInspectorTab(null);
-    setInfoOpen(false);
+    setInfoPanel(null);
     setSelection(null);
     setVersion(null);
     setDiagnostics([]);
@@ -533,7 +535,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
 
   const closeInspector = useCallback(() => {
     setInspectorTab(null);
-    inspectorButtonRef.current?.focus({ preventScroll: true });
+    moreButtonRef.current?.focus({ preventScroll: true });
   }, []);
 
   const closeOverlayInspector = useCallback(() => {
@@ -551,10 +553,9 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
       if (event.target instanceof Node && event.target !== document.body && event.target !== document.documentElement
         && !viewerRef.current?.contains(event.target) && !fileInfoPanelRef.current?.contains(event.target)) return;
       if (event.target instanceof Element && event.target.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
-      if (fileInfoRef.current?.open) {
-        fileInfoRef.current.open = false;
-        setInfoOpen(false);
-        fileInfoRef.current.querySelector("summary")?.focus();
+      if (infoPanel) {
+        setInfoPanel(null);
+        (infoPanel === "policy" ? policyButtonRef : moreButtonRef).current?.focus({ preventScroll: true });
       } else if (inspectorTab) closeInspector();
       else if (fullscreen) setFullscreen(false);
       else return;
@@ -563,27 +564,26 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [closeInspector, fullscreen, inspectorTab, moreOpen, visible]);
+  }, [closeInspector, fullscreen, infoPanel, inspectorTab, moreOpen, visible]);
 
   useEffect(() => {
     if (visible) return;
-    if (fileInfoRef.current) fileInfoRef.current.open = false;
-    setInfoOpen(false);
+    setInfoPanel(null);
   }, [visible]);
 
-  // Metadata lives outside the clipped viewer, while staying anchored to Info
-  // as its toolbar wraps, the file pane resizes or the software keyboard opens.
+  // Keep file details and preview policy outside the clipped pane, anchored to
+  // a persistent toolbar button rather than an unmounted menu item.
   useLayoutEffect(() => {
-    if (!infoOpen || !visible) return;
+    if (!infoPanel || !visible) return;
     const position = () => {
-      const anchor = fileInfoRef.current?.querySelector("summary");
+      const anchor = (infoPanel === "policy" ? policyButtonRef : moreButtonRef).current;
       const panel = fileInfoPanelRef.current;
       if (!anchor || !panel) return;
       const bounds = anchor.getBoundingClientRect();
       const viewport = window.visualViewport;
       const leftEdge = viewport?.offsetLeft ?? 0;
       const topEdge = viewport?.offsetTop ?? 0;
-      const width = Math.min(240, (viewport?.width ?? window.innerWidth) - 24);
+      const width = Math.min(320, (viewport?.width ?? window.innerWidth) - 24);
       const bottomEdge = topEdge + (viewport?.height ?? window.innerHeight);
       const availableBelow = Math.max(0, bottomEdge - bounds.bottom - 18);
       const availableAbove = Math.max(0, bounds.top - topEdge - 18);
@@ -613,19 +613,43 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
       window.visualViewport?.removeEventListener("resize", position);
       window.visualViewport?.removeEventListener("scroll", position);
     };
-  }, [fullscreen, infoOpen, visible]);
+  }, [fullscreen, infoPanel, visible]);
 
   useEffect(() => {
+    if (!infoPanel) return;
     const closeInfo = (event: PointerEvent) => {
-      const details = fileInfoRef.current;
-      if (details?.open && event.target instanceof Node && !details.contains(event.target) && !fileInfoPanelRef.current?.contains(event.target)) {
-        details.open = false;
-        setInfoOpen(false);
+      const anchor = (infoPanel === "policy" ? policyButtonRef : moreButtonRef).current;
+      if (event.target instanceof Node && !anchor?.contains(event.target) && !fileInfoPanelRef.current?.contains(event.target)) {
+        setInfoPanel(null);
       }
     };
     document.addEventListener("pointerdown", closeInfo, true);
     return () => document.removeEventListener("pointerdown", closeInfo, true);
-  }, []);
+  }, [infoPanel]);
+
+  useLayoutEffect(() => {
+    if (infoPanel === "policy" && infoPosition && visible && document.activeElement === policyButtonRef.current) {
+      fileInfoPanelRef.current?.focus({ preventScroll: true });
+    }
+  }, [infoPanel, infoPosition, visible]);
+
+  useEffect(() => {
+    if (infoPanel === "policy" && (!previewMode || viewMode !== "source" || editing)) setInfoPanel(null);
+  }, [editing, infoPanel, previewMode, viewMode]);
+
+  const closeFileInfo = () => {
+    setInfoPanel(null);
+    (infoPanel === "policy" ? policyButtonRef : moreButtonRef).current?.focus({ preventScroll: true });
+  };
+
+  const handleMenuCloseFocus = (event: Event) => {
+    const target = menuFocusTargetRef.current;
+    menuFocusTargetRef.current = null;
+    if (!target) return;
+    event.preventDefault();
+    if (target === "info") fileInfoPanelRef.current?.focus({ preventScroll: true });
+    else viewerRef.current?.querySelector<HTMLElement>('[data-testid="file-inspector"] button')?.focus({ preventScroll: true });
+  };
 
   if (loading) {
     return <div className={styles.loadingState}>{t("common.loading")}</div>;
@@ -640,60 +664,13 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
   const isHtml = data.language === "html";
   const isMarkdown = data.language === "markdown";
   const lines = data.content.split("\n");
-  const pathParts = relativePath.split("/").filter(Boolean);
-  const compactPath = pathParts.length > 2
-    ? { start: pathParts[0], end: pathParts.at(-1)! }
-    : null;
   const diffBase = version?.content ?? prevContent;
   const hasComparedDiff = diffBase !== null && diffBase !== data.content;
 
   return (
     <div ref={viewerRef} className={`${styles.root} ${fullscreen ? styles.fullscreen : ""}`} data-file-focus-mode={fullscreen}>
       <div className={styles.statusBar} data-testid="file-viewer-toolbar">
-        <div className={styles.fileSummary}>
-          <span className={styles.filePath} title={filePath} aria-label={relativePath}>
-            {compactPath
-              ? <>
-                  <span className={styles.filePathStart}>{compactPath.start}</span>
-                  <span className={styles.filePathSeparator}>/…/</span>
-                  <span className={styles.filePathEnd}>{compactPath.end}</span>
-                </>
-              : relativePath}
-          </span>
-          <details
-            ref={fileInfoRef}
-            className={styles.fileInfo}
-            onToggle={(event) => {
-              setInfoOpen(event.currentTarget.open);
-              if (event.currentTarget.open) setMoreOpen(false);
-            }}
-          >
-            <summary aria-label={t("files.info")} title={t("files.info")}>
-              <Info size={UI_ICON_SIZE.compact} aria-hidden />
-              <span>{t("files.info")}</span>
-            </summary>
-            {infoOpen && visible && createPortal(<div
-              ref={fileInfoPanelRef}
-              className={styles.fileInfoPopover}
-              role="region"
-              aria-label={t("files.info")}
-              style={infoPosition ?? { visibility: "hidden" }}
-            >
-              <span>{t("files.type")}</span><strong>{data.language}</strong>
-              <span>{t("files.lines")}</span><strong>{lines.length}</strong>
-              <span>{t("files.size")}</span><strong>{formatSize(data.size)}</strong>
-              <span>{t("files.sync")}</span>
-              <strong className={watching ? styles.watchIndicatorActive : styles.watchIndicatorInactive}>
-                <span className={watching ? styles.watchDotActive : styles.watchDotInactive} />
-                {t(watching ? "files.live" : "files.static")}
-              </strong>
-              {previewMode && previewRenderMs !== null && <>
-                <span>{t("files.render")}</span><strong>{previewRenderMs} {t("files.millisecondsShort")}</strong>
-              </>}
-            </div>, document.body)}
-          </details>
-        </div>
-
+        {showFilePath && <span className={styles.paneFilePath} title={filePath}>{relativePath}</span>}
         <div className={styles.fileActions}>
         {!editing && (isHtml || isMarkdown) && viewMode === "source" && (
           <div className={styles.toggleGroup} role="group" aria-label={t("files.viewMode")}>
@@ -728,9 +705,18 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
           </div>
         )}
 
+        {isHtml && previewMode && viewMode === "source" && !editing && <>
+          <button ref={policyButtonRef} type="button" className={`${styles.iconButton} ${infoPanel === "policy" ? styles.toggleActive : styles.toggleInactive}`} aria-label={t("files.isolatedPreview")} aria-expanded={infoPanel === "policy"} title={t("files.isolatedPreview")} onClick={() => { setInfoPosition(null); setInfoPanel(current => current === "policy" ? null : "policy"); }}>
+            <ShieldCheck size={UI_ICON_SIZE.compact} aria-hidden />
+          </button>
+          <button type="button" className={`${styles.iconButton} ${styles.toggleInactive}`} aria-label={t("files.reloadPreview")} title={t("files.reloadPreview")} onClick={() => { previewStartedAtRef.current = performance.now(); setPreviewRenderMs(null); setPreviewReloadKey(value => value + 1); }}>
+            <RotateCw size={UI_ICON_SIZE.compact} aria-hidden />
+          </button>
+        </>}
+
         {onSendToAgent && !editing && (
-          <button className={styles.askPi} onClick={() => sendToAgent("context")} title={t("files.askPiHint")}>
-            {t("files.askPi")}
+          <button type="button" className={`${styles.iconButton} ${styles.toggleInactive}`} onClick={() => sendToAgent("context")} aria-label={t("files.askPi")} title={t("files.askPiHint")}>
+            <MessageSquarePlus size={UI_ICON_SIZE.compact} aria-hidden />
           </button>
         )}
 
@@ -741,11 +727,12 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
           </div>
         )}
 
-        {!editing && <button ref={inspectorButtonRef} className={`${styles.toggleStandalone} ${inspectorTab ? styles.toggleActive : styles.toggleInactive}`} onClick={() => setInspectorTab((current) => current ? null : "outline")} aria-expanded={Boolean(inspectorTab)}>{t("files.inspector")}</button>}
         <div className={styles.moreWrap}>
-          <ActionMenu open={moreOpen} onOpenChange={setMoreOpen} label={t("files.moreActions")} trigger={
-            <button type="button" className={`${styles.moreButton} ${moreOpen ? styles.toggleActive : styles.toggleInactive}`} aria-label={t("files.moreActions")}><MoreHorizontal size={UI_ICON_SIZE.control} aria-hidden /></button>
+          <ActionMenu open={moreOpen} onOpenChange={(open) => { setMoreOpen(open); if (open) setInfoPanel(null); }} onCloseAutoFocus={handleMenuCloseFocus} label={t("files.moreActions")} trigger={
+            <button ref={moreButtonRef} type="button" className={`${styles.iconButton} ${moreOpen || inspectorTab || infoPanel === "info" ? styles.toggleActive : styles.toggleInactive}`} aria-label={t("files.moreActions")} title={t("files.moreActions")}><MoreHorizontal size={UI_ICON_SIZE.control} aria-hidden /></button>
           }>
+            <ActionMenuItem><button onClick={() => { setInfoPosition(null); setInfoPanel("info"); menuFocusTargetRef.current = "info"; setMoreOpen(false); }}><Info size={UI_ICON_SIZE.compact} aria-hidden />{t("files.info")}</button></ActionMenuItem>
+            {!editing && <ActionMenuItem><button onClick={() => { const opening = !inspectorTab; setInspectorTab(opening ? "outline" : null); menuFocusTargetRef.current = opening ? "inspector" : null; setMoreOpen(false); }} aria-expanded={Boolean(inspectorTab)}>{t("files.inspector")}</button></ActionMenuItem>}
             <ActionMenuItem><button onClick={copyContent}>{t("files.copyFile")}</button></ActionMenuItem>
             {viewMode === "source" && !previewMode && !structuredMode && !editing && !data.truncated && <ActionMenuItem><button disabled={!data.version} onClick={startEditing}>{t("files.editFile")}</button></ActionMenuItem>}
             {viewMode === "source" && !previewMode && !structuredMode && !editing && <ActionMenuItem><button onClick={() => setWrapLines((current) => !current)}>{t(wrapLines ? "files.disableWrap" : "files.enableWrap")}</button></ActionMenuItem>}
@@ -806,12 +793,33 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
         </div>
       )}
 
-      {isHtml && previewMode && viewMode === "source" && !editing && (
-        <details className={styles.previewNotice}>
-          <summary>{t("files.isolatedPreview")}</summary>
-          <p>{t("files.isolatedPreviewHelp")}</p>
-        </details>
-      )}
+      {infoPanel && visible && createPortal(<div
+        ref={fileInfoPanelRef}
+        className={styles.fileInfoPopover}
+        role="region"
+        aria-label={t(infoPanel === "policy" ? "files.isolatedPreview" : "files.info")}
+        tabIndex={-1}
+        style={infoPosition ?? { visibility: "hidden" }}
+      >
+        <div className={styles.infoHeading}>
+          <strong>{t(infoPanel === "policy" ? "files.isolatedPreview" : "files.info")}</strong>
+          <button type="button" onClick={closeFileInfo} aria-label={t("common.close")} title={t("common.close")}><X size={UI_ICON_SIZE.compact} aria-hidden /></button>
+        </div>
+        {infoPanel === "policy" ? <p className={styles.policyHelp}>{t("files.isolatedPreviewHelp")}</p> : <>
+          <div className={styles.infoPath} title={filePath}>{relativePath}</div>
+          <span>{t("files.type")}</span><strong>{data.language}</strong>
+          <span>{t("files.lines")}</span><strong>{lines.length}</strong>
+          <span>{t("files.size")}</span><strong>{formatSize(data.size)}</strong>
+          <span>{t("files.sync")}</span>
+          <strong className={watching ? styles.watchIndicatorActive : styles.watchIndicatorInactive}>
+            <span className={watching ? styles.watchDotActive : styles.watchDotInactive} />
+            {t(watching ? "files.live" : "files.static")}
+          </strong>
+          {previewMode && previewRenderMs !== null && <>
+            <span>{t("files.render")}</span><strong>{previewRenderMs} {t("files.millisecondsShort")}</strong>
+          </>}
+        </>}
+      </div>, document.body)}
 
       <div className={styles.workspaceBody}>
       <div
@@ -860,7 +868,7 @@ export function TextFileViewer({ filePath, visible = true, cwd, gotoLine: gotoLi
           <StructuredDataView content={data.content} kind={structuredKind} onGotoLine={(line) => { setStructuredMode(false); setFindQuery(`:${line}`); }} />
         ) : (isHtml || isMarkdown) && previewMode ? (
           <Suspense fallback={<div className={styles.previewLoading}>{t("files.renderingPreview")}</div>}>
-            <LazyPreviewView content={data.content} language={data.language} filePath={filePath} revision={data.version ?? changeCount} onRendered={handlePreviewRendered} />
+            <LazyPreviewView content={data.content} language={data.language} filePath={filePath} revision={data.version ?? changeCount} reloadKey={previewReloadKey} onRendered={handlePreviewRendered} />
           </Suspense>
         ) : usePlain ? (
           <PlainSourceView content={data.content} wrapLines={wrapLines} activeLine={activeLine} diagnosticLines={diagnosticLines} />

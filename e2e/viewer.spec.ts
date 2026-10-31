@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { selectFileAction } from "./file-preview-actions";
 
 const MAIN = "/?session=aaaa1111-2222-3333-4444-555566667777";
 
@@ -149,7 +150,7 @@ test.describe("file viewer", () => {
 
   test("opens an outline inspector and sends selected lines to the composer", async ({ page }) => {
     await openReadme(page);
-    await page.getByRole("button", { name: "Inspector", exact: true }).click();
+    await selectFileAction(page, page.locator(".right-panel-container.right-panel-open"), "Inspector");
     const inspector = page.getByTestId("file-inspector");
     await expect(inspector).toBeVisible();
     await expect(inspector.getByRole("button", { name: /Demo project/ })).toBeVisible();
@@ -216,7 +217,7 @@ test.describe("file viewer", () => {
   test("keeps the inspector and file actions usable on a phone viewport", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openReadme(page);
-    await page.getByRole("button", { name: "Inspector", exact: true }).click();
+    await selectFileAction(page, page.locator(".right-panel-container.right-panel-open"), "Inspector");
     const inspector = page.getByTestId("file-inspector");
     await expect(inspector).toBeVisible();
     const box = (await inspector.boundingBox())!;

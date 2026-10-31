@@ -1,0 +1,4 @@
+/* Phones already display the file workspace as a full-screen overlay. */
+@media (max-width: 700px) {
+  button.desktopAction { display: none; }
+}

@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { GenerationSettingsState } from "../lib/generation-settings";
+import { selectFileAction } from "./file-preview-actions";
 const MAIN = "/?session=aaaa1111-2222-3333-4444-555566667777";
 
 async function open(page: Page, width = 1280) {
@@ -135,7 +136,7 @@ test("Markdown outline scrolls the preview without dismissing Inspector; links m
     return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
   });
   expect(ratio).toBeGreaterThanOrEqual(4.5);
-  await panel.getByRole("button", { name: "Inspector", exact: true }).click();
+  await selectFileAction(page, panel, "Inspector");
   await panel.getByRole("button", { name: /Target heading/ }).click();
   await expect(preview).toHaveAttribute("aria-pressed", "true");
   await expect(panel.getByRole("tab", { name: "Outline", exact: true })).toBeVisible();

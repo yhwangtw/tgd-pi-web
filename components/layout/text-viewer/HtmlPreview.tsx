@@ -14,12 +14,17 @@ interface PreviewState {
   error?: string;
 }
 
-export function HtmlPreview({ filePath, content, revision, onRendered }: {
-  filePath?: string; content: string; revision?: string | number; onRendered?: () => void;
+export function HtmlPreview({ filePath, content, revision, reloadKey = 0, showToolbar = true, onRendered }: {
+  filePath?: string;
+  content: string;
+  revision?: string | number;
+  reloadKey?: number;
+  showToolbar?: boolean;
+  onRendered?: () => void;
 }) {
   const { t } = useI18n();
   const [attempt, setAttempt] = useState(0);
-  const key = `${filePath ?? "inline"}:${revision ?? content}:${attempt}`;
+  const key = `${filePath ?? "inline"}:${revision ?? content}:${reloadKey}:${attempt}`;
   const [state, setState] = useState<PreviewState>({ key, status: "loading" });
   const onRenderedRef = useRef(onRendered);
   onRenderedRef.current = onRendered;
@@ -62,12 +67,17 @@ export function HtmlPreview({ filePath, content, revision, onRendered }: {
   }, [key, content, filePath, t]);
 
   const current = state.key === key ? state : { key, status: "loading" as const };
+  const reload = () => setAttempt((value) => value + 1);
   return <div className={styles.root} aria-busy={current.status === "loading"}>
-    <div className={styles.toolbar}>
+    {showToolbar && <div className={styles.toolbar}>
       {current.status === "loading" && <span role="status">{t("files.renderingPreview")}</span>}
-      <button type="button" onClick={() => setAttempt((value) => value + 1)}>{t(current.status === "error" ? "files.retryPreview" : "files.reloadPreview")}</button>
-    </div>
-    {current.status === "error" && <div role="alert" className={styles.feedback}>{current.error}</div>}
+      <button type="button" onClick={reload}>{t(current.status === "error" ? "files.retryPreview" : "files.reloadPreview")}</button>
+    </div>}
+    {!showToolbar && current.status === "loading" && <div role="status" className={styles.loadingStatus}>{t("files.renderingPreview")}</div>}
+    {current.status === "error" && <div role="alert" className={`${styles.feedback} ${styles.errorFeedback}`}>
+      <span>{current.error}</span>
+      {!showToolbar && <button type="button" className={styles.retryButton} onClick={reload}>{t("files.retryPreview")}</button>}
+    </div>}
     {!!current.warnings?.length && <details className={styles.feedback}>
       <summary>{t("files.previewResourcesSkipped")}</summary>
       <ul>{current.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>

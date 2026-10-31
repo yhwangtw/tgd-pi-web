@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { encodeFilePathForApi } from "../lib/file-paths";
 import { isolatedPreviewDocument } from "../lib/preview-policy";
+import { openFileActions } from "./file-preview-actions";
 
 const MAIN = "/?session=aaaa1111-2222-3333-4444-555566667777";
 const url = (name: string, type = "raw") => `/api/files/${encodeFilePathForApi(path.join(process.env.E2E_PROJECT_CWD!, name))}?type=${type}`;
@@ -128,17 +129,26 @@ for (const style of ["original", "trae"]) {
     await expect(frame.locator("#proof")).toContainText('"network":"blocked"');
     await frame.getByRole("button", { name: "Count: 0" }).click();
     await expect(frame.getByRole("button", { name: "Count: 1" })).toBeVisible();
-    const note = panel.locator("details").filter({ has: page.locator("summary", { hasText: "Isolated preview" }) });
-    await note.locator("summary").focus();
-    await note.locator("summary").press("Enter");
-    await expect(note).toHaveAttribute("open", "");
+    const isolation = panel.getByRole("button", { name: "Isolated preview", exact: true });
+    const note = page.getByRole("region", { name: "Isolated preview", exact: true });
     for (const width of [1280, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.locator("html")).toHaveAttribute("data-font-size", "xlarge");
+      await isolation.focus();
+      await isolation.press("Enter");
+      await expect(isolation).toHaveAttribute("aria-expanded", "true");
       await expect(note.getByText(/Project styles, images and scripts are bundled/)).toBeVisible();
-      expect(await note.locator("summary").evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+      expect(await isolation.evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(width <= 700 ? 44 : 32);
       await expect.poll(() => note.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-      for (const label of ["Code", "Preview", "Ask Pi", "Inspector", "More file actions"]) {
+      await expect.poll(() => note.evaluate(el => {
+        const box = el.getBoundingClientRect();
+        return box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight;
+      })).toBe(true);
+      await page.keyboard.press("Escape");
+      await expect(note).toBeHidden();
+      await expect(isolation).toHaveAttribute("aria-expanded", "false");
+      await expect(isolation).toBeFocused();
+      for (const label of ["Code", "Preview", "Isolated preview", "Reload preview", "Add to composer", "More file actions"]) {
         const control = panel.getByRole("button", { name: label, exact: true });
         await expect(control).toBeVisible();
         await expect.poll(() => control.evaluate(el => {
@@ -146,8 +156,21 @@ for (const style of ["original", "trae"]) {
           return box.left >= 0 && box.right <= innerWidth && el.scrollWidth <= el.clientWidth;
         })).toBe(true);
       }
+      const menu = await openFileActions(page, panel);
+      for (const label of ["Info", "Inspector"]) {
+        const action = menu.getByRole("menuitem", { name: label, exact: true });
+        await expect(action).toBeVisible();
+        await expect.poll(() => action.evaluate(el => {
+          const box = el.getBoundingClientRect();
+          return box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight
+            && el.scrollWidth <= el.clientWidth;
+        })).toBe(true);
+      }
+      await page.keyboard.press("Escape");
+      await expect(menu).toBeHidden();
+      await expect(panel.getByRole("button", { name: "More file actions", exact: true })).toBeFocused();
       if (style === "trae") {
-        expect(await panel.getByRole("button", { name: "Ask Pi", exact: true }).evaluate(el => {
+        expect(await panel.getByRole("button", { name: "Add to composer", exact: true }).evaluate(el => {
           const sample = document.createElement("span");
           sample.style.color = "var(--text-muted)";
           document.body.append(sample);
@@ -157,10 +180,14 @@ for (const style of ["original", "trae"]) {
         })).toBe(true);
       }
       await expect(frame.getByRole("heading", { name: "Preview fixture" })).toBeVisible();
+      await isolation.focus();
+      await isolation.press("Enter");
+      await expect(note).toBeVisible();
       await page.screenshot({ path: test.info().outputPath(`preview-${style}-${width}.png`) });
+      await page.keyboard.press("Escape");
+      await expect(note).toBeHidden();
+      await expect(isolation).toBeFocused();
     }
-    await note.locator("summary").click();
-    await expect(note).not.toHaveAttribute("open");
   });
 }
 

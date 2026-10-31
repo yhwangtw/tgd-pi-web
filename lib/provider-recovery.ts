@@ -40,7 +40,7 @@ export function classifyProviderError(message: string): ProviderErrorInfo {
   if (/insufficient (?:balance|credit)|billing|payment required|quota exceeded|usage limit/i.test(message)) {
     return { kind: "billing", retryAfterSeconds: retryAfter, recoverableWithFallback: true };
   }
-  if (/no api key|unauthori[sz]ed|authentication|credential|sign[ -]?in|log[ -]?in|invalid.*key/i.test(message)) {
+  if (/no api key|unauthori[sz]ed|not[ _-]authori[sz]ed|authentication|credential|sign[ -]?in|log[ -]?in|invalid.*key/i.test(message)) {
     return { kind: "authentication", retryAfterSeconds: retryAfter, recoverableWithFallback: true };
   }
   if (/503|502|504|overloaded|temporar(?:y|ily) unavailable|service unavailable|capacity/i.test(message)) {
