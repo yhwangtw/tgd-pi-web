@@ -143,8 +143,8 @@
   min-width: 180px;
   max-width: calc(100vw - var(--space-4));
   overflow: hidden auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control-prominent);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-menu);
   background: var(--bg-elev-1);
   box-shadow: var(--color-shadow-popup);
 }
@@ -240,6 +240,7 @@
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border: 0;
+  border-radius: var(--radius-row);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -273,7 +274,7 @@
   min-width: 200px;
   width: min(440px, calc(100vw - 16px));
   max-width: calc(100vw - 16px);
-  padding: var(--space-3);
+  padding: var(--space-2);
 }
 
 

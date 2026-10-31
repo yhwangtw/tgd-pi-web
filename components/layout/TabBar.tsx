@@ -3,7 +3,7 @@
 import { useState, useRef, useLayoutEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Columns2, MoreHorizontal, Pin, X } from "lucide-react";
-import { ActionMenu, ActionMenuRadioGroup, ActionMenuRadioItem } from "@/components/ui/ActionMenu";
+import { ActionMenu, ActionMenuItem, ActionMenuRadioGroup, ActionMenuRadioItem } from "@/components/ui/ActionMenu";
 import { getFileIcon } from "../sidebar/FileIcons";
 import { useI18n } from "@/lib/i18n";
 import type { FileOpenIntent, FileViewState } from "@/lib/file-open";
@@ -50,9 +50,11 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
   const [menu, setMenu] = useState<{ offsetX: number; offsetY: number; tab: Tab } | null>(null);
   const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const dragId = useRef<string | null>(null);
   const [fileListOpen, setFileListOpen] = useState(false);
+  const [compactNavigation, setCompactNavigation] = useState(false);
   const [overflow, setOverflow] = useState({ left: false, right: false });
   const updateOverflow = useCallback(() => {
     const strip = stripRef.current;
@@ -60,6 +62,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
     const max = strip.scrollWidth - strip.clientWidth;
     const next = { left: max > 1 && strip.scrollLeft > 1, right: max > 1 && strip.scrollLeft < max - 1 };
     setOverflow(previous => previous.left === next.left && previous.right === next.right ? previous : next);
+    const width = containerRef.current?.clientWidth ?? 0;
+    setCompactNavigation(width > 0 && width < 360);
   }, []);
   const scrollTabs = (direction: number) => {
     const strip = stripRef.current;
@@ -85,6 +89,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
     revealActive();
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(revealActive) : null;
     observer?.observe(strip);
+    if (containerRef.current) observer?.observe(containerRef.current);
     const wheel = (event: WheelEvent) => {
       // Regular mouse wheels can reach offscreen tabs; keep trackpad and zoom native.
       if (event.ctrlKey || event.metaKey || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
@@ -101,7 +106,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
       strip.removeEventListener("scroll", updateOverflow);
       strip.removeEventListener("wheel", wheel);
     };
-  }, [activeTabId, tabs, updateOverflow]);
+  }, [activeTabId, tabs, updateOverflow, compactNavigation]);
 
   const dismissMenu = useCallback((restoreFocus = true) => {
     if (restoreFocus && menu) tabRefs.current.get(menu.tab.id)?.focus({ preventScroll: true });
@@ -168,7 +173,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
   };
 
   return (
-    <div className={styles.container}>
+    <div ref={containerRef} className={`${styles.container} ${compactNavigation ? styles.compactNavigation : ""}`}
+      data-testid="file-tab-bar" data-navigation={compactNavigation ? "compact" : "full"}>
     <div ref={stripRef} className={styles.tabBar} data-testid="file-tab-strip">
       <div className={styles.tabList} role="tablist" aria-label={t("tabs.files")}>
       {tabs.map((tab, index) => {
@@ -269,13 +275,13 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
 
     </div>
     {tabs.length > 1 && <div className={styles.navigation}>
-      {onReorder && <button type="button" className={styles.navigationButton}
+      {onReorder && !compactNavigation && <button type="button" className={styles.navigationButton}
         aria-label={t("tabs.actions")} title={t("tabs.actions")}
         aria-haspopup="menu" aria-expanded={!!menu}
         onClick={() => { const active = tabs.find(tab => tab.id === activeTabId) ?? tabs[0]; if (active) openMenu(active); }}>
         <MoreHorizontal aria-hidden="true" />
       </button>}
-      {(overflow.left || overflow.right) && <>
+      {!compactNavigation && (overflow.left || overflow.right) && <>
         <button type="button" className={styles.navigationButton} disabled={!overflow.left}
           aria-label={t("tabs.scrollLeft")} title={t("tabs.scrollLeft")} onClick={() => scrollTabs(-1)}>
           <ChevronLeft aria-hidden="true" />
@@ -302,6 +308,26 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onCloseOthe
             <span className={styles.selectionMark} aria-hidden="true">{tab.id === activeTabId && <Check />}</span>
           </ActionMenuRadioItem>)}
         </ActionMenuRadioGroup>
+        {compactNavigation && <div className={styles.compactMenuActions}>
+          {(overflow.left || overflow.right) && <>
+            <ActionMenuItem><button type="button" disabled={!overflow.left} onClick={() => scrollTabs(-1)}>
+              <ChevronLeft aria-hidden />{t("tabs.scrollLeft")}
+            </button></ActionMenuItem>
+            <ActionMenuItem><button type="button" disabled={!overflow.right} onClick={() => scrollTabs(1)}>
+              <ChevronRight aria-hidden />{t("tabs.scrollRight")}
+            </button></ActionMenuItem>
+          </>}
+          {onReorder && <ActionMenuItem><button type="button" onClick={() => {
+            setFileListOpen(false);
+            // Let the file-list menu return focus before the tab menu takes it.
+            requestAnimationFrame(() => {
+              const active = tabs.find(tab => tab.id === activeTabId) ?? tabs[0];
+              if (active) openMenu(active);
+            });
+          }}>
+            <MoreHorizontal aria-hidden />{t("tabs.actions")}
+          </button></ActionMenuItem>}
+        </div>}
       </ActionMenu>
     </div>}
 

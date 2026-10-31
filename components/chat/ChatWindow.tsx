@@ -1132,11 +1132,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className={styles.loadingConversation}>
         <div className={styles.skeletonWrapper}>
-          {[1, 2, 3, 4, 5].map((i) => (
+          <p className={styles.loadingLabel} role="status">{t("chat.loadingConversation")}</p>
+          <div aria-hidden="true">{[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="skeleton-line" style={{ width: `${40 + (i % 3) * 20}%`, marginBottom: 10, marginLeft: i % 2 === 0 ? 0 : 60 }} />
-          ))}
+          ))}</div>
         </div>
       </div>
     );
@@ -1197,23 +1198,25 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       {isEmptyNew ? (
         <div className={`${styles.emptyNew} flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8`}>
           <div className={`${styles.emptyNewInner} w-full ${wideChat ? "max-w-[1080px]" : "max-w-[900px]"}`}>
-            <div
-              className={styles.welcomeHeader}
-            >
-              <div className={styles.welcomeTitleRow}>
-                <span className={styles.piSymbol}>π</span>
-                <span className={styles.titleText}>with tGD</span>
-                <span className={styles.typewriterContainer}>
-                  <WelcomeTypewriter phrases={TYPEWRITER_PHRASES} />
-                </span>
-              </div>
-              <div className={styles.versionColumn}>
-                <span className={styles.versionLabel}>
-                  {t("chat.runtimeWeb")} <span className={styles.versionValue}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
-                </span>
-                <span className={styles.versionLabel}>
-                  {t("chat.runtimePi")} <span className={styles.versionValue}>v{process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}</span>
-                </span>
+            <div className={styles.welcomeHeaderContainer}>
+              <div className={`${styles.welcomeHeader} ${wideChat ? styles.welcomeHeaderWide : ""}`} data-testid="new-chat-welcome">
+                <div className={styles.welcomeTitleRow}>
+                  <h1 className={styles.welcomeBrand}>
+                    <span className={styles.piSymbol}>π</span>
+                    <span className={styles.titleText}>with tGD</span>
+                  </h1>
+                  <span className={styles.typewriterContainer}>
+                    <WelcomeTypewriter phrases={TYPEWRITER_PHRASES} />
+                  </span>
+                </div>
+                <div className={styles.versionColumn} data-testid="welcome-versions">
+                  <span className={styles.versionLabel}>
+                    {t("chat.runtimeWeb")} <span className={styles.versionValue}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
+                  </span>
+                  <span className={styles.versionLabel}>
+                    {t("chat.runtimePi")} <span className={styles.versionValue}>v{process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}</span>
+                  </span>
+                </div>
               </div>
             </div>
             {chatInputElement}
@@ -1346,6 +1349,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 busy={false}
                 onRetryWithModel={handleRetryWithModel}
                 onAdjustThinking={() => chatInputRef.current?.openControls?.()}
+                onOpenModels={onOpenModels}
                 onAutomaticChange={handleAutoProviderFallbackChange}
                 onDismiss={() => setProviderRecovery(null)}
               />

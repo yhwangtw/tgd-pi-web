@@ -39,6 +39,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-composer);
   background: var(--bg-elev-1);
+  caret-color: var(--accent-text);
   box-shadow: var(--color-shadow-input);
   transition: border-color var(--motion-normal) var(--ease-standard), box-shadow var(--motion-normal) var(--ease-standard);
 }
@@ -991,7 +992,7 @@
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-border);
   border-radius: var(--radius-control);
-  color: var(--color-error);
+  color: var(--color-error-text);
   cursor: pointer;
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);

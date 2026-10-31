@@ -26,7 +26,7 @@
 
 .headerButtons {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 /* ── New session button ── */
@@ -35,8 +35,8 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-1);
-  background: var(--bg-hover);
-  border: 1px solid transparent;
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border-subtle);
   height: 32px;
   padding-left: var(--space-2);
   padding-right: var(--space-3);
@@ -70,8 +70,8 @@
   transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
 }
 .refreshButtonDefault {
-  background: var(--bg-hover);
-  border: 1px solid transparent;
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border-subtle);
   color: var(--text-muted);
 }
 .refreshButtonDone {
@@ -114,10 +114,10 @@
   width: 100%;
   height: 34px;
   padding: 0 var(--space-8) 0 var(--space-8);
-  border: 1px solid transparent;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   outline: none;
-  background: var(--bg-hover);
+  background: var(--bg-elev-1);
   color: var(--text);
   font: inherit;
   font-size: var(--text-sm);

@@ -27,9 +27,12 @@ for (const style of ["original", "trae"]) {
     await trigger.press("Enter");
     const menu = page.getByRole("menu", { name: "More file actions" });
     await expect(menu).toBeVisible();
-    await expect(menu.getByRole("menuitem").first()).toBeFocused();
+    const items = menu.locator('[role="menuitem"]:not(:disabled):not([data-disabled])');
+    await expect(items.first()).toBeFocused();
     await page.keyboard.press("ArrowDown");
-    await expect(menu.getByRole("menuitem", { name: "Edit file", exact: true })).toBeFocused();
+    await expect(items.nth(1)).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(items.first()).toBeFocused();
     await page.keyboard.press("End");
     await expect(menu.getByRole("menuitem").last()).toBeFocused();
     await expect(menu.getByRole("menuitem").last()).toBeInViewport();

@@ -1,5 +1,6 @@
 import { isFixtureReadReceipt } from "./read-receipt-fixture";
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
+import { selectFileAction, selectPanelLayoutAction } from "./file-preview-actions";
 
 const SESSION = "ffff1111-2222-3333-4444-555566667777";
 
@@ -69,8 +70,8 @@ for (const style of ["original", "trae"] as const) {
     test(`${style} ${width}px: Inspector fills the workspace width and line navigation reveals the source`, async ({ page }) => {
       await openFixture(page, style, width, 800);
       const panel = await openSource(page);
-      const trigger = panel.getByRole("button", { name: "Inspector", exact: true });
-      await trigger.click();
+      const trigger = panel.getByRole("button", { name: "More file actions", exact: true });
+      await selectFileAction(page, panel, "Inspector");
       const inspector = page.getByTestId("file-inspector");
       await withinViewport(page, inspector);
       const workspace = inspector.locator("..");
@@ -84,7 +85,7 @@ for (const style of ["original", "trae"] as const) {
       await inspector.getByRole("button", { name: /answer.*L1/ }).click();
       await expect(inspector).toBeHidden();
       await expect(panel.locator('[data-active-line][data-line-number="1"]')).toBeInViewport();
-      await trigger.click();
+      await selectFileAction(page, panel, "Inspector");
       await inspector.getByRole("button", { name: "Close inspector", exact: true }).click();
       await expect(inspector).toBeHidden();
       await expect(trigger).toBeFocused();
@@ -110,7 +111,7 @@ for (const style of ["original", "trae"] as const) {
     expect(secondBox.y).toBeGreaterThanOrEqual(firstBox.y + firstBox.height - 2);
     await expect(split.locator('iframe[title="HTML preview"]')).toBeVisible();
     await page.screenshot({ path: test.info().outputPath(`file-split-narrow-${style}.png`) });
-    await panel.getByRole("button", { name: "Expand file panel", exact: true }).click();
+    await selectPanelLayoutAction(page, panel, "Expand file panel");
     await expect.poll(async () => {
       const primary = await first.boundingBox();
       const secondary = await split.boundingBox();
@@ -118,7 +119,7 @@ for (const style of ["original", "trae"] as const) {
         && Math.abs(primary.y - secondary.y) <= 2
         && secondary.x >= primary.x + primary.width - 2;
     }, { message: "An expanded workspace can show both files side by side again" }).toBe(true);
-    await panel.getByRole("button", { name: "Restore file panel", exact: true }).click();
+    await selectPanelLayoutAction(page, panel, "Restore file panel");
     await expect.poll(async () => {
       const primary = await first.boundingBox();
       const secondary = await split.boundingBox();
@@ -151,15 +152,15 @@ for (const style of ["original", "trae"] as const) {
     await openFixture(page, style, 390, 800);
     const panel = await openSource(page);
     await page.setViewportSize({ width: 390, height: 320 });
-    const summary = panel.locator("summary").filter({ hasText: "Info" });
-    await summary.click();
+    const trigger = panel.getByRole("button", { name: "More file actions", exact: true });
+    await selectFileAction(page, panel, "Info");
     const popover = page.getByRole("region", { name: "Info", exact: true });
     await withinViewport(page, popover);
     await expect(popover.getByText("Sync", { exact: true })).toBeInViewport();
     await page.screenshot({ path: test.info().outputPath(`file-info-short-${style}.png`) });
     await page.keyboard.press("Escape");
     await expect(popover).toBeHidden();
-    await expect(summary).toBeFocused();
+    await expect(trigger).toBeFocused();
   });
 
   test(`${style}: file browsing preserves chat space across laptop and wide desktop sizes`, async ({ page }) => {

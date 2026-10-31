@@ -12,9 +12,9 @@ const SESSION = "aaaa1111-2222-3333-4444-555566667777";
 const reasoningError = '400: {"message":"reasoning_effort `none` is not supported by this model Request id: fixture-request-123","type":"invalid_request_error","param":null}';
 const rejectedError = "The 'fixture-spark' model is not supported when using Codex with a ChatGPT account";
 
-async function installFailure(page: Page, rejected = false) {
+async function installFailure(page: Page, rejected = false, errorOverride?: string) {
   const modelId = rejected ? "fixture-spark" : "fixture-reasoning";
-  const error = rejected ? rejectedError : reasoningError;
+  const error = errorOverride ?? (rejected ? rejectedError : reasoningError);
   const provider = "fixture";
   const failed = { role: "assistant", provider, model: modelId, content: [], stopReason: "error", errorMessage: error, timestamp: 1_780_000_000_000 };
   const messages = [{ role: "user", content: "Hello", timestamp: 1_780_000_000_000 }, failed];
@@ -152,6 +152,33 @@ for (const width of [390, 1440]) {
     const refreshed = page.getByRole("dialog", { name: "Choose a model", exact: true }).getByRole("button", { name: /Fixture Spark/ });
     await expect(refreshed).not.toHaveAttribute("aria-disabled", "true");
     expect(settingsCommands).toEqual([]);
+    expect(forbidden).toEqual([]);
+  });
+}
+
+
+for (const { width, locale } of [{ width: 320, locale: "en" }, { width: 1440, locale: "zh" }] as const) {
+  test(`${width}px ${locale}: rejected login offers readable guidance and a working connection settings entry`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(({ locale }) => {
+      localStorage.setItem("pi-locale", locale);
+      localStorage.setItem("pi-font-size", "xlarge");
+    }, { locale });
+    const { forbidden } = await installFailure(page, false, "Perch AI: Not authorized");
+    await page.goto(`/?session=${SESSION}`);
+    const recovery = page.getByRole("region", { name: locale === "en" ? "Recovery options" : "復原選項" });
+    await expect(recovery).toBeVisible();
+    await expect(recovery).toContainText(locale === "en" ? "could not verify your sign-in" : "未通過登入驗證");
+    const action = recovery.getByRole("button", { name: locale === "en" ? "Check connection" : "檢查連線", exact: true });
+    await action.scrollIntoViewIfNeeded();
+    await expect(action).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+    await action.click();
+    const settings = page.getByTestId("models-config-dialog");
+    await expect(settings).toBeVisible();
+    await settings.getByRole("button", { name: locale === "en" ? "Close" : "關閉", exact: true }).click();
+    await expect(settings).toBeHidden();
+    await expect(recovery).toBeVisible();
     expect(forbidden).toEqual([]);
   });
 }

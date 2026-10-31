@@ -2,22 +2,30 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
   overflow: hidden;
 }
 
 .toolbar {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
   padding: var(--space-1) var(--space-4);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-xs);
   color: var(--text-dim);
   background: var(--bg);
   flex-shrink: 0;
+  min-width: 0;
 }
 
+.toolbar > span { max-width: 100%; overflow-wrap: anywhere; }
+.toolbar > a { min-width: 0; flex-shrink: 1; white-space: normal; }
+
 .filePath {
+  flex: 1 1 auto;
+  min-width: 0;
   font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -25,7 +33,7 @@
 }
 
 .extension {
-  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .watchStatus {
@@ -33,6 +41,7 @@
   align-items: center;
   gap: var(--space-1);
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .watchStatusLive {

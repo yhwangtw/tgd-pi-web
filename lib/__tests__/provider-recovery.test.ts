@@ -8,6 +8,10 @@ describe("provider recovery", () => {
     expect(classifyProviderError("context_length_exceeded")).toMatchObject({ kind: "context", recoverableWithFallback: false });
   });
 
+  it.each(["Not authorized", "not_authorized", "Not authorised"])("recognizes a saved login rejected by the service: %s", message => {
+    expect(classifyProviderError(`Perch AI: ${message}`)).toMatchObject({ kind: "authentication", recoverableWithFallback: true });
+  });
+
   it("prefers a fallback from another provider", () => {
     const result = selectFallbackModel({ provider: "alpha", modelId: "one" }, [
       { provider: "alpha", modelId: "one", name: "One" },

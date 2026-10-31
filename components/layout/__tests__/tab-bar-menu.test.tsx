@@ -297,3 +297,49 @@ it("offers move-left/right from a touch-accessible action trigger and skips disa
   await act(async () => otherLeft.click());
   expect(reorder).toHaveBeenLastCalledWith("source", 0);
 });
+
+it("moves narrow-strip scroll controls into the open-file menu and restores wide navigation", async () => {
+  const container = host.querySelector<HTMLElement>('[data-testid="file-tab-bar"]')!;
+  let width = 220;
+  Object.defineProperty(container, "clientWidth", { configurable: true, get: () => width });
+  const strip = setStripSize(100, 720);
+  await act(async () => root.render(<TabBar tabs={[...tabs]} activeTabId="readme" onSelectTab={vi.fn()} onCloseTab={vi.fn()} />));
+  expect(container.dataset.navigation).toBe("compact");
+  expect(host.querySelector('[aria-label="tabs.scrollRight"]')).toBeNull();
+
+  const trigger = host.querySelector<HTMLButtonElement>('[aria-label="tabs.showAll"]')!;
+  await key(trigger, "Enter");
+  const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+  const left = Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent === "tabs.scrollLeft")!;
+  const right = Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent === "tabs.scrollRight")!;
+  expect(left.disabled).toBe(true);
+  expect(right.disabled).toBe(false);
+  await act(async () => right.click());
+  expect(strip.scrollLeft).toBe(80);
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+
+  width = 500;
+  await act(async () => strip.dispatchEvent(new Event("scroll")));
+  expect(container.dataset.navigation).toBe("full");
+  expect(host.querySelector('[aria-label="tabs.scrollLeft"]')).not.toBeNull();
+  expect(host.querySelector('[aria-label="tabs.scrollRight"]')).not.toBeNull();
+});
+
+it("keeps active-file actions reachable through the compact open-file menu", async () => {
+  const container = host.querySelector<HTMLElement>('[data-testid="file-tab-bar"]')!;
+  Object.defineProperty(container, "clientWidth", { configurable: true, value: 220 });
+  const reorder = vi.fn();
+  await act(async () => root.render(<TabBar tabs={[...tabs]} activeTabId="source" onSelectTab={vi.fn()} onCloseTab={vi.fn()} onReorder={reorder} />));
+  expect(host.querySelector('[aria-label="tabs.actions"]')).toBeNull();
+  await key(host.querySelector('[aria-label="tabs.showAll"]')!, "Enter");
+  const action = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent === "tabs.actions")!;
+  expect(action).toBeTruthy();
+  await act(async () => action.click());
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
+  const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+  expect(menu.getAttribute("aria-label")).toBe("index.ts");
+  const moveLeft = Array.from(menu.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "tabs.moveLeft")!;
+  expect(document.activeElement).toBe(moveLeft);
+  await act(async () => moveLeft.click());
+  expect(reorder).toHaveBeenCalledExactlyOnceWith("source", 0);
+});

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { selectFileAction } from "./file-preview-actions";
 
 for (const style of ["original", "trae"]) {
   test(`${style}: 200% text keeps composer, file tabs and inspector notes usable`, async ({ page }) => {
@@ -70,7 +71,7 @@ for (const style of ["original", "trae"]) {
       const tab = panel.getByRole("tab", { selected: true });
       await expect(tab).toBeVisible();
       expect(await tab.evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
-      await panel.getByRole("button", { name: "Inspector", exact: true }).click();
+      await selectFileAction(page, panel, "Inspector");
       const inspector = page.getByTestId("file-inspector");
       await inspector.getByRole("tab", { name: "Notes", exact: true }).click();
       const note = inspector.getByRole("textbox", { name: "Note", exact: true });

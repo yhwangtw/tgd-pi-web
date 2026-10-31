@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectPanelExpanded, selectPanelLayoutAction } from "./file-preview-actions";
 
 const SESSION = "ffff1111-2222-3333-4444-555566667777";
 async function session(page: Page) {
@@ -50,12 +51,12 @@ for (const style of ["original", "trae"]) {
     await fits(page);
     const frameBox = (await panel.locator('iframe[title="HTML preview"]').boundingBox())!;
     expect(frameBox.width).toBeLessThanOrEqual((await panel.boundingBox())!.width);
-    await panel.getByRole("button", { name: "Expand file panel", exact: true }).click();
-    await expect(panel.getByRole("button", { name: "Restore file panel", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await selectPanelLayoutAction(page, panel, "Expand file panel");
+    await expectPanelExpanded(page, panel, true);
     await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(730);
     await page.keyboard.press("Escape");
-    await expect(panel.getByRole("button", { name: "Expand file panel", exact: true })).toBeVisible();
-    await panel.getByRole("button", { name: "Reset file panel width", exact: true }).click();
+    await expectPanelExpanded(page, panel, false);
+    await selectPanelLayoutAction(page, panel, "Reset file panel width");
     expect(await page.evaluate(() => localStorage.getItem("pi-right-width"))).toBeNull();
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.getByRole("button", { name: /^(Explorer|Files)$/ }).first().click();
@@ -66,15 +67,15 @@ for (const style of ["original", "trae"]) {
     await expect(panel.locator('iframe[title="HTML preview"]')).toBeVisible();
     await fits(page);
     // The existing file Focus mode owns Escape before the expanded outer pane.
-    await panel.getByRole("button", { name: "Expand file panel", exact: true }).click();
+    await selectPanelLayoutAction(page, panel, "Expand file panel");
     await panel.getByRole("button", { name: "More file actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Focus mode", exact: true }).click();
     await expect(page.locator('[data-file-focus-mode="true"]')).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.locator('[data-file-focus-mode="true"]')).toBeHidden();
-    await expect(panel.getByRole("button", { name: "Restore file panel", exact: true })).toBeVisible();
+    await expectPanelExpanded(page, panel, true);
     await page.keyboard.press("Escape");
-    await expect(panel.getByRole("button", { name: "Expand file panel", exact: true })).toBeVisible();
+    await expectPanelExpanded(page, panel, false);
     await page.screenshot({ path: test.info().outputPath(`preview-desktop-${style}.png`) });
   });
 
@@ -101,8 +102,12 @@ for (const style of ["original", "trae"]) {
       const frame = (await panel.locator('iframe[title="HTML preview"]').boundingBox())!;
       expect(frame.height).toBeGreaterThan(80);
       expect(frame.y + frame.height).toBeLessThanOrEqual(page.viewportSize()!.height + 1);
-      const controls = panel.locator('[class*="HtmlPreview_toolbar"] button');
-      for (const control of await controls.all()) expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      const toolbar = panel.getByTestId("file-viewer-toolbar");
+      for (const label of ["Code", "Preview", "Isolated preview", "Reload preview", "Add to composer", "More file actions"]) {
+        const control = toolbar.getByRole("button", { name: label, exact: true });
+        await expect(control).toBeVisible();
+        expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      }
       if ([390, 768, 1440].includes(width)) await page.screenshot({ path: test.info().outputPath(`preview-${width}-${style}.png`) });
       await panel.getByRole("button", { name: /^(Hide file panel|Back to chat)$/ }).tap();
       await expect(page.getByRole("textbox", { name: "Message…", exact: true })).toBeVisible();
@@ -117,31 +122,43 @@ for (const style of ["original", "trae"]) {
     await page.addInitScript(style => { if (window === window.top) { localStorage.setItem("pi-ui-style", style); localStorage.setItem("pi-locale", "en"); } }, style);
     await session(page);
     await page.getByRole("link", { name: "查看成果", exact: true }).tap();
+    const frame = page.locator('iframe[title="HTML preview"]');
+    const heading = page.frameLocator('iframe[title="HTML preview"]').getByRole("heading", { name: "Linked HTML preview" });
+    await expect(heading).toBeVisible();
     const panel = page.locator(".right-panel-open");
     const separator = panel.getByRole("separator", { name: "Resize file panel" });
     await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBe(320);
     const client = await context.newCDPSession(page);
     const touch = async (type: string, points: { x: number; y: number; id: number }[]) => client.send("Input.dispatchTouchEvent", { type, touchPoints: points });
     for (const interrupt of ["cancel", "second finger", "commit"]) {
-      const edge = (await separator.boundingBox())!;
-      expect(edge.width).toBeGreaterThanOrEqual(24);
-      const start = { x: edge.x + 12, y: edge.y + 160, id: 1 };
-      const moved = { ...start, x: start.x - 70 };
-      const before = (await panel.boundingBox())!.width;
-      await touch("touchStart", [start]);
-      await touch("touchMove", [moved]);
-      await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(before + 35);
-      if (interrupt === "cancel") await touch("touchCancel", []);
-      else if (interrupt === "second finger") {
-        await touch("touchStart", [moved, { ...moved, x: moved.x + 80, id: 2 }]);
-        await touch("touchEnd", []);
-      } else await touch("touchEnd", []);
-      await expect(panel).not.toHaveClass(/right-panel-dragging/);
-      if (interrupt !== "commit") {
-        await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBe(Math.round(before));
-        expect(await page.evaluate(() => localStorage.getItem("pi-right-width"))).toBeNull();
-      } else expect(Number(await page.evaluate(() => localStorage.getItem("pi-right-width")))).toBeGreaterThan(before + 35);
+      await test.step(`Resize: ${interrupt}`, async () => {
+        const edge = (await separator.boundingBox())!;
+        expect(edge.width).toBeGreaterThanOrEqual(24);
+        const start = { x: edge.x + 12, y: edge.y + 160, id: 1 };
+        const moved = { ...start, x: start.x - 70 };
+        const before = (await panel.boundingBox())!.width;
+        await touch("touchStart", [start]);
+        await touch("touchMove", [moved]);
+        await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(before + 35);
+        if (interrupt === "cancel") await touch("touchCancel", []);
+        else if (interrupt === "second finger") {
+          const bounds = (await frame.boundingBox())!;
+          // The second finger must land over a loaded child document, rather
+          // than a placeholder that happens to share the parent event scope.
+          const second = { x: bounds.x + Math.min(80, bounds.width / 2), y: bounds.y + Math.min(80, bounds.height / 2), id: 2 };
+          const hitTag = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.localName, second);
+          expect(hitTag, "New contacts during resize must stay in the parent pointer scope").not.toBe("iframe");
+          await touch("touchStart", [moved, second]);
+          await touch("touchEnd", []);
+        } else await touch("touchEnd", []);
+        await expect(panel).not.toHaveClass(/right-panel-dragging/);
+        if (interrupt !== "commit") {
+          await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBe(Math.round(before));
+          expect(await page.evaluate(() => localStorage.getItem("pi-right-width"))).toBeNull();
+        } else expect(Number(await page.evaluate(() => localStorage.getItem("pi-right-width")))).toBeGreaterThan(before + 35);
+      });
     }
+    await heading.click();
     await fits(page);
     await context.close();
   });

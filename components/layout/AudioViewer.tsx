@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { encodeFilePathForApi, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { useFileWatch } from "@/hooks/useFileWatch";
 import { formatSize, formatDuration } from "./file-viewer-utils";
+import styles from "./MediaViewer.module.css";
 
 export function AudioViewer({ filePath, cwd, visible = true }: { filePath: string; cwd?: string; visible?: boolean }) {
   const { watching, refreshTrigger } = useFileWatch(filePath, visible);
@@ -34,40 +35,19 @@ export function AudioViewer({ filePath, cwd, visible = true }: { filePath: strin
   const src = `/api/files/${encoded}?type=read${bust ? `&v=${bust}` : ""}`;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
-          fontSize: "var(--text-xs)",
-          color: "var(--text-dim)",
-          background: "var(--bg)",
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
+    <div className={styles.root}>
+      <div className={styles.toolbar}>
+        <span className={styles.path} title={filePath}>
           {getRelativeFilePath(filePath, cwd)}
         </span>
-        <span style={{ marginLeft: "auto" }}>{ext || "audio"}</span>
+        <span>{ext || "audio"}</span>
         {duration != null && <span>{formatDuration(duration)}</span>}
         {size != null && <span>{formatSize(size)}</span>}
         <span
           title={watching ? "Live sync active" : "Not watching"}
-          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "var(--color-success)" : "var(--text-dim)" }}
+          className={watching ? styles.live : styles.static}
         >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "var(--radius-circle)",
-              background: watching ? "var(--color-success)" : "var(--border)",
-              display: "inline-block",
-              boxShadow: watching ? "0 0 4px var(--color-success)" : "none",
-            }}
-          />
+          <span aria-hidden="true" className={styles.watchDot} />
           {watching ? "live" : "static"}
         </span>
       </div>

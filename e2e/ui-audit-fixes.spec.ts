@@ -80,12 +80,12 @@ test("sidebar Refresh forces the active search even when the session list has no
 });
 
 for (const width of [390, 921, 1440]) {
-  test(`${width}: Ask Pi reveals and focuses the draft with one confirmation`, async ({ page }, info) => {
+  test(`${width}: Add to composer reveals and focuses the draft with one confirmation`, async ({ page }, info) => {
     await open(page, width);
     await page.getByRole("button", { name: width < 700 ? "Files" : "Explorer", exact: true }).click();
     await page.getByRole("treeitem", { name: "README.md", exact: true }).click();
     const panel = page.locator(".right-panel-container");
-    await panel.getByRole("button", { name: "Ask Pi", exact: true }).click();
+    await panel.getByRole("button", { name: "Add to composer", exact: true }).click();
     const input = page.getByRole("textbox", { name: "Message…", exact: true });
     await expect(input).toHaveValue(/README\.md/);
     await expect(input).toBeFocused();
@@ -98,7 +98,7 @@ for (const width of [390, 921, 1440]) {
     }
     await input.click();
     await expect(input).toBeFocused();
-    await page.screenshot({ path: info.outputPath(`ask-pi-${width}.png`) });
+    await page.screenshot({ path: info.outputPath(`add-to-composer-${width}.png`) });
   });
 }
 
