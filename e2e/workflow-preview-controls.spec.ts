@@ -122,31 +122,43 @@ for (const style of ["original", "trae"]) {
     await page.addInitScript(style => { if (window === window.top) { localStorage.setItem("pi-ui-style", style); localStorage.setItem("pi-locale", "en"); } }, style);
     await session(page);
     await page.getByRole("link", { name: "查看成果", exact: true }).tap();
+    const frame = page.locator('iframe[title="HTML preview"]');
+    const heading = page.frameLocator('iframe[title="HTML preview"]').getByRole("heading", { name: "Linked HTML preview" });
+    await expect(heading).toBeVisible();
     const panel = page.locator(".right-panel-open");
     const separator = panel.getByRole("separator", { name: "Resize file panel" });
     await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBe(320);
     const client = await context.newCDPSession(page);
     const touch = async (type: string, points: { x: number; y: number; id: number }[]) => client.send("Input.dispatchTouchEvent", { type, touchPoints: points });
     for (const interrupt of ["cancel", "second finger", "commit"]) {
-      const edge = (await separator.boundingBox())!;
-      expect(edge.width).toBeGreaterThanOrEqual(24);
-      const start = { x: edge.x + 12, y: edge.y + 160, id: 1 };
-      const moved = { ...start, x: start.x - 70 };
-      const before = (await panel.boundingBox())!.width;
-      await touch("touchStart", [start]);
-      await touch("touchMove", [moved]);
-      await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(before + 35);
-      if (interrupt === "cancel") await touch("touchCancel", []);
-      else if (interrupt === "second finger") {
-        await touch("touchStart", [moved, { ...moved, x: moved.x + 80, id: 2 }]);
-        await touch("touchEnd", []);
-      } else await touch("touchEnd", []);
-      await expect(panel).not.toHaveClass(/right-panel-dragging/);
-      if (interrupt !== "commit") {
-        await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBe(Math.round(before));
-        expect(await page.evaluate(() => localStorage.getItem("pi-right-width"))).toBeNull();
-      } else expect(Number(await page.evaluate(() => localStorage.getItem("pi-right-width")))).toBeGreaterThan(before + 35);
+      await test.step(`Resize: ${interrupt}`, async () => {
+        const edge = (await separator.boundingBox())!;
+        expect(edge.width).toBeGreaterThanOrEqual(24);
+        const start = { x: edge.x + 12, y: edge.y + 160, id: 1 };
+        const moved = { ...start, x: start.x - 70 };
+        const before = (await panel.boundingBox())!.width;
+        await touch("touchStart", [start]);
+        await touch("touchMove", [moved]);
+        await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(before + 35);
+        if (interrupt === "cancel") await touch("touchCancel", []);
+        else if (interrupt === "second finger") {
+          const bounds = (await frame.boundingBox())!;
+          // The second finger must land over a loaded child document, rather
+          // than a placeholder that happens to share the parent event scope.
+          const second = { x: bounds.x + Math.min(80, bounds.width / 2), y: bounds.y + Math.min(80, bounds.height / 2), id: 2 };
+          const hitTag = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.localName, second);
+          expect(hitTag, "New contacts during resize must stay in the parent pointer scope").not.toBe("iframe");
+          await touch("touchStart", [moved, second]);
+          await touch("touchEnd", []);
+        } else await touch("touchEnd", []);
+        await expect(panel).not.toHaveClass(/right-panel-dragging/);
+        if (interrupt !== "commit") {
+          await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBe(Math.round(before));
+          expect(await page.evaluate(() => localStorage.getItem("pi-right-width"))).toBeNull();
+        } else expect(Number(await page.evaluate(() => localStorage.getItem("pi-right-width")))).toBeGreaterThan(before + 35);
+      });
     }
+    await heading.click();
     await fits(page);
     await context.close();
   });

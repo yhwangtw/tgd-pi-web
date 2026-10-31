@@ -733,6 +733,11 @@
   padding-left: var(--space-3);
 }
 
+/* A new touch over a child document must reach the parent resize handler.
+   Pointer capture keeps the original drag on the grip; removing the dragging
+   class restores normal iframe interaction on commit or cancellation. */
+:global(.right-panel-dragging) .rightPanelContent iframe { pointer-events: none; }
+
 .fileWorkspace { width: 100%; height: 100%; min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
 .fileWorkspaceSplit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fileWorkspacePane { min-width: 0; min-height: 0; overflow: hidden; }
