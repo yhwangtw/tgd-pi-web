@@ -2,7 +2,7 @@
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
 import type { Pluggable, PluggableList } from "unified";
-import { createElement, Fragment, memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { cloneElement, createElement, Fragment, isValidElement, memo, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { createContext, useContext } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -16,7 +16,7 @@ import { looksLikeFilePath, parseMarkdownFileLink, requestOpenFile } from "@/lib
 import { encodeFilePathForApi, normalizeFilePathSlashes } from "@/lib/file-paths";
 import { useI18n } from "@/lib/i18n";
 import { parseOutputSegments } from "@/lib/output-design";
-import { splitStreamingMarkdown } from "@/lib/streaming-markdown";
+import { createStreamingMarkdownSplitter, streamingFencedCode } from "@/lib/streaming-markdown";
 import { FocusDialog } from "./FocusDialog";
 import { StructuredOutputCard } from "./StructuredOutputCard";
 import styles from "./MarkdownBody.module.css";
@@ -256,6 +256,7 @@ export function MarkdownBody({ children, className, isStreaming, allowSafeHtml =
 }
 
 const MarkdownContext = createContext<{ isStreaming?: boolean; sourceFilePath?: string }>({});
+const StreamingCodeContext = createContext<string | null>(null);
 
 function MarkdownRenderer({
   markdown,
@@ -275,15 +276,22 @@ function MarkdownRenderer({
   rehypePlugins: PluggableList;
 }) {
   const components = useMemo<Components>(() => ({
+          // Keep source positions on every independent top-level node so the
+          // final full parse can reuse the stream's existing fragment groups.
+          p({ node, ...props }) { void node; return <p {...props} />; },
+          hr({ node, ...props }) { void node; return <hr {...props} />; },
           ...Object.fromEntries(["h1", "h2", "h3", "h4", "h5", "h6"].map((tag) => [tag,
             ({ node, children, ...props }: React.ComponentProps<"h1"> & { node?: { position?: { start: { line: number } } } }) =>
               createElement(tag, { ...props, "data-source-line": sourceFilePath ? node?.position?.start.line : undefined }, children),
           ])),
           code: function MarkdownCode({ className, children, node: markdownNode, ...props }) {
             const { isStreaming } = useContext(MarkdownContext);
+            const streamingCode = useContext(StreamingCodeContext);
             void markdownNode;
             const lang = className?.replace("language-", "").toLowerCase() ?? "";
-            const raw = String(children);
+            // The small parsed opener still owns language/entity decoding.
+            // The fenced body is literal and never needs inline/GFM parsing.
+            const raw = streamingCode === null ? String(children ?? "") : streamingCode ? streamingCode + "\n" : "";
             const isBlock = className?.includes("language-") || raw.includes("\n");
             if (isBlock) {
               if (lang === "mermaid") {
@@ -376,19 +384,32 @@ function MarkdownRenderer({
   }), [sourceFilePath]);
   // Keep the parsed Markdown element stable when only stream/context metadata
   // changes. Context consumers (code blocks/links) still receive those updates.
-  const streamingChunks = useMemo(
-    () => allowStreamingChunks && isStreaming ? splitStreamingMarkdown(markdown) : null,
-    [allowStreamingChunks, isStreaming, markdown],
+  const splitMarkdown = useMemo(() => createStreamingMarkdownSplitter(), []);
+  const independentChunks = useMemo(
+    () => allowStreamingChunks ? splitMarkdown(markdown) : null,
+    [allowStreamingChunks, markdown, splitMarkdown],
   );
-  const renderedMarkdown = useMemo(() => streamingChunks ? (
-    streamingChunks.map((chunk, index) => <Fragment key={index}>
+  const renderedMarkdown = useMemo(() => {
+    const chunks = independentChunks ?? [markdown];
+    // Completion still parses the entire document once. Regroup its elements
+    // into the same fragments so code copy/focus/Mermaid state survives it.
+    const finalGroups = !isStreaming && independentChunks
+      ? groupParsedMarkdown(parseMarkdown({ markdown, components, remarkPlugins, rehypePlugins }), chunks)
+      : null;
+    return chunks.map((chunk, index) => <Fragment key={index}>
       {/* Match the full parser's inter-block whitespace without extra wrappers. */}
       {index > 0 && "\n"}
-      <MarkdownChunk markdown={chunk} components={components} remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} />
-    </Fragment>)
-  ) : (
-    <MarkdownChunk markdown={markdown} components={components} remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} />
-  ), [markdown, streamingChunks, remarkPlugins, rehypePlugins, components]);
+      <StreamingMarkdownChunk
+        markdown={chunk}
+        active={index === chunks.length - 1}
+        optimize={!!independentChunks && !!isStreaming}
+        parsed={finalGroups?.[index]}
+        components={components}
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
+      />
+    </Fragment>);
+  }, [markdown, independentChunks, isStreaming, remarkPlugins, rehypePlugins, components]);
   const context = useMemo(() => ({ isStreaming, sourceFilePath }), [isStreaming, sourceFilePath]);
   return (
     <MarkdownContext.Provider value={context}><div className={["markdown-body", className].filter(Boolean).join(" ")}>
@@ -397,21 +418,98 @@ function MarkdownRenderer({
   );
 }
 
-
-// Memoize the parser, not a surrounding layout element: completed chunks keep
-// their DOM and CSS first/last-child behavior while only the active tail grows.
-const MarkdownChunk = memo(function MarkdownChunk({ markdown, components, remarkPlugins, rehypePlugins }: {
+type MarkdownChunkProps = {
   markdown: string;
+  parsed?: ReactNode;
   components: Components;
   remarkPlugins: PluggableList;
   rehypePlugins: PluggableList;
-}) {
-  return <ReactMarkdown
-    urlTransform={(url, key) => key === "href" && parseMarkdownFileLink(url) ? url : defaultUrlTransform(url)}
-    remarkPlugins={remarkPlugins}
-    rehypePlugins={rehypePlugins}
-    components={components}
-  >{markdown}</ReactMarkdown>;
+};
+
+// Large unfinished tables/paragraphs still need their original parser context.
+// Coalesce their intermediate snapshots with a fixed deadline (not a debounce,
+// which could indefinitely hide output). First content, replacements, context
+// fallbacks and the final full-document render always update immediately.
+const LARGE_STREAMING_CHUNK = 16_384;
+const STREAMING_PARSE_INTERVAL = 120;
+
+function useStreamingSnapshot(markdown: string, paced: boolean): string {
+  const [snapshot, setSnapshot] = useState(markdown);
+  const lastPublished = useRef(0);
+  const immediate = !paced || !markdown.startsWith(snapshot);
+  useEffect(() => {
+    if (snapshot === markdown) {
+      lastPublished.current = Date.now();
+      return;
+    }
+    if (immediate) {
+      lastPublished.current = Date.now();
+      setSnapshot(markdown);
+      return;
+    }
+    const delay = Math.max(0, lastPublished.current + STREAMING_PARSE_INTERVAL - Date.now());
+    const timer = setTimeout(() => {
+      lastPublished.current = Date.now();
+      setSnapshot(markdown);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [immediate, markdown, snapshot]);
+  return immediate ? markdown : snapshot;
+}
+
+const StreamingMarkdownChunk = memo(function StreamingMarkdownChunk({ markdown, active, optimize, ...props }: MarkdownChunkProps & { active: boolean; optimize: boolean }) {
+  const fenced = useMemo(() => optimize ? streamingFencedCode(markdown) : null, [markdown, optimize]);
+  const snapshot = useStreamingSnapshot(markdown, optimize && active && !fenced && markdown.length >= LARGE_STREAMING_CHUNK);
+  return <StreamingCodeContext.Provider value={fenced?.code ?? null}>
+    <MarkdownChunk {...props} markdown={fenced?.header ?? snapshot} />
+  </StreamingCodeContext.Provider>;
+});
+
+type PositionedMarkdownElement = ReactElement<{ node?: { position?: { start?: { offset?: number } } } }>;
+
+function groupParsedMarkdown(parsed: ReactElement, chunks: string[]): ReactNode[] {
+  const root = parsed as ReactElement<{ children?: ReactNode }>;
+  const children = Array.isArray(root.props.children) ? root.props.children : [root.props.children];
+  const groups: ReactNode[][] = chunks.map(() => []);
+  const counts = chunks.map(() => new Map<string, number>());
+  let group = 0;
+  let end = chunks[0].length;
+  let previousGroup = 0;
+  let whitespace: ReactNode[] = [];
+  for (const child of children) {
+    if (!isValidElement<PositionedMarkdownElement["props"]>(child)) {
+      whitespace.push(child);
+      continue;
+    }
+    const offset = child.props.node?.position?.start?.offset ?? 0;
+    while (group < chunks.length - 1 && offset >= end) end += chunks[++group].length;
+    if (group === previousGroup) groups[group].push(...whitespace);
+    whitespace = [];
+    // react-markdown numbers sibling keys by tag. Restart those counters in
+    // each group to match the independently parsed streaming fragments.
+    const name = String(child.key).replace(/-\d+$/, "");
+    const count = counts[group].get(name) ?? 0;
+    counts[group].set(name, count + 1);
+    groups[group].push(cloneElement(child, { key: `${name}-${count}` }));
+    previousGroup = group;
+  }
+  return groups.map((children) => createElement(Fragment, null, children));
+}
+
+function parseMarkdown({ markdown, components, remarkPlugins, rehypePlugins }: MarkdownChunkProps) {
+  return ReactMarkdown({
+    children: markdown,
+    urlTransform: (url, key) => key === "href" && parseMarkdownFileLink(url) ? url : defaultUrlTransform(url),
+    remarkPlugins,
+    rehypePlugins,
+    components,
+  });
+}
+
+// Memoize the parser, not a surrounding layout element: completed chunks keep
+// their DOM and CSS first/last-child behavior while only the active tail grows.
+const MarkdownChunk = memo(function MarkdownChunk({ parsed, ...props }: MarkdownChunkProps) {
+  return parsed ?? parseMarkdown(props);
 });
 
 function normalizeDisplayMath(markdown: string): string {
@@ -508,7 +606,7 @@ function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boole
   );
 
   if (!showPreview || isStreaming) {
-    return <CodeBlock code={code} lang="mermaid" headerAction={previewButton} />;
+    return <CodeBlock code={code} lang="mermaid" headerAction={previewButton} plain={isStreaming} />;
   }
 
   const body =

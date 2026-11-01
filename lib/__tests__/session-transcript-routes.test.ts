@@ -10,7 +10,7 @@ vi.mock("@/lib/rpc-manager", () => ({ getRpcSession: () => undefined }));
 vi.mock("@/lib/session-reader", async importOriginal => ({
   ...await importOriginal<typeof import("../session-reader")>(),
   resolveSessionPath: async () => "/fixture/compact.jsonl",
-  readSessionFile: () => ({ header: { id: "compacted", cwd: "/fixture", timestamp: "2026-10-27T00:00:00Z" }, entries: fixture.entries }),
+  readSessionFileCached: async () => ({ header: { id: "compacted", cwd: "/fixture", timestamp: "2026-10-27T00:00:00Z" }, entries: fixture.entries }),
   getSessionEntries: () => fixture.entries,
 }));
 import { GET as getSession } from "@/app/api/sessions/[id]/route";

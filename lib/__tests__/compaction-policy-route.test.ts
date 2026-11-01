@@ -8,7 +8,7 @@ vi.mock("@/lib/rpc-manager", () => ({ getRpcSession: () => fixture.live }));
 vi.mock("@/lib/session-reader", async importOriginal => ({
   ...await importOriginal<typeof import("../session-reader")>(),
   resolveSessionPath: async () => "/fixture/policy.jsonl",
-  readSessionFile: () => ({ header: { id: "policy", cwd: "/fixture", timestamp: "2026-10-28T00:00:00Z" }, entries: [{ type: "model_change", id: "model", parentId: null, timestamp: "2026-10-28T00:00:00Z", provider: "fixture", modelId: "saved" }] }),
+  readSessionFileCached: async () => ({ header: { id: "policy", cwd: "/fixture", timestamp: "2026-10-28T00:00:00Z" }, entries: [{ type: "model_change", id: "model", parentId: null, timestamp: "2026-10-28T00:00:00Z", provider: "fixture", modelId: "saved" }] }),
 }));
 import { GET } from "@/app/api/sessions/[id]/route";
 const request = () => GET(new Request("http://localhost/"), { params: Promise.resolve({ id: "policy" }) });

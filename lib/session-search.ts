@@ -41,35 +41,77 @@ function messageText(content: unknown): string {
     .join(" ");
 }
 
+interface SearchableMessage extends SessionSearchMatch {
+  normalizedText?: string;
+}
+
+/** Compact search data excludes tool payloads, images and provider-private fields. */
+export interface PreparedSessionSearch {
+  readonly messages: readonly Readonly<SearchableMessage>[];
+  readonly metadata: Readonly<SessionSearchMetadata>;
+  /** Conservative retained-string/object estimate, used by the bounded server cache. */
+  readonly byteSize: number;
+}
+
+function* searchableMessages(entries: readonly SearchableEntry[]): Generator<SearchableMessage> {
+  for (let line = 0; line < entries.length; line++) {
+    const entry = entries[line];
+    if (entry.type !== "message" || typeof entry.id !== "string" || !entry.message) continue;
+    const role = entry.message.role;
+    if (role !== "user" && role !== "assistant") continue;
+    yield { entryId: entry.id, role, text: messageText(entry.message.content), line };
+  }
+}
+
+function searchMessages(messages: Iterable<SearchableMessage>, query: string, limit: number): SessionSearchMatch[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle || !(limit > 0)) return [];
+
+  const matches: SessionSearchMatch[] = [];
+  for (const message of messages) {
+    const index = (message.normalizedText ?? message.text.toLowerCase()).indexOf(needle);
+    if (index < 0) continue;
+    const start = Math.max(0, index - 40);
+    const end = Math.min(message.text.length, index + needle.length + 60);
+    matches.push({
+      entryId: message.entryId,
+      role: message.role,
+      text: `${start > 0 ? "…" : ""}${message.text.slice(start, end)}${end < message.text.length ? "…" : ""}`,
+      line: message.line,
+    });
+    if (matches.length >= limit) break;
+  }
+  return matches;
+}
+
 /** Pure search over already-parsed entries; never opens or rewrites a session. */
 export function searchSessionEntries(
   entries: readonly SearchableEntry[],
   query: string,
   limit = 8,
 ): SessionSearchMatch[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle || limit <= 0) return [];
+  return searchMessages(searchableMessages(entries), query, limit);
+}
 
-  const matches: SessionSearchMatch[] = [];
-  for (let line = 0; line < entries.length && matches.length < limit; line++) {
-    const entry = entries[line];
-    if (entry.type !== "message" || typeof entry.id !== "string" || !entry.message) continue;
-    const role = entry.message.role;
-    if (role !== "user" && role !== "assistant") continue;
-    const text = messageText(entry.message.content);
-    const index = text.toLowerCase().indexOf(needle);
-    if (index < 0) continue;
+/** Extract and normalize once per file revision, retaining all branches. */
+export function prepareSessionSearch(entries: readonly SearchableEntry[]): PreparedSessionSearch {
+  const metadata = Object.freeze(getSessionSearchMetadata(entries));
+  const messages = Object.freeze(Array.from(searchableMessages(entries), message => Object.freeze({
+    ...message,
+    normalizedText: message.text.toLowerCase(),
+  })));
+  const byteSize = 256 + 2 * ((metadata.provider?.length ?? 0) + (metadata.modelId?.length ?? 0))
+    + messages.reduce((total, message) => total + 128
+      + 2 * (message.entryId.length + message.text.length + message.normalizedText.length), 0);
+  return Object.freeze({ messages, metadata, byteSize });
+}
 
-    const start = Math.max(0, index - 40);
-    const end = Math.min(text.length, index + needle.length + 60);
-    matches.push({
-      entryId: entry.id,
-      role,
-      text: `${start > 0 ? "…" : ""}${text.slice(start, end)}${end < text.length ? "…" : ""}`,
-      line,
-    });
-  }
-  return matches;
+export function searchPreparedSession(
+  prepared: PreparedSessionSearch,
+  query: string,
+  limit = 8,
+): SessionSearchMatch[] {
+  return searchMessages(prepared.messages, query, limit);
 }
 
 /** Derive filterable model/outcome metadata from the immutable session log. */

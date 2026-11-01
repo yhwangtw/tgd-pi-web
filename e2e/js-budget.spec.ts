@@ -8,7 +8,7 @@ import { javascriptBudget } from "../scripts/js-budget-policy.mjs";
 // deliberately outside this hydrated-UI budget. Its separate policy must never
 // change the HTML entry-script gate in audit-js-budget.mjs.
 const limits = javascriptBudget("hydrated");
-for (const route of ["/login", "/?session=aaaa1111-2222-3333-4444-555566667777"]) {
+for (const route of ["/login", "/", "/?session=aaaa1111-2222-3333-4444-555566667777"]) {
   test(`initial hydrated JavaScript budget: ${route}`, async ({ page }, testInfo) => {
     const pending = new Set<string>();
     const failed: string[] = [];
@@ -26,7 +26,13 @@ for (const route of ["/login", "/?session=aaaa1111-2222-3333-4444-555566667777"]
     });
     await page.goto(route);
     if (route === "/login") await expect(page.getByRole("button", { name: "Unlock" })).toBeVisible();
-    else await expect(page.getByText("專案架構分析").first()).toBeVisible({ timeout: 20_000 });
+    else if (route === "/") await expect(page.getByTestId("welcome-screen")).toHaveAttribute("data-state", /^(welcome|project)$/);
+    else {
+      const conversation = page.locator('[data-chat-session-id="aaaa1111-2222-3333-4444-555566667777"]');
+      await expect(conversation).toBeVisible({ timeout: 20_000 });
+      await expect(conversation).toContainText("第一步先把驗證邏輯抽到");
+      await expect(conversation.getByTestId("composer-shell").locator("textarea")).toBeVisible();
+    }
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     await expect.poll(() => pending.size).toBe(0);
     const loaded = await Promise.all([...chunks].map(async ([path, body]) => {
@@ -35,7 +41,7 @@ for (const route of ["/login", "/?session=aaaa1111-2222-3333-4444-555566667777"]
     }));
     const rawBytes = loaded.reduce((total, chunk) => total + chunk.rawBytes, 0);
     const gzipBytes = loaded.reduce((total, chunk) => total + chunk.gzipBytes, 0);
-    await testInfo.attach("initial-javascript.json", { body: JSON.stringify({ scope: "hydrated", route, checkpoint: "initial fixture UI visible, two animation frames, tracked script requests complete", compression: "Node gzip level 9 per unique script body", limits, rawBytes, gzipBytes, chunks: loaded, failed }, null, 2), contentType: "application/json" });
+    await testInfo.attach("initial-javascript.json", { body: JSON.stringify({ scope: "hydrated", route, checkpoint: "route UI visible (transcript and composer for a conversation), two animation frames, tracked script requests complete", compression: "Node gzip level 9 per unique script body", limits, rawBytes, gzipBytes, chunks: loaded, failed }, null, 2), contentType: "application/json" });
     expect(failed).toEqual([]);
     expect(loaded.length).toBeGreaterThan(0);
     expect(rawBytes).toBeLessThanOrEqual(limits.rawBytes);

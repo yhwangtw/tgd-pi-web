@@ -11,10 +11,11 @@ import {
   buildTree,
   getLeafId,
   readSessionHeader,
-  readSessionFile,
+  readSessionFileCached,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
 import type { SessionEntry, SessionHeader } from "@/lib/types";
+import { sessionJsonResponse } from "@/lib/session-json-response";
 import type { ResolvedCompactionSettings } from "@/lib/compaction-policy";
 
 export async function GET(
@@ -33,7 +34,7 @@ export async function GET(
     let readFromDisk = false;
     if (filePath) {
       try {
-        ({ header, entries } = readSessionFile(filePath));
+        ({ header, entries } = await readSessionFileCached(filePath));
         readFromDisk = true;
       } catch {
         // Pi intentionally defers writing a new session until its first
@@ -109,7 +110,7 @@ export async function GET(
       ...(compactionSettings ? { compactionSettings } : {}),
       ...(agentState !== undefined ? { agentState } : {}),
     };
-    return NextResponse.json(wireFormat ? encodeSessionData(data, wireFormat) : data, { headers: { Vary: "X-Pi-Session-Tree" } });
+    return await sessionJsonResponse(req, wireFormat ? encodeSessionData(data, wireFormat) : data, true);
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

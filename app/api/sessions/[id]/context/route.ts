@@ -1,7 +1,8 @@
 import { waitForSessionMigration } from "@/lib/session-migrations";
 import { NextResponse } from "next/server";
-import { resolveSessionPath, buildSessionTranscript, getSessionEntries } from "@/lib/session-reader";
+import { resolveSessionPath, buildSessionTranscript, readSessionFileCached } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
+import { sessionJsonResponse } from "@/lib/session-json-response";
 import type { SessionEntry } from "@/lib/types";
 
 export async function GET(
@@ -19,7 +20,7 @@ export async function GET(
     let entries: SessionEntry[] | null = null;
     if (filePath) {
       try {
-        entries = getSessionEntries(filePath);
+        entries = (await readSessionFileCached(filePath)).entries;
       } catch {
         // An unflushed live session has a future file path but no file yet.
       }
@@ -32,7 +33,7 @@ export async function GET(
     }
     const context = buildSessionTranscript(entries, leafId);
 
-    return NextResponse.json({ context });
+    return await sessionJsonResponse(req, { context });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

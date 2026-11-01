@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { SessionSidebar } from "../sidebar/SessionSidebar";
-import { ChatWindow } from "../chat/ChatWindow";
+import { ConversationLoading } from "../chat/ConversationLoading";
 import { WelcomeScreen } from "./WelcomeScreen";
 import type { DiffAnnotation } from "./DiffView";
 import { IconRail, type PanelView } from "./IconRail";
@@ -62,6 +62,10 @@ import s from "./AppShell.module.css";
 function MobileActionPortal({ open, children }: { open: boolean; children: React.ReactNode }) {
   return open ? createPortal(children, document.body) : children;
 }
+
+// The welcome/project views do not need the transcript, composer or agent runtime.
+const loadChatWindow = () => import("../chat/ChatWindow").then((module) => ({ default: module.ChatWindow }));
+const ChatWindow = lazy(loadChatWindow);
 
 const FileViewer = lazy(() => import("./FileViewer").then((module) => ({ default: module.FileViewer })));
 
@@ -113,6 +117,15 @@ export function AppShell() {
   const { state, actions, refs, topBarRef } = useAppShellState();
   const attention = useAttentionCenter();
   const { fileTabs, activeFileTabId, splitFileTabId, rightPanelOpen, setRightPanelOpen, setActiveFileTabId, handleOpenFile: openFileTab, handleUpdateViewState, handleConsumeNavigation, handleCloseFileTab, handleCloseOthers, handleCloseAll, handleReorderTabs, handleTogglePin, handleOpenSplit } = useFileTabs();
+
+  useEffect(() => {
+    if (!state.initialSessionId) return;
+    // A session URL already expresses intent. Download alongside sidebar
+    // restoration; the ordinary welcome/project views keep this code deferred.
+    void loadChatWindow().catch(() => {
+      // Best-effort preload: rendering still uses the loader and error boundary.
+    });
+  }, [state.initialSessionId]);
 
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
   const handleOpenModels = useCallback(() => setModelsConfigOpen(true), []);
@@ -744,6 +757,7 @@ export function AppShell() {
   const panelCwd = state.selectedSession?.cwd ?? state.newSessionCwd ?? state.activeCwd ?? null;
 
   const panelLoading = <span role="status">{t("common.loading")}</span>;
+  const conversationLoading = <ConversationLoading />;
   const sidebarContent = (
     <ErrorBoundary>
     <Suspense fallback={panelLoading}>
@@ -1294,6 +1308,7 @@ export function AppShell() {
             <div className={s.parallelContainer}>
               <div className={s.parallelPane}>
                 {showChat && (
+                  <Suspense fallback={conversationLoading}>
                   <ChatWindow
                     key={`main-${state.sessionKey}`}
                     wideChat={wideChat}
@@ -1313,10 +1328,12 @@ export function AppShell() {
                     isParallel
                     paneLabel={state.selectedSession ? getSessionDisplayTitle(state.selectedSession) : undefined}
                   />
+                  </Suspense>
                 )}
               </div>
               {state.parallelSessions.map((session, idx) => (
                 <div key={session.id} className={s.parallelPane}>
+                  <Suspense fallback={conversationLoading}>
                   <ChatWindow
                     key={`parallel-${session.id}-${idx}`}
                     wideChat={wideChat}
@@ -1334,10 +1351,12 @@ export function AppShell() {
                       ? () => actions.closeParallel(session.id)
                       : undefined}
                   />
+                  </Suspense>
                 </div>
               ))}
             </div>
           ) : showChat ? (
+            <Suspense fallback={conversationLoading}>
             <ChatWindow
               key={state.sessionKey}
               wideChat={wideChat}
@@ -1355,6 +1374,7 @@ export function AppShell() {
               onSessionNamed={actions.bumpRefreshKey}
               onOpenModels={handleOpenModels}
             />
+            </Suspense>
           ) : centerView === "loading" ? (
             <WelcomeScreen variant="loading" />
           ) : centerView === "project" || centerView === "welcome" ? (
