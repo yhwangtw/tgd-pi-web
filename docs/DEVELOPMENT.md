@@ -66,6 +66,40 @@ async dependency predates the new browser gate. The corresponding candidate HTML
 was 1524805 / 461950 bytes. Offline build inspection does not establish an actual
 production browser hydration total.
 
+The welcome/project entry defers `ChatWindow` and its transcript/composer dependencies.
+A direct `?session=` URL preloads that module alongside session-list restoration;
+normal welcome pages wait for explicit conversation navigation. Each pane reuses
+the conversation loading skeleton while code or data is arriving. Hydrated-JS
+checks wait for real transcript content and a usable composer, rather than a title
+that can appear before the lazy module, so splitting cannot hide download costs.
+
+Session detail and branch-context reads use a revision-checked asynchronous native
+JSONL cache (12 files, 16 MiB of retained source bytes, 4 MiB per cacheable file).
+File identity, size, ctime, mtime and mode invalidate it; deletion/read failures
+never return a cached history. Each caller receives independent entries, including
+a stack-safe fallback for deeply nested JSON tool details. GET responses retain
+the complete history and branch data and negotiate gzip for JSON above 16 KiB;
+private/no-store and Vary headers cover encoding/tree choices. A bounded cache
+(12 responses / 8 MiB of compressed bytes) avoids recompressing identical authorized
+JSON; its digest includes every current field, including live state and settings.
+SSE is not buffered or compressed by this response helper.
+
+Full-text session search keeps a separate compact text/metadata index per active
+agent directory. Queries reuse normalized text for unchanged file revisions;
+append/replacement, deletion and migration-list changes invalidate affected paths.
+The index retains at most 500 files / an estimated 32 MiB (4 MiB per document),
+with at most eight concurrent builds. Oversized documents remain fully searchable
+without being retained. Neither cache opens or rewrites native session files.
+
+Streaming Markdown memoizes independent prose, fenced-code and table blocks.
+A literal fenced-code adapter parses only the opening fence while the body grows;
+its language decoding, copy/focus UI and final syntax highlighting remain shared.
+Large active non-fenced safe blocks coalesce at a fixed 120 ms deadline, with the
+first content, replacements and final output immediate. Late reference/footnote
+syntax, lists, HTML and math retain the whole-document parser. Completion still
+parses the full document once and groups safe blocks without remounting open code
+focus dialogs. Source-position file previews do not use streaming chunking.
+
 Transcript rows use normal layout because scroll restoration, disclosures and
 the minimap measure their geometry. Do not add `content-visibility` to these rows:
 display locking conflicts with descendant measurement and changes scroll anchors.

@@ -51,6 +51,7 @@ import { assistantModelKey, shouldShowAssistantModelLabel } from "./message-chro
 import { ProviderRecoveryBanner } from "./ProviderRecoveryBanner";
 import { activeToolDetails } from "@/lib/tool-preview";
 import { RunStatus } from "./RunStatus";
+import { ConversationLoading } from "./ConversationLoading";
 
 interface Props {
   session: SessionInfo | null;
@@ -1131,16 +1132,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     expandedKeys, toggleExpanded, historyStartIndex]);
 
   if (loading) {
-    return (
-      <div className={styles.loadingConversation}>
-        <div className={styles.skeletonWrapper}>
-          <p className={styles.loadingLabel} role="status">{t("chat.loadingConversation")}</p>
-          <div aria-hidden="true">{[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="skeleton-line" style={{ width: `${40 + (i % 3) * 20}%`, marginBottom: 10, marginLeft: i % 2 === 0 ? 0 : 60 }} />
-          ))}</div>
-        </div>
-      </div>
-    );
+    return <ConversationLoading />;
   }
 
   if (error) {

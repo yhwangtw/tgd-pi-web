@@ -8,7 +8,7 @@ vi.mock("@/lib/rpc-manager", () => ({ getRpcSession: () => undefined }));
 vi.mock("@/lib/session-reader", async importOriginal => ({
   ...await importOriginal<typeof import("../session-reader")>(),
   resolveSessionPath: async () => "/fixture/session.jsonl",
-  readSessionFile: () => ({ header: { id: fixture.id, cwd: "/fixture", timestamp: "2026-10-22T00:00:00Z" }, entries: fixture.entries }),
+  readSessionFileCached: async () => ({ header: { id: fixture.id, cwd: "/fixture", timestamp: "2026-10-22T00:00:00Z" }, entries: fixture.entries }),
   listAllSessions: async () => [],
 }));
 import { GET } from "@/app/api/sessions/[id]/route";
@@ -23,7 +23,7 @@ describe("long conversation detail responses", () => {
     fixture.id = id;
     const response = await GET(new Request("http://localhost/?includeState", { headers: { "X-Pi-Session-Tree": format } }), { params: Promise.resolve({ id }) });
     expect(response.status).toBe(200);
-    expect(response.headers.get("vary")).toBe("X-Pi-Session-Tree");
+    expect(response.headers.get("vary")).toBe("X-Pi-Session-Tree, Accept-Encoding");
     const wire = await response.json();
     expect(wire.tree.format).toBe(format);
     if (format === "flat-v2") expect(wire.tree.nodes.some((node: object) => "contextMessage" in node)).toBe(true);

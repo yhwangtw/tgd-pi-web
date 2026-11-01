@@ -37,6 +37,14 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await page.addInitScript(() => localStorage.setItem("pi-locale", "en"));
     await page.goto(`/?session=${SESSION}`);
+    const detail = await page.request.get(`/api/sessions/${SESSION}`, { headers: { "X-Pi-Session-Tree": "flat-v2", "Accept-Encoding": "gzip" } });
+    expect(detail.ok()).toBe(true);
+    expect(detail.headers()["content-encoding"]).toBe("gzip");
+    expect(detail.headers()["cache-control"]).toBe("private, no-store");
+    const preserved = await detail.json(); // The real HTTP client decodes gzip.
+    expect(preserved.context.messages).toHaveLength(780);
+    expect(preserved.tree.format).toBe("flat-v2");
+    expect(Number(detail.headers()["content-length"])).toBeLessThan(Buffer.byteLength(JSON.stringify(preserved)) / 2);
     const composer = page.getByTestId("composer-shell").locator("textarea");
     const transcript = page.locator("[data-transcript-scroll]");
     await expect(composer).toBeVisible();

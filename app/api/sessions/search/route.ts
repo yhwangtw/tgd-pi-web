@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { resolveSessionPath, listAllSessions, getSessionEntries } from "@/lib/session-reader";
-import { getSessionSearchMetadata, scoreSessionSearchHit, searchSessionEntries, type SessionSearchMatch, type SessionSearchStatus } from "@/lib/session-search";
+import { listAllSessions } from "@/lib/session-reader";
+import { getSessionSearchIndex } from "@/lib/session-search-index";
+import { scoreSessionSearchHit, searchPreparedSession, type SessionSearchMatch, type SessionSearchStatus } from "@/lib/session-search";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ interface SearchHit {
 }
 
 // Search all sessions: name + firstMessage + all message contents.
-// Scans up to 200 most-recent sessions to bound work; older sessions are
+// Scans up to 500 most-recent sessions (300 by default); older sessions are
 // skipped with a `truncated` flag in the response.
 export async function GET(req: Request) {
   try {
@@ -36,6 +37,7 @@ export async function GET(req: Request) {
     }
 
     const all = await listAllSessions();
+    const index = getSessionSearchIndex(all.map(session => session.path));
     // Most-recent first
     all.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
     const slice = all.slice(0, limit);
@@ -45,9 +47,6 @@ export async function GET(req: Request) {
     const hits: SearchHit[] = [];
 
     for (const s of slice) {
-      const filePath = await resolveSessionPath(s.id);
-      if (!filePath) continue;
-
       let matchedIn: SearchHit["matchedIn"] = "messages";
 
       // 1. Check session name
@@ -60,18 +59,13 @@ export async function GET(req: Request) {
         matchedIn = "firstMessage";
       }
 
-      // 3. Parse in memory and scan message entries. SessionManager.open() is
-      // deliberately avoided because it may rewrite empty/corrupted files.
-      let entries;
-      try {
-        entries = getSessionEntries(filePath);
-      } catch {
-        continue;
-      }
-      const matches = searchSessionEntries(entries, needle);
+      // 3. Reuse compact searchable text for unchanged files across queries.
+      const data = await index.read(s.path);
+      if (!data) continue;
+      const matches = searchPreparedSession(data, needle);
 
       if (matches.length > 0 || matchedIn !== "messages") {
-        const metadata = getSessionSearchMetadata(entries);
+        const metadata = data.metadata;
         hits.push({
           id: s.id,
           cwd: s.cwd,

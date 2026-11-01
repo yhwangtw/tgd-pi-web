@@ -1,6 +1,7 @@
 import { readSessionHeader } from "./session-header";
 import { assistantFailure } from "./session-error-summary";
 export { readSessionHeader } from "./session-header";
+export { readSessionFileCached } from "./session-file-cache";
 import { migrationDirectory, migrationKey, resolveMigratedSessionId } from "./session-migrations";
 import { getAgentDir, migrateSessionEntries, parseSessionEntries } from "@earendil-works/pi-coding-agent";
 import type { SessionEntry, SessionHeader, SessionInfo, SessionTreeNode } from "./types";
