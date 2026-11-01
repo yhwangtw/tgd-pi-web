@@ -139,8 +139,9 @@ for (const style of ["original", "trae"] as const) {
     expect(new Set(groupRows).size).toBeLessThanOrEqual(3);
     for (const name of ["Change reasoning level", "Change tool preset"]) {
       const button = panel.getByRole("button", { name, exact: true });
-      await expect(button).toHaveText("");
+      await expect(button).not.toHaveText("");
       await expect(button).toHaveAttribute("title", /.+: .+/);
+      expect(await button.getAttribute("title")).toContain((await button.textContent())!.trim());
       await button.click();
       await expectContained(page, page.getByRole("listbox", { name, exact: true }));
       await page.keyboard.press("Escape");

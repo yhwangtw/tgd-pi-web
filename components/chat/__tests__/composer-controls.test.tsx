@@ -668,7 +668,7 @@ describe("composer controls", () => {
     expect(toolbar?.textContent).toContain("Enter 傳送 · Shift+Enter 換行");
   });
 
-  it("keeps icon actions named and announces their current settings", async () => {
+  it("shows the selected reasoning and tool mode while keeping actions named", async () => {
     const compact = vi.fn();
     await render(<ChatInput onSend={vi.fn()} onAbort={vi.fn()} isStreaming={false}
       thinkingLevel="high" onThinkingLevelChange={vi.fn()} toolPreset="default" onToolPresetChange={vi.fn()}
@@ -678,7 +678,7 @@ describe("composer controls", () => {
     expect(controls.title).toBe("Composer controls");
     await act(async () => controls.click());
     const thinking = container!.querySelector<HTMLButtonElement>('[aria-label="Change reasoning level"]')!;
-    expect(thinking.textContent).toBe("");
+    expect(thinking.textContent).toBe("High");
     expect(document.getElementById(thinking.getAttribute("aria-describedby")!)?.textContent).toBe("High");
     expect(thinking.title).toContain("High");
     await act(async () => thinking.click());
@@ -687,7 +687,7 @@ describe("composer controls", () => {
     expect(controls.getAttribute("aria-expanded")).toBe("true");
     expect(document.activeElement).toBe(thinking);
     const tools = container!.querySelector<HTMLButtonElement>('[aria-label="Change tool preset"]')!;
-    expect(tools.textContent).toBe("");
+    expect(tools.textContent).toBe("Default");
     expect(document.getElementById(tools.getAttribute("aria-describedby")!)?.textContent).toBeTruthy();
     await act(async () => container!.querySelector<HTMLButtonElement>('[aria-label="Compact"]')!.click());
     expect(compact).toHaveBeenCalledOnce();

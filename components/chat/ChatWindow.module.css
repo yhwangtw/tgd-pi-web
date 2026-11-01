@@ -454,6 +454,11 @@
   outline: none;
 }
 
+.findScope:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: -2px;
+}
+
 .contextWarningWrap {
   min-width: 0;
 }
@@ -600,6 +605,7 @@
   }
 }
 
+
 /* TRAE Work keeps the conversation quiet through spacing. */
 :global(html[data-ui-style="trae"]) .transcriptScroll {
   padding-top: var(--space-4);
@@ -717,3 +723,8 @@
 .runSettings button:hover:not(:disabled) { background: var(--bg-hover); }
 .runSettings button:disabled { color: var(--text-dim); cursor: default; }
 @media (max-width: 700px) { .runSettings button { min-height: var(--control-touch); } }
+
+/* A translucent canvas cannot serve as an opaque fade over its backdrop. */
+:global(html[data-skin="glass"]) .composerDock {
+  background: transparent;
+}

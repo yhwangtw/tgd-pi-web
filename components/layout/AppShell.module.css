@@ -808,8 +808,12 @@
 }
 
 @media (max-width: 700px) {
-  .container {
+  .container,
+  .mobileMoreRoot {
     --mobile-nav-height: max(54px, calc(10px + var(--control-touch) * var(--font-scale)));
+  }
+
+  .container {
     padding-bottom: calc(var(--safe-area-bottom) + var(--mobile-nav-height));
   }
 
@@ -1079,9 +1083,26 @@
   }
 
   .mobileNavIcon {
+    position: relative;
     display: grid;
     place-items: center;
     height: 20px;
+  }
+
+  .mobileNavUnreadDot {
+    position: absolute;
+    top: -2px;
+    right: -4px;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-circle);
+    background: var(--accent);
+    outline: 2px solid var(--bg-panel-opaque);
+  }
+
+  .mobileMoreSheet:focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: -2px;
   }
 
   .mobileSheetBackdrop {
@@ -1100,7 +1121,7 @@
     right: calc(var(--safe-area-right) + 8px);
     bottom: calc(var(--safe-area-bottom) + var(--mobile-nav-height) + 4px);
     z-index: 370;
-    max-height: min(70dvh, 520px);
+    max-height: min(70dvh, 520px, calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom) - var(--mobile-nav-height) - var(--space-6)));
     padding: var(--space-2) var(--space-3) var(--space-3);
     overflow-y: auto;
     border: 1px solid var(--glass-border);

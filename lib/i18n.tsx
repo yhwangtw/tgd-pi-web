@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
+import { resolveLocalePreference } from "./locale-preference";
 
 // ============================================================================
-// Lightweight two-locale i18n — English default, Traditional Chinese optional.
+// Lightweight two-locale i18n — browser preference, with an explicit override.
 // Same module-level-store pattern as useTheme/useToast: no context provider,
 // any component (or plain function) can read the current locale.
 // ============================================================================
@@ -180,6 +181,7 @@ const MESSAGES = {
   "mobile.chat": { en: "Chat", zh: "對話" },
   "mobile.sessions": { en: "Sessions", zh: "記錄" },
   "mobile.files": { en: "Files", zh: "檔案" },
+  "mobile.fileViewer": { en: "File viewer", zh: "檔案檢視器" },
   "mobile.search": { en: "Search", zh: "搜尋" },
   "mobile.more": { en: "More", zh: "更多" },
   "mobile.moreActions": { en: "More", zh: "更多" },
@@ -556,7 +558,7 @@ const MESSAGES = {
   "input.scrollModeDesc.always": { en: "Keep the latest output visible", zh: "持續顯示最新輸出" },
   "input.scrollModeDesc.preserve": { en: "Move only when you ask", zh: "只在你要求時移動" },
   "input.sound": { en: "Sound", zh: "提示音" },
-  "input.contextControl": { en: "Context", zh: "Context" },
+  "input.contextControl": { en: "Context", zh: "上下文" },
 
   // ── Structured output ──
   "output.result": { en: "Result", zh: "結果" },
@@ -1952,7 +1954,7 @@ const MESSAGES = {
   "agents.name": { en: "Run name", zh: "任務名稱" },
   "agents.namePlaceholder": { en: "Implement notification center", zh: "實作通知中心" },
   "agents.project": { en: "Project or worktree path", zh: "專案或 worktree 路徑" },
-  "agents.prompt": { en: "Prompt", zh: "Prompt" },
+  "agents.prompt": { en: "Prompt", zh: "任務提示詞" },
   "agents.promptPlaceholder": { en: "Describe the outcome this agent should deliver…", zh: "描述這個 Agent 要交付的成果…" },
   "agents.model": { en: "Model", zh: "模型" },
   "agents.projectDefault": { en: "Project default", zh: "使用專案預設" },
@@ -2018,6 +2020,24 @@ const MESSAGES = {
   "toast.runtimeReconnected": { en: "Session runtime reconnected", zh: "Session runtime 已重新連線" },
 
   // ── Welcome / placeholders ──
+  "welcome.phrase.ready": { en: "ready when you are.", zh: "準備好就開始。" },
+  "welcome.phrase.ask": { en: "ask me anything.", zh: "什麼都可以問我。" },
+  "welcome.phrase.build": { en: "let's build something cool.", zh: "一起做點有趣的東西。" },
+  "welcome.phrase.explore": { en: "explore your codebase.", zh: "探索你的程式碼庫。" },
+  "welcome.phrase.email": { en: "draft an email.", zh: "草擬一封電子郵件。" },
+  "welcome.phrase.paper": { en: "summarize that paper.", zh: "摘要那篇論文。" },
+  "welcome.phrase.weekend": { en: "plan your weekend.", zh: "規劃你的週末。" },
+  "welcome.phrase.explain": { en: "explain it like I'm five.", zh: "用五歲小孩也懂的方式解釋。" },
+  "welcome.phrase.pair": { en: "pair-program with me.", zh: "一起結對寫程式。" },
+  "welcome.phrase.fix": { en: "fix that pesky bug.", zh: "修好那個惱人的 bug。" },
+  "welcome.phrase.translate": { en: "translate to 中文.", zh: "翻譯成中文。" },
+  "welcome.phrase.haiku": { en: "write a haiku.", zh: "寫一首俳句。" },
+  "welcome.phrase.ideas": { en: "brainstorm ideas.", zh: "腦力激盪一些點子。" },
+  "welcome.phrase.review": { en: "review my pull request.", zh: "審查我的 pull request。" },
+  "welcome.phrase.cook": { en: "what should we cook tonight?", zh: "今晚煮什麼好？" },
+  "welcome.phrase.ship": { en: "ship it.", zh: "上線吧。" },
+  "welcome.phrase.polish": { en: "make it pretty.", zh: "美化一下。" },
+  "welcome.phrase.rubberDuck": { en: "rubber-duck with me.", zh: "一起釐清問題。" },
   "welcome.selectSession": { en: "Select a session", zh: "選擇一個 session" },
   "welcome.chooseFromSidebar": { en: "Choose from the sidebar or start a new one", zh: "從側欄選擇，或建立新的" },
   "welcome.subtitle": { en: "Your AI coding assistant, powered by Pi", zh: "你的 AI 程式助手，由 Pi 驅動" },
@@ -2134,15 +2154,17 @@ export type MsgKey = keyof typeof MESSAGES;
 const listeners = new Set<() => void>();
 let locale: Locale = "en";
 
-// Read persisted preference at module load (client only; SSR keeps "en")
+// Client hydration uses the persisted choice, or the browser's language order.
+// SSR stays deterministic and useSyncExternalStore reconciles after hydration.
 if (typeof window !== "undefined") {
+  let saved: string | null = null;
   try {
-    const saved = localStorage.getItem("pi-locale");
-    if (saved === "zh" || saved === "en") locale = saved;
-    document.documentElement.lang = locale === "zh" ? "zh-Hant-TW" : "en";
+    saved = localStorage.getItem("pi-locale");
   } catch {
-    // storage unavailable — stay on default
+    // Browser language remains available when storage is blocked.
   }
+  locale = resolveLocalePreference(saved, navigator.languages.length ? navigator.languages : [navigator.language]);
+  document.documentElement.lang = locale === "zh" ? "zh-Hant-TW" : "en";
 }
 
 function subscribe(cb: () => void): () => void {

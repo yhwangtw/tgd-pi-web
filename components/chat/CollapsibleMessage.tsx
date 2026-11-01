@@ -65,9 +65,9 @@ export function CollapsibleMessage({ collapsible, expanded, onToggle, children }
         ref={innerRef}
         className={collapsed ? styles.clip : undefined}
         style={collapsed ? { maxHeight: COLLAPSED } : undefined}
+        onFocusCapture={collapsed ? onToggle : undefined}
       >
         {children}
-        {collapsed && <div className={styles.fade} aria-hidden />}
       </div>
       {collapsed && (
         <button type="button" className={styles.toggleBtn} onClick={onToggle}>

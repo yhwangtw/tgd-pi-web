@@ -1318,7 +1318,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                 <span className={styles.mobileControlValue}>{t(expanded ? "input.collapseComposerShort" : "input.expandComposerShort")}</span>
               </button>
             </div>
-            <div className={styles.mobileLabeledControl}>
+            <div className={`${styles.mobileLabeledControl} ${styles.selectorControl}`}>
               <span className={styles.mobileControlLabel}>{t("input.reasoning")}</span>
               <ThinkingSelector
                 thinkingLevel={thinkingLevel}
@@ -1327,7 +1327,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                 isStreaming={isStreaming}
                 disabled={!!isCompacting || settingsUpdating}
                 presentation={isMobileViewport ? "inline" : "popover"}
-                iconOnly={!isMobileViewport}
                 onThinkingLevelChange={onThinkingLevelChange}
               />
             </div>
@@ -1340,7 +1339,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                 <span className={styles.mobileControlValue}>{t(hintsEnabled ? "input.hintsOn" : "input.hintsOff")}</span>
               </button>
             </div>
-            <div className={styles.mobileLabeledControl}>
+            <div className={`${styles.mobileLabeledControl} ${styles.selectorControl}`}>
               <span className={styles.mobileControlLabel}>{t("input.tools")}</span>
               <ToolPresetSelector
                 toolPreset={toolPreset}
@@ -1348,7 +1347,6 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                 customToolNames={customToolNames}
                 isStreaming={isStreaming}
                 presentation={isMobileViewport ? "inline" : "popover"}
-                iconOnly={!isMobileViewport}
                 onToolPresetChange={onToolPresetChange}
               />
             </div>

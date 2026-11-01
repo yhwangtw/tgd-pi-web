@@ -1,16 +1,8 @@
 .clip {
   position: relative;
   overflow: hidden;
-}
-
-.fade {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 72px;
-  background: linear-gradient(to bottom, transparent, var(--bg));
-  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 72px), transparent 100%);
+  mask-image: linear-gradient(to bottom, black calc(100% - 72px), transparent 100%);
 }
 
 .toggleBtn {
@@ -35,7 +27,6 @@
 }
 
 :global(html[data-ui-style="trae"]) .toggleBtn { min-height: var(--control-lg); border-color: transparent; border-radius: var(--radius-pill); background: var(--trae-control); }
-:global(html[data-ui-style="trae"]) .fade { background: linear-gradient(transparent, var(--trae-canvas)); }
 
 @media (max-width: 700px), (pointer: coarse) {
   .toggleBtn,

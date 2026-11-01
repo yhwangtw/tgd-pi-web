@@ -787,6 +787,20 @@
   .bottomBarRightMobileOpen .mobileLabeledControl > button,
   .bottomBarRightMobileOpen .mobileLabeledControl > div { flex-shrink: 0; }
 
+  .bottomBarRightMobileOpen .selectorControl > div {
+    min-width: 0;
+    max-width: 65%;
+    flex-shrink: 1;
+  }
+
+  .selectorControl > div > button { max-width: 100%; }
+  .selectorControl button > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .bottomBarRightMobileOpen .scrollModeControl > div {
     margin-inline: 0;
     padding-inline: 0;
