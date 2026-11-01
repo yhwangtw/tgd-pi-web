@@ -1160,7 +1160,7 @@ export function AppShell() {
                 {rightPanelOpen
                   ? <PanelRightClose size={UI_ICON_SIZE.compact} aria-hidden />
                   : <PanelRightOpen size={UI_ICON_SIZE.compact} aria-hidden />}
-                <span>{t("mobile.files")}</span>
+                <span>{t("mobile.fileViewer")}</span>
                 {pendingReviewFiles.length > 0 && <span className={s.mobileReviewCount}>
                   {t("files.reviewCount").replace("{count}", pendingReviewFiles.length.toLocaleString())}
                 </span>}

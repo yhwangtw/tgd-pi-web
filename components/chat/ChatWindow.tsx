@@ -76,26 +76,26 @@ interface Props {
   onOpenModels?: () => void;
 }
 
-const TYPEWRITER_PHRASES = [
-  "ready when you are.",
-  "ask me anything.",
-  "let's build something cool.",
-  "explore your codebase.",
-  "draft an email.",
-  "summarize that paper.",
-  "plan your weekend.",
-  "explain it like I'm five.",
-  "pair-program with me.",
-  "fix that pesky bug.",
-  "translate to 中文.",
-  "write a haiku.",
-  "brainstorm ideas.",
-  "review my pull request.",
-  "what should we cook tonight?",
-  "ship it.",
-  "make it pretty.",
-  "rubber-duck with me.",
-];
+const TYPEWRITER_PHRASE_KEYS = [
+  "welcome.phrase.ready",
+  "welcome.phrase.ask",
+  "welcome.phrase.build",
+  "welcome.phrase.explore",
+  "welcome.phrase.email",
+  "welcome.phrase.paper",
+  "welcome.phrase.weekend",
+  "welcome.phrase.explain",
+  "welcome.phrase.pair",
+  "welcome.phrase.fix",
+  "welcome.phrase.translate",
+  "welcome.phrase.haiku",
+  "welcome.phrase.ideas",
+  "welcome.phrase.review",
+  "welcome.phrase.cook",
+  "welcome.phrase.ship",
+  "welcome.phrase.polish",
+  "welcome.phrase.rubberDuck",
+] as const;
 
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef: providedChatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange, onSessionNamed, isParallel, paneLabel, onClosePane, wideChat, onOpenModels }: Props) {
   const { soundEnabled, onSoundToggle, playDoneSound } = useAudio();
@@ -126,7 +126,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionNamed,
   });
 
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const welcomePhrases = useMemo(() => TYPEWRITER_PHRASE_KEYS.map(t), [t]);
   const changingRunSettings = settingsRestarting || generationSettings?.restarting === true;
   const scrollFollowMode = useScrollFollowMode();
   const questionCardRef = useRef<UserQuestionCardHandle>(null);
@@ -661,6 +662,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const [findPos, setFindPos] = useState(0);
   const findInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Native hotkeys can run before React commits the search input. Focus only
+  // after it mounts instead of racing a single animation-frame callback.
+  useLayoutEffect(() => {
+    if (findOpen) findInputRef.current?.focus();
+  }, [findOpen]);
+
   const findIndex = useMemo(() => findOpen
     ? buildTranscriptSearchIndex(messages, conversationLayout, toolResultsMap)
     : [], [findOpen, messages, conversationLayout, toolResultsMap]);
@@ -831,7 +838,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         if (messages.length === 0) return; // nothing to search — let the browser have it
         e.preventDefault();
         setFindOpen(true);
-        requestAnimationFrame(() => findInputRef.current?.focus());
+        findInputRef.current?.focus();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1198,7 +1205,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     <span className={styles.titleText}>with tGD</span>
                   </h1>
                   <span className={styles.typewriterContainer}>
-                    <WelcomeTypewriter phrases={TYPEWRITER_PHRASES} />
+                    <WelcomeTypewriter key={locale} phrases={welcomePhrases} />
                   </span>
                 </div>
                 <div className={styles.versionColumn} data-testid="welcome-versions">

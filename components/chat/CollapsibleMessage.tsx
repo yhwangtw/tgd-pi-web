@@ -65,9 +65,13 @@ export function CollapsibleMessage({ collapsible, expanded, onToggle, children }
         ref={innerRef}
         className={collapsed ? styles.clip : undefined}
         style={collapsed ? { maxHeight: COLLAPSED } : undefined}
+        onFocusCapture={collapsed ? (event) => {
+          // Reveal keyboard-focused content without moving a mouse-pressed
+          // disclosure before its click can reach the original target.
+          if (event.target.matches(":focus-visible")) onToggle();
+        } : undefined}
       >
         {children}
-        {collapsed && <div className={styles.fade} aria-hidden />}
       </div>
       {collapsed && (
         <button type="button" className={styles.toggleBtn} onClick={onToggle}>

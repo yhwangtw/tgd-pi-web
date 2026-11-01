@@ -1,7 +1,9 @@
 "use client";
 import { UI_ICON_SIZE } from "@/lib/ui-icons";
 
-import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type Ref } from "react";
+import { createPortal } from "react-dom";
+import { useModalDialog } from "@/hooks/useModalDialog";
 import {
   BarChart3,
   Bell,
@@ -48,9 +50,12 @@ interface NavButtonProps {
   label: string;
   onClick: () => void;
   expanded?: boolean;
+  badge?: number;
 }
 
-function NavButton({ active, icon, label, onClick, expanded, buttonRef }: NavButtonProps) {
+function NavButton({ active, icon, label, onClick, expanded, buttonRef, badge = 0 }: NavButtonProps) {
+  const { t } = useI18n();
+  const badgeId = useId();
   return (
     <button
       ref={buttonRef}
@@ -60,8 +65,13 @@ function NavButton({ active, icon, label, onClick, expanded, buttonRef }: NavBut
       onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" })}
       aria-current={active ? "page" : undefined}
       aria-expanded={expanded}
+      aria-describedby={badge > 0 ? badgeId : undefined}
     >
-      <span className={s.mobileNavIcon} aria-hidden>{icon}</span>
+      <span className={s.mobileNavIcon} aria-hidden>
+        {icon}
+        {badge > 0 && <span className={s.mobileNavUnreadDot} data-testid="mobile-attention-unread-dot" />}
+      </span>
+      {badge > 0 && <span id={badgeId} hidden>{badge} {t("attention.unread")}</span>}
       <span>{label}</span>
     </button>
   );
@@ -112,17 +122,21 @@ export function MobileNavigation({
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const closeMore = useCallback(() => setMoreOpen(false), []);
+  const titleId = useId();
+  const { panelRef } = useModalDialog<HTMLElement>({ open: moreOpen, onClose: closeMore, initialFocusRef: closeRef });
   const { t } = useI18n();
   const secondaryViewActive = panelOpen && ["attention", "agents", "schedule", "changes", "tgd"].includes(panelView);
 
   useEffect(() => {
     if (!moreOpen) return;
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMoreOpen(false);
-    };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, [moreOpen]);
+    const viewport = window.matchMedia("(max-width: 700px)");
+    const closeOnDesktop = () => { if (!viewport.matches) closeMore(); };
+    closeOnDesktop();
+    viewport.addEventListener("change", closeOnDesktop);
+    return () => viewport.removeEventListener("change", closeOnDesktop);
+  }, [moreOpen, closeMore]);
 
   const run = (action: () => void) => {
     setMoreOpen(false);
@@ -131,14 +145,6 @@ export function MobileNavigation({
 
   return (
     <>
-      {moreOpen && (
-        <button
-          type="button"
-          className={s.mobileSheetBackdrop}
-          onClick={() => setMoreOpen(false)}
-          aria-label={t("mobile.closeMore")}
-        />
-      )}
       <nav className={s.mobileNav} aria-label={t("navigation.primary")}>
         <NavButton
           active={!panelOpen && !filePanelOpen && !moreOpen}
@@ -168,18 +174,22 @@ export function MobileNavigation({
           active={moreOpen || secondaryViewActive}
           buttonRef={moreRef}
           expanded={moreOpen}
+          badge={attentionUnreadCount}
           label={t("mobile.more")}
           onClick={() => setMoreOpen(!moreOpen)}
           icon={<Ellipsis size={UI_ICON_SIZE.navigation} />}
         />
       </nav>
 
-      {moreOpen && (
-        <section className={s.mobileMoreSheet} aria-label={t("mobile.moreActions")}>
+      {moreOpen && typeof document !== "undefined" && createPortal(
+        <div data-dialog-root className={s.mobileMoreRoot}>
+          <button type="button" className={s.mobileSheetBackdrop} tabIndex={-1}
+            onClick={closeMore} aria-label={t("mobile.closeMore")} />
+        <section ref={panelRef} className={s.mobileMoreSheet} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
           <div className={s.mobileSheetHandle} aria-hidden />
           <div className={s.mobileSheetHeader}>
-            <strong>{t("mobile.moreActions")}</strong>
-            <button type="button" onClick={() => setMoreOpen(false)} aria-label={t("mobile.closeMore")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>
+            <strong id={titleId}>{t("mobile.moreActions")}</strong>
+            <button ref={closeRef} type="button" onClick={closeMore} aria-label={t("mobile.closeMore")}><X size={UI_ICON_SIZE.control} aria-hidden="true" /></button>
           </div>
           <div className={s.mobileMoreGroup}>
             <div className={s.mobileMoreGroupTitle}>{t("mobile.work")}</div>
@@ -203,6 +213,7 @@ export function MobileNavigation({
             </div>
           </div>
         </section>
+        </div>, document.body,
       )}
     </>
   );
