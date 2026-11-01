@@ -68,9 +68,10 @@ it("offers Restore for an expanded panel and retains Escape focus restoration", 
 it("closes the menu before returning to an origin that can hide the pane", async () => {
   const menu = await openMenu();
   const origin = menu.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+  returnToOrigin.mockImplementation(() => {
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+  });
   await act(async () => origin.click());
   expect(document.querySelector('[role="menu"]')).toBeNull();
-  expect(returnToOrigin).not.toHaveBeenCalled();
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
   expect(returnToOrigin).toHaveBeenCalledOnce();
 });

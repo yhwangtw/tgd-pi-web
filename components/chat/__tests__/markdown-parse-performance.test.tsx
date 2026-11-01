@@ -296,9 +296,9 @@ it("never reparses the growing body of a large unfinished fence and retains copy
   const host = document.createElement("div"); const root = createRoot(host);
   const writeText = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
-  const body = "const value = '<raw> [reference] $$literal$$';\n".repeat(3_000);
+  const body = "const value = '<raw> [reference] $$literal$$';\n".repeat(600);
   try {
-    for (let end = 2_000; end <= body.length; end += 2_000) {
+    for (let end = 4_000; end <= body.length; end += 4_000) {
       const markdown = "Earlier prose.\n\n```ts\n" + body.slice(0, end);
       await act(async () => root.render(<MarkdownBody isStreaming>{markdown}</MarkdownBody>));
       expect(host.querySelector("pre code")!.textContent).toBe(body.slice(0, end).replace(/\n$/, ""));

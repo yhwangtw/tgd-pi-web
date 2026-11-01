@@ -28,8 +28,10 @@ export function FilePanelLayoutMenu({ className, expanded, onToggleExpanded, onR
       {returnAction && <ActionMenuItem>
         <button type="button" onClick={() => {
           setOpen(false);
-          // Restore menu focus before a compact origin action hides the pane.
-          requestAnimationFrame(returnAction.onReturn);
+          // Let React commit the menu close and restore trigger focus before a
+          // compact origin action hides the pane. A next-task callback is
+          // reliable even in environments where animation frames run inline.
+          window.setTimeout(returnAction.onReturn, 0);
         }}>
           <ArrowLeft size={UI_ICON_SIZE.compact} aria-hidden />
           {returnAction.label}
