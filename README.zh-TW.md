@@ -153,24 +153,24 @@ parent/
 
 手機版會在 safe area 內保留目前階段、對話、輸入框、模型控制與主要導覽，常用操作維持在拇指可及範圍。
 
-| Session 與檔案工作區 | 指令面板 |
+| Session 與檔案工作區 | 全域搜尋 |
 |---|---|
-| ![程式碼 session](./docs/screenshots/03-code-session.png) | ![指令面板](./docs/screenshots/04-command-palette.png) |
+| ![程式碼 session](./docs/screenshots/03-code-session.png) | ![全域搜尋](./docs/screenshots/04-unified-search.png) |
 
 | 深色模式 | 空白狀態 |
 |---|---|
 | ![深色模式](./docs/screenshots/10-dark-mode.png) | ![空白狀態](./docs/screenshots/01-empty-state.png) |
 
 <details>
-<summary><strong>查看全部五種外觀 skin</strong></summary>
+<summary><strong>查看全部六種外觀 skin</strong></summary>
 
-| Editorial | Terminal | Aurora |
+| TRAE | Editorial | Terminal |
 |---|---|---|
-| ![Editorial skin](./docs/screenshots/05-skin-editorial.png) | ![Terminal skin](./docs/screenshots/06-skin-terminal.png) | ![Aurora skin](./docs/screenshots/07-skin-aurora.png) |
+| ![TRAE skin](./docs/screenshots/03-code-session.png) | ![Editorial skin](./docs/screenshots/05-skin-editorial.png) | ![Terminal skin](./docs/screenshots/06-skin-terminal.png) |
 
-| Industrial | Glass |
-|---|---|
-| ![Industrial skin](./docs/screenshots/08-skin-industrial.png) | ![Glass skin](./docs/screenshots/09-skin-glass.png) |
+| Aurora | Industrial | Glass |
+|---|---|---|
+| ![Aurora skin](./docs/screenshots/07-skin-aurora.png) | ![Industrial skin](./docs/screenshots/08-skin-industrial.png) | ![Glass skin](./docs/screenshots/09-skin-glass.png) |
 
 </details>
 
@@ -270,7 +270,7 @@ OAuth/PKCE、resource/prompt 瀏覽與 required-task 執行尚未整合；詳見
 ### 顯示與外觀
 
 - GitHub Flavored Markdown、表格、task list、KaTeX、Mermaid、適合串流內容的 fenced code 呈現，以及延遲載入的最終語法高亮。
-- Editorial、Terminal、Industrial、Aurora、Glass 五種 skin，各自支援亮色與暗色。
+- TRAE、Editorial、Terminal、Industrial、Aurora、Glass 六種 skin，各自支援亮色與暗色。
 - 內建 Inter、JetBrains Mono 與 Noto Sans TC，不依賴 CDN。
 - 應用程式介面語言目前為 English 與繁體中文；專案文件另外提供日本語與 Deutsch。
 
@@ -278,7 +278,7 @@ OAuth/PKCE、resource/prompt 瀏覽與 required-task 執行尚未整合；詳見
 
 | 按鍵 | 動作 |
 |---|---|
-| `⌘/Ctrl + K` | 開啟指令面板 |
+| `⌘/Ctrl + K` | 開啟全域搜尋 |
 | `⌘/Ctrl + P` | 開啟 project switcher |
 | `⌘/Ctrl + F` | 搜尋目前對話 |
 | `⌥ + ↑` / `⌥ + ↓` | 上一個／下一個 user turn |

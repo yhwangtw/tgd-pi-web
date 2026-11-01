@@ -145,24 +145,24 @@ Setze `TGD_DIR`, wenn das Artefaktverzeichnis an einem anderen Ort liegt.
 
 Das mobile Layout hält aktive Phase, Gespräch, Composer, Modellsteuerung und Hauptnavigation in Daumenreichweite und berücksichtigt die Safe Areas des Geräts.
 
-| Session- und Datei-Arbeitsbereich | Befehlspalette |
+| Session- und Datei-Arbeitsbereich | Einheitliche Suche |
 |---|---|
-| ![Code-Session](./docs/screenshots/03-code-session.png) | ![Befehlspalette](./docs/screenshots/04-command-palette.png) |
+| ![Code-Session](./docs/screenshots/03-code-session.png) | ![Einheitliche Suche](./docs/screenshots/04-unified-search.png) |
 
 | Dunkelmodus | Leerer Zustand |
 |---|---|
 | ![Dunkelmodus](./docs/screenshots/10-dark-mode.png) | ![Leerer Zustand](./docs/screenshots/01-empty-state.png) |
 
 <details>
-<summary><strong>Alle fünf Appearance-Skins anzeigen</strong></summary>
+<summary><strong>Alle sechs Appearance-Skins anzeigen</strong></summary>
 
-| Editorial | Terminal | Aurora |
+| TRAE | Editorial | Terminal |
 |---|---|---|
-| ![Editorial skin](./docs/screenshots/05-skin-editorial.png) | ![Terminal skin](./docs/screenshots/06-skin-terminal.png) | ![Aurora skin](./docs/screenshots/07-skin-aurora.png) |
+| ![TRAE skin](./docs/screenshots/03-code-session.png) | ![Editorial skin](./docs/screenshots/05-skin-editorial.png) | ![Terminal skin](./docs/screenshots/06-skin-terminal.png) |
 
-| Industrial | Glass |
-|---|---|
-| ![Industrial skin](./docs/screenshots/08-skin-industrial.png) | ![Glass skin](./docs/screenshots/09-skin-glass.png) |
+| Aurora | Industrial | Glass |
+|---|---|---|
+| ![Aurora skin](./docs/screenshots/07-skin-aurora.png) | ![Industrial skin](./docs/screenshots/08-skin-industrial.png) | ![Glass skin](./docs/screenshots/09-skin-glass.png) |
 
 </details>
 
@@ -235,7 +235,7 @@ API-Revisionen, Validierungsgrenzen und Warnungen nach erfolgreichem Speichern s
 ### Darstellung und Erscheinungsbild
 
 - GitHub Flavored Markdown, Tabellen, Task-Listen, KaTeX, Mermaid, streaming-sichere fenced Codeblöcke und verzögert geladenes finales Syntax-Highlighting.
-- Editorial, Terminal, Industrial, Aurora und Glass, jeweils mit hellem und dunklem Modus.
+- TRAE, Editorial, Terminal, Industrial, Aurora und Glass, jeweils mit hellem und dunklem Modus.
 - Mitgelieferte Schriften Inter, JetBrains Mono und Noto Sans TC ohne CDN-Abhängigkeit.
 - UI-Sprachen der Anwendung: English und 繁體中文. Diese Projektdokumentation ist zusätzlich auf Japanisch und Deutsch verfügbar.
 
@@ -243,7 +243,7 @@ API-Revisionen, Validierungsgrenzen und Warnungen nach erfolgreichem Speichern s
 
 | Tasten | Aktion |
 |---|---|
-| `⌘/Ctrl + K` | Befehlspalette öffnen |
+| `⌘/Ctrl + K` | Einheitliche Suche öffnen |
 | `⌘/Ctrl + P` | Project Switcher öffnen |
 | `⌘/Ctrl + F` | Im Gespräch suchen |
 | `⌥ + ↑` / `⌥ + ↓` | Vorheriger / nächster User Turn |

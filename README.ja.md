@@ -145,24 +145,24 @@ artifacts が別の場所にある場合は `TGD_DIR` を設定してくださ�
 
 モバイルレイアウトでは、端末の Safe Area を尊重しながら、現在のフェーズ、会話、入力欄、モデル操作、主要ナビゲーションを親指の届く範囲に保ちます。
 
-| セッションとファイルのワークスペース | コマンドパレット |
+| セッションとファイルのワークスペース | 統合検索 |
 |---|---|
-| ![コードセッション](./docs/screenshots/03-code-session.png) | ![コマンドパレット](./docs/screenshots/04-command-palette.png) |
+| ![コードセッション](./docs/screenshots/03-code-session.png) | ![統合検索](./docs/screenshots/04-unified-search.png) |
 
 | ダークモード | 空の状態 |
 |---|---|
 | ![ダークモード](./docs/screenshots/10-dark-mode.png) | ![空の状態](./docs/screenshots/01-empty-state.png) |
 
 <details>
-<summary><strong>5 種類の appearance skin を表示</strong></summary>
+<summary><strong>6 種類の appearance skin を表示</strong></summary>
 
-| Editorial | Terminal | Aurora |
+| TRAE | Editorial | Terminal |
 |---|---|---|
-| ![Editorial skin](./docs/screenshots/05-skin-editorial.png) | ![Terminal skin](./docs/screenshots/06-skin-terminal.png) | ![Aurora skin](./docs/screenshots/07-skin-aurora.png) |
+| ![TRAE skin](./docs/screenshots/03-code-session.png) | ![Editorial skin](./docs/screenshots/05-skin-editorial.png) | ![Terminal skin](./docs/screenshots/06-skin-terminal.png) |
 
-| Industrial | Glass |
-|---|---|
-| ![Industrial skin](./docs/screenshots/08-skin-industrial.png) | ![Glass skin](./docs/screenshots/09-skin-glass.png) |
+| Aurora | Industrial | Glass |
+|---|---|---|
+| ![Aurora skin](./docs/screenshots/07-skin-aurora.png) | ![Industrial skin](./docs/screenshots/08-skin-industrial.png) | ![Glass skin](./docs/screenshots/09-skin-glass.png) |
 
 </details>
 
@@ -232,7 +232,7 @@ API リビジョン、入力制限、保存後の再読み込み失敗の警告�
 ### レンダリングと外観
 
 - GitHub Flavored Markdown、テーブル、task list、KaTeX、Mermaid、ストリーミングに安全な fenced code 表示、遅延ロードされる最終シンタックスハイライト。
-- Editorial、Terminal、Industrial、Aurora、Glass の 5 skin。それぞれライト／ダークモード対応。
+- TRAE、Editorial、Terminal、Industrial、Aurora、Glass の 6 skin。それぞれライト／ダークモード対応。
 - Inter、JetBrains Mono、Noto Sans TC を同梱し、CDN に依存しません。
 - アプリ UI の対応言語は English と繁體中文です。プロジェクト文書は日本語と Deutsch でも提供します。
 
@@ -240,7 +240,7 @@ API リビジョン、入力制限、保存後の再読み込み失敗の警告�
 
 | キー | 操作 |
 |---|---|
-| `⌘/Ctrl + K` | コマンドパレットを開く |
+| `⌘/Ctrl + K` | 統合検索を開く |
 | `⌘/Ctrl + P` | Project switcher を開く |
 | `⌘/Ctrl + F` | 会話内を検索 |
 | `⌥ + ↑` / `⌥ + ↓` | 前／次の user turn |

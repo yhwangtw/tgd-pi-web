@@ -149,24 +149,24 @@ Set `TGD_DIR` when your artifact directory lives elsewhere.
 
 The mobile layout keeps the active phase, transcript, composer, model controls, and primary navigation within thumb reach while respecting device safe areas.
 
-| Session and file workspace | Command palette |
+| Session and file workspace | Unified search |
 |---|---|
-| ![Code session](./docs/screenshots/03-code-session.png) | ![Command palette](./docs/screenshots/04-command-palette.png) |
+| ![Code session](./docs/screenshots/03-code-session.png) | ![Unified search](./docs/screenshots/04-unified-search.png) |
 
 | Dark mode | Empty state |
 |---|---|
 | ![Dark mode](./docs/screenshots/10-dark-mode.png) | ![Empty state](./docs/screenshots/01-empty-state.png) |
 
 <details>
-<summary><strong>View all five appearance skins</strong></summary>
+<summary><strong>View all six appearance skins</strong></summary>
 
-| Editorial | Terminal | Aurora |
+| TRAE | Editorial | Terminal |
 |---|---|---|
-| ![Editorial skin](./docs/screenshots/05-skin-editorial.png) | ![Terminal skin](./docs/screenshots/06-skin-terminal.png) | ![Aurora skin](./docs/screenshots/07-skin-aurora.png) |
+| ![TRAE skin](./docs/screenshots/03-code-session.png) | ![Editorial skin](./docs/screenshots/05-skin-editorial.png) | ![Terminal skin](./docs/screenshots/06-skin-terminal.png) |
 
-| Industrial | Glass |
-|---|---|
-| ![Industrial skin](./docs/screenshots/08-skin-industrial.png) | ![Glass skin](./docs/screenshots/09-skin-glass.png) |
+| Aurora | Industrial | Glass |
+|---|---|---|
+| ![Aurora skin](./docs/screenshots/07-skin-aurora.png) | ![Industrial skin](./docs/screenshots/08-skin-industrial.png) | ![Glass skin](./docs/screenshots/09-skin-glass.png) |
 
 </details>
 
@@ -341,7 +341,7 @@ the download to obtain the current file.
 ### Rendering and appearance
 
 - GitHub Flavored Markdown, tables, task lists, KaTeX, Mermaid, streaming-safe fenced-code rendering, and lazy-loaded final syntax highlighting.
-- Editorial, Terminal, Industrial, Aurora, and Glass skins, each in light and dark mode.
+- TRAE, Editorial, Terminal, Industrial, Aurora, and Glass skins, each in light and dark mode.
 - Bundled Inter, JetBrains Mono, and Noto Sans TC fonts with no CDN dependency.
 - Application UI languages: English and Traditional Chinese. These project documents are also available in Japanese and German.
 
@@ -349,7 +349,7 @@ the download to obtain the current file.
 
 | Keys | Action |
 |---|---|
-| `⌘/Ctrl + K` | Open command palette |
+| `⌘/Ctrl + K` | Open unified search |
 | `⌘/Ctrl + P` | Open project switcher |
 | `⌘/Ctrl + F` | Find in the conversation |
 | `⌥ + ↑` / `⌥ + ↓` | Previous / next user turn |
