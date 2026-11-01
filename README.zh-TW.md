@@ -174,6 +174,19 @@ parent/
 
 </details>
 
+## 效能
+
+以下是在同一份含 104 個本機 session 的快照上，對啟動、對話傳輸與搜尋改動所做的端到端量測：
+
+| 路徑 | 修改前 | 修改後 | 變化 |
+| --- | ---: | ---: | ---: |
+| 初始 JavaScript（gzip） | 472.2 KiB | 321.7 KiB | 減少 31.9% |
+| 692 則訊息的對話傳輸 | 3,635.98 KiB | 1,505.25 KiB | 減少 58.6% |
+| 382 則訊息的對話傳輸 | 1,558.69 KiB | 767.20 KiB | 減少 50.8% |
+| 暖啟動 session 搜尋中位數 | 31.35 ms | 2.90 ms | 加快 90.7% |
+
+聊天工作區採延遲載入；直接開啟 `?session=` 時，會與 session 還原並行預載。串流 Markdown 會重用已完成區塊，成長中的 fenced code block 先以純文字顯示，最終解析後仍保留語法高亮。Session 詳細資料與 context 回應使用有上限、會檢查版本的 JSONL 與 gzip 快取；SSE 不緩衝。全文搜尋使用獨立且有上限的索引（500 個檔案／32 MiB，最多同時建置 8 個），並以檔案身分、大小、ctime、mtime 與 mode 判斷失效。以上是單次本機快照量測，實際結果會隨硬體、provider 延遲與對話內容而異。
+
 ## 主要功能
 
 <!-- capability-table:start -->
@@ -237,7 +250,7 @@ OAuth/PKCE、resource/prompt 瀏覽與 required-task 執行尚未整合；詳見
 
 ### Session 與導覽
 
-- 以增量、唯讀方式索引本機 Pi `.jsonl` session 檔。
+- 以增量、唯讀方式索引本機 Pi `.jsonl` session 檔，並搭配有上限、會檢查版本的全文索引。
 - 支援搜尋、標籤、釘選、封存、自動命名、HTML/Markdown 匯出與用量分析。
 - 提供對話搜尋、user turn 導覽、書籤、minimap、長訊息收合與 always-follow 串流模式。
 - Project switcher 支援最近專案、釘選、探索、檔案系統自動完成與 linked git worktrees。
@@ -256,7 +269,7 @@ OAuth/PKCE、resource/prompt 瀏覽與 required-task 執行尚未整合；詳見
 
 ### 顯示與外觀
 
-- GitHub Flavored Markdown、表格、task list、KaTeX、Mermaid 與延遲載入的語法高亮。
+- GitHub Flavored Markdown、表格、task list、KaTeX、Mermaid、適合串流內容的 fenced code 呈現，以及延遲載入的最終語法高亮。
 - Editorial、Terminal、Industrial、Aurora、Glass 五種 skin，各自支援亮色與暗色。
 - 內建 Inter、JetBrains Mono 與 Noto Sans TC，不依賴 CDN。
 - 應用程式介面語言目前為 English 與繁體中文；專案文件另外提供日本語與 Deutsch。
@@ -349,7 +362,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 ```text
 Browser                    Next.js server             AgentSessionRuntime
   │                              │                            │
-  ├─ GET /api/sessions ─────────▶│ incremental .jsonl cache   │
+  ├─ GET /api/sessions ─────────▶│ bounded .jsonl cache/index │
   ├─ POST /api/agent/[id] ──────▶│ startRpcSession() ────────▶│
   ├─ GET /events (SSE) ─────────▶│◀──── session events ───────│
   ├─ GET /api/files/* ──────────▶│ allowed-root file access   │
@@ -357,7 +370,7 @@ Browser                    Next.js server             AgentSessionRuntime
   └─ GET /api/tgd/artifacts ────▶│ sibling tGD directory      │
 ```
 
-唯讀歷史解析不會建立 `AgentSession`；送出訊息才建立 in-process SDK wrapper，由 Pi 管理 session 替換。列表、搜尋與匯出讀取原生 JSONL 歷史，背景任務與排程沿用相同的 SDK Session 基礎。
+一般導覽會把聊天工作區保留在延遲載入的 chunk；直接開啟 `?session=` 時，則會與 session 還原並行預載。唯讀歷史解析不會建立 `AgentSession`；送出訊息才建立 in-process SDK wrapper，由 Pi 管理 session 替換。列表以及詳細資料／context 讀取使用有上限、會檢查版本的 JSONL 與 gzip 快取，全文搜尋另用獨立且有上限的索引。JSON 回應 helper 不會緩衝或壓縮 SSE。背景任務與排程沿用相同的 SDK Session 基礎。
 
 ## 專案結構
 

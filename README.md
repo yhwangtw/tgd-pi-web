@@ -170,6 +170,19 @@ The mobile layout keeps the active phase, transcript, composer, model controls, 
 
 </details>
 
+## Performance
+
+The same local 104-session snapshot produced these end-to-end measurements after the startup, transcript, and search changes:
+
+| Path | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| Initial JavaScript (gzip) | 472.2 KiB | 321.7 KiB | 31.9% smaller |
+| 692-message conversation transfer | 3,635.98 KiB | 1,505.25 KiB | 58.6% smaller |
+| 382-message conversation transfer | 1,558.69 KiB | 767.20 KiB | 50.8% smaller |
+| Warm session-search median | 31.35 ms | 2.90 ms | 90.7% faster |
+
+The chat workspace is lazy-loaded and preloaded alongside session restoration for direct `?session=` links. Streaming Markdown reuses completed blocks and renders a growing fenced code block literally until the final parse, so final syntax highlighting is retained. Session detail and context responses use bounded, revision-aware JSONL and gzip caches; SSE remains unbuffered. Full-text search uses a separate bounded index (500 files / 32 MiB, at most eight concurrent builds), invalidated by file identity, size, ctime, mtime, and mode. These are measurements from one local snapshot; results vary with hardware, provider latency, and transcript shape.
+
 ## Key Features
 
 <!-- capability-table:start -->
@@ -252,7 +265,7 @@ MCP guide for API revisions, validation limits and saved-but-reload-failed warni
 
 ### Sessions and navigation
 
-- Incremental, read-only session index over local Pi `.jsonl` files.
+- Incremental, read-only session index over local Pi `.jsonl` files, backed by a bounded, revision-aware full-text index.
 - Search, tags, pins, archive, auto-naming, HTML/Markdown export, and usage analytics.
 - Conversation find, user-turn navigation, bookmarks, minimap, long-message collapse, and optional always-follow streaming.
 - A run monitor stays beside the composer while browsing earlier messages. It shows the last reported phase, total elapsed time, and age of the last model/tool event. Expand it for full tool targets, individual tool timers and reported subagent states; select a tool to open its work log. Quiet periods remain neutral, and a keepalive is not evidence that the provider is computing.
@@ -327,7 +340,7 @@ the download to obtain the current file.
 
 ### Rendering and appearance
 
-- GitHub Flavored Markdown, tables, task lists, KaTeX, Mermaid, and lazy-loaded syntax highlighting.
+- GitHub Flavored Markdown, tables, task lists, KaTeX, Mermaid, streaming-safe fenced-code rendering, and lazy-loaded final syntax highlighting.
 - Editorial, Terminal, Industrial, Aurora, and Glass skins, each in light and dark mode.
 - Bundled Inter, JetBrains Mono, and Noto Sans TC fonts with no CDN dependency.
 - Application UI languages: English and Traditional Chinese. These project documents are also available in Japanese and German.
@@ -421,7 +434,7 @@ until an operator explicitly converts them; see [offline archive conversion](doc
 ```text
 Browser                    Next.js server             AgentSessionRuntime
   │                              │                            │
-  ├─ GET /api/sessions ─────────▶│ incremental .jsonl cache   │
+  ├─ GET /api/sessions ─────────▶│ bounded .jsonl cache/index │
   ├─ POST /api/agent/[id] ──────▶│ startRpcSession() ────────▶│
   ├─ GET /events (SSE) ─────────▶│◀──── session events ───────│
   ├─ GET /api/files/* ──────────▶│ allowed-root file access   │
@@ -429,10 +442,14 @@ Browser                    Next.js server             AgentSessionRuntime
   └─ GET /api/tgd/artifacts ────▶│ sibling tGD directory      │
 ```
 
-Read-only history parsing does not create an `AgentSession`; sending a message
-creates an in-process SDK wrapper, and Pi owns its session replacement lifecycle.
-Session listing, search and export read native JSONL history. Background runs and
-schedules use the same SDK session infrastructure.
+Normal navigation keeps the chat workspace in a lazy-loaded chunk; direct
+`?session=` links preload it alongside session restoration. Read-only history
+parsing does not create an `AgentSession`; sending a message creates an in-process
+SDK wrapper, and Pi owns its session replacement lifecycle. Session listing and
+detail/context reads use bounded, revision-aware JSONL and gzip caches, while
+full-text search keeps a separate bounded index. SSE is not buffered or
+compressed by the JSON response helper. Background runs and schedules use the
+same SDK session infrastructure.
 
 ## Project Structure
 

@@ -166,6 +166,19 @@ artifacts が別の場所にある場合は `TGD_DIR` を設定してくださ�
 
 </details>
 
+## パフォーマンス
+
+同じローカル 104 セッションのスナップショットで、起動、トランスクリプト、検索の変更後に計測したエンドツーエンドの結果です。
+
+| 経路 | 変更前 | 変更後 | 変化 |
+| --- | ---: | ---: | ---: |
+| 初期 JavaScript（gzip） | 472.2 KiB | 321.7 KiB | 31.9% 削減 |
+| 692 メッセージの会話転送 | 3,635.98 KiB | 1,505.25 KiB | 58.6% 削減 |
+| 382 メッセージの会話転送 | 1,558.69 KiB | 767.20 KiB | 50.8% 削減 |
+| ウォーム状態のセッション検索中央値 | 31.35 ms | 2.90 ms | 90.7% 高速化 |
+
+チャット workspace は遅延ロードされ、`?session=` の直接リンクではセッション復元と並行してプリロードされます。ストリーミング Markdown は完了済みブロックを再利用し、成長中の fenced code block は最終パースまでリテラル表示にして、最後の構文ハイライトを維持します。Session 詳細と context のレスポンスには、上限付きでリビジョンを確認する JSONL／gzip cache を使用し、SSE はバッファリングしません。全文検索は別の上限付き index（500 file／32 MiB、最大 8 件の同時 build）を使い、file identity、size、ctime、mtime、mode で無効化します。これらは 1 回のローカル snapshot 計測であり、hardware、provider latency、transcript の形によって結果は変わります。
+
 ## 主な機能
 
 ### Agent チャット
@@ -202,7 +215,7 @@ API リビジョン、入力制限、保存後の再読み込み失敗の警告�
 
 ### セッションとナビゲーション
 
-- ローカル Pi `.jsonl` ファイルを増分・読み取り専用でインデックス。
+- ローカル Pi `.jsonl` ファイルを増分・読み取り専用でインデックスし、上限付きでリビジョンを確認する全文 index を併用。
 - 検索、タグ、ピン、アーカイブ、自動命名、HTML/Markdown export、使用量分析。
 - 会話内検索、user turn 移動、ブックマーク、ミニマップ、長文折りたたみ、always-follow ストリーム。
 - 最近のプロジェクト、ピン、探索、ファイルシステム補完、linked git worktrees を備えた Project switcher。
@@ -218,7 +231,7 @@ API リビジョン、入力制限、保存後の再読み込み失敗の警告�
 
 ### レンダリングと外観
 
-- GitHub Flavored Markdown、テーブル、task list、KaTeX、Mermaid、遅延ロードされるシンタックスハイライト。
+- GitHub Flavored Markdown、テーブル、task list、KaTeX、Mermaid、ストリーミングに安全な fenced code 表示、遅延ロードされる最終シンタックスハイライト。
 - Editorial、Terminal、Industrial、Aurora、Glass の 5 skin。それぞれライト／ダークモード対応。
 - Inter、JetBrains Mono、Noto Sans TC を同梱し、CDN に依存しません。
 - アプリ UI の対応言語は English と繁體中文です。プロジェクト文書は日本語と Deutsch でも提供します。
@@ -291,7 +304,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 ```text
 Browser                    Next.js server             AgentSessionRuntime
   │                              │                            │
-  ├─ GET /api/sessions ─────────▶│ incremental .jsonl cache   │
+  ├─ GET /api/sessions ─────────▶│ bounded .jsonl cache/index │
   ├─ POST /api/agent/[id] ──────▶│ startRpcSession() ────────▶│
   ├─ GET /events (SSE) ─────────▶│◀──── session events ───────│
   ├─ GET /api/files/* ──────────▶│ allowed-root file access   │
@@ -299,7 +312,7 @@ Browser                    Next.js server             AgentSessionRuntime
   └─ GET /api/tgd/artifacts ────▶│ sibling tGD directory      │
 ```
 
-読み取り専用の閲覧では、`AgentSession` を作らずにセッションファイルを解析します。メッセージ送信時のみ、アクティブなセッションごとに in-process runtime wrapper を作成し、イベントを SSE で配信します。セッション置換は Pi が管理し、wrapper は cwd 固有サービス、extensions、registry key、イベント購読を新しい `AgentSession` に再バインドします。
+通常のナビゲーションでは chat workspace を遅延ロード chunk に保ち、`?session=` の直接リンクではセッション復元と並行してプリロードします。読み取り専用の閲覧では、`AgentSession` を作らずにセッションファイルを解析します。メッセージ送信時のみ、アクティブなセッションごとに in-process runtime wrapper を作成し、イベントを SSE で配信します。Session 一覧と詳細／context の読み取りには、上限付きでリビジョンを確認する JSONL／gzip cache を使用し、全文検索は別の上限付き index を使います。JSON response helper は SSE をバッファリングも圧縮もしません。セッション置換は Pi が管理し、wrapper は cwd 固有サービス、extensions、registry key、イベント購読を新しい `AgentSession` に再バインドします。
 
 ## プロジェクト構成
 

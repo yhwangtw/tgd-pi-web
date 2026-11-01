@@ -166,6 +166,19 @@ Das mobile Layout hält aktive Phase, Gespräch, Composer, Modellsteuerung und H
 
 </details>
 
+## Leistung
+
+Derselbe lokale Snapshot mit 104 Sessions ergab nach den Änderungen an Start, Transcript und Suche diese End-to-End-Messwerte:
+
+| Pfad | Vorher | Nachher | Änderung |
+| --- | ---: | ---: | ---: |
+| Initiales JavaScript (gzip) | 472.2 KiB | 321.7 KiB | 31.9% kleiner |
+| Übertragung einer Konversation mit 692 Nachrichten | 3,635.98 KiB | 1,505.25 KiB | 58.6% kleiner |
+| Übertragung einer Konversation mit 382 Nachrichten | 1,558.69 KiB | 767.20 KiB | 50.8% kleiner |
+| Median der Session-Suche im warmen Zustand | 31.35 ms | 2.90 ms | 90.7% schneller |
+
+Der Chat-Arbeitsbereich wird lazy geladen und bei direkten `?session=`-Links parallel zur Session-Wiederherstellung vorgeladen. Streaming-Markdown verwendet abgeschlossene Blöcke wieder und zeigt einen wachsenden fenced Codeblock bis zur abschließenden Analyse als Literal an; das finale Syntax-Highlighting bleibt erhalten. Sessiondetails und Context-Antworten nutzen begrenzte, revisionsgeprüfte JSONL- und gzip-Caches; SSE bleibt ungepuffert. Die Volltextsuche verwendet einen separaten begrenzten Index (500 Dateien / 32 MiB, höchstens acht parallele Builds), der durch Dateiidentität, Größe, ctime, mtime und Modus invalidiert wird. Es handelt sich um Messungen eines lokalen Snapshots; Hardware, Provider-Latenz und Transkriptform verändern die Ergebnisse.
+
 ## Hauptfunktionen
 
 ### Agenten-Chat
@@ -205,7 +218,7 @@ API-Revisionen, Validierungsgrenzen und Warnungen nach erfolgreichem Speichern s
 
 ### Sessions und Navigation
 
-- Inkrementeller, schreibgeschützter Index lokaler Pi-`.jsonl`-Dateien.
+- Inkrementeller, schreibgeschützter Index lokaler Pi-`.jsonl`-Dateien mit einem begrenzten, revisionsgeprüften Volltextindex.
 - Suche, Tags, Pins, Archiv, automatische Benennung, HTML/Markdown-Export und Nutzungsanalyse.
 - Gesprächssuche, User-Turn-Navigation, Lesezeichen, Minimap, Einklappen langer Nachrichten und optionaler Always-follow-Stream.
 - Project Switcher mit zuletzt verwendeten Projekten, Pins, Discovery, Dateisystem-Vervollständigung und verknüpften Git-Worktrees.
@@ -221,7 +234,7 @@ API-Revisionen, Validierungsgrenzen und Warnungen nach erfolgreichem Speichern s
 
 ### Darstellung und Erscheinungsbild
 
-- GitHub Flavored Markdown, Tabellen, Task-Listen, KaTeX, Mermaid und verzögert geladenes Syntax-Highlighting.
+- GitHub Flavored Markdown, Tabellen, Task-Listen, KaTeX, Mermaid, streaming-sichere fenced Codeblöcke und verzögert geladenes finales Syntax-Highlighting.
 - Editorial, Terminal, Industrial, Aurora und Glass, jeweils mit hellem und dunklem Modus.
 - Mitgelieferte Schriften Inter, JetBrains Mono und Noto Sans TC ohne CDN-Abhängigkeit.
 - UI-Sprachen der Anwendung: English und 繁體中文. Diese Projektdokumentation ist zusätzlich auf Japanisch und Deutsch verfügbar.
@@ -294,7 +307,7 @@ Session-Dateien bleiben im nativen Pi-Format:
 ```text
 Browser                    Next.js server             AgentSessionRuntime
   │                              │                            │
-  ├─ GET /api/sessions ─────────▶│ incremental .jsonl cache   │
+  ├─ GET /api/sessions ─────────▶│ bounded .jsonl cache/index │
   ├─ POST /api/agent/[id] ──────▶│ startRpcSession() ────────▶│
   ├─ GET /events (SSE) ─────────▶│◀──── session events ───────│
   ├─ GET /api/files/* ──────────▶│ allowed-root file access   │
@@ -302,7 +315,7 @@ Browser                    Next.js server             AgentSessionRuntime
   └─ GET /api/tgd/artifacts ────▶│ sibling tGD directory      │
 ```
 
-Beim schreibgeschützten Browsen werden Session-Dateien analysiert, ohne eine `AgentSession` zu erstellen. Erst beim Senden einer Nachricht erzeugt der Server einen In-Process-Runtime-Wrapper pro aktiver Session und streamt Ereignisse über SSE. Pi verwaltet den Sessionwechsel; der Wrapper bindet cwd-spezifische Dienste, Extensions, Registry-Schlüssel und Event-Abonnements an die neue `AgentSession`.
+Bei der normalen Navigation bleibt der Chat-Arbeitsbereich in einem lazy geladenen Chunk; direkte `?session=`-Links laden ihn parallel zur Session-Wiederherstellung vor. Beim schreibgeschützten Browsen werden Session-Dateien analysiert, ohne eine `AgentSession` zu erstellen. Erst beim Senden einer Nachricht erzeugt der Server einen In-Process-Runtime-Wrapper pro aktiver Session und streamt Ereignisse über SSE. Sessionliste sowie Detail- und Context-Lesevorgänge nutzen begrenzte, revisionsgeprüfte JSONL- und gzip-Caches; die Volltextsuche verwendet einen separaten begrenzten Index. Der JSON-Response-Helper puffert oder komprimiert SSE nicht. Pi verwaltet den Sessionwechsel; der Wrapper bindet cwd-spezifische Dienste, Extensions, Registry-Schlüssel und Event-Abonnements an die neue `AgentSession`.
 
 ## Projektstruktur
 
